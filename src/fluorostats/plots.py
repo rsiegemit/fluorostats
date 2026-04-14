@@ -182,35 +182,58 @@ def summary_panel(
 # Statistical helpers
 # ---------------------------------------------------------------------------
 
-def _add_pvalue_annotations(ax, data, x, conditions):
-    """Add p-value brackets between all condition pairs."""
+def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6):
+    """Add p-value brackets — only the most meaningful comparisons.
+
+    For <= 4 conditions: show all significant pairs.
+    For > 4 conditions: show only adjacent pairs (dose-response neighbors).
+    Limits total brackets to max_brackets to keep plots clean.
+    """
     from scipy.stats import mannwhitneyu
 
-    pairs = list(combinations(range(len(conditions)), 2))
-    y_max = ax.get_ylim()[1]
-    step = y_max * 0.08
-    offset = y_max * 0.05
+    n = len(conditions)
 
-    for pair_idx, (i, j) in enumerate(pairs):
+    # Choose which pairs to test
+    if n <= 4:
+        pairs = list(combinations(range(n), 2))
+    else:
+        # Adjacent pairs only (i, i+1) — natural for dose-response
+        pairs = [(i, i + 1) for i in range(n - 1)]
+
+    # Compute p-values and filter to significant
+    sig_pairs = []
+    for i, j in pairs:
         if len(data[i]) < 2 or len(data[j]) < 2:
             continue
-
         try:
             _, p = mannwhitneyu(data[i], data[j], alternative="two-sided")
         except ValueError:
             continue
-
         stars = _pvalue_stars(p)
-        if stars == "ns" and len(pairs) > 3:
-            continue  # skip non-significant for busy plots
+        if stars != "ns":
+            sig_pairs.append((i, j, stars, p))
 
-        y = y_max + offset + pair_idx * step
+    # Sort by significance (most significant first) and limit
+    sig_pairs.sort(key=lambda t: t[3])
+    sig_pairs = sig_pairs[:max_brackets]
+    # Re-sort by position for clean stacking
+    sig_pairs.sort(key=lambda t: (t[0], t[1]))
+
+    if not sig_pairs:
+        return
+
+    y_max = ax.get_ylim()[1]
+    step = y_max * 0.07
+    offset = y_max * 0.05
+
+    for drawn_idx, (i, j, stars, _) in enumerate(sig_pairs):
+        y = y_max + offset + drawn_idx * step
         ax.plot([x[i], x[i], x[j], x[j]], [y - step * 0.2, y, y, y - step * 0.2],
                 color="black", linewidth=0.8)
         ax.text((x[i] + x[j]) / 2, y, stars, ha="center", va="bottom", fontsize=9)
 
-    # Extend y-axis to fit annotations
-    new_max = y_max + offset + len(pairs) * step + step
+    # Extend y-axis just enough for drawn brackets
+    new_max = y_max + offset + len(sig_pairs) * step + step * 0.5
     ax.set_ylim(ax.get_ylim()[0], new_max)
 
 
