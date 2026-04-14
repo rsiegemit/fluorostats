@@ -8,45 +8,45 @@
 
 ---
 
-FluoroStats is a Python CLI tool and library that takes your microscopy images — confocal z-stacks, widefield fluorescence, any major microscope format — and produces the numbers, statistics, and figures you need for your paper. No ImageJ macros, no manual thresholding, no spreadsheet wrangling.
+FluoroStats is a Python CLI tool and library that converts microscopy images — confocal z-stacks, widefield fluorescence, any major microscope format — into the numbers, statistics, and figures needed for publication. No ImageJ macros, no manual thresholding, no spreadsheet wrangling.
 
 ## Why FluoroStats?
 
-You have fluorescence images from your experiment. You can *see* that one condition has more cells, or a denser network, or better coverage. But reviewers want numbers, error bars, and p-values.
+Fluorescence microscopy experiments often produce clear qualitative differences between conditions — more cells, denser networks, better coverage. But manuscripts require quantitative evidence: volume fractions, connectivity metrics, error bars, and p-values.
 
-FluoroStats bridges that gap:
+FluoroStats bridges that gap with a single command:
 
 ```bash
 fluorostats quant3d --input ./my_confocal_data/ --output ./results/
 ```
 
-That one command gives you:
-- **Per-file CSV** with volume fraction, connectivity metrics, skeleton analysis
-- **Per-condition summary** with mean, std, median across replicates
-- **QC overlays** so you can verify the segmentation looks right
-- **Publication plots** — bar charts with SEM, boxplots with individual data points
+This produces:
+- **Per-file CSV** with volume fraction, connectivity metrics, and skeleton analysis
+- **Per-condition summary** with mean, std, and median across replicates
+- **QC overlays** for visual verification of segmentation accuracy
+- **Publication plots** — bar charts with SEM and boxplots with individual data points
 - **Statistical comparisons** — Mann-Whitney U p-values between all condition pairs
 
-## What Can You Quantify?
+## What Can It Quantify?
 
 ### 3D Confocal Z-Stacks
 
-Ideal for: bioprinted constructs, tissue sections, organoids, spheroids — anything where you need to measure cell presence and network structure in a volume.
+Well suited for bioprinted constructs, tissue sections, organoids, and spheroids — any volumetric data where cell presence and network structure matter.
 
-**Metrics produced:**
-- **Volume fraction** — what percentage of the volume contains cells?
-- **Euler number** — how interconnected is the cell network? (more negative = more loops and tunnels = more connected)
-- **Largest component fraction** — is it one big connected network (97%) or many scattered clusters (19%)?
-- **Skeleton length, branches, junctions** — how extensive and branched is the cell network?
+**Metrics:**
+- **Volume fraction** — percentage of the volume containing cells
+- **Euler number** — topological measure of network interconnectedness (more negative = more loops and tunnels)
+- **Largest component fraction** — whether the structure forms one connected network (e.g., 97%) or many scattered clusters (e.g., 19%)
+- **Skeleton length, branches, junctions** — extent and branching complexity of the cell network
 
 ### 2D Fluorescence Images
 
-Ideal for: endothelial coverage, monolayer confluence, wound healing assays, any planar cell coverage measurement.
+Well suited for endothelial coverage, monolayer confluence, wound healing assays, and other planar cell coverage measurements.
 
-**Metrics produced:**
-- **Area fraction** — what percentage of the surface is covered by cells?
-- **Cluster count and sizes** — are cells forming one sheet or many scattered patches?
-- **Largest component fraction** — is coverage confluent or fragmented?
+**Metrics:**
+- **Area fraction** — percentage of the surface covered by cells
+- **Cluster count and sizes** — whether cells form one confluent sheet or many scattered patches
+- **Largest component fraction** — degree of coverage fragmentation
 
 ## Getting Started
 
@@ -56,21 +56,21 @@ Ideal for: endothelial coverage, monolayer confluence, wound healing assays, any
 pip install fluorostats
 ```
 
-Your images are from a specific microscope? Add format support:
+For microscope-specific proprietary formats, add the corresponding extra:
 
 ```bash
 pip install fluorostats[olympus]    # .oib, .oif files
 pip install fluorostats[zeiss]      # .czi files
 pip install fluorostats[nikon]      # .nd2 files
 pip install fluorostats[leica]      # .lif files
-pip install fluorostats[all]        # everything
+pip install fluorostats[all]        # all formats
 ```
 
-TIFF, OME-TIFF, PNG, JPEG, and BMP work out of the box.
+TIFF, OME-TIFF, PNG, JPEG, and BMP are supported out of the box.
 
-### Organize Your Data
+### Organize Data
 
-Put each experimental condition in its own folder. Files inside are replicates:
+Each experimental condition should be in its own folder, with replicate files inside:
 
 ```
 my_experiment/
@@ -98,38 +98,38 @@ fluorostats quant3d --input ./my_experiment/ --output ./results_3d/
 fluorostats quant2d --input ./endothelial_images/ --output ./results_2d/
 ```
 
-### Check Your Results
+### Review Results
 
-Open the `overlays/` folder first — each image gets a QC overlay (grayscale intensity + magenta segmentation mask) so you can immediately see if the thresholding worked.
+Start with the `overlays/` folder — each image gets a QC overlay (grayscale intensity + magenta segmentation mask) for immediate visual verification.
 
-Then look at:
-- `per_file.csv` — every measurement for every file
+Then inspect:
+- `per_file.csv` — measurements for every file
 - `per_condition.csv` — summary statistics grouped by condition
-- `plots/summary_panel.png` — all metrics in one figure
-- `plots/pvalues.csv` — statistical comparisons (when you have replicates)
+- `plots/summary_panel.png` — all metrics in one composite figure
+- `plots/pvalues.csv` — statistical comparisons (available when replicates are present)
 
 ## Tuning
 
-The defaults are optimized for typical fluorescence microscopy, but every dataset is different. The two most useful knobs:
+Defaults are optimized for typical fluorescence microscopy, but two parameters are worth adjusting for specific datasets:
 
-**Threshold method** — `otsu` (default for 3D) works well for bright, distinct signal. `li` (default for 2D) is better for dim or diffuse signal like endothelial monolayers.
+**Threshold method** — `otsu` (default for 3D) works well for bright, high-contrast signal. `li` (default for 2D) is better suited to dim or diffuse signal such as endothelial monolayers.
 
 ```bash
 fluorostats quant3d --input ./data/ --output ./results/ --threshold li
 ```
 
-**Threshold scale** — multiply the computed threshold by a factor. Lower = capture more dim signal. The default (0.9 for 3D) slightly favors sensitivity over specificity.
+**Threshold scale** — scales the computed threshold by a multiplicative factor. Lower values capture more dim signal. The 3D default of 0.9 slightly favors sensitivity over specificity.
 
 ```bash
 fluorostats quant3d --input ./data/ --output ./results/ --threshold-scale 0.8
 ```
 
-If you're unsure, run with defaults first, check the overlays, then adjust.
+A recommended workflow: run with defaults, review the overlays, then adjust if needed.
 
 ## Supported Formats
 
 ```bash
-fluorostats formats   # see what's available on your system
+fluorostats formats   # check availability on the current system
 ```
 
 | Format | Microscope | Install |
@@ -144,7 +144,7 @@ fluorostats formats   # see what's available on your system
 
 ## Python API
 
-For custom workflows or integration into your own scripts:
+FluoroStats can also be used as a library for custom analysis workflows:
 
 ```python
 from fluorostats.io import load_auto
@@ -152,10 +152,10 @@ from fluorostats.preprocess import select_green_channel, denoise
 from fluorostats.segment import binarize
 from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
 
-# Load any format — auto-detected
+# Load any supported format (auto-detected)
 arr, meta = load_auto("my_sample.czi")
 
-# Extract green/fluorescence channel (auto-detects 488nm, FITC, GFP, etc.)
+# Extract the fluorescence channel (auto-detects 488nm, FITC, GFP, etc.)
 green = select_green_channel(arr, meta["channel_names"])
 green = denoise(green)
 
