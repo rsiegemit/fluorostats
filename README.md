@@ -3,179 +3,212 @@
 </p>
 
 <p align="center">
-  <em>Universal fluorescence microscopy image quantification</em>
+  <strong>Turn fluorescence microscopy images into publication-ready quantitative data.</strong>
 </p>
 
 ---
 
-Segment, measure, and compare fluorescence signals across experimental conditions — from confocal z-stacks to widefield 2D images.
+FluoroStats is a Python CLI tool and library that takes your microscopy images — confocal z-stacks, widefield fluorescence, any major microscope format — and produces the numbers, statistics, and figures you need for your paper. No ImageJ macros, no manual thresholding, no spreadsheet wrangling.
 
-## Features
+## Why FluoroStats?
 
-- **3D confocal analysis** — volume fraction, Euler number (interconnectedness), largest component fraction, skeleton length/branches/junctions
-- **2D coverage analysis** — area fraction, cluster count, largest component fraction, mean/median cluster size
-- **Universal format support** — TIFF, OME-TIFF, Olympus (.oib/.oif), Zeiss (.czi), Nikon (.nd2), Leica (.lif), PNG, JPEG, BMP, NumPy
-- **Auto-detection** — automatic file format detection, green/fluorescence channel selection, microscope border cropping
-- **Replicate-aware** — per-file and per-condition CSVs with mean/std/median, bar+SEM plots, Mann-Whitney U p-values
-- **QC overlays** — MIP + mask overlay PNGs for visual verification
-- **Publication-ready plots** — boxplots, bar+SEM charts, multi-metric summary panels
+You have fluorescence images from your experiment. You can *see* that one condition has more cells, or a denser network, or better coverage. But reviewers want numbers, error bars, and p-values.
 
-## Install
+FluoroStats bridges that gap:
 
 ```bash
-# Core (TIFF, PNG, JPEG, BMP, NumPy)
+fluorostats quant3d --input ./my_confocal_data/ --output ./results/
+```
+
+That one command gives you:
+- **Per-file CSV** with volume fraction, connectivity metrics, skeleton analysis
+- **Per-condition summary** with mean, std, median across replicates
+- **QC overlays** so you can verify the segmentation looks right
+- **Publication plots** — bar charts with SEM, boxplots with individual data points
+- **Statistical comparisons** — Mann-Whitney U p-values between all condition pairs
+
+## What Can You Quantify?
+
+### 3D Confocal Z-Stacks
+
+Ideal for: bioprinted constructs, tissue sections, organoids, spheroids — anything where you need to measure cell presence and network structure in a volume.
+
+**Metrics produced:**
+- **Volume fraction** — what percentage of the volume contains cells?
+- **Euler number** — how interconnected is the cell network? (more negative = more loops and tunnels = more connected)
+- **Largest component fraction** — is it one big connected network (97%) or many scattered clusters (19%)?
+- **Skeleton length, branches, junctions** — how extensive and branched is the cell network?
+
+### 2D Fluorescence Images
+
+Ideal for: endothelial coverage, monolayer confluence, wound healing assays, any planar cell coverage measurement.
+
+**Metrics produced:**
+- **Area fraction** — what percentage of the surface is covered by cells?
+- **Cluster count and sizes** — are cells forming one sheet or many scattered patches?
+- **Largest component fraction** — is coverage confluent or fragmented?
+
+## Getting Started
+
+### Install
+
+```bash
 pip install fluorostats
-
-# With specific microscope format support
-pip install fluorostats[olympus]    # Olympus .oib/.oif
-pip install fluorostats[zeiss]      # Zeiss .czi
-pip install fluorostats[nikon]      # Nikon .nd2
-pip install fluorostats[leica]      # Leica .lif
-
-# Everything
-pip install fluorostats[all]
 ```
 
-## Quick Start
-
-### 3D confocal z-stacks
+Your images are from a specific microscope? Add format support:
 
 ```bash
-fluorostats quant3d \
-  --input ./confocal_data/ \
-  --output ./results_3d \
-  --condition-from parent
+pip install fluorostats[olympus]    # .oib, .oif files
+pip install fluorostats[zeiss]      # .czi files
+pip install fluorostats[nikon]      # .nd2 files
+pip install fluorostats[leica]      # .lif files
+pip install fluorostats[all]        # everything
 ```
 
-Expects files organized by condition:
+TIFF, OME-TIFF, PNG, JPEG, and BMP work out of the box.
+
+### Organize Your Data
+
+Put each experimental condition in its own folder. Files inside are replicates:
+
 ```
-confocal_data/
-  GelMA/rep1.oib, rep2.oib, rep3.oib
-  Hybrid/rep1.oib, rep2.oib, rep3.oib
-  CMCMA-rich/rep1.oib, rep2.oib, rep3.oib
+my_experiment/
+  GelMA/
+    sample1.oib
+    sample2.oib
+    sample3.oib
+  Hybrid/
+    sample1.oib
+    sample2.oib
+    sample3.oib
+  Control/
+    sample1.oib
+    sample2.oib
+    sample3.oib
 ```
 
-### 2D fluorescence images
+### Run
 
 ```bash
-fluorostats quant2d \
-  --input ./endothelial_data/ \
-  --output ./results_2d \
-  --condition-from parent
+# 3D confocal data
+fluorostats quant3d --input ./my_experiment/ --output ./results_3d/
+
+# 2D fluorescence images
+fluorostats quant2d --input ./endothelial_images/ --output ./results_2d/
 ```
 
-### Check supported formats
+### Check Your Results
+
+Open the `overlays/` folder first — each image gets a QC overlay (grayscale intensity + magenta segmentation mask) so you can immediately see if the thresholding worked.
+
+Then look at:
+- `per_file.csv` — every measurement for every file
+- `per_condition.csv` — summary statistics grouped by condition
+- `plots/summary_panel.png` — all metrics in one figure
+- `plots/pvalues.csv` — statistical comparisons (when you have replicates)
+
+## Tuning
+
+The defaults are optimized for typical fluorescence microscopy, but every dataset is different. The two most useful knobs:
+
+**Threshold method** — `otsu` (default for 3D) works well for bright, distinct signal. `li` (default for 2D) is better for dim or diffuse signal like endothelial monolayers.
 
 ```bash
-fluorostats formats
+fluorostats quant3d --input ./data/ --output ./results/ --threshold li
 ```
 
-## Output
+**Threshold scale** — multiply the computed threshold by a factor. Lower = capture more dim signal. The default (0.9 for 3D) slightly favors sensitivity over specificity.
 
-Each run produces:
+```bash
+fluorostats quant3d --input ./data/ --output ./results/ --threshold-scale 0.8
+```
 
-| File | Description |
-|------|-------------|
-| `per_file.csv` | Per-file metrics with condition and replicate ID |
-| `per_condition.csv` | Mean, std, median grouped by condition |
-| `overlays/*.png` | MIP + magenta mask overlay for visual QC |
-| `plots/summary_panel.png` | All metrics in one composite figure |
-| `plots/*_bar.png` | Bar + SEM plots (when replicates present) |
-| `plots/*_box.png` | Boxplots with individual data points |
-| `plots/pvalues.csv` | Mann-Whitney U p-values (when replicates present) |
-| `run_config.json` | Parameters used (for reproducibility) |
-
-### 3D metrics
-
-| Metric | Description |
-|--------|-------------|
-| `volume_fraction` | Fraction of voxels segmented as cell |
-| `n_components` | Number of disconnected cell clusters |
-| `euler_number` | Topological interconnectedness (more negative = more loops/tunnels) |
-| `largest_component_fraction` | Fraction of cell volume in the largest connected component |
-| `total_length_um` | Total skeleton branch length in um |
-| `n_branches` | Number of skeleton branches |
-| `n_junctions` | Number of skeleton branching points |
-| `mean_branch_length_um` | Average skeleton branch length |
-
-### 2D metrics
-
-| Metric | Description |
-|--------|-------------|
-| `area_fraction` | Fraction of pixels covered by cells |
-| `n_components` | Number of disconnected cell clusters |
-| `largest_component_fraction` | Fraction of cell area in the largest cluster |
-| `mean_cluster_area_px` | Mean cluster size in pixels |
-| `median_cluster_area_px` | Median cluster size (robust to outliers) |
-
-## CLI Options
-
-### Common options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--condition-from` | `parent` | How to assign condition labels: `parent`, `grandparent`, or `filename` |
-| `--channel` | auto | Force channel by index or name substring |
-| `--threshold` | `otsu` (3D) / `li` (2D) | Thresholding method |
-| `--threshold-scale` | `0.9` (3D) / `1.0` (2D) | Scale threshold (lower = more sensitive) |
-| `--min-size` | `64` | Minimum object size in pixels/voxels |
-| `--sigma` | `1.0` | Gaussian blur sigma |
-| `--bg-radius` | `0` (3D) / `15` (2D) | Background subtraction radius (0 = off) |
-
-### 3D-specific
-
-| Option | Description |
-|--------|-------------|
-| `--no-skeleton` | Skip skeleton analysis (faster) |
-
-### 2D-specific
-
-| Option | Description |
-|--------|-------------|
-| `--auto-crop / --no-auto-crop` | Auto-crop microscope software borders (default: on) |
+If you're unsure, run with defaults first, check the overlays, then adjust.
 
 ## Supported Formats
 
-| Extension | Microscope | Package | Install |
-|-----------|-----------|---------|---------|
-| `.tif`, `.tiff` | Universal | tifffile (core) | included |
-| `.png`, `.jpg`, `.bmp` | Exported images | imageio (core) | included |
-| `.npy` | NumPy arrays | numpy (core) | included |
-| `.oib`, `.oif` | Olympus FluoView | oiffile | `pip install fluorostats[olympus]` |
-| `.czi` | Zeiss ZEN | czifile | `pip install fluorostats[zeiss]` |
-| `.nd2` | Nikon NIS-Elements | nd2 | `pip install fluorostats[nikon]` |
-| `.lif` | Leica LAS X | readlif | `pip install fluorostats[leica]` |
+```bash
+fluorostats formats   # see what's available on your system
+```
+
+| Format | Microscope | Install |
+|--------|-----------|---------|
+| `.tif` `.tiff` | Universal / OME-TIFF / ImageJ | included |
+| `.png` `.jpg` `.bmp` | Exported snapshots | included |
+| `.npy` | NumPy arrays | included |
+| `.oib` `.oif` | Olympus FluoView | `fluorostats[olympus]` |
+| `.czi` | Zeiss ZEN | `fluorostats[zeiss]` |
+| `.nd2` | Nikon NIS-Elements | `fluorostats[nikon]` |
+| `.lif` | Leica LAS X | `fluorostats[leica]` |
 
 ## Python API
 
+For custom workflows or integration into your own scripts:
+
 ```python
-from fluorostats.io import load_volume, load_image, load_auto
+from fluorostats.io import load_auto
 from fluorostats.preprocess import select_green_channel, denoise
 from fluorostats.segment import binarize
 from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
-from fluorostats.metrics_2d import coverage_metrics
 
-# Load any supported format
-arr, meta = load_auto("sample.czi")
+# Load any format — auto-detected
+arr, meta = load_auto("my_sample.czi")
+
+# Extract green/fluorescence channel (auto-detects 488nm, FITC, GFP, etc.)
 green = select_green_channel(arr, meta["channel_names"])
 green = denoise(green)
+
+# Segment
 mask = binarize(green, method="otsu", threshold_scale=0.9)
 
-# 3D metrics
-vf = volume_fraction(mask)
-conn = connectivity_metrics(mask)
-skel = skeleton_metrics(mask, voxel_size_um=meta["voxel_size_um"])
-
-# 2D metrics
-cov = coverage_metrics(mask)
+# Measure
+print(f"Volume fraction: {volume_fraction(mask):.1%}")
+print(f"Connectivity: {connectivity_metrics(mask)}")
+print(f"Skeleton: {skeleton_metrics(mask, meta['voxel_size_um'])}")
 ```
 
-## Tests
+## All CLI Options
 
-```bash
-pip install fluorostats[dev]
-pytest tests/ -v
-```
+<details>
+<summary>fluorostats quant3d</summary>
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--input` | required | Folder containing volume files |
+| `--output` | required | Output folder for results |
+| `--condition-from` | `parent` | Label source: `parent` folder, `grandparent`, or `filename` |
+| `--channel` | auto | Force channel by index or name |
+| `--threshold` | `otsu` | Thresholding method: `otsu` or `li` |
+| `--threshold-scale` | `0.9` | Scale threshold (lower = more sensitive) |
+| `--min-size` | `64` | Min object size in voxels |
+| `--sigma` | `1.0` | Gaussian blur sigma |
+| `--bg-radius` | `0` | Background subtraction radius (0 = off) |
+| `--no-skeleton` | off | Skip skeleton analysis (faster) |
+| `--no-overlays` | off | Skip QC overlay images |
+| `--no-plots` | off | Skip comparison plots |
+
+</details>
+
+<details>
+<summary>fluorostats quant2d</summary>
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--input` | required | Folder containing image files |
+| `--output` | required | Output folder for results |
+| `--condition-from` | `parent` | Label source: `parent` folder, `grandparent`, or `filename` |
+| `--channel` | auto | Force channel by index or name |
+| `--threshold` | `li` | Thresholding method: `otsu` or `li` |
+| `--threshold-scale` | `1.0` | Scale threshold (lower = more sensitive) |
+| `--min-size` | `64` | Min object size in pixels |
+| `--sigma` | `1.0` | Gaussian blur sigma |
+| `--bg-radius` | `15` | Background subtraction radius (0 = off) |
+| `--auto-crop` | on | Auto-crop microscope software borders |
+| `--no-overlays` | off | Skip QC overlay images |
+| `--no-plots` | off | Skip comparison plots |
+
+</details>
 
 ## License
 
