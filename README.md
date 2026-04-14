@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rsiegemit/fluorostats/main/logo_v3.png" alt="FluoroStats" width="500">
+  <img src="https://raw.githubusercontent.com/rsiegemit/fluorostats/main/logo.png" alt="FluoroStats" width="500">
 </p>
 
 <p align="center">
