@@ -1,6 +1,14 @@
-# FluoroStats
+<p align="center">
+  <img src="logo.png" alt="FluoroStats" width="500">
+</p>
 
-Universal fluorescence microscopy image quantification. Segment, measure, and compare fluorescence signals across experimental conditions — from confocal z-stacks to widefield 2D images.
+<p align="center">
+  <em>Universal fluorescence microscopy image quantification</em>
+</p>
+
+---
+
+Segment, measure, and compare fluorescence signals across experimental conditions — from confocal z-stacks to widefield 2D images.
 
 ## Features
 
