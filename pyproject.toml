@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fluorostats"
+version = "0.1.0"
+description = "Universal fluorescence microscopy image quantification — 2D coverage, 3D volume fraction, connectivity, and skeleton analysis"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    {name = "Roy Siegelmann"},
+]
+keywords = ["fluorescence", "microscopy", "confocal", "image-analysis", "quantification", "segmentation", "bioimage"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-image>=0.22",
+    "tifffile>=2023.7",
+    "imageio>=2.31",
+    "imagecodecs>=2023.7",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "skan>=0.11",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+olympus = ["oiffile>=2023.8"]
+zeiss = ["czifile>=2019.7"]
+nikon = ["nd2>=0.7"]
+leica = ["readlif>=0.6"]
+all = [
+    "oiffile>=2023.8",
+    "czifile>=2019.7",
+    "nd2>=0.7",
+    "readlif>=0.6",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "oiffile>=2023.8",
+    "czifile>=2019.7",
+    "nd2>=0.7",
+    "readlif>=0.6",
+]
+
+[project.scripts]
+fluorostats = "fluorostats.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/rsiegelmann/fluorostats"
+Issues = "https://github.com/rsiegelmann/fluorostats/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
