@@ -59,11 +59,12 @@ def bar_mean_sem(
     metric: str,
     out_path: Path,
     ylabel: str | None = None,
-    show_pvalues: bool = True,
+    show_pvalues: bool = False,
 ) -> None:
-    """Bar chart with mean +/- SEM, individual replicate points, and p-values.
+    """Bar chart with mean +/- SEM and individual replicate points.
 
     Publication-standard format for n=3-5 replicates.
+    P-value brackets are off by default (use pvalues.csv instead).
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,11 +118,12 @@ def summary_panel(
     out_path: Path,
     title: str = "Quantification Summary",
     ncols: int = 4,
-    show_pvalues: bool = True,
+    show_pvalues: bool = False,
 ) -> None:
     """Multi-panel figure: one bar+SEM subplot per metric.
 
     Generates a publication-ready composite figure with all metrics.
+    P-value brackets are off by default (use pvalues.csv instead).
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
