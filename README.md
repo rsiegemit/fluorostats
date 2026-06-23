@@ -168,6 +168,125 @@ print(f"Connectivity: {connectivity_metrics(mask)}")
 print(f"Skeleton: {skeleton_metrics(mask, meta['voxel_size_um'])}")
 ```
 
+## Advanced Analysis (v0.2)
+
+Beyond the per-file metrics, FluoroStats now exposes the toolkit needed to run a full statistical analysis directly from the library — homogeneity, density normalisation, multi-group statistics, power planning, and publication-style 3D renders.
+
+### Spatial homogeneity and depth (no segmentation needed)
+
+```python
+from fluorostats.morphometry import (
+    lateral_homogeneity, depth_profile, depth_span, depth_centroid,
+)
+
+hom = lateral_homogeneity(green, tiles=8)        # Gini + CV across an 8x8 XY grid
+prof = depth_profile(green)                       # mean intensity vs z slice
+span = depth_span(green, voxel_size_um=meta["voxel_size_um"])
+cent = depth_centroid(green, voxel_size_um=meta["voxel_size_um"])
+```
+
+Useful for "is the signal uniformly distributed?" and "how deep do cells penetrate?" questions without committing to a binary mask.
+
+### Per-object measurements
+
+```python
+from fluorostats.objects import (
+    label_3d, equivalent_diameters_um, object_density_per_mm3, centroid_homogeneity,
+)
+
+labels, n = label_3d(mask, min_size=64)
+diams_um = equivalent_diameters_um(labels, meta["voxel_size_um"])
+density = object_density_per_mm3(n, mask.shape, meta["voxel_size_um"])
+centroids = object_centroids(labels)
+spatial = centroid_homogeneity(centroids, mask.shape, tiles=8)
+```
+
+Right tool for nuclei sizing (DAPI), cluster-size distributions, and centroid-based homogeneity checks.
+
+### FOV-normalised densities (digital-zoom-safe)
+
+```python
+from fluorostats.metrics_3d import normalise_skeleton_metrics
+
+skel = skeleton_metrics(mask, meta["voxel_size_um"])
+skel = normalise_skeleton_metrics(skel, mask.shape, meta["voxel_size_um"])
+# adds length_density_um_per_mm3, junction_density_per_mm3, branch_density_per_mm3
+```
+
+Use whenever stacks have different voxel sizes — counts/lengths per FOV are not comparable, but per-mm³ densities are.
+
+### Multi-group statistics
+
+```python
+from fluorostats.stats import (
+    stratified_mann_whitney, bootstrap_fold_change_ci,
+    stouffer_combine, scheirer_ray_hare, cliffs_delta, bh_fdr,
+)
+
+# Stratified Mann-Whitney + BH-FDR across (region × metric)
+stats_df = stratified_mann_whitney(
+    df, value_cols=["volume_fraction", "length_density_um_per_mm3"],
+    group_col="material", group_a="GelMA", group_b="Hybrid",
+    strata=["day", "region"],
+)
+
+# Distribution-free fold-change interval
+ci = bootstrap_fold_change_ci(gelma_vf, hybrid_vf, n_boot=5000)
+# {"fold_change_median": 9.5, "ci_low": 2.5, "ci_high": 38.0, ...}
+
+# Pool independent evidence (e.g. across modalities)
+pooled = stouffer_combine([p_live_dead, p_immuno])
+
+# Non-parametric 2-way ANOVA on ranks (Scheirer-Ray-Hare)
+anova = scheirer_ray_hare(df, value_col="lateral_gini",
+                          factor_a="material", factor_b="day")
+```
+
+### Bootstrap power analysis
+
+```python
+from fluorostats.power import bootstrap_power, power_curve, fdr_power_curve
+
+# How many replicates do I need to clear FDR at q < 0.05?
+curve = power_curve(samples_a, samples_b,
+                    ns=[4, 6, 8, 10, 12, 15, 20], n_sims=1000)
+
+# Joint power under BH-FDR across multiple metrics
+multi = fdr_power_curve(samples_per_metric_a, samples_per_metric_b,
+                        ns=[4, 8, 12, 20], n_sims=500)
+```
+
+### Publication 3D rendering
+
+```python
+from fluorostats.render3d import render_isosurface, render_voxel_cloud, save_isosurface
+
+save_isosurface(
+    mask, "out/iso.png",
+    voxel_size_um=meta["voxel_size_um"],
+    color="#d62728", downsample=(1, 4, 4), scalebar_um=100,
+)
+```
+
+Marching-cubes isosurface on a physical-micrometre grid, or chunky voxel-cloud variant. Both compose into multi-panel figures via the standard matplotlib subplot machinery.
+
+### Effect-size grids and forest plots
+
+```python
+from fluorostats.plots import effect_size_heatmap, forest_plot, modality_panel
+
+effect_size_heatmap(stats_df, "out/heatmap.png",
+                    row_col="metric", col_col="region",
+                    value_col="cliffs_delta", sig_col="sig_q05")
+
+forest_plot(bootstrap_ci_df, "out/forest.png",
+            label_col="metric", center_col="fold_change_median",
+            lo_col="ci_low", hi_col="ci_high", log_scale=True)
+
+modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
+               modality_col="modality", out_path="out/modality.png")
+```
+
 ## All CLI Options
 
 <details>

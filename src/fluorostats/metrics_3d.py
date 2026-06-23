@@ -1,4 +1,10 @@
-"""3D volumetric metrics: volume fraction, connectivity, skeleton analysis."""
+"""3D volumetric metrics: volume fraction, connectivity, skeleton analysis.
+
+Also exposes field-of-view normalisation helpers (``fov_volume_mm3`` and
+``*_per_mm3``). Use these whenever stacks have different voxel sizes
+(digital-zoom heterogeneity); they convert per-FOV counts to absolute
+densities that can be compared across acquisition settings.
+"""
 
 from __future__ import annotations
 
@@ -96,3 +102,50 @@ def skeleton_metrics(
             "n_junctions": 0,
             "mean_branch_length_um": 0.0,
         }
+
+
+# ---------------------------------------------------------------------------
+# FOV-normalised densities (voxel-size invariant)
+# ---------------------------------------------------------------------------
+
+def fov_volume_mm3(
+    shape_zyx: tuple[int, int, int],
+    voxel_size_um: tuple[float, float, float],
+) -> float:
+    """Imaged volume in mm³ from voxel count and physical voxel size.
+
+    Use to normalise count- or length-style metrics into densities that
+    are comparable across stacks with different digital zoom.
+    """
+    return float(np.prod(shape_zyx)) * float(np.prod(voxel_size_um)) * 1e-9
+
+
+def density_per_mm3(count: float, shape_zyx: tuple[int, int, int],
+                    voxel_size_um: tuple[float, float, float]) -> float:
+    """Convert a per-FOV count (or length in µm) to per-mm³ density."""
+    v = fov_volume_mm3(shape_zyx, voxel_size_um)
+    return float(count / v) if v > 0 else 0.0
+
+
+def normalise_skeleton_metrics(
+    metrics: dict,
+    shape_zyx: tuple[int, int, int],
+    voxel_size_um: tuple[float, float, float],
+) -> dict:
+    """Append `length_density_um_per_mm3` and `junction_density_per_mm3`.
+
+    Returns a new dict; the input is not mutated.
+    """
+    v = fov_volume_mm3(shape_zyx, voxel_size_um)
+    out = dict(metrics)
+    out["fov_volume_mm3"] = v
+    out["length_density_um_per_mm3"] = (
+        float(metrics.get("total_length_um", 0.0) / v) if v > 0 else 0.0
+    )
+    out["junction_density_per_mm3"] = (
+        float(metrics.get("n_junctions", 0) / v) if v > 0 else 0.0
+    )
+    out["branch_density_per_mm3"] = (
+        float(metrics.get("n_branches", 0) / v) if v > 0 else 0.0
+    )
+    return out

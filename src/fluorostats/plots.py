@@ -308,3 +308,211 @@ _LABELS = {
 
 def _label_for(metric: str) -> str:
     return _LABELS.get(metric, metric.replace("_", " ").title())
+
+
+# ---------------------------------------------------------------------------
+# Effect-size grids and forest plots
+# ---------------------------------------------------------------------------
+
+def effect_size_heatmap(
+    stats_df: pd.DataFrame,
+    out_path: Path | None = None,
+    *,
+    row_col: str = "metric",
+    col_col: str = "stratum",
+    value_col: str = "cliffs_delta",
+    sig_col: str | None = "sig_q05",
+    cmap: str = "RdBu_r",
+    vmin: float = -1.0,
+    vmax: float = 1.0,
+    title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+):
+    """Heatmap of an effect-size column across (metric × stratum).
+
+    Cells flagged by `sig_col` (boolean column, e.g. BH-FDR sig) are
+    annotated with a star. Pass a long-format DataFrame produced by
+    :func:`fluorostats.stats.stratified_mann_whitney` (or similar);
+    if `col_col` does not exist, all rows are collapsed into a single
+    "all" column.
+    """
+    df = stats_df.copy()
+    if col_col not in df.columns:
+        df[col_col] = "all"
+    pivot = df.pivot_table(index=row_col, columns=col_col, values=value_col,
+                           aggfunc="first")
+    sig = (df.pivot_table(index=row_col, columns=col_col, values=sig_col,
+                          aggfunc="first").fillna(False).astype(bool)
+           if sig_col and sig_col in df.columns else None)
+
+    nrows, ncols = pivot.shape
+    figsize = figsize or (max(4, ncols * 1.1), max(2, nrows * 0.5))
+    fig, ax = plt.subplots(figsize=figsize)
+    im = ax.imshow(pivot.values, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
+    ax.set_xticks(range(ncols)); ax.set_xticklabels(pivot.columns, rotation=45, ha="right")
+    ax.set_yticks(range(nrows)); ax.set_yticklabels([_label_for(r) for r in pivot.index])
+    for i in range(nrows):
+        for j in range(ncols):
+            v = pivot.values[i, j]
+            if not np.isnan(v):
+                txt = f"{v:.2f}"
+                if sig is not None and sig.values[i, j]:
+                    txt += "*"
+                ax.text(j, i, txt, ha="center", va="center", fontsize=8,
+                        color="white" if abs(v) > 0.6 else "black")
+    cbar = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
+    cbar.set_label(value_col, fontsize=10)
+    if title:
+        ax.set_title(title, fontsize=11)
+    fig.tight_layout()
+    if out_path is not None:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
+        plt.close(fig)
+    return fig
+
+
+def forest_plot(
+    df: pd.DataFrame,
+    out_path: Path | None = None,
+    *,
+    label_col: str = "label",
+    center_col: str = "fold_change_median",
+    lo_col: str = "ci_low",
+    hi_col: str = "ci_high",
+    reference: float = 1.0,
+    log_scale: bool = True,
+    color: str = "#d62728",
+    title: str | None = None,
+    xlabel: str | None = None,
+    figsize: tuple[float, float] | None = None,
+):
+    """Forest plot — one row per measurement, center ± [lo, hi]."""
+    df = df.copy()
+    df = df.sort_values(center_col).reset_index(drop=True)
+    y = np.arange(len(df))
+    err = np.array([df[center_col] - df[lo_col], df[hi_col] - df[center_col]])
+    figsize = figsize or (8, max(2, 0.4 * len(df)))
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.barh(y, df[center_col], xerr=err, color=color, alpha=0.65,
+            edgecolor="black", capsize=4)
+    if reference is not None:
+        ax.axvline(reference, color="black", lw=0.7)
+    if log_scale:
+        ax.set_xscale("log")
+    ax.set_yticks(y); ax.set_yticklabels(df[label_col].tolist(), fontsize=9)
+    ax.set_xlabel(xlabel or f"{center_col} (95% CI)")
+    if title:
+        ax.set_title(title, fontsize=11)
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    fig.tight_layout()
+    if out_path is not None:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
+        plt.close(fig)
+    return fig
+
+
+def condition_strip(
+    df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    *,
+    hue_col: str | None = None,
+    marker_col: str | None = None,
+    ax=None,
+    palette: dict | None = None,
+    markers: dict | None = None,
+    show_median: bool = True,
+):
+    """Strip plot with optional hue and per-point marker differentiation.
+
+    `marker_col` is handy to distinguish e.g. "original" vs "new" batches
+    in the same condition strip (▲/○) without duplicating the x ticks.
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(max(4, df[x_col].nunique() * 0.8), 4))
+    rng = np.random.default_rng(0)
+    x_levels = sorted(df[x_col].dropna().unique())
+    hue_levels = sorted(df[hue_col].dropna().unique()) if hue_col else [None]
+    marker_levels = sorted(df[marker_col].dropna().unique()) if marker_col else [None]
+    palette = palette or {h: c for h, c in zip(
+        hue_levels, plt.cm.Set2(np.linspace(0, 1, max(1, len(hue_levels))))
+    )}
+    markers = markers or {m: ("^" if i % 2 else "o") for i, m in enumerate(marker_levels)}
+    n_hue = max(1, len(hue_levels))
+    for xi, xv in enumerate(x_levels):
+        for hi, hv in enumerate(hue_levels):
+            for mv in marker_levels:
+                sel = df[x_col] == xv
+                if hue_col:
+                    sel &= df[hue_col] == hv
+                if marker_col:
+                    sel &= df[marker_col] == mv
+                vals = df.loc[sel, y_col].dropna().values
+                if vals.size == 0:
+                    continue
+                offset = (hi - (n_hue - 1) / 2) * 0.25
+                x = xi + offset + rng.uniform(-0.05, 0.05, vals.size)
+                ax.scatter(x, vals, color=palette.get(hv, "k"),
+                           marker=markers.get(mv, "o"),
+                           s=55, alpha=0.8, edgecolors="black", linewidths=0.4)
+                if show_median:
+                    ax.plot([xi + offset - 0.13, xi + offset + 0.13],
+                            [np.median(vals)] * 2,
+                            color=palette.get(hv, "k"), linewidth=3)
+    ax.set_xticks(range(len(x_levels)))
+    ax.set_xticklabels(x_levels)
+    ax.set_ylabel(_label_for(y_col))
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    if hue_col and len(hue_levels) > 1:
+        from matplotlib.lines import Line2D
+        handles = [Line2D([0], [0], marker="o", color="w",
+                          markerfacecolor=palette[h], markersize=8, label=str(h))
+                   for h in hue_levels]
+        ax.legend(handles=handles, loc="best", frameon=False)
+    return ax
+
+
+def modality_panel(
+    df: pd.DataFrame,
+    metrics: list[str],
+    *,
+    modality_col: str = "modality",
+    group_col: str = "condition",
+    out_path: Path | None = None,
+    figsize: tuple[float, float] | None = None,
+    title: str | None = None,
+):
+    """Compare a set of metrics across staining modalities.
+
+    Produces a grid with rows = modalities, cols = metrics. Each cell is
+    a condition strip with median markers.
+    """
+    modalities = sorted(df[modality_col].dropna().unique())
+    nrows, ncols = len(modalities), len(metrics)
+    figsize = figsize or (ncols * 3.5, nrows * 3.0)
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+    for i, mod in enumerate(modalities):
+        sub = df[df[modality_col] == mod]
+        for j, metric in enumerate(metrics):
+            ax = axes[i, j]
+            if metric not in sub.columns:
+                ax.set_visible(False)
+                continue
+            condition_strip(sub, group_col, metric, ax=ax)
+            if j == 0:
+                ax.set_ylabel(f"{mod}\n{_label_for(metric)}",
+                              fontsize=9, fontweight="bold")
+            else:
+                ax.set_ylabel(_label_for(metric), fontsize=9)
+            if i < nrows - 1:
+                ax.set_xticklabels([])
+    if title:
+        fig.suptitle(title, fontsize=12, fontweight="bold")
+    fig.tight_layout()
+    if out_path is not None:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
+        plt.close(fig)
+    return fig
