@@ -22,7 +22,7 @@ Public API surface, grouped by module:
   - ``report`` — per-condition aggregation.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from . import (  # noqa: F401
     io,
@@ -36,6 +36,7 @@ from . import (  # noqa: F401
     power,
     render3d,
     plots,
+    style,
     qc,
     report,
 )

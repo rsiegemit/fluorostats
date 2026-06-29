@@ -18,6 +18,10 @@ from fluorostats.render3d import (
     render_isosurface,
     mip_overlay,
     save_isosurface,
+    live_dead_mip,
+    mip_grid,
+    depth_coded_mip,
+    layer_split_mip,
 )
 
 
@@ -100,3 +104,59 @@ def test_save_isosurface_writes_file(tmp_path):
     save_isosurface(mask, out_path, voxel_size_um=(2.0, 1.0, 1.0),
                     downsample=(1, 4, 4), scalebar_um=20.0)
     assert out_path.exists() and out_path.stat().st_size > 1000
+
+
+def test_render_isosurface_dark_style():
+    mask = np.zeros((8, 32, 32), dtype=bool)
+    mask[2:6, 8:24, 8:24] = True
+    fig = plt.figure(figsize=(4, 4))
+    ax = fig.add_subplot(111, projection="3d")
+    render_isosurface(mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax,
+                      style="dark", smooth_iter=2, color="#F5C518")
+    plt.close(fig)
+
+
+def test_live_dead_mip_returns_axis():
+    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32) * 100
+    dead = np.random.RandomState(1).rand(4, 16, 16).astype(np.float32) * 50
+    fig, ax = plt.subplots()
+    out = live_dead_mip(live, dead, ax=ax)
+    assert out is ax
+    plt.close(fig)
+
+
+def test_live_dead_mip_handles_zero_dead():
+    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
+    fig, ax = plt.subplots()
+    live_dead_mip(live, dead=None, ax=ax)
+    plt.close(fig)
+
+
+def test_mip_grid_writes_cells(tmp_path):
+    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
+    cells = {
+        ("D1", "top"): {"live": live},
+        ("D1", "middle"): {"live": live * 0.5},
+        ("D7", "top"): {"live": live * 0.8},
+        ("D7", "middle"): {"live": live * 1.2},
+    }
+    fig = mip_grid(cells, rows=["D1", "D7"], cols=["top", "middle"],
+                   title="test grid")
+    out = tmp_path / "grid.png"
+    fig.savefig(out, dpi=100)
+    plt.close(fig)
+    assert out.exists() and out.stat().st_size > 1000
+
+
+def test_depth_coded_mip_runs():
+    vol = np.random.RandomState(0).rand(8, 16, 16).astype(np.float32)
+    fig, ax = plt.subplots()
+    depth_coded_mip(vol, ax=ax)
+    plt.close(fig)
+
+
+def test_layer_split_mip_runs():
+    vol = np.random.RandomState(0).rand(10, 16, 16).astype(np.float32)
+    fig, (a, b) = plt.subplots(1, 2)
+    layer_split_mip(vol, ax_top=a, ax_bot=b, split=0.5)
+    plt.close(fig)

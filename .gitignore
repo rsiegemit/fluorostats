@@ -28,3 +28,4 @@ preset_comparison*/
 optimized_output/
 publication_figures/
 cli_test*/
+.claude/
