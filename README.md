@@ -168,9 +168,9 @@ print(f"Connectivity: {connectivity_metrics(mask)}")
 print(f"Skeleton: {skeleton_metrics(mask, meta['voxel_size_um'])}")
 ```
 
-## Advanced Analysis (v0.2)
+## Advanced Analysis
 
-Beyond the per-file metrics, FluoroStats now exposes the toolkit needed to run a full statistical analysis directly from the library — homogeneity, density normalisation, multi-group statistics, power planning, and publication-style 3D renders.
+Beyond the per-file metrics, FluoroStats exposes the toolkit needed to run a full statistical analysis directly from the library — homogeneity, density normalisation, multi-group statistics, power planning, publication styling, and 3D / slide-style rendering.
 
 ### Spatial homogeneity and depth (no segmentation needed)
 
@@ -256,19 +256,54 @@ multi = fdr_power_curve(samples_per_metric_a, samples_per_metric_b,
                         ns=[4, 8, 12, 20], n_sims=500)
 ```
 
-### Publication 3D rendering
+### Publication styling
+
+```python
+from fluorostats.style import apply_style, PALETTE, material_color
+
+apply_style()                       # clean typography, spines, grid, palette
+color = material_color("Hybrid")    # consistent per-condition colors
+```
+
+`apply_style()` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` / `MATERIAL_COLORS` give a consistent color story, and `DARK_PALETTE` drives the black-background 3D look below.
+
+### 3D reconstruction (isosurface, voxel cloud)
 
 ```python
 from fluorostats.render3d import render_isosurface, render_voxel_cloud, save_isosurface
 
-save_isosurface(
-    mask, "out/iso.png",
-    voxel_size_um=meta["voxel_size_um"],
-    color="#d62728", downsample=(1, 4, 4), scalebar_um=100,
-)
+# Light publication look on a physical-µm grid
+save_isosurface(mask, "out/iso.png", voxel_size_um=meta["voxel_size_um"],
+                color="#d62728", downsample=(1, 4, 4), scalebar_um=100)
+
+# Dark, smooth, shaded mesh (reference-figure style)
+render_isosurface(mask, voxel_size_um=meta["voxel_size_um"],
+                  style="dark", smooth_iter=6, shade=True,
+                  color="#F5C518", scalebar_um=100)
 ```
 
-Marching-cubes isosurface on a physical-micrometre grid, or chunky voxel-cloud variant. Both compose into multi-panel figures via the standard matplotlib subplot machinery.
+Marching-cubes isosurface on a physical-micrometre grid. `style="dark"` renders on black with a faint box and white scalebar; `smooth_iter` applies Laplacian mesh smoothing for continuous tubes; `shade=True` adds Lambertian per-face shading for depth. `render_voxel_cloud` is a chunky voxel variant.
+
+### Slide-style image panels (no segmentation)
+
+```python
+from fluorostats.render3d import live_dead_mip, mip_grid, layer_split_mip, depth_coded_mip
+
+# Two-channel raw MIP (green live + red dead), gamma + percentile clipped
+live_dead_mip(live_channel, dead_channel, ax=ax)
+
+# Grid of MIPs — any cell renderer, any {(row, col): kwargs} mapping
+fig = mip_grid(cells, rows=["top", "middle", "bottom"], cols=conditions,
+               render_func=live_dead_mip)
+
+# Top vs middle layer split of one volume (depth-resolved comparison)
+layer_split_mip(volume, ax_top=ax1, ax_bot=ax2, split=0.5)
+
+# Depth-coded MIP — single-panel 3D intuition via colormap
+depth_coded_mip(volume, ax=ax, cmap="viridis")
+```
+
+These build the qualitative image panels (raw Live/Dead grids, top-vs-middle layer views, depth maps) straight from the intensity volume — useful alongside the quantitative figures.
 
 ### Effect-size grids and forest plots
 

@@ -15,9 +15,13 @@ Public API surface, grouped by module:
   - ``stats`` — Mann-Whitney, BH-FDR, Cliff's delta, bootstrap fold-change
     CIs, Stouffer pooling, Scheirer-Ray-Hare 2-way non-parametric ANOVA.
   - ``power`` — bootstrap power and power curves.
-  - ``render3d`` — isosurface mesh + voxel cloud + MIP overlay.
+  - ``render3d`` — isosurface mesh (light/dark, smoothed, shaded), voxel
+    cloud, two-channel live/dead MIP, MIP grid, depth-coded MIP, and
+    top/bottom layer split for slide-style image panels.
   - ``plots`` — bar/box/strip plots, summary panels, effect-size heatmaps,
     forest plots, modality panels.
+  - ``style`` — publication matplotlib defaults, palette, and per-condition
+    color lookup (light) plus the dark palette for reference-style renders.
   - ``qc`` — segmentation QC overlays.
   - ``report`` — per-condition aggregation.
 """
