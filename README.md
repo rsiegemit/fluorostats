@@ -239,6 +239,44 @@ rep = agreement_report(fluorostats_values, ground_truth, "fluorostats", "manual"
 
 For validating fluorostats (or any method) against ground truth or another tool — Bland-Altman limits of agreement, Lin's concordance correlation coefficient, and ICC(A,1) absolute agreement in one call.
 
+### Live/Dead viability quantification
+
+```python
+from fluorostats.viability import (
+    live_dead_fractions, viability_depth_profile,
+    viability_2d_vs_3d, attenuation_correct,
+)
+
+frac = live_dead_fractions(live_channel, dead_channel)   # live/dead fraction + viability
+prof = viability_depth_profile(live_channel, dead_channel)  # per-z live/dead — depth gradient
+cmp  = viability_2d_vs_3d(live_channel)   # how much a mid-plane / MIP overestimates the true 3D fraction
+corr = attenuation_correct(volume)        # per-z normalisation: biological death vs optical decay
+```
+
+Quantifies the Calcein-AM / PI (live/dead) assay in a depth-aware way. In thick 3D samples a single plane or a maximum-intensity projection overestimates viability and misses depth-dependent core death — `viability_2d_vs_3d` measures that overestimation and `viability_depth_profile` exposes the gradient.
+
+### Instance-segmentation validation
+
+```python
+from fluorostats.validate import instance_f1, average_precision
+
+f1 = instance_f1(pred_labels, gt_labels, iou_threshold=0.5)   # F1, precision, recall, mean IoU
+ap = average_precision(pred_labels, gt_labels)                # mean AP over IoU 0.5–0.9 (DSB2018 convention)
+```
+
+Score a labeled prediction against a labeled ground truth with the standard DSB2018 / Cell Tracking Challenge instance metrics — lets fluorostats validate itself (or any tool) against reference annotations in-library.
+
+### Splitting touching objects
+
+```python
+from fluorostats.objects import watershed_split, clear_border_labels
+
+labels, n = watershed_split(mask, min_distance=5)   # separate touching nuclei/cells
+labels, n = clear_border_labels(labels)             # drop partial edge objects for unbiased counts
+```
+
+Connected-component labeling merges touching objects; `watershed_split` seeds a distance-transform watershed to separate them (the training-free fix for crowded fields), and `clear_border_labels` removes edge objects that would bias counts.
+
 ### Multi-group statistics
 
 ```python
