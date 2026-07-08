@@ -42,6 +42,67 @@ def label_3d(mask: np.ndarray, min_size: int = 0) -> tuple[np.ndarray, int]:
     return remap[labels], int(keep.sum())
 
 
+def watershed_split(
+    mask: np.ndarray,
+    min_size: int = 0,
+    min_distance: int = 5,
+    footprint_size: int = 3,
+) -> tuple[np.ndarray, int]:
+    """Split touching convex objects via a distance-transform watershed.
+
+    Connected-component labeling merges touching nuclei/cells into one object
+    (fluorostats' main under-count failure mode in crowded fields). This seeds
+    a watershed at local maxima of the distance transform to separate them —
+    the classical fix, no training required.
+
+    Parameters
+    ----------
+    mask : np.ndarray of bool
+    min_size : int
+        Drop objects below this voxel count after splitting.
+    min_distance : int
+        Minimum separation (voxels) between seed maxima; larger = fewer splits.
+    footprint_size : int
+        Size of the local-maximum neighbourhood.
+
+    Returns (labels, n).
+    """
+    from scipy.ndimage import distance_transform_edt, maximum_filter
+    from skimage.segmentation import watershed as _watershed
+
+    m = mask > 0
+    if not m.any():
+        return np.zeros(m.shape, int), 0
+    dist = distance_transform_edt(m)
+    fp = np.ones((footprint_size,) * m.ndim, dtype=bool)
+    local_max = (maximum_filter(dist, footprint=fp) == dist) & (dist > min_distance)
+    markers, _ = ndi.label(local_max)
+    labels = _watershed(-dist, markers, mask=m)
+    if min_size > 0:
+        labels, n = label_3d(labels > 0, min_size=0)  # relabel contiguous
+        # re-apply size filter on the watershed labels
+        sizes = np.bincount(labels.ravel())
+        keep = sizes >= min_size
+        keep[0] = False
+        if not keep.any():
+            return np.zeros_like(labels), 0
+        remap = np.zeros(sizes.size, dtype=labels.dtype)
+        remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
+        return remap[labels], int(keep.sum())
+    return labels, int(labels.max())
+
+
+def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
+    """Remove objects touching any image border and relabel.
+
+    Useful for count endpoints where partial edge objects bias the total
+    (e.g. BBBC039 ground truth excludes border nuclei). Returns (labels, n).
+    """
+    from skimage.segmentation import clear_border
+    cleared = clear_border(labels)
+    return label_3d(cleared > 0, min_size=0)
+
+
 def object_volumes_voxels(labels: np.ndarray) -> np.ndarray:
     """Per-object volume in voxels (excluding background label 0)."""
     if labels.max() == 0:

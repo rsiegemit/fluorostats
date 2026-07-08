@@ -15,7 +15,12 @@ Public API surface, grouped by module:
   - ``morphometry`` — intensity-only spatial homogeneity, depth profiles,
     depth span, depth centroid (no segmentation needed).
   - ``objects`` — per-object volumes, equivalent diameters, centroids,
-    object density, centroid homogeneity.
+    object density, centroid homogeneity, watershed splitting of touching
+    objects, and border-object clearing.
+  - ``viability`` — Live/Dead quantification: live/dead fractions, depth-resolved
+    viability profile, 2D-vs-3D overestimation, attenuation correction.
+  - ``validate`` — instance-segmentation metrics: instance F1 / precision /
+    recall and average precision (AP) at IoU thresholds.
   - ``stats`` — Mann-Whitney, BH-FDR, Cliff's delta, bootstrap fold-change
     CIs, Stouffer pooling, Scheirer-Ray-Hare 2-way non-parametric ANOVA.
   - ``power`` — bootstrap power and power curves.
@@ -30,7 +35,7 @@ Public API surface, grouped by module:
   - ``report`` — per-condition aggregation.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from . import (  # noqa: F401
     io,
@@ -41,8 +46,10 @@ from . import (  # noqa: F401
     metrics_2d,
     morphometry,
     objects,
+    viability,
     stats,
     agreement,
+    validate,
     power,
     render3d,
     plots,
