@@ -49,7 +49,7 @@ validated. Then the paper can be cited by the Extrusion bioprinting paper.
 - All additions are OPT-IN / additive → **existing 3D Live/Dead outputs unchanged,
   no rerun triggered.** README + __init__ docstrings document them.
 
-## Benchmark campaign — DONE (39 benchmarks, 30+ reference methods, ≥4 comparators each)
+## Benchmark campaign — DONE (44 benchmarks, 30+ reference methods, ≥4 comparators each)
 See `benchmarks/00_BENCHMARK_RESULTS.md` for the full table. Headlines:
 - **Nuclei 2D (BBBC039, 12 methods):** fluorostats F1 0.90 ≥ StarDist 0.87 /
   Cellpose 0.87; on DSB2018 (StarDist's own data) fluorostats 0.789 = ~91% of
@@ -63,6 +63,12 @@ See `benchmarks/00_BENCHMARK_RESULTS.md` for the full table. Headlines:
   euler_number ρ=1.0, homogeneity vs 5 spatial stats ρ 0.96–0.997.
 - **DL baselines validated** to reproduce published F1 before comparison
   (StarDist 0.871≈0.864 published; Cellpose 0.862). See `data/PUBLISHED_BASELINES.md`.
+- **Full module audit done** — every quantitative function benchmarked vs ≥4
+  methods. Last 5 gaps closed: viability (6 methods, 2D biases live fraction
+  +5–25%), stratified_mann_whitney (exact vs scipy), centroid_homogeneity
+  (ρ=0.975), prune_skeleton (best of 5), background_subtract (top-hat r45 best of
+  6). Only io/report/plots/qc/render3d/style remain un-benchmarked (viz/utility,
+  no external method to compare). External viability-tool comparison: in progress.
 
 ## Honesty ledger (stated, not hidden)
 - Crowded/overlapping nuclei: fluorostats collapses — DL territory.

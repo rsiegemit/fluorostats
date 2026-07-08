@@ -38,6 +38,11 @@ where `pip install --user` works.
 | B-skelmeth | b_skeleton_methods.py | synthetic trees | Lee-1994, medial_axis, thin, Zhang | b_skeleton_methods.csv | all 4 recover branches exactly | ✅ |
 | B-depth | b_depth_metrics.py | synthetic z-gradient | intensity-centroid, geometric, peak, median, FWHM | b_depth_metrics.csv | fluorostats centroid validated (0.07 err) | ✅ |
 | B-denoise | b_denoising.py | BBBC024+noise | none, fluorostats-gaussian, median, gaussian-σ2, TV | b_denoising.csv | fluorostats recovers Dice 0.41→0.91 at high noise | ✅ |
+| V-strat | b_stratified_stats.py | synthetic strata | scipy per-stratum MWU + hand-BH | b_stratified_stats.csv | raw p + q both exact | ✅ |
+| B-viab-multi | b3_viability_multi.py | S-BIAD2130 Live/Dead | 3D, midplane, MIP, per-slice, attn, focus (6) | b3_viability_multi.csv | 2D biases viability +5% (MIP), +25% (mean-slice) | ✅ |
+| B-centroid | b_centroid_homogeneity.py | synthetic point patterns | Clark-Evans, Morisita, quadrat-var | b_centroid_homogeneity.csv | ρ=0.975 vs clustering; 0.99 vs stats | ✅ |
+| B-prune | b_prune_skeleton.py | spurred trees | no-prune, skan leaf-prune ×2, fluorostats ×2 | b_prune_skeleton.csv | fluorostats prune best (err 3.7) | ✅ |
+| B-bgsub | b_background_subtract.py | BBBC024 uneven illum. | none, gaussian, morph-open, rolling-ball, top-hat ×2 | b_background_subtract.csv | fluorostats top-hat(r45) best (0.956) | ✅ |
 | B-connect | b_connectivity_discrimination.py | synthetic fragment→connected | LCC, Euler, n_comp, percolation, fragmentation | connectivity_discrimination_correlations.csv | euler_number best (ρ=1.0), spans both regimes | ✅ |
 | B-density | b_density_normalization.py | BBBC024 zoom series | per-mm³, raw, per-Mpx, per-area, per-slice | b_density_normalization_cv.csv | fluorostats per-mm³ zoom-invariant (CV=0) vs 4 varying | ✅ |
 | V-agreement | b_agreement_validation.py | synthetic paired | Lin formula, Pearson-decomp, ANOVA-ICC, numpy BA | b_agreement_validation.csv | 11/11 exact to machine precision | ✅ |

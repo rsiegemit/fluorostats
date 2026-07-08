@@ -262,6 +262,35 @@ PASS** vs an independent IoU matcher and the Kaggle DSB2018 AP formula.
 Spearman ~0.9 vs GT; validated. (Cluster COUNT over-counts as expected for
 threshold+CC on touching nuclei.)
 
+## 11. Remaining-capability coverage — the last 5 gaps closed (≥4 comparators each)
+
+After a full module audit, five quantitative capabilities that were unbenchmarked
+or under-compared were closed:
+
+**Viability module (S-BIAD2130 Live/Dead, 6 reduction methods):** the true 3D
+voxelwise live fraction (0.570) is the reference; 2D/heuristic shortcuts bias it
+upward — MIP +5.0%, midplane +1.5%, brightest-focus +1.7%, and naive
+mean-of-per-slice **+25.2%** (it over-weights sparse deep slices). Attenuation
+correction stays within 2.7%. Quantifies exactly why 3D viability ≠ any 2D readout
+— the flagship methods-paper claim, now with ≥4 comparators.
+
+**stratified_mann_whitney:** raw per-stratum p-values match scipy exactly and the
+BH-FDR grid matches a hand-coded reference exactly — stats module now 7/7 validated.
+
+**centroid_homogeneity (object-based spatial uniformity):** tracks a
+regular→clustered sweep at Spearman ρ=+0.975 and agrees with Clark-Evans /
+Morisita / quadrat-variance at |ρ| 0.99.
+
+**prune_skeleton (spur removal):** on trees with known spurs, fluorostats pruning
+gives the lowest branch-count error (mean 3.7) vs no-prune (16.3) and an
+independent skan leaf-prune (5.3) — best of 5.
+
+**background_subtract (uneven illumination):** with a correctly sized radius
+(> object scale) fluorostats white-top-hat is the **best of 6** correction methods
+(Dice 0.956) vs rolling-ball 0.861, gaussian-highpass 0.855, none 0.759; a
+too-small radius (r15, 0.664) honestly shows top-hat's radius-must-exceed-object
+rule.
+
 ## Headline claims supported by these data
 
 1. **On well-separated nuclei, fluorostats matches or beats validated DL

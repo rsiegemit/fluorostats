@@ -1,0 +1,16 @@
+n_spurs,true_branches,method,measured,err
+5,15,no_prune,21,6
+5,15,fluorostats_prune_L6,18,3
+5,15,fluorostats_prune_L10,10,5
+5,15,skan_leafprune_L6(ref),17,2
+5,15,skan_leafprune_L10(ref),15,0
+10,15,no_prune,28,13
+10,15,fluorostats_prune_L6,18,3
+10,15,fluorostats_prune_L10,12,3
+10,15,skan_leafprune_L6(ref),22,7
+10,15,skan_leafprune_L10(ref),19,4
+20,15,no_prune,45,30
+20,15,fluorostats_prune_L6,22,7
+20,15,fluorostats_prune_L10,18,3
+20,15,skan_leafprune_L6(ref),31,16
+20,15,skan_leafprune_L10(ref),27,12
