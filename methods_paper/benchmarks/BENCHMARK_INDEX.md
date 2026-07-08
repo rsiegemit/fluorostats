@@ -43,6 +43,10 @@ where `pip install --user` works.
 | B-centroid | b_centroid_homogeneity.py | synthetic point patterns | Clark-Evans, Morisita, quadrat-var | b_centroid_homogeneity.csv | ρ=0.975 vs clustering; 0.99 vs stats | ✅ |
 | B-prune | b_prune_skeleton.py | spurred trees | no-prune, skan leaf-prune ×2, fluorostats ×2 | b_prune_skeleton.csv | fluorostats prune best (err 3.7) | ✅ |
 | B-bgsub | b_background_subtract.py | BBBC024 uneven illum. | none, gaussian, morph-open, rolling-ball, top-hat ×2 | b_background_subtract.csv | fluorostats top-hat(r45) best (0.956) | ✅ |
+| B-viab-ext | b_viability_external.py | Kerkhoff Zenodo 10395753 (synthetic GT) | Fiji macro peak-count, fs area/objcount/maxima, Otsu-CC | b_viability_external.csv | fs maxima ties published macro (MAE 0.016, CCC 0.987) | ✅ |
+| B-viab-auto | b_viability_auto.py | synthetic + Kerkhoff | cc, maxima, watershed, auto | b_viability_auto.csv | auto safe (3/5); crowding≈noise, so conservative | ✅ |
+| B-maxregime | b_maxima_regimes.py | synthetic size/noise sweep | maxima, watershed, CC | b_maxima_regimes.csv | maxima NOT universal — over-counts flat/noisy | ✅ |
+| B-timing-all | b_timing_all_metrics.py | BBBC024/039 + Kerkhoff | every fs metric vs every comparator | b_timing_all_metrics.csv | full per-metric timing table | ✅ |
 | B-connect | b_connectivity_discrimination.py | synthetic fragment→connected | LCC, Euler, n_comp, percolation, fragmentation | connectivity_discrimination_correlations.csv | euler_number best (ρ=1.0), spans both regimes | ✅ |
 | B-density | b_density_normalization.py | BBBC024 zoom series | per-mm³, raw, per-Mpx, per-area, per-slice | b_density_normalization_cv.csv | fluorostats per-mm³ zoom-invariant (CV=0) vs 4 varying | ✅ |
 | V-agreement | b_agreement_validation.py | synthetic paired | Lin formula, Pearson-decomp, ANOVA-ICC, numpy BA | b_agreement_validation.csv | 11/11 exact to machine precision | ✅ |

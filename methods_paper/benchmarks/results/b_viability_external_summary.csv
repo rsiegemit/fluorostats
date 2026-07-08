@@ -1,0 +1,6 @@
+method,MAE,CCC
+Kerkhoff_macro_peakcount,0.0164,0.987
+fluorostats_maxima(NEW),0.0164,0.987
+fluorostats_objcount,0.0759,0.703
+Otsu_CC_count,0.0794,0.801
+fluorostats_areafrac,0.0913,0.832

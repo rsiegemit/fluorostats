@@ -291,6 +291,65 @@ independent skan leaf-prune (5.3) — best of 5.
 too-small radius (r15, 0.664) honestly shows top-hat's radius-must-exceed-object
 rule.
 
+## 12. External viability tool + a discovered capability (Kerkhoff Zenodo 10395753)
+
+Head-to-head vs a **published Fiji Live/Dead macro** (Kerkhoff 2024) on its own
+synthetic set, where cell counts — hence true viability — are known by construction:
+
+| method | MAE | CCC |
+|---|---|---|
+| Kerkhoff Fiji macro (peak count) | 0.016 | 0.987 |
+| **fluorostats maxima (NEW)** | **0.016** | **0.987** |
+| Otsu connected-comp count | 0.079 | 0.801 |
+| fluorostats area-fraction | 0.091 | 0.832 |
+| fluorostats object-count (CC) | 0.076 | 0.703 |
+
+The external comparison **found a real gap** — fluorostats had no peak/maxima
+counting mode, so area/CC trailed the macro on crowded cells (same overlap wall as
+nuclei). We **built the capability** (`objects.count_local_maxima`,
+`viability.live_dead_by_count`), and fluorostats now **ties the published tool
+exactly** (MAE 0.016, CCC 0.987) — through its own API, training-free.
+
+**Is maxima always better? No — it is regime-specific** (`b_maxima_regimes.py`,
+true count = 100):
+
+| regime | maxima | watershed | connected-comp |
+|---|---|---|---|
+| small separated cells | 100 ✓ (raw over-counts flat/needs smoothing) | 100 | 100 |
+| large cells | over/under-counts | ~exact | ~exact |
+| noise σ=200 | 3068 ✗ | — | **68** ✓ |
+
+Maxima wins on crowded single-peak cells; connected-components is far more
+noise-robust; area answers coverage. So `live_dead_by_count` offers `cc`,
+`watershed`, `maxima`, a transparent conservative `auto`, and `all` (run every
+mode + report consensus/spread — cheap, ~86 ms). **Auto cannot be an oracle**:
+crowding and noise are not separable from image statistics (the maxima-win regime
+is statistically indistinguishable from noise), so `auto` biases to the robust
+method and reports its reasoning; users who know their assay should pick explicitly.
+
+## 13. Master per-metric runtime — every fluorostats metric vs every comparator
+
+Full table in `results/b_timing_all_metrics.csv` (3D vol 129×565×807 CPU, 5 reps).
+fluorostats is fast where it matters and on par with comparators on shared ops:
+
+| class | fluorostats (ms) | comparator (ms) |
+|---|---|---|
+| stats / agreement | 0.01–0.4 | scipy 0.09–0.24 (parity) |
+| 2D metrics | area 2.9, coverage 5.1 | — |
+| morphometry (depth/homogeneity) | 0.03–32 | spatial stats 0.01–0.6 |
+| skeleton metrics 2D | 4–13 | Lee 0.4, medial 31, thin 15 |
+| viability | 10–86 (all-modes 86) | Fiji macro-equiv 11 |
+| denoise 3D (gauss) | 400 | median 17154, gaussian-σ2 696 |
+| connectivity 3D | 1069 (full metrics) | euler alone 648 |
+| count maxima 3D | 1400 | peak_local_max 1332 (parity) |
+| segmentation vs DL | Otsu-CC ~14 ms/2D-img | StarDist 215, Cellpose 5547 |
+
+Honest bottlenecks (algorithmic, not fluorostats overhead — they track their
+library equivalents): `validate.average_precision` 19.5 s and `instance_f1` 2.2 s
+(many objects × IoU thresholds); `watershed_split` 9.2 s ≈ skimage watershed 8.1 s;
+`background_subtract` 9.3 s ≈ rolling-ball 7.9 s. These are validation/heavy-3D
+operations, run once per volume — not per-frame metrics.
+
 ## Headline claims supported by these data
 
 1. **On well-separated nuclei, fluorostats matches or beats validated DL

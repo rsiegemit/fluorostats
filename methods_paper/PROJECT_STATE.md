@@ -11,8 +11,8 @@ than existing methods, benchmarked on public datasets, with every capability
 validated. Then the paper can be cited by the Extrusion bioprinting paper.
 
 ## Where things live
-- **Library**: `src/fluorostats/` — v0.5.0, 18 modules, pushed to GitHub `main`
-  (github.com/rsiegemit/fluorostats). Tests in `tests/` (98 passing).
+- **Library**: `src/fluorostats/` — v0.6.0, 19 modules, pushed to GitHub `main`
+  (github.com/rsiegemit/fluorostats). Tests in `tests/` (102 passing).
 - **Methods paper workspace**: `methods_paper/`
   - `research/` — 13 capability literature dossiers (~145 refs, DOI-verified) +
     `00_SYNTHESIS.md` + `00_COMPARISON_MATRIX.md`
@@ -49,7 +49,7 @@ validated. Then the paper can be cited by the Extrusion bioprinting paper.
 - All additions are OPT-IN / additive → **existing 3D Live/Dead outputs unchanged,
   no rerun triggered.** README + __init__ docstrings document them.
 
-## Benchmark campaign — DONE (44 benchmarks, 30+ reference methods, ≥4 comparators each)
+## Benchmark campaign — DONE (48 benchmarks, 30+ reference methods, ≥4 comparators each)
 See `benchmarks/00_BENCHMARK_RESULTS.md` for the full table. Headlines:
 - **Nuclei 2D (BBBC039, 12 methods):** fluorostats F1 0.90 ≥ StarDist 0.87 /
   Cellpose 0.87; on DSB2018 (StarDist's own data) fluorostats 0.789 = ~91% of
@@ -67,8 +67,15 @@ See `benchmarks/00_BENCHMARK_RESULTS.md` for the full table. Headlines:
   methods. Last 5 gaps closed: viability (6 methods, 2D biases live fraction
   +5–25%), stratified_mann_whitney (exact vs scipy), centroid_homogeneity
   (ρ=0.975), prune_skeleton (best of 5), background_subtract (top-hat r45 best of
-  6). Only io/report/plots/qc/render3d/style remain un-benchmarked (viz/utility,
-  no external method to compare). External viability-tool comparison: in progress.
+  6). Only io/report/plots/qc/render3d/style remain un-benchmarked (viz/utility).
+- **v0.6.0 — count-based viability** (`objects.count_local_maxima`,
+  `viability.live_dead_by_count` with cc/watershed/maxima/auto/all). Built after an
+  external head-to-head vs the published Kerkhoff Fiji macro (Zenodo 10395753)
+  exposed the gap; fluorostats `maxima` now ties the macro exactly (CCC 0.987).
+  Honest: maxima is NOT universal (over-counts flat/noisy); auto is conservative
+  (crowding≈noise statistically). See benchmarks B-viab-ext/auto/maxregime.
+- **Master per-metric timing** (`b_timing_all_metrics.py`) — every fs metric vs
+  every comparator on identical data; see 00_BENCHMARK_RESULTS.md §13.
 
 ## Honesty ledger (stated, not hidden)
 - Crowded/overlapping nuclei: fluorostats collapses — DL territory.

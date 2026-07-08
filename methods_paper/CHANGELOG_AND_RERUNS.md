@@ -88,6 +88,25 @@ auditable set.
 | `objects.clear_border_labels` (drop edge objects) | objects | None until used; candidate for the rerun IF we adopt border-excluded counts |
 | +11 tests; suite 98 green | tests | — |
 
+### LANDED in v0.6.0 (count-based viability — additive/opt-in, no rerun triggered)
+
+| Change | Module | Rerun impact |
+|---|---|---|
+| `objects.count_local_maxima` (prominence peak counting, Fiji "Find Maxima" equivalent, optional smoothing) | objects | None until used |
+| `viability.live_dead_by_count` (count-based viability: `cc`/`watershed`/`maxima`/`auto`/`all`+consensus) + `choose_count_method` | viability | None now; **candidate for the final Live/Dead rerun** IF we report count-based (not area-based) viability. The GelMA v3 used area-based `live_dead_fractions`; switching to counts would change the viability numbers (not VF/homogeneity). |
+| +4 tests; suite 102 green | tests | — |
+
+**Why this landed:** an external head-to-head vs the published Kerkhoff Fiji
+Live/Dead macro (Zenodo 10395753, synthetic ground truth) exposed that fluorostats
+had no peak-counting mode, so area/CC counting trailed the macro on crowded cells.
+The new `maxima` mode now matches the macro exactly (MAE 0.016, CCC 0.987).
+**Honest caveat (benchmarked):** maxima is NOT universally best — it over-counts
+flat/noisy cells; `cc` is more noise-robust; `auto` is conservative because
+crowding and noise are not separable from image statistics. For the GelMA rerun
+decision this means: area-based viability remains the safe default; adopt
+count-based only if the Live/Dead cells are crowded enough that area under-reports
+(check with `method="all"` spread on a few stacks first).
+
 **Benchmark validation backing v0.5:** fluorostats instance F1 on BBBC039 = 0.896
 (ahead of validated StarDist 0.871 / Cellpose 0.862 on well-separated nuclei).
 Viability module demonstrated on public S-BIAD2130 (MIP overestimates 3D live

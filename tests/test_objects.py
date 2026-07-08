@@ -12,7 +12,23 @@ from fluorostats.objects import (
     object_centroids,
     object_density_per_mm3,
     centroid_homogeneity,
+    count_local_maxima,
 )
+
+
+def test_count_local_maxima_counts_separated_dots():
+    img = np.zeros((100, 100), np.float32)
+    for y in (20, 50, 80):
+        for x in (20, 50, 80):
+            img[y, x] = 100.0            # 9 well-separated peaks
+    r = count_local_maxima(img, min_distance=5, threshold_rel=0.2)
+    assert r["count"] == 9
+    assert r["coords"].shape == (9, 2)
+
+
+def test_count_local_maxima_empty_image():
+    r = count_local_maxima(np.zeros((10, 10), np.float32))
+    assert r["count"] == 0
 
 
 def _two_blobs() -> np.ndarray:

@@ -7,8 +7,40 @@ import pytest
 
 from fluorostats.viability import (
     live_dead_fractions, viability_depth_profile,
-    viability_2d_vs_3d, attenuation_correct,
+    viability_2d_vs_3d, attenuation_correct, live_dead_by_count,
 )
+
+
+def _two_channel_dots(n_live, n_dead, size=200, sep=9):
+    """Synthetic 2-channel image: n_live green + n_dead red gaussian dots."""
+    live = np.zeros((size, size), np.float32)
+    dead = np.zeros((size, size), np.float32)
+
+    def place(img, n):
+        g = int(np.ceil(np.sqrt(n)))
+        xs = np.linspace(sep, size - sep, g)
+        pts = [(y, x) for y in xs for x in xs][:n]
+        for (y, x) in pts:
+            yy, xx = int(y), int(x)
+            img[yy - 1:yy + 2, xx - 1:xx + 2] = 255.0
+
+    place(live, n_live)
+    place(dead, n_dead)
+    return live, dead
+
+
+def test_live_dead_by_count_maxima_recovers_true_viability():
+    # 90 live / 10 dead -> true viability 0.9; peak counting should recover it
+    live, dead = _two_channel_dots(90, 10)
+    r = live_dead_by_count(live, dead, method="maxima", min_distance=3)
+    assert r["n_live"] > r["n_dead"]
+    assert r["viability"] == pytest.approx(0.9, abs=0.05)
+
+
+def test_live_dead_by_count_bad_method_raises():
+    live, dead = _two_channel_dots(5, 5)
+    with pytest.raises(ValueError):
+        live_dead_by_count(live, dead, method="nonsense")
 
 
 def _stack_with_depth_gradient(nz=20, size=32):

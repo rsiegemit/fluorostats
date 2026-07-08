@@ -1,0 +1,13 @@
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_viability_external.py:28: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  lm=remove_small_objects(live>filters.threshold_otsu(live),8)
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_viability_external.py:29: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  dm=remove_small_objects(dead>filters.threshold_otsu(dead),8)
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_viability_external.py:18: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  return ndi.label(remove_small_objects(mask,8))[0].max()
+=== External viability vs exact ground truth (n=65 synthetic images) ===
+                  method    MAE   CCC
+Kerkhoff_macro_peakcount 0.0164 0.987
+ fluorostats_maxima(NEW) 0.0164 0.987
+    fluorostats_objcount 0.0759 0.703
+           Otsu_CC_count 0.0794 0.801
+    fluorostats_areafrac 0.0913 0.832

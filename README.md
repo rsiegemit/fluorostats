@@ -243,17 +243,21 @@ For validating fluorostats (or any method) against ground truth or another tool 
 
 ```python
 from fluorostats.viability import (
-    live_dead_fractions, viability_depth_profile,
+    live_dead_fractions, live_dead_by_count, viability_depth_profile,
     viability_2d_vs_3d, attenuation_correct,
 )
 
-frac = live_dead_fractions(live_channel, dead_channel)   # live/dead fraction + viability
+frac = live_dead_fractions(live_channel, dead_channel)   # area-based live/dead fraction + viability
 prof = viability_depth_profile(live_channel, dead_channel)  # per-z live/dead — depth gradient
 cmp  = viability_2d_vs_3d(live_channel)   # how much a mid-plane / MIP overestimates the true 3D fraction
 corr = attenuation_correct(volume)        # per-z normalisation: biological death vs optical decay
+
+# count-based viability — robust to crowding (area under-reports when cells overlap)
+cnt  = live_dead_by_count(live_channel, dead_channel, method="all")
+#   -> {'by_method': {cc/watershed/maxima}, 'consensus': median, 'spread': disagreement}
 ```
 
-Quantifies the Calcein-AM / PI (live/dead) assay in a depth-aware way. In thick 3D samples a single plane or a maximum-intensity projection overestimates viability and misses depth-dependent core death — `viability_2d_vs_3d` measures that overestimation and `viability_depth_profile` exposes the gradient.
+Quantifies the Calcein-AM / PI (live/dead) assay in a depth-aware way. In thick 3D samples a single plane or a maximum-intensity projection overestimates viability and misses depth-dependent core death — `viability_2d_vs_3d` measures that overestimation and `viability_depth_profile` exposes the gradient. `live_dead_by_count` counts cells instead of area (via `cc`, `watershed`, prominence-`maxima`, a transparent `auto`, or `all`+consensus); on a published synthetic Live/Dead set the `maxima` mode matches the reference Fiji macro exactly (CCC 0.987). No single counting mode is universally best — `maxima` excels on crowded single-peak cells, `cc` is most noise-robust — so pick by regime or use `all`.
 
 ### Instance-segmentation validation
 

@@ -92,6 +92,63 @@ def watershed_split(
     return labels, int(labels.max())
 
 
+def count_local_maxima(
+    intensity: np.ndarray,
+    min_distance: int = 3,
+    threshold_rel: float = 0.15,
+    mask: np.ndarray | None = None,
+    smooth_sigma: float = 0.0,
+) -> dict:
+    """Count intensity local maxima — one peak per cell (Fiji "Find Maxima").
+
+    Prominence-based peak counting excels at counting **crowded, overlapping**
+    cells that each present a single intensity peak (realistic gaussian-like
+    staining): area fraction and connected-component labeling under-count when
+    cells touch (the merged-blob failure mode), while one peak still marks each
+    cell. No training required.
+
+    NOT a universal winner — choose by regime (see ``objects.label_3d`` for
+    connected components and ``watershed_split`` for touching convex cells):
+
+    - Over-counts **flat-topped / saturated** cells (a plateau is many equal
+      maxima) and **noisy** images (every bump is a peak). Set ``smooth_sigma``
+      (~cell radius / 1.5) to collapse each cell to one peak first.
+    - For **well-separated** cells, connected-component counting is exact and far
+      more noise-robust.
+    - Answers "how many objects", NOT "what area fraction" — use
+      ``metrics_2d.area_fraction`` for coverage questions.
+
+    Parameters
+    ----------
+    intensity : np.ndarray
+        Raw (or denoised) intensity image/volume — NOT a binary mask.
+    min_distance : int
+        Minimum separation (voxels) between peaks; larger = fewer, merges close cells.
+    threshold_rel : float
+        Peaks must exceed this fraction of the image maximum (prominence floor).
+    mask : np.ndarray, optional
+        Restrict peak search to this foreground region.
+    smooth_sigma : float
+        If > 0, gaussian-smooth before peak finding (suppresses plateau/noise
+        over-counting). Recommended ~ cell radius / 1.5 for flat or noisy cells.
+
+    Returns dict: {'count', 'coords'} where coords is (n, ndim).
+    """
+    from skimage.feature import peak_local_max
+
+    img = np.asarray(intensity, dtype=float)
+    if smooth_sigma > 0:
+        img = ndi.gaussian_filter(img, smooth_sigma)
+    if mask is not None:
+        img = np.where(np.asarray(mask) > 0, img, 0.0)
+    if img.size == 0 or img.max() <= 0:
+        return {"count": 0, "coords": np.empty((0, img.ndim), dtype=int)}
+    coords = peak_local_max(
+        img, min_distance=min_distance, threshold_abs=img.max() * threshold_rel
+    )
+    return {"count": int(len(coords)), "coords": coords}
+
+
 def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
     """Remove objects touching any image border and relabel.
 
