@@ -215,6 +215,30 @@ skel = normalise_skeleton_metrics(skel, mask.shape, meta["voxel_size_um"])
 
 Use whenever stacks have different voxel sizes — counts/lengths per FOV are not comparable, but per-mm³ densities are.
 
+### Skeleton morphometry (spur pruning + field-standard branchpoints)
+
+```python
+from fluorostats.skeleton import skeleton_metrics, prune_skeleton, n_junction_nodes
+
+# Opt-in spur pruning (removes short branches like AnalyzeSkeleton/AngioTool/REAVER)
+m = skeleton_metrics(mask, meta["voxel_size_um"], prune=True, min_branch_length_um=5)
+m["n_junction_nodes"]   # degree>=3 nodes — the AngioTool/REAVER branchpoint definition
+m["n_junctions"]        # junction-to-junction branches (skan convention)
+```
+
+Works on 2D or 3D masks. `prune=False` (default) preserves raw skeleton behaviour; `prune=True` removes short spurs before counting so junction/branch counts match the conventions used by Fiji AnalyzeSkeleton, AngioTool, and REAVER. `n_junction_nodes` is the field-standard branchpoint count (degree ≥ 3 nodes).
+
+### Method-comparison / agreement statistics
+
+```python
+from fluorostats.agreement import agreement_report, bland_altman, lins_ccc, icc
+
+rep = agreement_report(fluorostats_values, ground_truth, "fluorostats", "manual")
+# -> bias, 95% limits of agreement, Lin's CCC, ICC, Spearman, Pearson, MAPE
+```
+
+For validating fluorostats (or any method) against ground truth or another tool — Bland-Altman limits of agreement, Lin's concordance correlation coefficient, and ICC(A,1) absolute agreement in one call.
+
 ### Multi-group statistics
 
 ```python

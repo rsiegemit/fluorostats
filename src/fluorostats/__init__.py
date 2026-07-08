@@ -5,9 +5,13 @@ Public API surface, grouped by module:
   - ``io`` — load_volume (any supported format).
   - ``preprocess`` — channel selection, denoising, background subtraction.
   - ``segment`` — binarisation (Otsu, percentile, manual).
-  - ``metrics_3d`` — volume_fraction, connectivity_metrics, skeleton_metrics,
-    fov_volume_mm3, normalise_skeleton_metrics.
+  - ``metrics_3d`` — volume_fraction, connectivity_metrics, fov_volume_mm3,
+    normalise_skeleton_metrics (skeleton_metrics re-exported from ``skeleton``).
+  - ``skeleton`` — skeleton_metrics (opt-in spur pruning), prune_skeleton,
+    n_junction_nodes (field-standard branchpoint count).
   - ``metrics_2d`` — 2D coverage/cluster metrics.
+  - ``agreement`` — method-comparison stats: Bland-Altman, Lin's CCC, ICC,
+    agreement_report (for validating fluorostats against other tools).
   - ``morphometry`` — intensity-only spatial homogeneity, depth profiles,
     depth span, depth centroid (no segmentation needed).
   - ``objects`` — per-object volumes, equivalent diameters, centroids,
@@ -26,17 +30,19 @@ Public API surface, grouped by module:
   - ``report`` — per-condition aggregation.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from . import (  # noqa: F401
     io,
     preprocess,
     segment,
+    skeleton,
     metrics_3d,
     metrics_2d,
     morphometry,
     objects,
     stats,
+    agreement,
     power,
     render3d,
     plots,
