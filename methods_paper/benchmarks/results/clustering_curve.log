@@ -1,0 +1,21 @@
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_clustering_curve.py:15: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  def lab_cc(vol,t): return ndi.label(remove_small_objects(vol>t,MS))[0]
+/opt/homebrew/lib/python3.13/site-packages/skimage/filters/thresholding.py:561: RuntimeWarning: divide by zero encountered in divide
+  higher = (csum_intensity[-1] - csum_intensity[:-1]) / csumh[:-1]
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_clustering_curve.py:29: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  cc,_=label_3d(remove_small_objects(otsu,MS),min_size=MS)
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_clustering_curve.py:30: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  ws,_=watershed_split(remove_small_objects(otsu,MS),min_size=MS,min_distance=6)
+done c00
+done c25
+done c50
+done c75
+=== Instance F1 vs nuclear clustering (BBBC024, many methods) ===
+clustering               c00    c25    c50    c75
+method                                           
+Isodata_1978           0.922  0.688  0.313  0.134
+Li_1993                0.841  0.594  0.186  0.111
+Otsu_1979              0.922  0.688  0.313  0.134
+Triangle_1977          0.000  0.000  0.000  0.000
+fluorostats_CC         0.922  0.688  0.313  0.134
+fluorostats_watershed  0.922  0.688  0.313  0.134

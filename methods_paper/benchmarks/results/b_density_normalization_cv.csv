@@ -1,0 +1,11 @@
+regime,scheme,CV_percent_across_zoom,mean_value
+A_fixed_FOV,fluorostats_per_mm3,0.0,1360.1233
+A_fixed_FOV,raw_count,0.0,20.0
+A_fixed_FOV,per_megavoxel,143.065,0.6737
+A_fixed_FOV,per_mm2_area,0.0,175.4559
+A_fixed_FOV,per_z_slice,58.427,0.151
+B_fixed_voxel,fluorostats_per_mm3,0.16,1363.7033
+B_fixed_voxel,raw_count,44.721,12.5
+B_fixed_voxel,per_megavoxel,0.16,0.3409
+B_fixed_voxel,per_mm2_area,16.577,146.2249
+B_fixed_voxel,per_z_slice,31.378,0.1108

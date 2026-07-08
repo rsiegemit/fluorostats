@@ -1,0 +1,17 @@
+=== fluorostats vascular metrics vs VEGF dose (SproutAngio) ===
+         file  VEGF_group  volume_fraction  length_density_um_per_mm3  junction_density_per_mm3  n_junction_nodes  largest_component_fraction
+group1-07.czi           1           0.0032                   121178.0                   10283.0               337                       0.744
+group1-08.czi           1           0.0024                    79236.0                    7443.0               188                       0.886
+group1-09.czi           1           0.0033                   132157.0                   11524.0               296                       0.785
+group1-10.czi           1           0.0037                   156487.0                   18146.0               461                       0.902
+group3-04.czi           3           0.0061                   203477.0                   14237.0               505                       0.736
+group3-05.czi           3           0.0064                   216626.0                   17504.0               552                       0.884
+group3-09.czi           3           0.0087                   250828.0                   19579.0               595                       0.895
+group3-10.czi           3           0.0078                   271898.0                   20834.0               688                       0.801
+group5-03.czi           5           0.0092                   334505.0                   24573.0               828                       0.939
+group5-06.czi           5           0.0053                   189947.0                   11257.0               366                       0.895
+group5-10.czi           5           0.0058                   225663.0                   19010.0               589                       0.662
+group5-11.czi           5           0.0040                   155708.0                   11448.0               302                       0.884
+
+Expected biology: higher VEGF -> more sprouting -> higher VF / length / junction density.
+Trend (group1 low -> group5 high): VF 0.0032->0.0061

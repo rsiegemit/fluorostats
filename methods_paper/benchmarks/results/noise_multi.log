@@ -1,0 +1,11 @@
+/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/benchmarks/b_noise_robustness.py:23: FutureWarning: Parameter `min_size` is deprecated since version 0.26.0 and will be removed in 2.0.0 (or later). To avoid this warning, please use the parameter `max_size` instead. For more details, see the documentation of `remove_small_objects`. Note that the new threshold removes objects smaller than **or equal to** its value, while the previous parameter only removed smaller ones.
+  p=remove_small_objects(noisy>fn(noisy),30); g=gt>0
+/opt/homebrew/lib/python3.13/site-packages/skimage/filters/thresholding.py:561: RuntimeWarning: divide by zero encountered in divide
+  higher = (csum_intensity[-1] - csum_intensity[:-1]) / csumh[:-1]
+=== Foreground Dice vs added Gaussian noise (BBBC024, n=5), many methods ===
+ noise_sd  Otsu    Li  Isodata  Triangle  fluorostats(Otsu+CC)
+        0 0.922 0.795    0.921     0.553                 0.922
+       20 0.920 0.857    0.920     0.693                 0.920
+       40 0.917 0.877    0.916     0.793                 0.917
+       80 0.905 0.883    0.905     0.886                 0.905
+      160 0.737 0.518    0.669     0.827                 0.737

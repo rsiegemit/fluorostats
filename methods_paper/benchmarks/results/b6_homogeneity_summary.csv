@@ -1,0 +1,2 @@
+gini_monotonic_up,R_monotonic_down,spearman_gini_vs_R,spearman_cv_vs_R,AUC_clustered_vs_uniform_gini,mannwhitney_p
+True,True,-0.985,-0.988,1.0,3.731884839536786e-11

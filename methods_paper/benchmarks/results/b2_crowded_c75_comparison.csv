@@ -1,0 +1,5 @@
+method,mean_F1,mean_count
+Cellpose,1.0,20.0
+StarDist,0.962,20.8
+fluorostats(Otsu+CC),0.38,8.7
+fluorostats(watershed),0.381,8.6

@@ -1,0 +1,6 @@
+phantom,expected_length,fluorostats_length,length_err_pct,expected_n_branches,fluorostats_n_branches,n_branches_pass,n_junctions_JtoJ,PASS
+straight_line,40.0,40.0,0.0,1,1,True,0,True
+bent_L,60.0,59.41,0.98,1,1,True,0,True
+two_lines,60.0,60.0,0.0,2,2,True,0,True
+y_junction,,84.77,,3,3,True,0,True
+plus_cross,100.0,100.0,0.0,4,4,True,0,True

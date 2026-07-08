@@ -1,0 +1,2 @@
+dataset,n_frames,mean_dice,mean_jaccard,vol_fraction_CCC,vol_fraction_spearman,ctc_top_SEG_context
+Fluo-C3DH-A549,30,0.688,0.528,0.14,0.794,0.908

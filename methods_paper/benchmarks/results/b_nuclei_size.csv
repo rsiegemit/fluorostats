@@ -1,0 +1,6 @@
+method,median_diam_um,GT_median,pct_error
+Otsu_1979,77.05,74.46,3.5
+Isodata_1978,77.05,74.46,3.5
+fluorostats(Otsu+CC),77.05,74.46,3.5
+Li_1993,85.74,74.46,15.2
+Triangle_1977,104.11,74.46,39.8

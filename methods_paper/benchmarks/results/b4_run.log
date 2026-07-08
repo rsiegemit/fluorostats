@@ -1,0 +1,43 @@
+  diaphragm_60x_1      AF gt=0.101 fs=0.075  BP gt= 19 fs= 39
+  diaphragm_60x_2      AF gt=0.283 fs=0.198  BP gt= 42 fs=111
+  diaphragm_60x_3      AF gt=0.293 fs=0.182  BP gt= 83 fs= 68
+  diaphragm_60x_4      AF gt=0.252 fs=0.194  BP gt= 43 fs= 61
+  diaphragm_60x_5      AF gt=0.166 fs=0.155  BP gt=  7 fs= 35
+  diaphragm_60x_6      AF gt=0.178 fs=0.155  BP gt= 32 fs= 31
+  heart_60x_1          AF gt=0.195 fs=0.146  BP gt= 18 fs= 53
+  heart_60x_2          AF gt=0.343 fs=0.240  BP gt= 76 fs=140
+  heart_60x_3          AF gt=0.355 fs=0.314  BP gt= 64 fs=151
+  heart_60x_4          AF gt=0.253 fs=0.184  BP gt= 35 fs= 70
+  heart_60x_5          AF gt=0.300 fs=0.257  BP gt= 76 fs= 99
+  heart_60x_6          AF gt=0.395 fs=0.334  BP gt= 61 fs=186
+  ing_fat_20x_1        AF gt=0.156 fs=0.080  BP gt= 50 fs= 12
+  ing_fat_20x_2        AF gt=0.173 fs=0.080  BP gt= 46 fs= 10
+  ing_fat_20x_3        AF gt=0.148 fs=0.066  BP gt= 67 fs= 15
+  ing_fat_60x_1        AF gt=0.067 fs=0.033  BP gt=  5 fs=  6
+  ing_fat_60x_2        AF gt=0.069 fs=0.032  BP gt= 20 fs= 14
+  ing_fat_60x_3        AF gt=0.067 fs=0.045  BP gt=  6 fs= 11
+  liver_60x_1          AF gt=0.405 fs=0.276  BP gt= 45 fs=221
+  liver_60x_2          AF gt=0.436 fs=0.263  BP gt= 79 fs=217
+  liver_60x_3          AF gt=0.450 fs=0.266  BP gt= 71 fs=273
+  liver_60x_4          AF gt=0.482 fs=0.303  BP gt= 83 fs=322
+  liver_60x_5          AF gt=0.508 fs=0.324  BP gt= 58 fs=402
+  liver_60x_6          AF gt=0.527 fs=0.288  BP gt= 87 fs=338
+  periton_cav_20x_1    AF gt=0.179 fs=0.116  BP gt= 37 fs= 30
+  periton_cav_20x_2    AF gt=0.186 fs=0.119  BP gt=  8 fs=  7
+  periton_cav_20x_3    AF gt=0.195 fs=0.115  BP gt= 40 fs= 26
+  periton_cav_60x_1    AF gt=0.145 fs=0.098  BP gt= 19 fs= 34
+  periton_cav_60x_2    AF gt=0.226 fs=0.139  BP gt= 18 fs= 61
+  periton_cav_60x_3    AF gt=0.130 fs=0.090  BP gt= 15 fs= 25
+  retina_20x_1         AF gt=0.196 fs=0.158  BP gt= 84 fs= 55
+  retina_20x_2         AF gt=0.182 fs=0.155  BP gt= 61 fs= 43
+  retina_20x_3         AF gt=0.135 fs=0.109  BP gt= 38 fs= 25
+  retina_60x_1         AF gt=0.207 fs=0.151  BP gt= 38 fs= 54
+  retina_60x_2         AF gt=0.176 fs=0.131  BP gt= 39 fs= 40
+  retina_60x_3         AF gt=0.171 fs=0.131  BP gt= 33 fs= 40
+
+=== fluorostats vs manual GT (REAVER dataset, n=36) ===
+              metric  n   CCC   ICC  spearman    bias     MAE
+vessel_area_fraction 36 0.701 0.707     0.935 -0.0758  0.0758
+   branchpoint_count 36 0.227 0.232     0.638 47.8300 60.6100
+
+Saved results + figures. Area-fraction CCC=0.701, branchpoint CCC=0.227

@@ -1,0 +1,4 @@
+noise_sd,none,fluorostats(gaussian σ1),median_3,gaussian_σ2,TV_chambolle
+40,0.914,0.92,0.921,0.917,0.914
+80,0.89,0.919,0.919,0.916,0.89
+160,0.405,0.911,0.914,0.916,0.41

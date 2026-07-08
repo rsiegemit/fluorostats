@@ -1,0 +1,9 @@
+phantom,method,true_branches,measured_branches,total_length,branch_err
+tree_d2,Lee_1994(fluorostats),7,7,157.2,0
+tree_d2,medial_axis,7,7,157.8,0
+tree_d2,thin,7,7,156.8,0
+tree_d2,skeletonize_2d_zhang,7,7,157.2,0
+tree_d3,Lee_1994(fluorostats),15,15,233.9,0
+tree_d3,medial_axis,15,15,236.2,0
+tree_d3,thin,15,15,233.6,0
+tree_d3,skeletonize_2d_zhang,15,15,233.9,0

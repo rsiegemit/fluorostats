@@ -1,0 +1,4 @@
+variant,mean_F1,mean_AP_0.5-0.9,count_MAE,count_bias
+cc,0.896,0.718,5.96,-4.03
+cc+watershed,0.899,0.725,7.01,-6.68
+cc+border,0.816,0.623,20.96,-19.62

@@ -1,0 +1,6 @@
+test,predicted_power,empirical_power,abs_diff,PASS
+calibration_n8_d0.8,0.223,0.347,0.125,True
+calibration_n15_d0.8,0.85,0.507,0.343,False
+calibration_n25_d0.8,0.998,0.782,0.215,False
+power_curve_monotonic_increasing,,,,True
+null_effect_power<=0.15(≈alpha),0.05,0.05,,True

@@ -1,0 +1,13 @@
+rank,method,mean_F1,mean_AP,count_MAE
+1,Li_1993,0.934,0.79,4.8
+2,Otsu_1979,0.905,0.735,4.33
+3,Isodata_1978,0.905,0.737,4.32
+4,fluorostats(Otsu+CC),0.905,0.735,4.33
+5,Mean,0.899,0.662,6.3
+6,StarDist_2018 (DL),0.874,,
+7,Cellpose_2021 (DL),0.87,,
+8,Triangle_1977,0.865,0.536,9.22
+9,Minimum,0.578,0.488,38.25
+10,Watershed_1991,0.342,0.128,127.25
+11,fluorostats(Otsu+watershed),0.342,0.128,127.25
+12,Yen_1995,0.31,0.212,68.07

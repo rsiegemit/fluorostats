@@ -1,0 +1,2 @@
+shape,fov_volume_mm3,volume_fraction,n_components,largest_component_fraction,total_length_um,length_density_mm_per_mm3,n_junction_nodes,junction_density_per_mm3,n_branches
+"(100, 500, 500)",0.05161,0.0019,29,0.349,1345.4,26.1,10,58.1,34

@@ -1,0 +1,4 @@
+tool,n,CCC,spearman,MAE,bias
+fluorostats,200,0.918,0.96,5.96,-4.03
+Cellpose,200,0.908,0.975,12.39,11.94
+StarDist,200,0.907,0.983,12.91,12.87

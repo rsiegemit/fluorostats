@@ -1,0 +1,9 @@
+test,fluorostats,reference,abs_diff,PASS
+mann_whitney_U,135.0,135.0,0.0,True
+mann_whitney_p,5.159344297745828e-05,5.159344297745828e-05,0.0,True
+cliffs_delta,-0.64,-0.64,0.0,True
+bh_fdr_max_abs_diff,0.0,0.0,0.0,True
+stouffer_Z(one_sided vs scipy),2.459327589432962,2.459327589432962,0.0,True
+stouffer_p(one_sided vs scipy),0.006959876923145851,0.006959876923145851,0.0,True
+bootstrap_CI_covers_true_ratio(e),2.896073896005611,2.718281828459045,0.17779206754656585,True
+SRH_interaction_p<0.05,0.0011627766800881094,0.05,,True

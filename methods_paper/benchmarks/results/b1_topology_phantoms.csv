@@ -1,0 +1,7 @@
+phantom,expected_euler,fluorostats_euler,euler_pass,expected_n_comp,fluorostats_n_comp,ncomp_pass,expected_LCC,fluorostats_LCC,lcc_pass,PASS
+solid_ball,1,1,True,1,1,True,1.0,1.0,True,True
+2_disjoint_balls,2,2,True,2,2,True,0.5,0.5,True,True
+3_disjoint_balls,3,3,True,3,3,True,0.3333,0.3333,True,True
+5_disjoint_balls,5,5,True,5,5,True,0.2,0.2,True,True
+solid_torus,0,0,True,1,1,True,1.0,1.0,True,True
+hollow_ball,2,2,True,1,1,True,1.0,1.0,True,True

@@ -1,0 +1,2 @@
+dataset,n_slices,mean_dice,mean_jaccard,af_CCC,ctc_top_SEG
+Fluo-N3DH-CHO,43,0.522,0.387,0.163,0.925

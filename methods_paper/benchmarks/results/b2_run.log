@@ -1,0 +1,18 @@
+Matched 200 image/mask pairs
+  [0/200] IXMtest_A02_s1_w1051DA gt=95 fs=88
+  [40/200] IXMtest_D04_s9_w17B626 gt=97 fs=98
+  [80/200] IXMtest_G13_s9_w196061 gt=62 fs=61
+  [120/200] IXMtest_J15_s9_w1857B3 gt=122 fs=110
+  [160/200] IXMtest_N11_s4_w142A84 gt=77 fs=73
+
+=== fluorostats vs GT nucleus count (BBBC039, n=200) ===
+  n   CCC   ICC  spearman  bias  MAE  mean_abs_pct_err
+200 0.918 0.918      0.96 -4.03 5.96              76.2
+
+By density (honest under-count expected as density rises):
+density_bin  n  gt_median  mean_signed_err  mean_abs_pct_err
+     sparse 67       66.0         0.492537        216.540729
+     medium 69      105.0        -4.681159          4.851055
+    crowded 64      127.0        -8.046875          6.275515
+
+Saved. CCC=0.918, Spearman=0.960, MAE=6.0

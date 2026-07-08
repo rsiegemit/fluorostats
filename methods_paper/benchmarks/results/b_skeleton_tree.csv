@@ -1,0 +1,4 @@
+tree_depth,true_branches,fs_n_branches,true_bifurcations,fs_n_junction_nodes,branch_match,bifurcation_match
+2,7,7,3,3,True,True
+3,15,15,7,7,True,True
+4,31,27,15,13,False,False
