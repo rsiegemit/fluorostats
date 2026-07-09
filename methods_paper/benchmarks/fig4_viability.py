@@ -22,15 +22,16 @@ bm = pd.read_csv(R/"b3_viability_multi.csv")
 bm = bm[bm.method != "full_3D_voxelwise(REF)"].copy()
 lab = {"midplane_slice":"mid-plane","MIP":"MIP","mean_of_per_slice":"mean-of-slices",
        "attenuation_corrected_3D":"attn-corrected","brightest_focus_slice":"brightest focus"}
-bm["name"] = bm.method.map(lab); bm = bm.sort_values("rel_bias_pct")
-cols = [BLUE if "attn" in m else VERM for m in bm.method]
-axa.hlines(bm.name, 0, bm.rel_bias_pct, color=cols, lw=1.2, zorder=1)
-axa.scatter(bm.rel_bias_pct, bm.name, color=cols, s=42, edgecolor="black", lw=0.4, zorder=3)
-for _, r in bm.iterrows():
-    axa.text(r.rel_bias_pct+0.6, r.name, f"+{r.rel_bias_pct:.0f}%", va="center", fontsize=5.6)
-axa.axvline(0, color="black", lw=0.6); axa.set_xlim(-1, 30)
+bm["name"] = bm.method.map(lab); bm = bm.sort_values("rel_bias_pct").reset_index(drop=True)
+y = np.arange(len(bm)); cols = [BLUE if "attn" in m else VERM for m in bm.method]
+axa.hlines(y, 0, bm.rel_bias_pct, color=cols, lw=1.3, zorder=1)
+axa.scatter(bm.rel_bias_pct, y, color=cols, s=44, edgecolor="black", lw=0.4, zorder=3)
+for yi, rb in zip(y, bm.rel_bias_pct):
+    axa.text(rb + 0.8, yi, f"+{rb:.0f}%", va="center", fontsize=F.FS["annot"])
+axa.axvline(0, color="black", lw=0.6); axa.set_xlim(-1, 30); axa.set_ylim(-0.6, len(bm)-0.4)
+axa.set_yticks(y); axa.set_yticklabels(bm.name)
 axa.set_xlabel("overestimate of live fraction vs true 3D (%)")
-axa.set_title("2D shortcuts inflate viability", fontsize=8, loc="left"); panel(axa, "a", dx=-0.42)
+axa.set_title("2D shortcuts inflate viability"); panel(axa, "a")
 
 axa2 = fig.add_subplot(gs[0, 2:])
 dp = pd.read_csv(R/"b3_viability_depth_profile.csv")

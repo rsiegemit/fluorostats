@@ -27,7 +27,7 @@ methods = {c: pi[c].values for c in pi.columns if c != "image"}
 methods.update(dl_pi)
 stats = {m: boot_ci(v) for m, v in methods.items()}
 # ---------- layout ----------
-fig = plt.figure(figsize=(7.4, 7.2))
+fig = plt.figure(figsize=(7.2, 7.2))
 gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.92, 1.5, 0.9],
                        hspace=0.5, wspace=1.05)
 

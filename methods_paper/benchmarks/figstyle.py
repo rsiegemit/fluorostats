@@ -36,6 +36,14 @@ EXT = Path(__file__).resolve().parent / "figures" / "extended"
 MAIN.mkdir(parents=True, exist_ok=True)
 EXT.mkdir(parents=True, exist_ok=True)
 
+# Nature Methods column widths (inches). Use these as the figure WIDTH.
+COL1 = 3.46      # single column  (88 mm)
+COL15 = 4.72     # 1.5 column     (120 mm)
+COL2 = 7.20      # double column  (183 mm)
+
+# One font scale for every figure (points). Reference these, don't hardcode sizes.
+FS = {"title": 8, "label": 7, "tick": 6.5, "legend": 6, "annot": 6, "small": 5.4, "panel": 8}
+
 
 def apply_style():
     """Set global rcParams for a clean Nature-style sans-serif look, white bg."""
@@ -45,15 +53,17 @@ def apply_style():
     plt.rcParams.update({
         "font.family": "sans-serif",
         "font.sans-serif": [fam, "Arial", "DejaVu Sans"],
-        "font.size": 7,
-        "axes.titlesize": 8, "axes.labelsize": 7.5,
-        "xtick.labelsize": 6.5, "ytick.labelsize": 6.5, "legend.fontsize": 6.5,
-        "axes.linewidth": 0.6, "axes.edgecolor": "#333333",
+        "font.size": FS["tick"],
+        "axes.titlesize": FS["title"], "axes.labelsize": FS["label"],
+        "xtick.labelsize": FS["tick"], "ytick.labelsize": FS["tick"], "legend.fontsize": FS["legend"],
+        "axes.linewidth": 0.6, "axes.edgecolor": "#333333", "axes.titlepad": 3.5,
+        "axes.titlelocation": "left", "axes.titleweight": "regular",
         "axes.spines.top": False, "axes.spines.right": False,
         "xtick.major.width": 0.6, "ytick.major.width": 0.6,
         "xtick.major.size": 2.5, "ytick.major.size": 2.5,
+        "xtick.major.pad": 1.8, "ytick.major.pad": 1.8,
         "axes.grid": False, "figure.facecolor": "white", "axes.facecolor": "white",
-        "savefig.facecolor": "white", "legend.frameon": False,
+        "savefig.facecolor": "white", "legend.frameon": False, "lines.solid_capstyle": "round",
         "pdf.fonttype": 42, "ps.fonttype": 42,  # editable text in vector output
         "svg.fonttype": "none",
     })
@@ -70,10 +80,14 @@ def color_for(name: str) -> str:
     return tool_style(name)["c"]
 
 
-def panel(ax, label, dx=-0.02, dy=1.0, fs=11):
-    """Bold lowercase panel label (a, b, c...) at top-left of an axis."""
-    ax.text(dx, dy, label, transform=ax.transAxes, fontsize=fs,
-            fontweight="bold", va="bottom", ha="right")
+def panel(ax, label, dx=None, dy=None, pad=(-16, 5)):
+    """Bold lowercase panel label at a fixed offset (points) from the axis top-left.
+
+    Uses offset-points so labels are identical across figures and never expand the
+    saved bounding box. dx/dy are accepted for back-compat but ignored."""
+    ax.annotate(label, xy=(0, 1), xycoords="axes fraction",
+                xytext=pad, textcoords="offset points",
+                fontsize=FS["panel"], fontweight="bold", va="bottom", ha="left")
 
 
 # ---- image-panel helpers (shared so every figure renders images identically) ----
@@ -119,16 +133,16 @@ def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.06):
             va="bottom", fontsize=6, fontweight="bold")
 
 
-def save(fig, name, folder=None, tight=True):
-    """Export vector PDF + 300-dpi PNG to figures/main (default) or a given folder."""
+def save(fig, name, folder=None, tight=True, pad=0.4):
+    """Export vector PDF + 300-dpi PNG at the figure's EXACT size (uniform width)."""
     folder = folder or MAIN
     if tight:
-        fig.tight_layout()
+        fig.tight_layout(pad=pad)
     stem = Path(folder) / name
-    fig.savefig(f"{stem}.pdf", bbox_inches="tight")
-    fig.savefig(f"{stem}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{stem}.pdf")                 # exact figsize -> uniform column width
+    fig.savefig(f"{stem}.png", dpi=300)
     plt.close(fig)
-    print("saved", f"{stem}.pdf / .png")
+    print("saved", f"{stem}.pdf / .png (%.2fx%.2f in)" % tuple(fig.get_size_inches()))
 
 
 def caption(name, text, folder=None):
