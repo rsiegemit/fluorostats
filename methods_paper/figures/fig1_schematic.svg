@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a5a5a"/>
+    </marker>
+    <style>
+      .box { fill:#ffffff; stroke:#c8ccd2; stroke-width:1.5; }
+      .seg { fill:#f4f8fb; stroke:#0072B2; stroke-width:1.6; }
+      .htitle { font-size:13.5px; font-weight:700; fill:#12232e; }
+      .line { font-size:10px; fill:#3a4750; }
+      .flow { stroke:#5a5a5a; stroke-width:1.8; fill:none; }
+      .badge { fill:#e9f5f0; stroke:#009E73; stroke-width:1.4; }
+      .btext { font-size:12px; font-weight:700; fill:#0a6b52; }
+      .foot { font-size:10.5px; fill:#4a5560; }
+      .footk { font-size:10.5px; font-weight:700; fill:#12232e; }
+    </style>
+  </defs>
+
+  <!-- title -->
+  <text x="34" y="34" font-size="22" font-weight="700" fill="#12232e">fluorostats</text>
+  <text x="168" y="34" font-size="15" fill="#5a6672">from a volumetric image to a reproducible statistic — training-free, on the CPU</text>
+
+  <!-- pipeline boxes: x = 34, 226, 418, 610, 802, 994 ; w=172 h=170 y=64 -->
+
+  <!-- 1 Input -->
+  <rect class="box" x="34" y="64" width="172" height="170" rx="10"/>
+  <text class="htitle" x="120" y="90" text-anchor="middle">Input</text>
+  <text class="line" x="50" y="116">Confocal z-stack</text>
+  <text class="line" x="50" y="136">Light-sheet</text>
+  <text class="line" x="50" y="156">Widefield</text>
+  <text class="line" x="50" y="184" font-style="italic">TIFF · CZI · any major</text>
+  <text class="line" x="50" y="200" font-style="italic">format · 2D / 3D</text>
+
+  <!-- 2 Preprocess -->
+  <rect class="box" x="226" y="64" width="172" height="170" rx="10"/>
+  <text class="htitle" x="312" y="90" text-anchor="middle">Preprocess</text>
+  <text class="line" x="242" y="116">Denoise</text>
+  <text class="line" x="242" y="136">Background subtract</text>
+  <text class="line" x="242" y="156">Calibrated voxel spacing</text>
+  <text class="line" x="242" y="184" font-style="italic">deterministic</text>
+
+  <!-- 3 Segment -->
+  <rect class="seg" x="418" y="64" width="172" height="170" rx="10"/>
+  <text class="htitle" x="504" y="90" text-anchor="middle">Segment</text>
+  <text class="line" x="434" y="116" font-weight="700" fill="#0072B2">Training-free threshold</text>
+  <text class="line" x="434" y="136">Otsu · Li · Isodata ·</text>
+  <text class="line" x="434" y="152">Triangle · Yen · …</text>
+  <text class="line" x="434" y="176">auto / consensus select</text>
+  <text class="line" x="434" y="196">watershed split (opt-in)</text>
+  <text class="line" x="434" y="220" font-style="italic" fill="#0072B2">no model · no GPU · no seed</text>
+
+  <!-- 4 Quantify -->
+  <rect class="box" x="610" y="64" width="172" height="170" rx="10"/>
+  <text class="htitle" x="696" y="90" text-anchor="middle">Quantify (3D)</text>
+  <circle cx="628" cy="112" r="4" fill="#0072B2"/><text class="line" x="640" y="116">Volume fraction</text>
+  <circle cx="628" cy="132" r="4" fill="#E69F00"/><text class="line" x="640" y="136">Topology / connectivity</text>
+  <circle cx="628" cy="152" r="4" fill="#009E73"/><text class="line" x="640" y="156">Skeleton / vascular</text>
+  <circle cx="628" cy="172" r="4" fill="#CC79A7"/><text class="line" x="640" y="176">Morphometry</text>
+  <circle cx="628" cy="192" r="4" fill="#56B4E9"/><text class="line" x="640" y="196">Spatial homogeneity</text>
+  <circle cx="628" cy="212" r="4" fill="#D55E00"/><text class="line" x="640" y="216">Live/Dead viability</text>
+
+  <!-- 5 Statistics -->
+  <rect class="box" x="802" y="64" width="172" height="170" rx="10"/>
+  <text class="htitle" x="888" y="90" text-anchor="middle">Statistics</text>
+  <text class="line" x="818" y="116">Mann–Whitney · Cliff's δ</text>
+  <text class="line" x="818" y="136">BH-FDR (stratified)</text>
+  <text class="line" x="818" y="156">Bootstrap CIs · fold-change</text>
+  <text class="line" x="818" y="176">Agreement: CCC · ICC · BA</text>
+  <text class="line" x="818" y="196">Power analysis</text>
+  <text class="line" x="818" y="220" font-style="italic">no manual export</text>
+
+  <!-- 6 Report -->
+  <rect class="box" x="994" y="64" width="172" height="170" rx="10"/>
+  <text class="htitle" x="1080" y="90" text-anchor="middle">Report</text>
+  <text class="line" x="1010" y="116">Publication figures</text>
+  <text class="line" x="1010" y="136">Result tables</text>
+  <text class="line" x="1010" y="156">Reproducible run record</text>
+  <text class="line" x="1010" y="184" font-style="italic">one command per figure</text>
+
+  <!-- arrows between boxes (y=149) -->
+  <line class="flow" x1="207" y1="149" x2="225" y2="149" marker-end="url(#arrow)"/>
+  <line class="flow" x1="399" y1="149" x2="417" y2="149" marker-end="url(#arrow)"/>
+  <line class="flow" x1="591" y1="149" x2="609" y2="149" marker-end="url(#arrow)"/>
+  <line class="flow" x1="783" y1="149" x2="801" y2="149" marker-end="url(#arrow)"/>
+  <line class="flow" x1="975" y1="149" x2="993" y2="149" marker-end="url(#arrow)"/>
+
+  <!-- properties ribbon -->
+  <rect class="badge" x="34" y="258" width="1132" height="40" rx="20"/>
+  <text class="btext" x="150" y="283" text-anchor="middle">training-free</text>
+  <line x1="320" y1="266" x2="320" y2="290" stroke="#b6ded1" stroke-width="1.2"/>
+  <text class="btext" x="450" y="283" text-anchor="middle">CPU-only</text>
+  <line x1="600" y1="266" x2="600" y2="290" stroke="#b6ded1" stroke-width="1.2"/>
+  <text class="btext" x="740" y="283" text-anchor="middle">reference-exact</text>
+  <line x1="890" y1="266" x2="890" y2="290" stroke="#b6ded1" stroke-width="1.2"/>
+  <text class="btext" x="1030" y="283" text-anchor="middle">deterministic</text>
+
+  <!-- footer -->
+  <text class="footk" x="34" y="342">Benchmarked against</text>
+  <text class="foot" x="176" y="342">StarDist · Cellpose · Omnipose · REAVER · AngioTool · VesselExpress · Fiji Live/Dead macro</text>
+  <text class="footk" x="34" y="366">Validated on public data</text>
+  <text class="foot" x="176" y="366">BBBC039 / BBBC024 · DSB2018 · Cell Tracking Challenge · SproutAngio · VesselExpress (Zenodo) · Kerkhoff (Zenodo)</text>
+  <text class="footk" x="34" y="390">Every metric</text>
+  <text class="foot" x="176" y="390">validated to reference-implementation exactness or analytic ground truth · 19 modules · 105 tests · v0.7.0</text>
+
+  <rect x="8" y="8" width="1184" height="424" rx="14" fill="none" stroke="#e2e6ea" stroke-width="1.2"/>
+</svg>

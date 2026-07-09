@@ -2,8 +2,8 @@
 
 Everything needed to draft the methods paper. This document is self-contained:
 numbers, figures, structure, honesty ledger, and reproducibility pointers. Where a
-claim needs the raw table, it points to a CSV in `benchmarks/results/` and a figure
-in `benchmarks/figures/handoff/`.
+claim needs the raw table, it points to a CSV in `benchmarks/results/`; the FINAL
+manuscript figures live in `benchmarks/figures/main/` + `.../extended/` (see §6).
 
 ---
 
@@ -122,20 +122,29 @@ fluorostats 2D segmentation ~14.5 ms/image (CPU) — **15× faster than StarDist
 (every fs metric vs every comparator): `b_timing_all_metrics.csv`;
 **fig4_timing_all.png**.
 
-## 6. Figure inventory (`benchmarks/figures/handoff/`)
-1. fig1_nuclei_ranking — 12-method nuclei F1 (fluorostats highlighted)
-2. fig2_dl_ci — fluorostats vs StarDist/Cellpose, bootstrap CIs (significant)
-3. fig3_clustering_curve — F1 vs overlap, all methods collapse
-4. fig4_timing_all — per-metric runtime, fluorostats vs comparators (log)
-5. fig5_viability_external — vs Kerkhoff Fiji macro (MAE + CCC)
-6. fig6_noise — noise robustness
-7. fig7_scope_boundary — separated vs crowded (fs vs DL)
-8. fig8_vascular_ranking — REAVER 6-tool ranking
-9. fig9_homogeneity — vs 5 spatial statistics
-10. fig10_vascular_phantom — 3D phantom exact-GT accuracy
-11. fig11_vesselexpress_seg — real 3D vessels vs VesselExpress software
-12. fig12_vs_dl_all — fluorostats vs 3 DL segmenters
-13. fig13_vesselexpress_metric — fluorostats vs VesselExpress vessel-VF (rank-consistent, systematic offset)
+## 6. Figure inventory — FINAL manuscript figures (Nature-style, built)
+
+**These are the manuscript display items.** Each is a vector **PDF + 300-dpi PNG +
+self-contained caption (.txt)**, uniform 7.2 in (183 mm) wide, Okabe–Ito palette,
+fluorostats always blue. Build scripts alongside; shared style in `figstyle.py`.
+
+Main (`benchmarks/figures/main/`):
+- **fig1_schematic** — architecture/overview schematic (`methods_paper/figures/fig1_schematic.svg`, Cowork).
+- **fig2_nuclei_boundary** — a 12-method F1 ranking (bootstrap CIs) · b forest vs
+  StarDist/Cellpose/Omnipose · c BBBC039 raw/GT/fluorostats crops · d clustering
+  crossover · e separated-vs-crowded fields · f scope map.
+- **fig3_vascular** — a REAVER 6-tool accuracy+precision+bias test · b VesselExpress
+  vessel overlays (filled masks) · c 3D phantom exact-GT · d Bland–Altman VF.
+- **fig4_viability** — a 2D-vs-3D bias + depth profile · b tie-to-Fiji-macro
+  (identity + Bland–Altman) · c Live/Dead composites.
+- **fig5_homogeneity_stats** — a point patterns + tile Gini · b vs 5 spatial stats ·
+  c live SproutAngio stats worked example + power curve.
+
+Extended Data (`benchmarks/figures/extended/`): **ed1_correctness**,
+**ed2_runtime** (+ determinism), **ed3_robustness**, **ed4_generalization**.
+
+(The earlier exploratory plots in `benchmarks/figures/handoff/` are superseded —
+ignore them for the manuscript.)
 
 ## 7. Honesty ledger (state these plainly in Limitations)
 - **Crowded/overlapping instances:** fluorostats (and all non-DL methods) collapse;

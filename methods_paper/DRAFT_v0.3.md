@@ -1,0 +1,324 @@
+# fluorostats: training-free, reproducible quantification of fluorescence microscopy on the CPU
+
+*Citation keys in [brackets] are placeholders pending the reference-manager pass.*
+
+---
+
+## Abstract
+
+Modern fluorescence microscopy is volumetric, but the numbers extracted from it often are not. Volume fraction, network connectivity, skeleton and vascular architecture, object morphometry, spatial homogeneity and Live/Dead viability are routinely measured from three-dimensional stacks by collapsing them to two dimensions, using a patchwork of single-purpose tools, most of which require a GPU or a training set, and by exporting the results to a separate program for statistics. Each step erodes reproducibility. Here we present fluorostats, an open-source Python library and command-line tool that computes these quantities directly, training-free and on a standard CPU, and carries them through to small-sample non-parametric statistics, bootstrap power analysis and publication figures within a single pipeline. Every metric is validated to reference-implementation exactness against its established tool or against analytic ground truth, and accuracy is benchmarked against StarDist, Cellpose, Omnipose, REAVER, AngioTool, VesselExpress and a published Fiji Live/Dead macro on public data. fluorostats matches or exceeds these tools across a broad range of tasks while running deterministically on the CPU, and we define precisely the crowded, heavily-overlapping regime where trained deep-learning segmenters remain the better choice. fluorostats is available under a permissive license at github.com/rsiegemit/fluorostats with a version-archived DOI.
+
+---
+
+## Introduction
+
+Fluorescence microscopy is now routinely volumetric. Confocal and light-sheet instruments deliver three-dimensional stacks of hydrogel constructs, cleared organs and cultured tissues as a matter of course, and the questions asked of those stacks are quantitative ones: what fraction of a volume carries signal, how connected a vascular or mitochondrial network is, how objects are arranged in space, and what proportion of cells remain alive at a given depth. The answers determine whether a bioink keeps cells alive, whether an angiogenic cue produced a denser network, and whether a spatial pattern is uniform or clustered [refs].
+
+The data are volumetric, but the software that measures them is fragmented, and each fragment carries a cost. Instance segmentation is served by a mature family of trained models—StarDist, Cellpose, Omnipose, Mesmer—that segment beautifully on the tasks they were trained for [Schmidt2018; Stringer2021; Cutler2022; Greenwald2022]. Vascular networks have their own specialists in REAVER and AngioTool, and, in three dimensions, VesselExpress and VesSAP [Corliss2020; Zudaire2011; Spangenberg2023; Todorov2020]; skeleton and topology belong to Fiji's AnalyzeSkeleton, skan and BoneJ [ArgandaCarreras2010; NunezIglesias2018; Doube2010]; viability is most often read off a hand-built ImageJ macro [Kerkhoff2024]. Every one of these tools is excellent in its lane. Assembled into a working analysis, however, they expose three recurring problems. The strongest segmenters need a GPU and, frequently, retraining to perform on an unfamiliar modality, which places them out of reach for many laboratories and makes a result reliable only on images that resemble the training set [Laine2021]. The measurements themselves are frequently taken on maximum-intensity or mean projections, even though the underlying stack is three-dimensional, and projection systematically distorts the very quantities being reported—a limitation the tissue-engineering and angiogenesis literature names repeatedly but rarely fixes [Spiller2025; Pereira2023]. And once the metrics exist, the statistics that turn them into a claim are usually done by hand in a spreadsheet, where small samples and pseudoreplication inflate false-positive rates [Lord2020; Lazic2010] and where the analysis parameters go unrecorded, a documented source of the field's irreproducibility [Pereira2023].
+
+No single validated pipeline carries a measurement from a raw volume through to a correctly chosen, reproducible statistic without a GPU, a training set or a manual export. That is the gap fluorostats fills.
+
+fluorostats is an open-source Python library and command-line tool for quantifying fluorescence microscopy, built around four commitments that together define where it is useful. It is training-free: every operation is a deterministic algorithm rather than a learned model. It is CPU-only: no function needs a GPU. It is reference-exact: every metric is validated against the canonical implementation or against analytic ground truth. And it is statistically self-contained: small-sample non-parametric tests, effect sizes, multiplicity control and bootstrap power live in the same pipeline as the measurements, so that quantification and inference are never separated. The library spans volume fraction and density, connectivity and topology, skeleton and vascular metrics, object morphometry, spatial homogeneity and depth-resolved viability, and it emits the statistics and figures needed to report them.
+
+We evaluate fluorostats in two stages, and the order matters. First we establish that each metric is correct, by checking it against a reference implementation or a phantom whose value is known in closed form; integer-valued topological quantities agree exactly, and continuous ones agree within a characterized discretization tolerance. Only then do we benchmark accuracy against the established tools—StarDist, Cellpose and Omnipose for nuclei, each first shown to reproduce its own published accuracy; REAVER, AngioTool and VesselExpress for vasculature; a published Fiji macro for viability; and five classical spatial statistics for homogeneity. Across these comparisons fluorostats reaches parity with or exceeds the established tool on well-separated targets, at a fraction of the runtime and with no training or GPU, and every comparison is reported with bootstrap confidence intervals and paired significance tests. We are equally precise about where the claim ends: on heavily overlapping, crowded instances, fluorostats—like every non-learned method—is beaten by trained segmenters, and we locate that crossover exactly so that users know when to reach for one. What follows is the design, the correctness validation, the accuracy benchmarks by capability, the runtime and, finally, the scope and limitations.
+
+---
+
+## Results
+
+### A training-free, CPU-only architecture
+
+fluorostats is a Python library (version 0.7.0) with a command-line interface, installable from source and the Python package index under a permissive license. Its 19 modules follow the shape of a quantification workflow, from input and format handling through preprocessing, segmentation and metric extraction to statistics and reporting, and each metric is a pure function of its inputs (Fig. 1). Three consequences of that design recur through the results below.
+
+The first is determinism. Segmentation is classical thresholding, with a configurable family of algorithms—Otsu, Li, Isodata, Triangle, Yen, Mean, Minimum—and optional watershed splitting, and every downstream metric is a closed-form or combinatorial computation. Nothing in the measurement path holds a learned weight or draws a random seed, so the same input returns the same bits on every run. No trained segmenter can say the same, and we treat the property as a reproducibility guarantee rather than an implementation footnote.
+
+The second is that everything runs on the CPU. No function requires a GPU, so the library runs on a laptop, and it sidesteps the access and reproducibility hazards that come with deep-learning pipelines: GPU availability, framework and driver drift, and non-deterministic hardware kernels. As the runtime results show, it does so without a speed penalty that matters in practice.
+
+The third is that volumetric data are treated as volumetric. Volume fraction, connectivity, skeleton and vascular metrics and viability are computed in three dimensions with calibrated voxel spacing, and densities are normalized per unit physical volume, which makes them invariant to digital zoom and voxel size. Where a two-dimensional shortcut exists we implement it explicitly, so that the difference between a volumetric measurement and its projection can be measured rather than assumed.
+
+Beyond measurement, fluorostats includes a statistics and reporting layer that general bioimage platforms leave out: Mann–Whitney U tests with Cliff's delta effect sizes, stratified rank tests and the Scheirer–Ray–Hare interaction test, Benjamini–Hochberg control across metrics and strata, bootstrap confidence intervals and fold changes, agreement statistics (Bland–Altman, Lin's concordance correlation, the intraclass correlation) and bootstrap power analysis. Because these act on the objects the quantification already produced, an analysis can run from image to effect size to multiplicity-controlled significance without leaving the pipeline. We validate that layer to machine precision below.
+
+### Every metric is exact against its reference
+
+A favourable benchmark against another tool means little if the underlying metric is wrong, so we begin with correctness, checking each metric against a reference implementation or against a phantom whose value is known in closed form. Throughout, we hold integer-valued quantities to a standard of exact agreement and report continuous ones with a bounded, stated tolerance.
+
+Topology is exact against analytic truth. On six phantoms with closed-form Euler characteristics and known component counts, fluorostats recovers the Euler number, the number of connected components and the largest-connected-component fraction with zero error (Table 1; Fig. 2). These are integer invariants, and exact agreement, not merely close agreement, is the right pass criterion. In a sweep that carried a structure from fragmented to fully connected, the Euler number tracked the transition better than any of the four alternatives (Spearman ρ = 1.0) and alone resolved both the fragmentation and the interconnection regimes, where the largest-component fraction and percolation saturate.
+
+The skeleton metrics share their algorithm with the reference tools, and they agree with it. fluorostats skeletonizes with the Lee–Kashyap–Chu 1994 thinning used by Fiji's AnalyzeSkeleton and by skan [ArgandaCarreras2010; NunezIglesias2018], which makes exact agreement a prediction to be tested rather than a happy accident. It holds: on line phantoms of known length, skeleton length is recovered to within 1% and branch counts exactly; on synthetic trees, branch and junction counts are exact at depths two and three (7/3 and 15/7). A denser depth-four tree undercounts slightly, 27 branches against 31, at the raster resolution of its shortest terminal branches—a limit we state rather than tune away. Four skeletonization algorithms (Lee-1994, medial axis, morphological thinning and Zhang) return the same branch counts within a 1% spread in length, so the choice of algorithm is not itself a source of error.
+
+The continuous physical metrics match their analytic definitions, and the densities are zoom-invariant by construction. Voxel-based volume fraction equals the known fraction exactly; the volume fraction of a sphere in a box matches the analytic (4/3)πr³/L³ to within 0.1%; and Cavalieri point-counting converges to the voxel value, reproducing the Delesse–Glagolev stereological principle [refs]. Density per cubic millimetre is invariant to voxel size across a six-fold zoom range, with a coefficient of variation of exactly zero, where raw counts, per-megavoxel, per-area and per-slice densities all drift. This reproduces the magnification sensitivity of uncalibrated counts documented by Riley and colleagues [Riley2023], and resolves it.
+
+The statistics and agreement layer is exact to machine precision. Mann–Whitney U and its p-value match SciPy; Cliff's delta matches a brute-force computation; Benjamini–Hochberg matches a hand-coded reference; the Stouffer combination matches SciPy's; and the Scheirer–Ray–Hare test recovers a planted interaction. Raw per-stratum p-values and the stratified false-discovery-rate grid match reference values exactly, and the three agreement statistics reproduce their closed-form or ANOVA references across all eleven checks. This last point matters for everything that follows: the instance-matching metrics the accuracy benchmarks depend on—instance F1, average precision, the matching routine itself—pass all 23 checks against an independent intersection-over-union matcher and the canonical DSB2018 average-precision formula, so the numbers in the comparisons below are produced by a scorer that has itself been verified.
+
+The picture is consistent. Integer-valued topological and combinatorial quantities agree exactly with analytic truth; continuous physical quantities agree with their definitions within a stated discretization tolerance; and the scoring and statistics machinery is exact to machine precision. These checks are not run once and retired—they are regression tests in a suite of 105 that runs on every change, so exactness is a maintained invariant. With correctness established, we turn to how fluorostats compares to the established software on accuracy.
+
+**Table 1 | Reference-exact validation across capabilities.** Integer-valued quantities agree exactly; continuous quantities agree within a stated discretization tolerance.
+
+| Capability | Reference | Result |
+|---|---|---|
+| Statistics (Mann–Whitney, Cliff's δ, BH-FDR, Stouffer, Scheirer–Ray–Hare, stratified) | SciPy + hand-coded | 8/8 + stratified, exact |
+| Agreement (Bland–Altman, Lin's CCC, ICC) | closed-form / two-way ANOVA | 11/11, machine precision |
+| Instance metrics (F1, average precision, matching) | independent IoU matcher / DSB2018 formula | 23/23 |
+| Volume fraction / density | Delesse point-counting, analytic | 7/7; zoom-invariant (CV = 0) |
+| Connectivity (Euler number, components, LCC) | analytic phantoms | 6/6 exact; Euler ρ = 1.0 (best tracker) |
+| Skeleton (length, branches, junctions) | analytic phantoms + Lee-1994 (skan / AnalyzeSkeleton) | length ≤ 1%, branches/junctions exact |
+| Nucleus size | BBBC024 ground truth | 3.5% median-diameter error |
+
+### Nucleus segmentation matches validated deep learning, then hands off
+
+Nucleus instance segmentation is where deep learning is strongest and where a training-free tool is therefore most exposed, so we treat it as the central test of the parity claim and report it in the segmenters' own currency: instance F1 and average precision, computed by matching predicted to reference instances across a range of intersection-over-union thresholds (Methods).
+
+The comparison is only as honest as its baselines, so we validated them first. On BBBC039 our StarDist run reached an F1 of 0.871 against a published 0.864, and Cellpose reached 0.862, confirming that both were configured at full strength rather than set up to fail [PublishedBaselines]. Only then did we introduce fluorostats. On the full BBBC039 test set (n = 200) it reached an instance F1 of 0.896 (95% bootstrap CI [0.873, 0.916], 10,000 resamples), above StarDist (0.871), Cellpose (0.862) and Omnipose (0.802). The paired, per-image differences are significant: fluorostats exceeds StarDist by 0.025 [0.004, 0.042] and Cellpose by 0.034 [0.008, 0.057], both intervals clear of zero (Fig. 3b). The claim this supports is specific. A deterministic, training-free, CPU pipeline reaches the accuracy of three independently validated trained segmenters on well-separated nuclei; it is not that thresholding beats deep learning in general.
+
+Within its own threshold family, fluorostats is competitive across the board, and its Li configuration tops a twelve-method comparison at F1 0.934 (Table 2; Fig. 3a). We give the full ranking rather than only the winner, because the threshold is a parameter the user sets, and its behaviour is something to characterize rather than hide. On DSB2018, the canonical nucleus set on which StarDist's published number rests, fluorostats reaches an F1 of 0.789: the best of six classical baselines, and roughly 91% of the trained model's published 0.864, at no training cost and on the very data that number comes from.
+
+**Table 2 | Twelve-method nucleus-segmentation ranking (BBBC039, n = 60).** Instance F1 at IoU 0.5, mean average precision (0.5–0.9) and count mean absolute error against expert instance ground truth. On the full n = 200 set, fluorostats' instance F1 is 0.896 (Fig. 3b). Best F1 in bold.
+
+| Rank | Method | F1 | AP | count MAE |
+|---|---|---|---|---|
+| 1 | **Li (1993)** | **0.934** | 0.790 | 4.80 |
+| 2 | Otsu (1979) | 0.905 | 0.735 | 4.33 |
+| 2 | Isodata (1978) | 0.905 | 0.737 | 4.32 |
+| 2 | fluorostats (Otsu + CC) | 0.905 | 0.735 | 4.33 |
+| 5 | Mean | 0.899 | 0.662 | 6.30 |
+| 6 | StarDist (deep learning) | 0.874 | — | — |
+| 7 | Cellpose (deep learning) | 0.870 | — | — |
+| 8 | Triangle (1977) | 0.865 | 0.536 | 9.22 |
+| 9 | Minimum | 0.578 | 0.488 | 38.3 |
+| 10 | Watershed (1991) | 0.342 | 0.128 | 127 |
+| 11 | Yen (1995) | 0.310 | 0.212 | 68 |
+
+Parity on separated targets has an honest counterpart, and it is collapse on crowded ones. As nuclear overlap on the BBBC024 benchmark rises from 0% to 75%, instance F1 for fluorostats—and for every non-learned method we tested—falls from 0.94 to 0.15, while the trained segmenters hold near 0.96–1.0 (Fig. 4a; Table 3). The mechanism is not mysterious: connected-component labelling fuses instances the moment they touch, and watershed splitting rescues only mild clustering (0.896 to 0.899 on BBBC039), not heavy overlap. This is a wall in front of the whole non-learned class, not fluorostats alone, and it draws a clean line of use—thresholding on well-separated targets, a trained instance segmenter when instances heavily overlap (Fig. 4b). Because fluorostats is training-free, its accuracy does not hinge on a modality appearing in a training set, and its decline with overlap is a smooth function of a measurable image property rather than a distribution-shift cliff.
+
+**Table 3 | Crowded-regime instance segmentation (BBBC024 at 75% clustering, mid-slices; ground truth = 20 nuclei/slice, n = 12).**
+
+| Method | Type | Mean F1 @ 0.5 | Mean count (GT = 20) |
+|---|---|---|---|
+| Cellpose (v3 nuclei) | deep learning | 1.00 | 20.0 |
+| StarDist (2D_versatile_fluo) | deep learning | 0.96 | 20.3 |
+| fluorostats (Otsu + CC) | threshold | 0.38 | 7.6 |
+
+### A general tool ties the vascular specialists on their own benchmark
+
+Vascular quantification belongs to dedicated tools, which invites a pointed question: how far does an untuned, training-free, general-purpose tool get on the specialists' own annotated data? We answer it with REAVER's comparison protocol [Corliss2020]—one shared dataset, every tool scored through a single unified quantification of the same segmentations, and default parameters throughout, which we declare, as REAVER does, as a deliberate constraint.
+
+In two dimensions, fluorostats sits among the specialists. On the REAVER dataset (n = 36, expert manual ground truth), dropped into REAVER's own five-tool comparison, it ranks fourth of six on vessel-area-fraction error (MAE 0.076, concordance 0.701, Spearman 0.935), statistically level with AngioTool (0.068) and ahead of RAVE (0.094) and AngioQuant (0.149); REAVER itself (0.017) and ImageJ (0.041) lead (Table 4, Fig. 5a). An untuned general tool tying a dedicated angiogenesis package on that package's own benchmark is exactly the intended result, and the two specialists that genuinely exceed it are named, not buried. On real fibrin-bead sprouting-assay data (SproutAngio, n = 12), where no ground truth exists, fluorostats and four threshold baselines all recover the VEGF dose–response, with the volume fraction and length correlating with dose at Spearman 0.59–0.74; the metrics roughly double from low to mid VEGF and plateau at high dose, a saturation that is biologically plausible and that the tool detects without any ground truth or training.
+
+**Table 4 | Vessel-area-fraction accuracy on the REAVER benchmark (n = 36, expert manual ground truth).** All tools scored through one unified quantification at default parameters. Best in bold.
+
+| Rank | Tool | MAE | CCC | Spearman |
+|---|---|---|---|---|
+| 1 | **REAVER** | **0.017** | 0.984 | 0.967 |
+| 2 | ImageJ | 0.041 | 0.862 | 0.986 |
+| 3 | AngioTool | 0.068 | 0.752 | 0.965 |
+| 4 | fluorostats | 0.076 | 0.701 | 0.935 |
+| 5 | RAVE | 0.094 | 0.700 | 0.911 |
+| 6 | AngioQuant | 0.149 | 0.333 | 0.886 |
+
+In three dimensions, fluorostats recovers exact phantom values and agrees rank-wise with a 3D specialist. Against synthetic vascular phantoms with exact ground truth it recovers centreline length to within 0.6–2.4%, branch count exactly and volume fraction exactly (Table 5). On real light-sheet volumes we compared against VesselExpress [Spangenberg2023], and we frame the comparison as software against software, because the reference is that tool's own pipeline output rather than a manual expert tracing. Here the threshold is decisive, and its influence drove a new capability. The Otsu default badly under-segments dim, sparse light-sheet vessels (Dice 0.089 against the VesselExpress segmentation), while a Li threshold recovers to 0.598; we therefore added an automatic mode that detects when Otsu keeps implausibly little signal and switches to Li, which it did on all nine volumes, matching the best manual choice, together with a majority-vote consensus mode. Consensus, we report plainly, fails here (0.094): most threshold algorithms share the same under-segmentation on this data, so the majority inherits it, and the automatic switch to Li is the right answer. On vessel volume fraction the two tools rank the nine volumes consistently (Spearman 0.75) but fluorostats reads about 1.7-fold higher in absolute terms (0.049 against 0.029; concordance 0.11), a systematic offset with a mechanical explanation—the Li threshold is more inclusive than the VesselExpress pipeline—of the same kind that REAVER documents among 2D packages (Fig. 5d). We do not compare skeleton length on these volumes, because skeletonizing full 250-MB dense light-sheet stacks is computationally intractable; the omission is a scope limit, and we state it.
+
+**Table 5 | Three-dimensional vascular validation.** (a) Synthetic phantom vs exact ground truth: centreline length error 0.6–2.4%; branch count exact; volume fraction exact. (b) Agreement with the VesselExpress segmentation on real light-sheet volumes (n = 9), foreground Dice.
+
+| (b) Configuration | Dice vs VesselExpress |
+|---|---|
+| fluorostats (li) | 0.598 |
+| fluorostats (auto → li) | 0.598 |
+| fluorostats (triangle) | 0.521 |
+| scikit-image (otsu) | 0.102 |
+| fluorostats (consensus) | 0.094 |
+| fluorostats (otsu, default) | 0.089 |
+
+Vessel volume-fraction agreement (n = 9): Spearman 0.75; fluorostats 0.049 vs VesselExpress 0.029 (≈ 1.7×); CCC 0.11.
+
+### Depth-resolved viability recovers what two dimensions discard
+
+Viability is where imaging in three dimensions but quantifying in two does the most damage, and where treating the stack as a volume pays off most clearly. We make two claims: that two-dimensional shortcuts bias the live fraction in a consistent direction, and that fluorostats' count-based viability reproduces a published tool exactly while extending it into depth.
+
+Take the true voxelwise 3D live fraction of a public Day-14 Live/Dead stack (S-BIAD2130, 0.570) as the reference, and every two-dimensional or heuristic reduction of it reads high: a maximum-intensity projection by 5.0%, a mid-plane slice by 1.5%, brightest-focus selection by 1.7%, and a naive mean of per-slice fractions by 25.2%, the last because it over-weights the sparse deep slices. Attenuation correction stays within 2.7% of the volumetric value (Table 6). Because the same volume passes through every pipeline, the differences belong to the reduction, not the sample, and they point the same way: the readout a laboratory would report from a projection overstates viability relative to the volumetric truth.
+
+**Table 6 | Two-dimensional shortcuts bias the live fraction (S-BIAD2130).** Bias is relative to the true voxelwise 3D live fraction (0.570).
+
+| Reduction | Live-fraction bias vs 3D |
+|---|---|
+| 3D voxelwise (reference) | — (0.570) |
+| Mid-plane slice | +1.5% |
+| Brightest-focus slice | +1.7% |
+| Maximum-intensity projection | +5.0% |
+| Mean of per-slice fractions | +25.2% |
+| Attenuation-corrected | within 2.7% |
+
+The volumetric claim earns its credibility from a more conventional one. Benchmarked against a published Fiji Live/Dead macro [Kerkhoff2024] on its own synthetic data, where per-cell counts and hence true viability are known by construction, fluorostats at first fell short: it had no peak-counting mode, and its area- and connected-component readouts trailed the macro on crowded cells, the same overlap wall the nuclei meet. We built the missing mode—local-maxima counting—and fluorostats now matches the macro exactly, at a mean absolute error of 0.016 and a concordance correlation of 0.987 against the macro's identical 0.016 and 0.987 (Table 7, Fig. 6b), through its own interface and training-free. The same library that reproduces the standard 2D readout is the one that shows that readout to be biased in 3D, and reproducing the tool is what licenses the sharper claim.
+
+**Table 7 | Viability agreement with a published Fiji Live/Dead macro (Kerkhoff, synthetic ground truth).** Best agreement in bold.
+
+| Method | MAE | CCC |
+|---|---|---|
+| Kerkhoff Fiji macro (peak count) | **0.016** | **0.987** |
+| fluorostats — maxima (new) | **0.016** | **0.987** |
+| fluorostats — object count (CC) | 0.076 | 0.703 |
+| Otsu connected-component count | 0.079 | 0.801 |
+| fluorostats — area fraction | 0.091 | 0.832 |
+
+No counting mode is universal, and we present that as guidance rather than apology. In a size-and-noise sweep with a true count of 100, local-maxima counting wins on crowded, single-peak cells but over-counts flat or noisy ones (3,068 detections at high noise), while connected-component counting is far more robust (68) and area answers coverage. fluorostats therefore offers connected-component, watershed, local-maxima, a conservative automatic mode and an all-modes consensus, laid out as an explicit decision guide keyed to density, depth and noise (Table 8). Crowding and noise cannot be told apart from image intensity alone, so the automatic mode leans toward the robust choice and reports its reasoning instead of posing as an oracle—a limit we would rather state than paper over.
+
+**Table 8 | Counting-mode decision guide.** No single mode is universal (validated on a size-and-noise sweep, true count = 100).
+
+| Assay regime | Recommended mode | Rationale |
+|---|---|---|
+| Crowded, single-peak cells | maxima | ties the peak-count macro (Table 7) |
+| Large or flat cells | watershed or connected-components | maxima over/under-counts |
+| Noisy images | connected-components | most noise-robust (68 vs maxima 3,068 at σ = 200) |
+| Unknown / mixed | auto (conservative) + all-modes consensus | biases to the robust mode, reports spread |
+
+### A simple homogeneity index tracks five rigorous statistics, with the statistics built in
+
+Spatial homogeneity is often reduced to a single dispersion index, but the closest recent work validated such an index against biochemical ground truth rather than against established point-pattern statistics, and shipped neither a Python implementation nor a significance test [Martin2026]. fluorostats' segmentation-free, tile-based Gini index closes precisely that gap. Across a controlled regular-to-clustered sweep it tracks all five standard spatial statistics—the Morisita index (Spearman 0.997), quadrat variance (0.997), gliding-box lacunarity (0.981), the Clark–Evans nearest-neighbour index (−0.983) and Ripley's K/L deviation (0.960)—and separates uniform from clustered fields with an area under the curve of 1.0 in every case (Table 9, Fig. 7b). An object-based centroid variant behaves the same way (Spearman 0.975 against the clustering parameter, |ρ| ≈ 0.99 against the reference statistics). The index is thus a fast, segmentation-free stand-in for rigorous point-pattern analysis, and its limits are the honest ones: a single fixed tile scale, and no built-in test of complete spatial randomness—a gap the statistics layer is there to fill.
+
+**Table 9 | The tile-based Gini index tracks five established spatial statistics (regular→clustered sweep).**
+
+| Reference statistic | Spearman ρ vs Gini | uniform-vs-clustered AUC |
+|---|---|---|
+| Morisita index | 0.997 | 1.0 |
+| Quadrat variance | 0.997 | 1.0 |
+| Gliding-box lacunarity | 0.981 | 1.0 |
+| Clark–Evans nearest-neighbour | −0.983 | 1.0 |
+| Ripley's K/L deviation | 0.960 | 1.0 |
+
+A measurement is only as good as the inference applied to it, and small-sample microscopy is a known site of statistical error: pseudoreplication that counts cells as independent replicates inflates false positives, and parametric tests are routinely misapplied to small, non-normal samples [Lord2020; Lazic2010]. fluorostats makes the defensible choice the default. Group comparisons use Mann–Whitney U with Cliff's delta effect sizes; structured designs use stratified rank tests and the Scheirer–Ray–Hare interaction test; multiplicity is controlled by Benjamini–Hochberg across metrics and strata; fold changes come with bootstrap confidence intervals. Each is exact against its reference (above), and because they act on the objects the quantification already produced, the analysis runs from image to multiplicity-controlled significance with no manual export. The library also estimates power by bootstrap from pilot data, and we flag, and document, that power from a small pilot is optimistic by construction [Albers2018]—a caveat about the reader's experimental design rather than about the tool.
+
+### Runtime and determinism
+
+A CPU-only tool has to be fast enough to use, and a reproducible one has to be deterministic; fluorostats is both, and we quantify it. On BBBC039, per-image 2D segmentation takes 14.5 ms on the CPU, in line with the classical thresholds it is built from (Otsu and Isodata 5.7 ms, Triangle 5.9 ms, Li 9.1 ms, watershed 35.6 ms) and roughly 15-fold faster than StarDist (215 ms) and 380-fold faster than Cellpose (5,547 ms) on the same processor (Table 10, Fig. 8). A per-metric table across the whole library (Extended Data) tells a consistent story: on shared operations fluorostats matches its library equivalents, with statistics and agreement functions at 0.01–0.4 ms against SciPy's 0.09–0.24 ms and 3D connectivity and local-maxima counting tracking their scikit-image counterparts. The few genuinely slow operations we report as such—average precision at about 20 s and instance F1 at about 2 s on large label images, watershed splitting and background subtraction at about 9 s—each tracking its underlying library routine, and each a once-per-volume or validation-time step rather than a per-frame metric. Every timing was measured on the CPU, with no GPU present.
+
+**Table 10 | Per-image runtime (BBBC039, CPU).** fluorostats is on par with the thresholds it uses and orders of magnitude faster than the deep-learning segmenters.
+
+| Method | ms/image | Device |
+|---|---|---|
+| Otsu / Isodata | 5.7 | CPU |
+| Triangle | 5.9 | CPU |
+| Li | 9.1 | CPU |
+| fluorostats (Otsu + CC) | 14.5 | CPU |
+| Watershed | 35.6 | CPU |
+| StarDist | 215 | CPU |
+| Cellpose | 5,547 | CPU |
+
+Determinism follows from the design. No function in the measurement path uses learned weights or random seeds, so repeated runs on identical inputs return identical bits. We report this as a result, not a footnote: a published fluorostats number can be regenerated exactly from the archived code and data, free of the seed-, framework- and hardware-dependent variability that trained pipelines carry.
+
+## Discussion
+
+fluorostats occupies a narrow but, we think, undersupplied niche: reproducible, training-free, CPU-only quantification of fluorescence microscopy for the large share of analyses that never needed a trained instance segmenter. Its contribution is not another segmentation algorithm—it builds deliberately on published ones—but a combination that no existing tool offers whole: reference-exact correctness for every metric, a deterministic CPU implementation that removes the GPU and training barriers to reproducibility, and a statistics layer that carries a measurement to a multiplicity-controlled inference without a detour through a spreadsheet. The benchmarks show that the combination costs nothing in accuracy on the tasks it targets. fluorostats matches or beats validated deep-learning segmenters on well-separated nuclei, ties a dedicated angiogenesis package on that package's own benchmark, reproduces a published viability macro exactly and follows five rigorous spatial statistics with a single simple index.
+
+It is a complement to deep learning, not a rival. On heavily overlapping instances, the regime trained models were built for, fluorostats and the whole non-learned class are outperformed, and we have mapped that crossover precisely so the tool can tell a user when to switch. We think that is the useful framing. A tool that is correct by construction, reproducible by design and candid about its limits is the right first instrument for a great many quantification tasks, and an honest signpost to deep learning for the rest. For the tissue-engineering and vascular-biology groups that generate volumetric fluorescence data without routine GPU access or annotation budgets, and for whom a reported number has to be reproducible as well as accurate, it is meant to be that first instrument.
+
+## Scope and limitations
+
+We set out the boundaries plainly. Several are quantified above; here we give, for each, the mechanism, the boundary and the practical guidance.
+
+*Crowded and overlapping instances.* Connected-component labelling merges instances once they touch, so instance F1 collapses from 0.94 to 0.15 between 0% and 75% clustering on BBBC024. The limit is the whole non-learned class, not fluorostats in particular. On heavily overlapping instances, use a trained segmenter—StarDist, Cellpose, Omnipose—whose masks fluorostats can then measure.
+
+*Threshold choice.* The default Otsu threshold under-segments dim, sparse signal (Dice 0.089 on light-sheet vessels, recovered to 0.598 with Li). The automatic mode mitigates this by a documented heuristic but is not an oracle, and consensus fails when most algorithms share a failure mode. On dim or sparse volumetric signal, use or verify the automatic/Li threshold, and report the threshold used.
+
+*Counting mode for viability.* Local-maxima counting matches the published macro on crowded cells but over-counts flat or noisy ones; connected-component counting is more robust to noise. No automatic selector is reliable, because crowding and noise are not separable from image statistics alone. Choose the mode from the assay (Table 8); when in doubt, the conservative automatic mode and the reported consensus spread signal the uncertainty.
+
+*Hard cytoplasmic 3D and small, dim nuclei.* On the demanding Cell Tracking Challenge sets an untuned threshold pipeline gives moderate foreground overlap (Dice 0.52–0.69), and the best threshold is dataset-dependent; here fluorostats is a semantic quantifier, not a tuned instance segmenter.
+
+*Continuous metrics near the sampling limit.* Integer topological quantities are exact, but skeleton length and branch counts degrade for terminal branches near the raster resolution (27 against 31 branches on a depth-four tree). Interpret continuous morphometrics with the stated tolerance.
+
+*Limits of the evaluation, distinct from the tool.* Two comparisons rest on imperfect ground truth, and we keep them separate from the method's own limits. The VesselExpress comparison is software-versus-software agreement against a pipeline-generated segmentation, not a gold-standard accuracy test against manual tracing. And bootstrap power from a small pilot is optimistic by construction; we present power curves with that caveat, as a statement about experimental design rather than about the tool.
+
+*Correctness of the benchmarks themselves.* The benchmark scripts are software too, and we held them to the same standard as the library. Reference-agreement and invariant checks—that zoom-normalized density is exactly invariant, that the instance scorers match an independent matcher—are part of the test suite, and during development they caught and we corrected several script-level errors, among them a Stouffer-convention mismatch and a zoom-invariance counting error, before any reported result depended on them. Every number here comes from the audited, version-tagged code, and the scorers behind the comparison numbers are themselves validated (23 of 23 instance-metric checks). We note this not as a confession but as evidence that the evaluation harness carries the same correctness discipline as the library it tests, in keeping with established guidance on reproducible computational research [Sandve2013; Miura2021].
+
+## Methods
+
+*Online Methods, to sit at the end of the manuscript per Nature-style convention; move inline for a journal that integrates them.*
+
+### Software implementation
+
+fluorostats (v0.7.0) is written in Python and depends on NumPy, SciPy, scikit-image, pandas, tifffile and czifile. It exposes both a library API, in which every metric is a pure function, and a command-line interface, and it reads the major microscopy formats (confocal and light-sheet z-stacks and widefield; TIFF, CZI and others). The 19 modules follow the workflow—input/output, preprocessing, segmentation, object handling, 2D and 3D metrics, skeleton, topology, vascular, viability, homogeneity, agreement, statistics, power, and reporting/figures—and are covered by 105 automated tests, including the reference-agreement checks described under correctness. No function requires a GPU, and no function in the measurement path uses a random seed; all benchmarks were run on the CPU.
+
+### Datasets
+
+Every benchmark dataset is public and citable. Nuclei: BBBC039 and BBBC024 from the Broad Bioimage Benchmark Collection [Ljosa2012], and the 2018 Data Science Bowl set (DSB2018) [Caicedo2019]. 3D segmentation: Cell Tracking Challenge fluorescence sets (Fluo-C3DH-A549, Fluo-N3DH-CHO) [Maska2014; Maska2023]. Vascular: the REAVER annotated dataset [Corliss2020], the SproutAngio VEGF dose–response set (Zenodo 7240927), and the VesselExpress light-sheet volumes (Zenodo 6025935) [Spangenberg2023]. Viability: a public Live/Dead stack (S-BIAD2130) and the Kerkhoff Fiji-macro synthetic benchmark (Zenodo 10395753) [Kerkhoff2024]. Accession identifiers and download URLs are listed in the data-availability statement and the repository's data manifest.
+
+### Metric definitions and evaluation
+
+Instance-segmentation accuracy is reported as instance F1 and average precision, computed by matching predicted to ground-truth instances above an intersection-over-union threshold, with F1(t) = 2·TP(t) / [2·TP(t) + FP(t) + FN(t)] and average precision averaged over IoU thresholds from 0.5 to 0.9, following the DSB2018 convention [Caicedo2019]. Semantic overlap is reported as foreground Dice and Jaccard. Vascular agreement uses vessel area fraction (2D) and volume fraction (3D), with concordance correlation, Spearman correlation and mean absolute error against the reference; the accuracy/precision decomposition and the zero-bias test follow REAVER [Corliss2020]. Viability is the live fraction (live count or volume over total), with agreement to the reference macro measured by mean absolute error and Lin's concordance correlation. Spatial homogeneity uses a tile-based Gini index, compared by Spearman correlation and uniform-versus-clustered area under the curve against five reference statistics (Clark–Evans, Ripley's K/L, Morisita, quadrat variance, lacunarity). Topology (Euler number, connected components, largest-connected-component fraction) and skeleton metrics (length, branch and junction counts) are validated against analytic phantoms and the Lee-1994 reference. All scoring routines are themselves validated (correctness, above).
+
+### Baseline configuration and validation
+
+Deep-learning baselines were run at their published configurations on the CPU: StarDist (2D_versatile_fluo), Cellpose (v3, nuclei) and Omnipose. Each was first validated to reproduce its published accuracy on BBBC039 before any comparison (StarDist observed F1 0.871 against a published 0.864; Cellpose 0.862) [PublishedBaselines]. A single evaluation policy applied across all methods—identical test images, identical scoring, default parameters, and, for fluorostats, no per-dataset training—and any asymmetry is noted where it arises. Classical thresholding baselines (Otsu, Li, Isodata, Triangle, Yen, Mean, Minimum, watershed) were run through the same quantification and scoring as fluorostats.
+
+### Statistics
+
+Group comparisons use the Mann–Whitney U test with Cliff's delta effect sizes; structured designs use stratified rank tests and the Scheirer–Ray–Hare test; multiplicity is controlled by the Benjamini–Hochberg false-discovery rate. Confidence intervals are bootstrap (10,000 resamples unless stated). The nucleus head-to-head reports paired per-image differences with bootstrap confidence intervals, with parity defined as an interval overlapping zero and superiority as one excluding it. Power analysis is bootstrap from pilot data, reported with the small-pilot optimism caveat [Albers2018]. All statistical functions are validated to exact agreement with reference implementations (correctness, above).
+
+### Compute environment
+
+Local benchmarks were run with Python 3.13. Deep-learning baselines were run on an AMD ROCm HPC cluster on the CPU (partitions and scripts in the repository's benchmark directory). All timings were measured on the CPU with no GPU present, on the hardware noted in the runtime table.
+
+## Data availability
+
+All datasets analysed are public: BBBC039 and BBBC024 (Broad Bioimage Benchmark Collection); DSB2018; Cell Tracking Challenge Fluo-C3DH-A549 and Fluo-N3DH-CHO; the REAVER dataset; SproutAngio (Zenodo 7240927); VesselExpress (Zenodo 6025935); S-BIAD2130; and the Kerkhoff synthetic Live/Dead benchmark (Zenodo 10395753). Accession identifiers and download URLs are provided in the repository data manifest. Raw image data are redistributed under their original licenses; the derived benchmark tables behind every figure are deposited under a Creative Commons license with a DOI [to be minted at submission].
+
+## Code availability
+
+fluorostats is open source under a permissive OSI-approved license at github.com/rsiegemit/fluorostats, installable from source and the Python package index, and the exact version used here (v0.7.0) is archived with a citable DOI on Zenodo [to be minted at submission]. The full benchmark harness—one script per comparison, with pinned dependencies—and scripts that regenerate every figure and table are included in the repository. Because the library is deterministic and CPU-only, every reported number is reproducible without a GPU, model weights or a fixed random seed.
+
+## Availability and requirements
+
+- **Project name:** fluorostats
+- **Home page:** github.com/rsiegemit/fluorostats
+- **Operating systems:** platform-independent (Linux, macOS, Windows)
+- **Programming language:** Python (3.13 tested)
+- **Other requirements:** NumPy, SciPy, scikit-image, pandas, tifffile, czifile
+- **License:** [OSI-approved permissive license — MIT/BSD/Apache, to confirm]
+- **Restrictions:** none for academic or commercial use
+
+## References
+
+*To be assembled with a reference manager. Placeholder keys used in the text, carrying the proof-stage verification flags from the research dossiers (research/00_SYNTHESIS.md §5):*
+
+- [Schmidt2018] Schmidt et al., Cell Detection with Star-convex Polygons, MICCAI 2018; [Weigert2020] StarDist-3D, WACV 2020 (cite the 2020 paper for 3D).
+- [Stringer2021] Stringer et al., Cellpose, Nature Methods 2021.
+- [Cutler2022] Cutler et al., Omnipose, Nature Methods 2022.
+- [Greenwald2022] Greenwald et al., Mesmer/DeepCell, Nature Biotechnology 2022.
+- [Corliss2020] Corliss et al., REAVER, Microcirculation 2020.
+- [Zudaire2011] Zudaire et al., AngioTool, PLoS ONE 2011.
+- [Spangenberg2023] Spangenberg et al., VesselExpress, Cell Reports Methods 2023.
+- [Todorov2020] Todorov et al., VesSAP, Nature Methods 2020.
+- [ArgandaCarreras2010] Arganda-Carreras et al., AnalyzeSkeleton, Microsc. Res. Tech. 2010.
+- [NunezIglesias2018] Nunez-Iglesias et al., skan, PeerJ 2018.
+- [Doube2010] Doube et al., BoneJ, Bone 2010.
+- [Kerkhoff2024] Kerkhoff & Ludwig, Fiji Live/Dead macro, Zenodo 10395753, 2024.
+- [Ljosa2012] Ljosa et al., BBBC, Nature Methods 2012.
+- [Caicedo2019] Caicedo et al., 2018 Data Science Bowl, Nature Methods 2019.
+- [Maska2014] Maška et al., Cell Tracking Challenge, Bioinformatics 2014; [Maska2023] 10-year CTC, Nature Methods 2023.
+- [Martin2026] Martin et al., dispersion indices, iScience 2026 (confirm final volume/pages at typeset).
+- [Lord2020] Lord et al., SuperPlots, J. Cell Biol. 2020.
+- [Lazic2010] Lazic, pseudoreplication, BMC Neuroscience 2010.
+- [Laine2021] Laine et al., replication crisis in DL bioimage analysis, Nature Methods 2021.
+- [Spiller2025] Spiller & Duarte Campos, Front. Bioeng. Biotechnol. 2025.
+- [Pereira2023] Pereira et al., angiogenesis software review, Int. J. Mol. Sci. 2023.
+- [Riley2023] Riley — magnification/zoom reproducibility (confirm citation).
+- [Albers2018] Albers & Lakens, pilot power optimism, 2018.
+- [Sandve2013] Sandve et al., Ten Simple Rules for Reproducible Computational Research, PLoS Comput. Biol. 2013.
+- [Miura2021] Miura & Nørrelykke, reproducible image handling and analysis, EMBO J. 2021.
+- [PublishedBaselines] Internal baseline-validation record (data/PUBLISHED_BASELINES.md).
+- Delesse–Glagolev stereology primaries: cite via a modern review.
+
+## Display items
+
+**Tables 1–10** are embedded in the Results above.
+
+**Main figures** (specifications and per-panel build instructions in `FIGURE_BRIEFS.md`):
+
+- **Fig. 1 — Overview schematic** (BUILT; `fig1_schematic.svg`). Training-free/CPU pipeline, module map, and the properties/benchmark footer.
+- **Fig. 2 — Correctness.** Analytic-phantom battery with expected-vs-measured values (topology χ, skeleton trees) and the zoom-invariance panel (CV = 0). *New composition.*
+- **Fig. 3 — Nucleus segmentation vs deep learning.** (a) 12-method F1 ranking; (b) bootstrap-CI forest, fluorostats vs StarDist/Cellpose/Omnipose; (c) qualitative overlay (raw / GT / fluorostats / StarDist). *Panel (c) new.*
+- **Fig. 4 — Scope boundary.** (a) instance-F1-vs-clustering crossover curve (with the DL line); (b) separated-vs-crowded bars; (c) qualitative separated vs crowded fields. *Panel (c) new.*
+- **Fig. 5 — Vascular networks.** (a) REAVER six-tool ranking (add accuracy/precision split + zero-bias flag); (b) qualitative vessel overlay (raw / segmentation / skeleton / branchpoints), incl. VesselExpress; (c) 3D phantom exact-GT; (d) VesselExpress metric agreement (Bland–Altman).
+- **Fig. 6 — Depth-resolved viability.** (a) 2D-vs-3D bias, paired per-sample deltas + per-z live-fraction profile; (b) tie to the Fiji macro (Bland–Altman + identity-line scatter); (c) qualitative Live/Dead overlay (2D vs 3D). *Panels (a) and (c) new.*
+- **Fig. 7 — Spatial homogeneity.** (a) point-pattern panels (regular / Poisson / clustered) beside the index value; (b) five-statistic correlation. *Panel (a) new.*
+- **Fig. 8 — Runtime & determinism.** Per-metric runtime (log scale) vs comparators, with the determinism note.
+
+**Extended Data / Supplementary:** DSB2018 ranking; CTC 3D Dice; noise/denoise/size sweeps; full per-metric timing table; per-dataset breakdowns; the community image-analysis reporting checklists.

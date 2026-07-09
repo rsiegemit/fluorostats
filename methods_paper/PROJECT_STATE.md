@@ -91,10 +91,17 @@ Day-14 middle Live/Dead analysis (v3, n=12 vs 12). Deferred: ONE final Live/Dead
 rerun IF we adopt library pruning / node-based branchpoints / viability columns
 (tracked in CHANGELOG_AND_RERUNS.md).
 
+## Manuscript figures — BUILT (Nature-style, final)
+8 figures in `benchmarks/figures/main/` (fig2–5) + `.../extended/` (ed1–4): each a
+vector PDF + 300-dpi PNG + caption `.txt`, uniform 7.2 in (183 mm), Okabe–Ito
+palette (fluorostats always blue). Shared style `benchmarks/figstyle.py`; build
+scripts `benchmarks/fig*.py` / `make_ed1_correctness.py` (run with `python3.13`).
+Cowork drafts present: `DRAFT_v0.5.md` (full draft), `PAPER_PLAN.md`, `FIGURE_BRIEFS.md`.
+
 ## NEXT STEPS (pick up here)
-1. **Draft the methods paper** — Methods + Results write almost directly from
-   `00_BENCHMARK_RESULTS.md`; Intro/gap from `research/00_SYNTHESIS.md`.
-2. Optional more benchmarks: correctness anchors to ≥4 comparators; more real
-   vascular/viability datasets; figure generation for each benchmark.
-3. Proof-stage: verify flagged citations (see research dossiers' flag lists).
-4. When paper structure is set, decide on the final Live/Dead rerun.
+1. **Hand `COWORK_NEXT.md` to Claude Cowork** — figures are done; remaining work is
+   prose (`DRAFT_v0.5.md`), reference pass (`[bracket]` keys + dossier flag lists),
+   and final display-item numbering (6 main figs + 2 tables + Supplementary S1–S9).
+2. Optional more benchmarks / figure tweaks (all reproducible from CSVs + figstyle).
+3. When paper structure is set, decide on the final Live/Dead rerun
+   (see `CHANGELOG_AND_RERUNS.md`; deferred).
