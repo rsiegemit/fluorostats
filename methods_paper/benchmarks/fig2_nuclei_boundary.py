@@ -34,7 +34,9 @@ gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.82, 1.9, 0.82],
 # (a) 12-method ranking with bootstrap CIs — one hero colour (blue), rest grey
 axa = fig.add_subplot(gs[0, :4])
 names = list(stats)
-acol = [OKABE["blue"] if "fluorostats" in m else "#AEB4BD" for m in names]
+# tool identity: fluorostats blue, DL tools in their Okabe-Ito colours (StarDist
+# orange, Cellpose vermillion, Omnipose purple), classical thresholds grey
+acol = [F.color_for(m) for m in names]
 F.ranked_barh(axa, names, [stats[m][0] for m in names],
               [stats[m][1] for m in names], [stats[m][2] for m in names],
               colors=acol, label_fs=6)

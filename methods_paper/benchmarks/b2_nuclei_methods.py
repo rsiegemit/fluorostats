@@ -10,10 +10,13 @@ is a published reference:
   plus a distance-transform Watershed (Vincent & Soille 1991) split.
 
 Reports instance F1@0.5, mean AP (0.5-0.9), and count MAE vs GT for each,
-alongside the validated DL baselines (StarDist 0.871, Cellpose 0.862) merged
-from the cluster runs.
+alongside the validated DL baselines (StarDist, Cellpose) merged from the
+cluster eval CSVs.
 
-Runs on a fixed subset for tractable AP computation.
+Runs on the first 100 BBBC039 images (per-image recompute), matching the
+per-image F1 cache (_perimage_f1.py) so the summary table and figure 2a agree:
+Otsu+CC and Watershed use the current fluorostats.objects primitives
+(label_3d, watershed_split), not the earlier ad-hoc watershed.
 """
 
 from __future__ import annotations
@@ -32,11 +35,12 @@ from skimage.segmentation import watershed
 from skimage.morphology import remove_small_objects
 
 from fluorostats.validate import instance_f1, average_precision
+from fluorostats.objects import label_3d, watershed_split
 
 DL = Path("/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/data/"
           "downloads/BBBC039")
 RES = Path(__file__).resolve().parent / "results"
-N_SUBSET = 60
+N_SUBSET = 100
 MIN_SIZE = 20
 
 THRESHOLDS = {
@@ -66,14 +70,12 @@ def label_clean(mask):
 
 
 def watershed_label(mask):
-    from scipy.ndimage import distance_transform_edt, maximum_filter
+    # current-library distance-transform watershed split (fluorostats.objects),
+    # the same call the per-image source uses so the summary reproduces it exactly
     mask = remove_small_objects(mask, MIN_SIZE)
     if not mask.any():
         return np.zeros(mask.shape, int)
-    d = distance_transform_edt(mask)
-    lm = (maximum_filter(d, size=5) == d) & (d > 4)
-    markers, _ = ndi.label(lm)
-    return watershed(-d, markers, mask=mask)
+    return watershed_split(mask, min_size=MIN_SIZE, min_distance=4)[0]
 
 
 def main():
@@ -105,8 +107,8 @@ def main():
         acc["Watershed_1991"]["f1"].append(instance_f1(ws, gt)["f1"])
         acc["Watershed_1991"]["ap"].append(average_precision(ws, gt)["mAP"])
         acc["Watershed_1991"]["cnt"].append(int(len(np.unique(ws)) - 1))
-        # fluorostats
-        cc = label_clean(otsu_mask)
+        # fluorostats (Otsu + connected-component labelling, fluorostats.objects)
+        cc = label_3d(otsu_mask, min_size=MIN_SIZE)[0]
         acc["fluorostats(Otsu+CC)"]["f1"].append(instance_f1(cc, gt)["f1"])
         acc["fluorostats(Otsu+CC)"]["ap"].append(average_precision(cc, gt)["mAP"])
         acc["fluorostats(Otsu+CC)"]["cnt"].append(int(len(np.unique(cc)) - 1))

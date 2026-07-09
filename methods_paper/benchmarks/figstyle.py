@@ -46,13 +46,16 @@ FS = {"title": 8, "label": 7, "tick": 6.5, "legend": 6, "annot": 6, "small": 5.4
 
 
 def apply_style():
-    """Set global rcParams for a clean Nature-style sans-serif look, white bg."""
-    fam = "Helvetica"
-    if not any(f.name == fam for f in font_manager.fontManager.ttflist):
-        fam = "Arial"
+    """Set global rcParams for a clean Nature-style sans-serif look, white bg.
+
+    Font is DejaVu Sans: a single bundled sans-serif family with full coverage of
+    the glyphs used on-figure (arrows, checkmarks, ±, µ, Greek, minus), so no panel
+    text renders as a missing-glyph box regardless of the host machine's fonts."""
+    fam = "DejaVu Sans"
     plt.rcParams.update({
         "font.family": "sans-serif",
-        "font.sans-serif": [fam, "Arial", "DejaVu Sans"],
+        "font.sans-serif": [fam, "Arial", "Helvetica"],
+        "axes.unicode_minus": False,
         "font.size": FS["tick"],
         "axes.titlesize": FS["title"], "axes.labelsize": FS["label"],
         "xtick.labelsize": FS["tick"], "ytick.labelsize": FS["tick"], "legend.fontsize": FS["legend"],

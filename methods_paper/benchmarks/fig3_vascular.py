@@ -89,8 +89,9 @@ panel(axc, "c", "3D phantom")
 
 cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool REAVER benchmark "
  "(n=36): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "
- "'#' marks tools statistically unbiased (one-sample t-test mean error = 0, Bonferroni). fluorostats "
- "(blue) is level with AngioTool and unbiased. (b) Real light-sheet vessels (VesselExpress, Zenodo "
+ "'#' marks tools statistically unbiased (one-sample t-test mean error = 0, Bonferroni across the six "
+ "tools); only REAVER qualifies. fluorostats (blue) ranks alongside AngioTool in accuracy but, like "
+ "every tool except REAVER, carries a small systematic underestimate. (b) Real light-sheet vessels (VesselExpress, Zenodo "
  "6025935), 3-slice MIP crops: raw, VesselExpress software segmentation (magenta), fluorostats "
  "auto→li (blue); scale bar 100 µm. (c) 3D synthetic phantom vs exact ground truth: centreline-length "
  "and volume-fraction error (%), branch counts exact. (d) Bland–Altman of vessel volume fraction, "
