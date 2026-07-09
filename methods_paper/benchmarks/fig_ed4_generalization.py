@@ -88,8 +88,7 @@ def panel_a(ax):
 
     ax.set_xlim(0, 1.0)
     ax.set_xlabel("Instance F1 @ IoU 0.5")
-    ax.set_title("DSB2018 fluorescence nuclei\n(StarDist's own training dataset)",
-                 fontsize=7.5)
+
 
     # annotate the "% of trained model" headline, placed in the clear
     # bottom-right whitespace beside the two shortest bars (Yen, Triangle)
@@ -143,8 +142,7 @@ def panel_b(ax):
     ax.set_xlabel("Cell Tracking Challenge 3D dataset")
     ax.set_ylabel("Foreground Dice")
     ax.set_ylim(0, 1.0)
-    ax.set_title("Unseen 3D modalities\n(training-free, no per-dataset tuning)",
-                 fontsize=7.5)
+
 
     # legend: one entry per method
     handles, leg_labels = ax.get_legend_handles_labels()
@@ -163,8 +161,8 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.6))
     panel_a(axes[0])
     panel_b(axes[1])
-    figstyle.panel(axes[0], "a", dx=-0.28)
-    figstyle.panel(axes[1], "b", dx=-0.14)
+    figstyle.panel(axes[0], "a", "DSB2018 — StarDist\u2019s own dataset")
+    figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)")
     fig.subplots_adjust(wspace=0.55, bottom=0.28, left=0.16, right=0.97, top=0.86)
 
     figstyle.save(fig, "ed4_generalization", figstyle.EXT, tight=False)

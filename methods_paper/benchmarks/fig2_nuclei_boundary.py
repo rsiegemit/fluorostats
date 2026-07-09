@@ -27,18 +27,19 @@ methods = {c: pi[c].values for c in pi.columns if c != "image"}
 methods.update(dl_pi)
 stats = {m: boot_ci(v) for m, v in methods.items()}
 # ---------- layout ----------
-fig = plt.figure(figsize=(7.2, 7.2))
-gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.92, 1.5, 0.9],
-                       hspace=0.5, wspace=1.05)
+fig = plt.figure(figsize=(7.2, 7.0))
+gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.95, 1.4, 0.95],
+                       hspace=0.4, wspace=1.05)
 
-# (a) 12-method ranking with bootstrap CIs
+# (a) 12-method ranking with bootstrap CIs — one hero colour (blue), rest grey
 axa = fig.add_subplot(gs[0, :4])
 names = list(stats)
+acol = [OKABE["blue"] if "fluorostats" in m else "#AEB4BD" for m in names]
 F.ranked_barh(axa, names, [stats[m][0] for m in names],
-              [stats[m][1] for m in names], [stats[m][2] for m in names], label_fs=6)
-axa.set_xlim(0, 1.0); axa.set_xlabel("instance F1 @ IoU 0.5  (BBBC039, n=100, 95% CI)")
-axa.set_title("Twelve-method comparison", fontsize=8, loc="left")
-panel(axa, "a", dx=-0.55)
+              [stats[m][1] for m in names], [stats[m][2] for m in names],
+              colors=acol, label_fs=6)
+axa.set_xlim(0, 1.0); axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
+panel(axa, "a", "twelve-method accuracy")
 
 # (b) forest vs DL
 axb = fig.add_subplot(gs[0, 4:])
@@ -52,11 +53,10 @@ for i, m in enumerate(fo):
     axb.errorbar(mean, i, xerr=[[mean-lo],[hi-mean]], fmt=TOOL.get(m,{}).get("m","o"),
                  color=c, ecolor="black", capsize=2.5, ms=6, mec="black", mew=0.5, elinewidth=0.9)
 axb.set_yticks(range(len(fo))); axb.set_yticklabels(fo, fontsize=6.5)
-axb.set_xlabel("mean F1 (95% CI)"); axb.set_xlim(0.78, 0.945)
-axb.set_title("vs validated DL", fontsize=8, loc="left")
+axb.set_xlabel("mean F1  (95% CI)"); axb.set_xlim(0.78, 0.955)
 axb.text(0.97, 0.06, "paired Δ excludes 0:\n−StarDist +0.025\n−Cellpose +0.034",
          transform=axb.transAxes, fontsize=5.4, color="#333", va="bottom", ha="right")
-panel(axb, "b", dx=-0.45)
+panel(axb, "b", "vs trained deep learning")
 
 # (c) qualitative overlay: raw / GT / fluorostats, 3 crops
 def gt_inst(stem):
@@ -64,7 +64,7 @@ def gt_inst(stem):
     seeds,_ = ndi.label(r==1); return watershed((r>=2).astype(np.uint8), seeds, mask=(r>0))
 imgs = sorted(glob.glob(str(DL/"BBBC039/images/images/*.tif")))
 crops = []
-hh, ww = 150, 230   # landscape crops fill the wide columns
+hh, ww = 178, 235   # crops sized to fill the image band (aspect ~1.3)
 for f in imgs:
     im = np.asarray(Image.open(f)).astype(np.float32); stem = Path(f).stem
     gt = gt_inst(stem)
@@ -87,7 +87,7 @@ for row, (im, gt, stem) in enumerate(crops):
         if row == 0: ax.set_title(lab, fontsize=7.5)
         if col == 0 and row == 0:
             F.scalebar(ax, 65, "20 µm")  # BBBC039 ~0.31 µm/px (approx, stated in caption)
-            panel(ax, "c", dx=-0.08)
+            panel(ax, "c")
 # (d) crossover
 axd = fig.add_subplot(gs[2, :2])
 cc = pd.read_csv(R/"b_clustering_curve.csv"); x = [0,25,50,75]
@@ -101,7 +101,7 @@ axd.text(2, 0.90, "deep learning", fontsize=5.6, color="black")
 axd.axvspan(50, 75, color=OKABE["vermillion"], alpha=0.08)
 axd.text(62, 0.5, "DL wins", fontsize=6, color=OKABE["vermillion"], ha="center")
 axd.set_xlabel("nuclear overlap (%)"); axd.set_ylabel("instance F1"); axd.set_ylim(0,1.02)
-axd.set_title("Crossover", fontsize=8, loc="left"); panel(axd, "d", dx=-0.28)
+panel(axd, "d", "crowding crossover")
 
 # (e) separated vs crowded fields
 def mid(fp):
@@ -114,7 +114,7 @@ for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separat
     ax = fig.add_subplot(gs_e[i]); ax.imshow(F.imnorm(sl), cmap="gray"); F.image_axes(ax)
     fsm = label_3d(remove_small_objects(sl > filters.threshold_otsu(sl), 15), min_size=15)[0]
     outline(ax, fsm, (0.0,0.45,0.70), width=2); ax.set_title(ttl, fontsize=7)
-    if i == 0: panel(ax, "e", dx=-0.08)
+    if i == 0: panel(ax, "e")
 
 # (f) scope decision map
 axf = fig.add_subplot(gs[2, 4:])
@@ -124,8 +124,8 @@ axf.axvline(40, ls="--", color="black", lw=1.0); axf.text(41, 0.5, "measured\ncr
 axf.text(15, 0.82, "fluorostats\n= DL", ha="center", fontsize=6.2, color=OKABE["green"])
 axf.text(75, 0.82, "use trained\nsegmenter", ha="center", fontsize=6.2, color=OKABE["vermillion"])
 axf.set_xlim(0,100); axf.set_ylim(0,1); axf.set_yticks([])
-axf.set_xlabel("instance overlap / crowding (%)"); axf.set_title("When to use which", fontsize=8, loc="left")
-panel(axf, "f", dx=-0.14)
+axf.set_xlabel("instance overlap / crowding (%)")
+panel(axf, "f", "when to use which")
 
 cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  "(a) Instance F1 (IoU 0.5) of twelve methods on BBBC039 (n=100 images); bars ranked, "

@@ -37,10 +37,10 @@ for i, (t, mae, sd, p) in enumerate(rec):
     axa.text(-0.001, i, tag, ha="right", va="center", fontsize=6.3,
              fontweight="bold" if t == "fluorostats" else "normal")
 axa.set_yticks([]); axa.set_xlabel("area-fraction error vs manual GT  (mean ± residual s.d.)")
-axa.set_title("Vessel tools on the REAVER benchmark (n=36)", fontsize=8, loc="left")
+
 axa.text(0.98, 0.04, "# unbiased (mean error = 0,\nBonferroni)", transform=axa.transAxes,
          ha="right", va="bottom", fontsize=5.3, color="#333")
-panel(axa, "a", dx=-0.03)
+panel(axa, "a", "vessel-tool accuracy   (REAVER, n = 36)")
 
 # (d) Bland-Altman VF fluorostats vs VesselExpress + rank inset
 axd = fig.add_subplot(gs[0, 2:])
@@ -49,13 +49,13 @@ ve, fs = m.VesselExpress_VF.values, m.fluorostats_VF.values
 bias, loa = F.bland_altman(axd, fs, ve, label=" · ~1.7×")
 axd.set_ylim(-0.005, bias+loa+0.006)
 axd.set_xlabel("mean vessel VF"); axd.set_ylabel("fluorostats − VesselExpress")
-axd.set_title("Metric agreement (Bland–Altman)", fontsize=8, loc="left")
+
 axins = axd.inset_axes([0.66, 0.14, 0.30, 0.34])
 axins.scatter(sps.rankdata(ve), sps.rankdata(fs), s=11, color=BLUE, edgecolor="none")
 axins.set_title(f"rank ρ = {sps.spearmanr(ve,fs).statistic:.2f}", fontsize=5.2, pad=1.5)
 axins.set_xticks([]); axins.set_yticks([])
 for sp in axins.spines.values(): sp.set_linewidth(0.5); sp.set_color("#999")
-panel(axd, "d")
+panel(axd, "d", "metric agreement")
 
 # (b) VE overlay: raw / VesselExpress seg / fluorostats(auto→li), 2 crops
 crops = np.load(R/"ve_crops.npz")
@@ -69,7 +69,7 @@ for row in range(2):
         if ov is not None:
             F.outline(ax, ov, (0.80,0.47,0.65) if col==1 else (0.0,0.45,0.70), width=1)
         if row == 0: ax.set_title(lab, fontsize=6.8)
-        if row == 0 and col == 0: F.scalebar(ax, 100, "100 µm"); panel(ax, "b", dx=-0.07)
+        if row == 0 and col == 0: F.scalebar(ax, 100, "100 µm"); panel(ax, "b")
 
 # (c) 3D phantom accuracy vs exact GT
 axc = fig.add_subplot(gs[1, 3])
@@ -81,7 +81,7 @@ axc.set_xticks(x); axc.set_xticklabels([f"{p}\nbranches {b}/{t}✓" for p,b,t in
     zip(ph.phantom, ph.fs_branches, ph.true_segments)], fontsize=5.2)
 axc.set_ylabel("error vs exact GT (%)")
 axc.set_ylim(0, max(3.2, ph.len_err_pct.max()*1.5)); axc.legend(fontsize=5.2, loc="upper right")
-axc.set_title("3D phantom", fontsize=7.5, loc="left"); panel(axc, "c", dx=-0.34)
+panel(axc, "c", "3D phantom")
 
 cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool REAVER benchmark "
  "(n=36): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "

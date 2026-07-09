@@ -80,14 +80,20 @@ def color_for(name: str) -> str:
     return tool_style(name)["c"]
 
 
-def panel(ax, label, dx=None, dy=None, pad=(-16, 5)):
-    """Bold lowercase panel label at a fixed offset (points) from the axis top-left.
+def panel(ax, label, title=None, dx=None, dy=None, pad=(-16, 5)):
+    """Nature-style panel label: bold lowercase letter at a fixed offset (points)
+    from the axis top-left, plus an optional short roman descriptor beside it.
 
-    Uses offset-points so labels are identical across figures and never expand the
-    saved bounding box. dx/dy are accepted for back-compat but ignored."""
+    Replaces chart-style titles. Offset-points keep labels identical across figures
+    and never expand the saved bbox. dx/dy accepted for back-compat but ignored."""
     ax.annotate(label, xy=(0, 1), xycoords="axes fraction",
                 xytext=pad, textcoords="offset points",
-                fontsize=FS["panel"], fontweight="bold", va="bottom", ha="left")
+                fontsize=FS["panel"], fontweight="bold", va="baseline", ha="left")
+    if title:
+        ax.annotate(title, xy=(0, 1), xycoords="axes fraction",
+                    xytext=(pad[0] + 9, pad[1]), textcoords="offset points",
+                    fontsize=FS["label"], fontweight="regular", color="#222",
+                    va="baseline", ha="left")
 
 
 # ---- image-panel helpers (shared so every figure renders images identically) ----

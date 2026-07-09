@@ -31,15 +31,14 @@ for yi, rb in zip(y, bm.rel_bias_pct):
 axa.axvline(0, color="black", lw=0.6); axa.set_xlim(-1, 30); axa.set_ylim(-0.6, len(bm)-0.4)
 axa.set_yticks(y); axa.set_yticklabels(bm.name)
 axa.set_xlabel("overestimate of live fraction vs true 3D (%)")
-axa.set_title("2D shortcuts inflate viability"); panel(axa, "a")
+panel(axa, "a", "2D inflates viability")
 
 axa2 = fig.add_subplot(gs[0, 2:])
 dp = pd.read_csv(R/"b3_viability_depth_profile.csv")
 axa2.plot(dp.depth_um, dp.live_fraction_raw, color=VERM, lw=1.8, label="raw")
 axa2.plot(dp.depth_um, dp.live_fraction_attn_corrected, color=BLUE, lw=1.8, ls="--", label="attn-corrected")
 axa2.set_xlabel("depth (µm)"); axa2.set_ylabel("live fraction per z-slice")
-axa2.set_title("Depth gradient a 2D readout cannot see", fontsize=7.5, loc="left")
-axa2.legend(fontsize=6, loc="lower left")
+axa2.legend(fontsize=6, loc="lower left"); panel(axa2, "", "depth gradient")
 
 # (b) tie to published Fiji macro (Kerkhoff synthetic GT)
 ext = pd.read_csv(R/"b_viability_external.csv")
@@ -52,14 +51,14 @@ axb.scatter(tv, mac, s=20, marker="s", facecolor="none", edgecolor=OKABE["orange
 axb.scatter(tv, fx, s=22, color=BLUE, edgecolor="black", lw=0.3, label="fluorostats maxima", zorder=4)
 axb.plot([0.3,1],[0.3,1], ls="--", color="black", lw=0.7)
 axb.set_xlabel("true viability"); axb.set_ylabel("measured viability"); axb.set_xlim(0.3,1.0); axb.set_ylim(0.3,1.0)
-axb.set_title("Ties the published Fiji macro", fontsize=8, loc="left"); axb.legend(fontsize=5.6, loc="upper left")
-panel(axb, "b", dx=-0.42)
+axb.legend(fontsize=5.6, loc="upper left")
+panel(axb, "b", "ties the published Fiji macro")
 
 axb2 = fig.add_subplot(gs[1, 2:])   # Bland-Altman fs maxima vs macro
 F.bland_altman(axb2, fx, mac); axb2.set_ylim(-0.02, 0.02)
 axb2.set_xlabel("mean viability (fs, macro)"); axb2.set_ylabel("fluorostats − macro")
-axb2.text(0.5, 0.9, "maxima ≡ macro (same peak counting)", transform=axb2.transAxes, ha="center", fontsize=5.4, color="#333")
-axb2.set_title(f"CCC 0.987 · MAE 0.016", fontsize=7.5, loc="left")
+axb2.text(0.5, 0.14, "maxima ≡ macro\n(same peak counting)", transform=axb2.transAxes, ha="center", va="center", fontsize=5.6, color="#555")
+panel(axb2, "", "CCC 0.987 · MAE 0.016")
 
 # (c) Live/Dead qualitative overlay
 def load_ch(ch, n=3, down=8):
@@ -80,7 +79,7 @@ panels_c = [
 for i,(img,ttl) in enumerate(panels_c):
     ax = fig.add_subplot(gs_c[i]); ax.imshow(np.clip(img,0,1)); F.image_axes(ax)
     ax.set_title(ttl, fontsize=6.3)
-    if i == 0: F.scalebar(ax, 12, "200 µm"); panel(ax, "c", dx=-0.06)
+    if i == 0: F.scalebar(ax, 12, "200 µm"); panel(ax, "c")
 
 cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (BioImage Archive "
  "S-BIAD2130), 2D/heuristic reductions overestimate the live fraction relative to the true voxelwise "

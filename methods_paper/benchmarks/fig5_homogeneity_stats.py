@@ -35,10 +35,10 @@ for i, kind in enumerate(["regular", "random", "clustered"]):
     ax = fig.add_subplot(gs_a[i]); ax.scatter(p[:, 1], p[:, 0], s=8, color=BLUE, edgecolor="none")
     ax.set_xlim(0, S); ax.set_ylim(0, S); ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
     for sp in ax.spines.values(): sp.set_color("#999"); sp.set_linewidth(0.5)
-    ax.set_title(titles[kind], fontsize=7)
+    ax.set_title(titles[kind], fontsize=6.8)
     ax.text(0.5, -0.09, f"tile Gini = {gini:.3f}", transform=ax.transAxes, ha="center", fontsize=6.4,
             fontweight="bold", color=BLUE)
-    if i == 0: panel(ax, "a", dx=-0.10)
+    if i == 0: panel(ax, "a")
 
 # (b) five-statistic correlation
 axb = fig.add_subplot(gs[1, :2])
@@ -50,7 +50,7 @@ names = {"clark_evans":"Clark–Evans NN","ripley_L_dev":"Ripley's K/L","morisit
 axb.barh([names[r] for r in corr.reference], corr["abs"], color=BLUE, edgecolor="black", lw=0.4, height=0.66)
 for i, v in enumerate(corr["abs"]): axb.text(v-0.02, i, f"{v:.3f}", va="center", ha="right", color="white", fontsize=5.6)
 axb.set_xlim(0, 1.02); axb.set_xlabel("|Spearman ρ| vs fluorostats tile Gini")
-axb.set_title("Tracks 5 established statistics", fontsize=8, loc="left"); panel(axb, "b", dx=-0.5)
+panel(axb, "b", "tracks 5 spatial statistics")
 
 # (c) end-to-end statistics worked example — SproutAngio VEGF dose (real .czi)
 sa = pd.read_csv(R/"b_vascular_sproutangio_multi.csv")
@@ -69,11 +69,11 @@ mw = mann_whitney(a, b); cd = cliffs_delta(a, b)
 fc = bootstrap_fold_change_ci(a, b, n_boot=5000)
 qs = bh_fdr([mann_whitney(groups[i], groups[j])["p"] for i,j in [(1,3),(1,5),(3,5)]])
 fc_ratio = fc["fold_change_median"]; fc_lo = fc["ci_low"]; fc_hi = fc["ci_high"]
-axc.set_title("Statistics layer output (VEGF 1 vs 3)", fontsize=7.3, loc="left")
-axc.text(0.02, 0.97, f"Mann–Whitney p = {mw['p']:.3f}\nCliff's δ = {cd:+.2f}\n"
-         f"fold-change {fc_ratio:.2f}× [{fc_lo:.2f}, {fc_hi:.2f}]\nBH-FDR q (3 contrasts) min = {qs.min():.3f}",
-         transform=axc.transAxes, va="top", fontsize=5.6, color="#222")
-panel(axc, "c", dx=-0.42)
+
+axc.text(0.03, 0.97, f"MWU p = {mw['p']:.3f}\nCliff's δ = {cd:+.2f}\nFC {fc_ratio:.1f}× [{fc_lo:.1f}, {fc_hi:.1f}]\nBH q = {qs.min():.3f}",
+         transform=axc.transAxes, va="top", ha="left", fontsize=5.4, color="#333",
+         bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#ccc", lw=0.4))
+panel(axc, "c", "statistics layer output")
 
 # power curve (real fluorostats.power)
 axp = fig.add_subplot(gs[1, 4:])
@@ -83,7 +83,7 @@ ycol = [c for c in pc.columns if "power" in c.lower()][0]; ncol = [c for c in pc
 axp.plot(pc[ncol], pc[ycol], marker="o", color=BLUE, lw=1.8, ms=4)
 axp.axhline(0.8, ls="--", color=VERM, lw=0.9); axp.text(ns[-1], 0.82, "80%", fontsize=5.4, color=VERM, ha="right")
 axp.set_xlabel("n per group"); axp.set_ylabel("power"); axp.set_ylim(0, 1.02)
-axp.set_title("Power (same pipeline)", fontsize=7.3, loc="left")
+panel(axp, "", "power (same pipeline)")
 
 cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "(a) Three canonical spatial patterns (regular, random/CSR, clustered) with fluorostats' "

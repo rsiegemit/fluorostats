@@ -141,7 +141,7 @@ axB.set_xticks(xr)
 axB.set_xticklabels(names, fontsize=5.6)
 axB.set_ylim(-1, 1)
 axB.set_ylabel("deviation from mean\n(parts per million)", fontsize=6)
-axB.set_title(f"fluorostats: {N_RUNS} runs, same input", fontsize=6.5, pad=3)
+axB.text(0.5, 1.02, f"fluorostats: {N_RUNS} runs, same input", transform=axB.transAxes, ha="center", va="bottom", fontsize=6)
 axB.text(0.5, 0.82, "spread = 0  (bit-identical)", transform=axB.transAxes,
          ha="center", va="center", fontsize=6.5, color=OKABE["blue"],
          fontweight="bold")
@@ -160,7 +160,7 @@ axH.text(0, 0.12, "0.0", ha="center", va="bottom", fontsize=6,
          color=OKABE["blue"], fontweight="bold")
 axH.text(1, spreads[1] + 0.1, "seed / GPU\nvariable", ha="center", va="bottom",
          fontsize=5.2, color=OKABE["orange"])
-axH.set_title("reproducibility", fontsize=6.5, pad=3)
+axH.text(0.5, 1.02, "reproducibility", transform=axH.transAxes, ha="center", va="bottom", fontsize=6)
 
 figstyle.save(fig, "ed2_runtime", figstyle.EXT, tight=False)
 
