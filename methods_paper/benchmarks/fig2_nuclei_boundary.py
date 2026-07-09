@@ -27,9 +27,9 @@ methods = {c: pi[c].values for c in pi.columns if c != "image"}
 methods.update(dl_pi)
 stats = {m: boot_ci(v) for m, v in methods.items()}
 # ---------- layout ----------
-fig = plt.figure(figsize=(7.2, 7.0))
-gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.95, 1.4, 0.95],
-                       hspace=0.4, wspace=1.05)
+fig = plt.figure(figsize=(7.2, 7.4))
+gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.82, 1.9, 0.82],
+                       hspace=0.34, wspace=1.05)
 
 # (a) 12-method ranking with bootstrap CIs — one hero colour (blue), rest grey
 axa = fig.add_subplot(gs[0, :4])

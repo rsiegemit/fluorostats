@@ -13,8 +13,8 @@ R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]
 
 fig = plt.figure(figsize=(7.2, 5.6))
-gs = gridspec.GridSpec(2, 4, figure=fig, height_ratios=[1.0, 0.95],
-                       hspace=0.5, wspace=0.75)
+gs = gridspec.GridSpec(2, 4, figure=fig, height_ratios=[1.0, 1.05],
+                       hspace=0.42, wspace=0.72)
 
 # (a) REAVER 6-tool: accuracy (MAE) + precision (residual std) + unbiased test
 pi = pd.read_csv(R/"b4_reaver_ranking_perimage.csv")
@@ -37,6 +37,7 @@ for i, (t, mae, sd, p) in enumerate(rec):
     axa.text(-0.001, i, tag, ha="right", va="center", fontsize=6.3,
              fontweight="bold" if t == "fluorostats" else "normal")
 axa.set_yticks([]); axa.set_xlabel("area-fraction error vs manual GT  (mean ± residual s.d.)")
+axa.set_xlim(0, max(mae+sd for _,mae,sd,_ in rec)*1.12)
 
 axa.text(0.98, 0.04, "# unbiased (mean error = 0,\nBonferroni)", transform=axa.transAxes,
          ha="right", va="bottom", fontsize=5.3, color="#333")
@@ -60,6 +61,9 @@ panel(axd, "d", "metric agreement")
 # (b) VE overlay: raw / VesselExpress seg / fluorostats(auto→li), 2 crops
 crops = np.load(R/"ve_crops.npz")
 gs_b = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1, :3], hspace=0.05, wspace=0.05)
+def fill_mask(ax, mask, rgb, alpha=0.85):
+    ov = np.zeros((*mask.shape, 4)); ov[mask > 0] = (*rgb, alpha)
+    ax.imshow(ov, interpolation="nearest")
 labs = ["raw", "VesselExpress", "fluorostats (auto→li)"]
 for row in range(2):
     raw = crops[f"raw{row}"]; ve_m = crops[f"ve{row}"]; fs_m = crops[f"fs{row}"]
@@ -67,7 +71,7 @@ for row in range(2):
     for col, (lab, ov) in enumerate(zip(labs, [None, ve_m, fs_m])):
         ax = fig.add_subplot(gs_b[row, col]); ax.imshow(p, cmap="gray"); F.image_axes(ax)
         if ov is not None:
-            F.outline(ax, ov, (0.80,0.47,0.65) if col==1 else (0.0,0.45,0.70), width=1)
+            fill_mask(ax, ov, (0.85,0.30,0.60) if col==1 else (0.13,0.55,0.85))
         if row == 0: ax.set_title(lab, fontsize=6.8)
         if row == 0 and col == 0: F.scalebar(ax, 100, "100 µm"); panel(ax, "b")
 
