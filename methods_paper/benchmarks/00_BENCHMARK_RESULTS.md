@@ -350,6 +350,42 @@ library equivalents): `validate.average_precision` 19.5 s and `instance_f1` 2.2 
 `background_subtract` 9.3 s ≈ rolling-ball 7.9 s. These are validation/heavy-3D
 operations, run once per volume — not per-frame metrics.
 
+## 14. Optional deep-dive benchmarks (reviewer-hardening)
+
+**Bootstrap CIs — fluorostats vs validated DL (BBBC039, n=200, 10k resamples):**
+fluorostats F1 = **0.896 [0.873, 0.916]**, StarDist 0.871, Cellpose 0.862. Paired
+differences are **statistically significant**: fluorostats − StarDist = +0.025
+[0.004, 0.042], fluorostats − Cellpose = +0.034 [0.008, 0.057] — both CIs exclude 0.
+
+**Third DL baseline (Omnipose, BBBC039, n=200):** F1 = 0.802 — below fluorostats
+(0.896), StarDist (0.871), Cellpose (0.862); its cyto model is not nucleus-
+specialised. Ran on CPU after the same ROCm hipBLASLt GPU crash seen with
+Cellpose-SAM. Three independent DL segmenters now bracket fluorostats.
+
+**3D vascular — synthetic phantom (exact GT):** fluorostats vessel metrics recover
+centerline length within 0.6–2.4%, branch count exactly, volume fraction exactly.
+
+**3D vascular — real data (VesselExpress, Zenodo 6025935, light-sheet, n=9):**
+fluorostats vs the **VesselExpress software's** own segmentation (framed as
+software-vs-software; GT is pipeline-generated). Mean Dice:
+
+| config / software | Dice vs VesselExpress |
+|---|---|
+| **fluorostats (li)** | **0.598** |
+| **fluorostats (auto → li)** | **0.598** |
+| fluorostats (triangle) | 0.521 |
+| scikit-image (otsu) | 0.102 |
+| fluorostats (consensus) | 0.094 |
+| fluorostats (otsu, default) | 0.089 |
+
+**Finding + capability built:** the Otsu default badly under-segments dim/sparse
+light-sheet vessels (0.089); `li` recovers to 0.598. This drove a new fluorostats
+capability — `binarize` now implements the full threshold family plus
+`method="auto"` (picks `li` when Otsu keeps implausibly little — it did so on all
+9 volumes, matching the best) and `method="consensus"` (majority vote). Honest
+limit: `consensus` (0.094) fails here because *most* threshold algorithms share the
+under-segmentation, so the majority inherits it — `auto→li` is the right answer.
+
 ## Headline claims supported by these data
 
 1. **On well-separated nuclei, fluorostats matches or beats validated DL

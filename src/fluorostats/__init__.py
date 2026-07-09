@@ -35,7 +35,7 @@ Public API surface, grouped by module:
   - ``report`` — per-condition aggregation.
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from . import (  # noqa: F401
     io,

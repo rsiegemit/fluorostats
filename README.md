@@ -159,7 +159,9 @@ arr, meta = load_auto("my_sample.czi")
 green = select_green_channel(arr, meta["channel_names"])
 green = denoise(green)
 
-# Segment
+# Segment — otsu/li/isodata/triangle/yen/mean, or "auto" (picks per histogram) /
+# "consensus" (majority vote of all six). Otsu under-segments dim/sparse signal;
+# "auto" switches to Li there, "consensus" is a no-guess robust fallback.
 mask = binarize(green, method="otsu", threshold_scale=0.9)
 
 # Measure

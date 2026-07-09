@@ -107,6 +107,22 @@ decision this means: area-based viability remains the safe default; adopt
 count-based only if the Live/Dead cells are crowded enough that area under-reports
 (check with `method="all"` spread on a few stacks first).
 
+### LANDED in v0.7.0 (threshold family + auto/consensus segmentation — additive/opt-in)
+
+| Change | Module | Rerun impact |
+|---|---|---|
+| `segment.binarize` extended to isodata/triangle/yen/mean + `method="auto"` (histogram heuristic) + `method="consensus"` (majority vote); `choose_threshold_method` | segment | Default `otsu` unchanged → **no rerun**. `auto`/`li` are opt-in; **candidate for the Live/Dead rerun only if the GelMA channels are dim/sparse enough that Otsu under-segments** (check `choose_threshold_method` on a few stacks). |
+| `remove_small_objects` skimage 0.24/0.26 compat shim | segment | None (behaviour identical) |
+| +3 segment tests; suite 105 green | tests | — |
+
+**Why this landed:** the real 3D-vascular benchmark (VesselExpress, Zenodo 6025935)
+showed the Otsu default badly under-segments dim light-sheet vessels (Dice 0.089 vs
+VesselExpress GT), while `li` recovers to 0.598 and `auto` picks `li` automatically
+(matching best on all 9 volumes). Honest limit: `consensus` (0.094) fails there
+because most threshold algorithms share the under-segmentation. Bootstrap CIs also
+confirmed fluorostats significantly beats StarDist/Cellpose on BBBC039 (n=200);
+Omnipose added as a third DL baseline (0.802).
+
 **Benchmark validation backing v0.5:** fluorostats instance F1 on BBBC039 = 0.896
 (ahead of validated StarDist 0.871 / Cellpose 0.862 on well-separated nuclei).
 Viability module demonstrated on public S-BIAD2130 (MIP overestimates 3D live

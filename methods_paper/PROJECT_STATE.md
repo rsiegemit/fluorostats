@@ -11,8 +11,8 @@ than existing methods, benchmarked on public datasets, with every capability
 validated. Then the paper can be cited by the Extrusion bioprinting paper.
 
 ## Where things live
-- **Library**: `src/fluorostats/` — v0.6.0, 19 modules, pushed to GitHub `main`
-  (github.com/rsiegemit/fluorostats). Tests in `tests/` (102 passing).
+- **Library**: `src/fluorostats/` — v0.7.0, 19 modules, pushed to GitHub `main`
+  (github.com/rsiegemit/fluorostats). Tests in `tests/` (105 passing).
 - **Methods paper workspace**: `methods_paper/`
   - `research/` — 13 capability literature dossiers (~145 refs, DOI-verified) +
     `00_SYNTHESIS.md` + `00_COMPARISON_MATRIX.md`
@@ -49,7 +49,7 @@ validated. Then the paper can be cited by the Extrusion bioprinting paper.
 - All additions are OPT-IN / additive → **existing 3D Live/Dead outputs unchanged,
   no rerun triggered.** README + __init__ docstrings document them.
 
-## Benchmark campaign — DONE (48 benchmarks, 30+ reference methods, ≥4 comparators each)
+## Benchmark campaign — DONE (52 benchmarks, 30+ reference methods, ≥4 comparators each)
 See `benchmarks/00_BENCHMARK_RESULTS.md` for the full table. Headlines:
 - **Nuclei 2D (BBBC039, 12 methods):** fluorostats F1 0.90 ≥ StarDist 0.87 /
   Cellpose 0.87; on DSB2018 (StarDist's own data) fluorostats 0.789 = ~91% of

@@ -3,8 +3,34 @@
 import numpy as np
 import pytest
 
-from fluorostats.segment import binarize
+from fluorostats.segment import binarize, choose_threshold_method, THRESHOLD_METHODS
 from fluorostats.metrics_3d import volume_fraction
+
+
+def test_threshold_family_all_run():
+    vol = np.zeros((8, 32, 32), np.float64); vol[2:6, 8:24, 8:24] = 500.0
+    for m in THRESHOLD_METHODS:
+        assert binarize(vol, method=m, min_size=5).sum() > 0
+
+
+def test_auto_selects_and_consensus_runs():
+    vol = np.zeros((8, 32, 32), np.float64); vol[2:6, 8:24, 8:24] = 500.0
+    info = choose_threshold_method(vol)
+    assert info["method"] in THRESHOLD_METHODS
+    assert "skew" in info and "fractions" in info
+    assert binarize(vol, method="auto", min_size=5).sum() > 0
+    assert binarize(vol, method="consensus", min_size=5).sum() > 0
+
+
+def test_auto_rule_is_self_consistent():
+    # auto's returned method must match its own documented rule, whatever the image
+    rng = np.random.default_rng(0)
+    for vol in [rng.normal(50, 10, (4, 64, 64)),
+                np.where(rng.random((4, 64, 64)) < 0.01, 200.0, 3.0)]:
+        info = choose_threshold_method(vol)
+        of, lf = info["fractions"]["otsu"], info["fractions"]["li"]
+        expected = "li" if (of < 0.01 and lf > 3 * of) else "otsu"
+        assert info["method"] == expected
 
 
 class TestBinarize3D:
