@@ -91,3 +91,43 @@ ax.bar(x+w/2,d.vf_err_pct,w,label="volume fraction err %",color=P["primary"],edg
 ax.set_xticks(x); ax.set_xticklabels(d.phantom); ax.set_ylabel("error vs exact GT (%)")
 ax.set_title("3D vascular phantom — fluorostats vessel metrics vs exact GT"); ax.legend(frameon=False); save(fig,"fig10_vascular_phantom.png")
 print("ALL FIGURES DONE ->", F)
+
+# 11. VesselExpress: fluorostats configs vs VesselExpress software GT
+try:
+    d=pd.read_csv(R/"b_vesselexpress.csv")
+    dc=[c for c in d.columns if c.startswith("dice_")]
+    means=d[dc].mean().sort_values()
+    labels=[c.replace("dice_","") for c in means.index]
+    cols=[P["accent"] if "fluorostats" in l and "otsu" not in l and "consensus" not in l else (P["muted"] if "fluorostats" not in l else P["primary"]) for l in labels]
+    fig,ax=plt.subplots(figsize=(8,4.5)); ax.barh(labels,means.values,color=cols,edgecolor="black",lw=.5)
+    ax.set_xlabel("Dice vs VesselExpress software segmentation"); ax.set_title("Real 3D vessels (VesselExpress, Zenodo 6025935)\nfluorostats(li)/(auto) recover dim vessels; Otsu default under-segments")
+    save(fig,"fig11_vesselexpress_seg.png")
+except Exception as e: print("fig11 skip:",e)
+
+# 12. DL comparison including Omnipose (well-separated nuclei, BBBC039)
+try:
+    ci=pd.read_csv(R/"b_dl_ci.csv"); base=ci[ci.method.isin(["fluorostats","StarDist","Cellpose"])][["method","mean_F1"]]
+    om=pd.read_csv(R/"omnipose_eval.csv"); omf=om[om.thirddl_f1>=0].thirddl_f1.mean()
+    rows=list(zip(base.method,base.mean_F1))+[("Omnipose",omf)]
+    rows=sorted(rows,key=lambda x:x[1])
+    labels=[r[0] for r in rows]; vals=[r[1] for r in rows]
+    cols=[P["accent"] if l=="fluorostats" else P["primary"] for l in labels]
+    fig,ax=plt.subplots(figsize=(7,4)); ax.barh(labels,vals,color=cols,edgecolor="black",lw=.5)
+    ax.set_xlim(0.75,0.92); ax.set_xlabel("instance F1 @ IoU 0.5 (BBBC039)")
+    ax.set_title("fluorostats vs 3 validated DL segmenters (well-separated nuclei)")
+    for i,v in enumerate(vals): ax.text(v+0.002,i,f"{v:.3f}",va="center",fontsize=8)
+    save(fig,"fig12_vs_dl_all.png")
+except Exception as e: print("fig12 skip:",e)
+
+# 13. VesselExpress metric agreement: fluorostats VF vs VesselExpress software VF
+try:
+    d=pd.read_csv(R/"b_ve_metrics.csv")
+    fig,ax=plt.subplots(figsize=(5.5,5.2))
+    ax.scatter(d.VesselExpress_VF,d.fluorostats_VF,s=70,color=P["accent"],edgecolor="black",zorder=3)
+    lim=max(d.VesselExpress_VF.max(),d.fluorostats_VF.max())*1.1
+    ax.plot([0,lim],[0,lim],ls="--",c=P["muted"],label="unity")
+    ax.set_xlim(0,lim); ax.set_ylim(0,lim)
+    ax.set_xlabel("VesselExpress software — vessel VF"); ax.set_ylabel("fluorostats (auto→li) — vessel VF")
+    ax.set_title("fluorostats vs VesselExpress software (real 3D vessels)\nrank-consistent (Spearman 0.75), fluorostats ~1.7× higher absolute")
+    ax.legend(frameon=False); save(fig,"fig13_vesselexpress_metric.png")
+except Exception as e: print("fig13 skip:",e)

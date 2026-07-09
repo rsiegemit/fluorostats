@@ -378,6 +378,11 @@ software-vs-software; GT is pipeline-generated). Mean Dice:
 | fluorostats (consensus) | 0.094 |
 | fluorostats (otsu, default) | 0.089 |
 
+**fluorostats vs VesselExpress metric agreement (vessel VF, n=9):** the two
+software rank volumes consistently (Spearman 0.75) but fluorostats(auto→li) reports
+~1.7× higher absolute VF (VE 0.029 vs fs 0.049; CCC 0.11) — a systematic offset,
+like tool-to-tool differences in REAVER. → `b_ve_metrics.csv`.
+
 **Finding + capability built:** the Otsu default badly under-segments dim/sparse
 light-sheet vessels (0.089); `li` recovers to 0.598. This drove a new fluorostats
 capability — `binarize` now implements the full threshold family plus

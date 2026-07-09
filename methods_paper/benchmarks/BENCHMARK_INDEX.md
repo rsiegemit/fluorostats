@@ -51,6 +51,7 @@ where `pip install --user` works.
 | B-omnipose | cluster_thirddl.py | BBBC039 | Omnipose (3rd DL) | omnipose_eval.csv | Omnipose F1 0.802 < fs 0.896 | ✅ |
 | B-vasc3d-phantom | b_vascular_phantom_3d.py | synthetic 3D vessels | exact GT | b_vascular_phantom_3d.csv | length err ≤2.4%, branches+VF exact | ✅ |
 | B-vesselexpress | cluster/bench_vesselexpress.py | VesselExpress (Zenodo 6025935, real 3D) | VesselExpress software GT; scikit-image | b_vesselexpress.csv | fs(li)=fs(auto)=0.598 vs VE; otsu 0.089 | ✅ |
+| B-ve-metric | cluster/bench_ve_metrics.py | VesselExpress (real 3D) | VesselExpress software (VF) | b_ve_metrics.csv | Spearman 0.75, 1.7× offset (CCC 0.11) | ✅ |
 | B-connect | b_connectivity_discrimination.py | synthetic fragment→connected | LCC, Euler, n_comp, percolation, fragmentation | connectivity_discrimination_correlations.csv | euler_number best (ρ=1.0), spans both regimes | ✅ |
 | B-density | b_density_normalization.py | BBBC024 zoom series | per-mm³, raw, per-Mpx, per-area, per-slice | b_density_normalization_cv.csv | fluorostats per-mm³ zoom-invariant (CV=0) vs 4 varying | ✅ |
 | V-agreement | b_agreement_validation.py | synthetic paired | Lin formula, Pearson-decomp, ANOVA-ICC, numpy BA | b_agreement_validation.csv | 11/11 exact to machine precision | ✅ |
