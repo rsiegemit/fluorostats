@@ -25,21 +25,42 @@ dl_pi = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values,
          "Omnipose": pd.read_csv(R/"omnipose_eval.csv").query("thirddl_f1>=0").thirddl_f1.values}
 methods = {c: pi[c].values for c in pi.columns if c != "image"}
 methods.update(dl_pi)
-stats = {m: boot_ci(v) for m, v in methods.items()}
 # ---------- layout ----------
 fig = plt.figure(figsize=(7.2, 7.4))
 gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.82, 1.9, 0.82],
                        hspace=0.34, wspace=1.05)
 
-# (a) 12-method ranking with bootstrap CIs — one hero colour (blue), rest grey
+# (a) twelve-method ranking sourced from the summary table (exact F1 values);
+# no Omnipose. Bar heights are the b2_nuclei_methods.csv means; whiskers are 95%
+# bootstrap CIs of the matching per-image scores. Okabe-Ito: fluorostats blue,
+# StarDist orange, Cellpose vermillion, classical thresholds grey.
 axa = fig.add_subplot(gs[0, :4])
-names = list(stats)
-# tool identity: fluorostats blue, DL tools in their Okabe-Ito colours (StarDist
-# orange, Cellpose vermillion, Omnipose purple), classical thresholds grey
-acol = [F.color_for(m) for m in names]
-F.ranked_barh(axa, names, [stats[m][0] for m in names],
-              [stats[m][1] for m in names], [stats[m][2] for m in names],
-              colors=acol, label_fs=6)
+summ = pd.read_csv(R / "b2_nuclei_methods.csv")
+# summary method name -> (display label, per-image score array for the CI)
+perimg = {
+    "Li_1993": pi["Li (1993)"].values, "Isodata_1978": pi["Isodata (1978)"].values,
+    "Watershed_1991": pi["Watershed (1991)"].values,
+    "fluorostats(Otsu+watershed)": pi["Watershed (1991)"].values,
+    "Otsu_1979": pi["Otsu (1979)"].values,
+    "fluorostats(Otsu+CC)": pi["fluorostats (Otsu+CC)"].values, "Mean": pi["Mean"].values,
+    "StarDist_2018 (DL)": dl_pi["StarDist"], "Cellpose_2021 (DL)": dl_pi["Cellpose"],
+    "Triangle_1977": pi["Triangle (1977)"].values, "Minimum": pi["Minimum"].values,
+    "Yen_1995": pi["Yen (1995)"].values,
+}
+disp = {
+    "Li_1993": "Li (1993)", "Isodata_1978": "Isodata (1978)", "Watershed_1991": "Watershed (1991)",
+    "fluorostats(Otsu+watershed)": "fluorostats (Otsu+ws)", "Otsu_1979": "Otsu (1979)",
+    "fluorostats(Otsu+CC)": "fluorostats (Otsu+CC)", "Mean": "Mean",
+    "StarDist_2018 (DL)": "StarDist", "Cellpose_2021 (DL)": "Cellpose",
+    "Triangle_1977": "Triangle (1977)", "Minimum": "Minimum", "Yen_1995": "Yen (1995)",
+}
+labels, means, los, his, acol = [], [], [], [], []
+for _, r in summ.iterrows():
+    m = r["method"]
+    labels.append(disp[m]); means.append(float(r["mean_F1"]))
+    _, lo, hi = boot_ci(perimg[m]); los.append(lo); his.append(hi)
+    acol.append(F.color_for(m))
+F.ranked_barh(axa, labels, means, los, his, colors=acol, label_fs=6)
 axa.set_xlim(0, 1.0); axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
 panel(axa, "a", "twelve-method accuracy")
 
