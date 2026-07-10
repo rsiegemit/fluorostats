@@ -13,7 +13,7 @@ F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]; VERM = OKABE["vermillion"]; GREEN = OKABE["green"]
 
-fig = plt.figure(figsize=(7.2, 5.4))
+fig = plt.figure(figsize=(7.2, 5.6), layout="constrained")
 gs = gridspec.GridSpec(2, 6, figure=fig, height_ratios=[1.0, 1.05], hspace=0.5, wspace=1.0)
 
 # (a) three canonical point patterns with tile Gini
@@ -40,23 +40,25 @@ for i, kind in enumerate(["regular", "random", "clustered"]):
             fontweight="bold", color=BLUE)
     if i == 0: panel(ax, "a")
 
-# (b) five-statistic correlation
+# (b) five-statistic correlation — zoomed dot-plot (all |ρ| hug 1.0)
 axb = fig.add_subplot(gs[1, :2])
 corr = pd.read_csv(R/"b_homogeneity_multi_corr.csv").copy()
 corr["abs"] = corr["spearman_gini_vs_ref"].abs()
-corr = corr.sort_values("abs")
 names = {"clark_evans":"Clark–Evans NN","ripley_L_dev":"Ripley's K/L","morisita":"Morisita",
          "lacunarity":"lacunarity","quadrat_var":"quadrat variance"}
-axb.barh([names[r] for r in corr.reference], corr["abs"], color=BLUE, edgecolor="black", lw=0.4, height=0.66)
-for i, v in enumerate(corr["abs"]): axb.text(v-0.02, i, f"{v:.3f}", va="center", ha="right", color="white", fontsize=5.6)
-axb.set_xlim(0, 1.02); axb.set_xlabel("|Spearman ρ| vs fluorostats tile Gini")
+labels_b = [names[r] for r in corr.reference]
+# single-series fluorostats-blue dots (this is the fluorostats metric's correlation)
+F.lollipop(axb, labels_b, list(corr["abs"]), colors=[BLUE]*len(labels_b),
+           floor=0.90, fmt="{:.3f}")
+axb.set_xlabel("|Spearman ρ| vs fluorostats tile Gini")
 panel(axb, "b", "tracks 5 spatial statistics")
 
 # (c) end-to-end statistics worked example — SproutAngio VEGF dose (real .czi)
 sa = pd.read_csv(R/"b_vascular_sproutangio_multi.csv")
 groups = {g: sa[sa.group == g]["fluorostats"].values * 100 for g in (1, 3, 5)}  # % VF
 axc = fig.add_subplot(gs[1, 2:4])
-gcol = {1: GREY, 3: GREEN, 5: BLUE}
+# non-blue sequential grey ramp for dose (blue reserved for fluorostats)
+gcol = {1: "#CFCFCF", 3: "#8A8A8A", 5: "#3A3A3A"}
 for j, (g, v) in enumerate(groups.items()):
     x = np.full(len(v), j) + rng.normal(0, 0.05, len(v))
     axc.scatter(x, v, s=26, color=gcol[g], edgecolor="black", lw=0.4, zorder=3)
@@ -70,8 +72,9 @@ fc = bootstrap_fold_change_ci(a, b, n_boot=5000)
 qs = bh_fdr([mann_whitney(groups[i], groups[j])["p"] for i,j in [(1,3),(1,5),(3,5)]])
 fc_ratio = fc["fold_change_median"]; fc_lo = fc["ci_low"]; fc_hi = fc["ci_high"]
 
-axc.text(0.03, 0.97, f"MWU p = {mw['p']:.3f}\nCliff's δ = {cd:+.2f}\nFC {fc_ratio:.1f}× [{fc_lo:.1f}, {fc_hi:.1f}]\nBH q = {qs.min():.3f}",
-         transform=axc.transAxes, va="top", ha="left", fontsize=5.4, color="#333",
+axc.text(0.03, 0.97,
+         f"VEGF 1 vs 3:\nMWU p = {mw['p']:.3f}\nCliff's δ = {cd:+.2f}\nFC {fc_ratio:.1f}× [{fc_lo:.1f}, {fc_hi:.1f}]\nBH q = {qs.min():.3f}\n(illustrative, n=4/group)",
+         transform=axc.transAxes, va="top", ha="left", fontsize=5.2, color="#333",
          bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#ccc", lw=0.4))
 panel(axc, "c", "statistics layer output")
 
@@ -83,17 +86,23 @@ ycol = [c for c in pc.columns if "power" in c.lower()][0]; ncol = [c for c in pc
 axp.plot(pc[ncol], pc[ycol], marker="o", color=BLUE, lw=1.8, ms=4)
 axp.axhline(0.8, ls="--", color=VERM, lw=0.9); axp.text(ns[-1], 0.82, "80%", fontsize=5.4, color=VERM, ha="right")
 axp.set_xlabel("n per group"); axp.set_ylabel("power"); axp.set_ylim(0, 1.02)
-panel(axp, "", "power (same pipeline)")
+axp.text(0.97, 0.18, "bootstrap power from an\nn=4 pilot — optimistic\n(see text)", transform=axp.transAxes,
+         ha="right", va="bottom", fontsize=5.2, color="#555", style="italic")
+panel(axp, "d", "power (same pipeline)")
 
 cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "(a) Three canonical spatial patterns (regular, random/CSR, clustered) with fluorostats' "
  "tile-based Gini index beneath each — the segmentation-free homogeneity metric increases from "
  "regular to clustered. (b) Across a regular→clustered sweep, the tile Gini tracks five established "
  "spatial statistics (Clark–Evans nearest-neighbour, Ripley's K/L, Morisita, quadrat variance, "
- "gliding-box lacunarity) at |Spearman ρ| 0.96–0.997 (uniform-vs-clustered AUC = 1.0). "
- "(c) End-to-end statistics on a real VEGF dose experiment (SproutAngio, .czi; n=4/group): vessel "
- "volume fraction by dose (SuperPlot; bars = group means), with the fluorostats.stats / power output "
- "computed live — Mann–Whitney U, Cliff's δ, bootstrap fold-change CI, BH-FDR across contrasts, and "
- "a power curve — showing image→statistic with no manual export.")
-save(fig, "fig5_homogeneity_stats"); caption("fig5_homogeneity_stats", cap)
+ "gliding-box lacunarity); dot plot of |Spearman ρ| on a zoomed 0.90–1.00 axis shows every "
+ "correlation at 0.96–0.997 (uniform-vs-clustered AUC = 1.0). "
+ "(c) End-to-end statistics on a small VEGF dose experiment (SproutAngio, .czi): vessel "
+ "volume fraction by dose (group means as bars), with the fluorostats.stats output "
+ "computed live for VEGF 1 vs 3 — Mann–Whitney U, Cliff's δ, bootstrap fold-change CI and "
+ "BH-FDR across contrasts — showing image→statistic with no manual export. This contrast is an "
+ "illustrative toy example (n=4/group; Cliff's δ=−1.00 reflects complete separation), not a headline "
+ "result. (d) Bootstrap power curve from the same pipeline; the 80% reference line is dashed. Because "
+ "it is estimated from an n=4 pilot the power is optimistic (see text).")
+save(fig, "fig5_homogeneity_stats", tight=False); caption("fig5_homogeneity_stats", cap)
 print("Figure 5 done")

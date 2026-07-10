@@ -17,10 +17,13 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager
 
 # ---- Okabe-Ito palette (colourblind-safe) ----
+# fluorostats is ALWAYS blue (#0072B2) and only fluorostats. DL tools: StarDist
+# orange, Cellpose vermillion, Omnipose purple. Classical / SciPy / scikit-image
+# baselines: neutral grey #999999 (locked by FIGURE_OVERHAUL_BRIEFS §0).
 OKABE = {
     "black": "#000000", "orange": "#E69F00", "sky": "#56B4E9", "green": "#009E73",
     "yellow": "#F0E442", "blue": "#0072B2", "vermillion": "#D55E00", "purple": "#CC79A7",
-    "grey": "#7F7F7F", "lgrey": "#B9BEC6",
+    "grey": "#999999", "lgrey": "#C4C9D0",
 }
 # fixed tool identities (colour + marker + linestyle) so series survive greyscale
 TOOL = {
@@ -41,8 +44,10 @@ COL1 = 3.46      # single column  (88 mm)
 COL15 = 4.72     # 1.5 column     (120 mm)
 COL2 = 7.20      # double column  (183 mm)
 
-# One font scale for every figure (points). Reference these, don't hardcode sizes.
-FS = {"title": 8, "label": 7, "tick": 6.5, "legend": 6, "annot": 6, "small": 5.4, "panel": 8}
+# One font scale for every figure (points), Nature's 5-7 pt window for body text
+# with 8 pt bold panel letters (the one documented exception). Reference these,
+# never hardcode sizes.
+FS = {"title": 7, "label": 7, "tick": 6, "legend": 6, "annot": 6, "small": 5, "panel": 8}
 
 
 def apply_style():
@@ -53,22 +58,27 @@ def apply_style():
     text renders as a missing-glyph box regardless of the host machine's fonts."""
     fam = "DejaVu Sans"
     plt.rcParams.update({
+        # dpi: preview at 200, export raster fallback at 600 (Nature-safe for insets)
+        "figure.dpi": 200, "savefig.dpi": 600,
+        "pdf.fonttype": 42, "ps.fonttype": 42,   # embed TrueType, no Type-3, text stays selectable
+        "svg.fonttype": "none",
         "font.family": "sans-serif",
         "font.sans-serif": [fam, "Arial", "Helvetica"],
         "axes.unicode_minus": False,
+        # Nature 5-7 pt window: ticks 6, axis/panel titles 7, legend/annot 6
         "font.size": FS["tick"],
         "axes.titlesize": FS["title"], "axes.labelsize": FS["label"],
         "xtick.labelsize": FS["tick"], "ytick.labelsize": FS["tick"], "legend.fontsize": FS["legend"],
-        "axes.linewidth": 0.6, "axes.edgecolor": "#333333", "axes.titlepad": 3.5,
+        "lines.linewidth": 1.2, "lines.markersize": 4,
+        "axes.linewidth": 0.6, "axes.edgecolor": "#333333", "axes.titlepad": 4.0,
         "axes.titlelocation": "left", "axes.titleweight": "regular",
-        "axes.spines.top": False, "axes.spines.right": False,
+        "axes.spines.top": False, "axes.spines.right": False,   # despine everywhere
+        "xtick.direction": "out", "ytick.direction": "out",
         "xtick.major.width": 0.6, "ytick.major.width": 0.6,
         "xtick.major.size": 2.5, "ytick.major.size": 2.5,
         "xtick.major.pad": 1.8, "ytick.major.pad": 1.8,
         "axes.grid": False, "figure.facecolor": "white", "axes.facecolor": "white",
         "savefig.facecolor": "white", "legend.frameon": False, "lines.solid_capstyle": "round",
-        "pdf.fonttype": 42, "ps.fonttype": 42,  # editable text in vector output
-        "svg.fonttype": "none",
     })
 
 
@@ -143,13 +153,21 @@ def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.06):
 
 
 def save(fig, name, folder=None, tight=True, pad=0.4):
-    """Export vector PDF + 300-dpi PNG at the figure's EXACT size (uniform width)."""
+    """Export editable vector PDF + 600-dpi PNG at the figure's EXACT authored size.
+
+    Never crops with bbox_inches='tight' (that silently rescales the physical width
+    and breaks the "author at column width" contract, §0A rule 7). For figures built
+    with layout='constrained', pass tight=False — constrained-layout already spaces
+    everything; calling tight_layout on top of it fights the engine. If a stray
+    element clips, fix the layout, don't crop."""
     folder = folder or MAIN
-    if tight:
+    engine = fig.get_layout_engine()
+    is_constrained = engine is not None and type(engine).__name__.lower().startswith("constrained")
+    if tight and not is_constrained:
         fig.tight_layout(pad=pad)
     stem = Path(folder) / name
-    fig.savefig(f"{stem}.pdf")                 # exact figsize -> uniform column width
-    fig.savefig(f"{stem}.png", dpi=300)
+    fig.savefig(f"{stem}.pdf")                 # vector, exact figsize -> uniform column width
+    fig.savefig(f"{stem}.png", dpi=600)        # 600-dpi raster fallback / preview
     plt.close(fig)
     print("saved", f"{stem}.pdf / .png (%.2fx%.2f in)" % tuple(fig.get_size_inches()))
 
@@ -179,6 +197,35 @@ def ranked_barh(ax, labels, means, los=None, his=None, *, colors=None,
             ax.text(means[i], row, fmt(means[i]), va="center", ha="left", fontsize=5.4)
     ax.set_yticks(range(len(order)))
     ax.set_yticklabels(order, fontsize=label_fs)
+    return order
+
+
+def lollipop(ax, labels, values, *, colors=None, floor=None, los=None, his=None,
+             ascending=False, fmt="{:.3f}", label_fs=6, value_fs=5.6, highlight="fluorostats"):
+    """Horizontal dot/lollipop plot with a ZOOMED x-axis for near-max values
+    (Cleveland: encode magnitude by position, not bar area). Use this instead of
+    bars whenever every value hugs the axis max (correlation / accuracy panels, §0B.3).
+
+    floor: left x-limit (justified zoom floor, e.g. 0.90). Defaults just below min.
+    Draws a thin stem from floor to the value + a dot; optional CI whiskers; value
+    labels in clear space. fluorostats auto-highlighted blue, others grey."""
+    labels = list(labels); values = list(values)
+    idx = sorted(range(len(values)), key=lambda i: values[i], reverse=not ascending)
+    order = [labels[i] for i in idx]
+    lo_x = floor if floor is not None else max(0.0, min(values) - 0.03)
+    hi_x = max(values) + (max(values) - lo_x) * 0.14
+    for row, i in enumerate(idx):
+        c = (colors[i] if colors else (OKABE["blue"]
+             if highlight and highlight in str(labels[i]).lower() else OKABE["grey"]))
+        ax.plot([lo_x, values[i]], [row, row], color=c, lw=1.0, alpha=0.55, zorder=2,
+                solid_capstyle="butt")
+        ax.plot(values[i], row, "o", color=c, ms=5, mec="white", mew=0.5, zorder=4)
+        if los is not None and his is not None:
+            ax.plot([los[i], his[i]], [row, row], color=c, lw=1.4, alpha=0.9, zorder=3)
+        ax.text(values[i] + (hi_x - lo_x) * 0.015, row, fmt.format(values[i]),
+                va="center", ha="left", fontsize=value_fs, color="#333")
+    ax.set_yticks(range(len(order))); ax.set_yticklabels(order, fontsize=label_fs)
+    ax.set_xlim(lo_x, hi_x); ax.set_ylim(-0.6, len(order) - 0.4)
     return order
 
 

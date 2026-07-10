@@ -20,49 +20,92 @@ outline = F.outline
 
 # ---------- data ----------
 pi = pd.read_csv(R / "b2_nuclei_methods_perimage.csv")           # per-image F1, 9 methods
-dl_pi = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values,
-         "Cellpose": pd.read_csv(R/"cellpose_eval.csv").cellpose_f1.values,
-         "Omnipose": pd.read_csv(R/"omnipose_eval.csv").query("thirddl_f1>=0").thirddl_f1.values}
+# n=100 first-100 per-image DL scores (so panel a uses the n=100 values, not the
+# n=200 Table-1 numbers): StarDist 0.861, Cellpose 0.858, Omnipose 0.798.
+dl_pi = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values[:100],
+         "Cellpose": pd.read_csv(R/"cellpose_eval.csv").cellpose_f1.values[:100],
+         "Omnipose": pd.read_csv(R/"omnipose_eval.csv").query("thirddl_f1>=0").thirddl_f1.values[:100]}
 methods = {c: pi[c].values for c in pi.columns if c != "image"}
 methods.update(dl_pi)
 # ---------- layout ----------
-fig = plt.figure(figsize=(7.2, 7.4))
-gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[0.82, 1.9, 0.82],
-                       hspace=0.34, wspace=1.05)
+fig = plt.figure(figsize=(7.2, 7.6), layout="constrained")
+fig.get_layout_engine().set(hspace=0.06, wspace=0.06)
+gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[1.05, 1.75, 0.82])
 
-# (a) twelve-method ranking sourced from the summary table (exact F1 values);
-# no Omnipose. Bar heights are the b2_nuclei_methods.csv means; whiskers are 95%
-# bootstrap CIs of the matching per-image scores. Okabe-Ito: fluorostats blue,
-# StarDist orange, Cellpose vermillion, classical thresholds grey.
+# (a) the fluorostats "unification" panel. Otsu / Li / Isodata / Triangle / Yen /
+# Mean / Minimum / watershed are NOT rival tools: they are fluorostats threshold
+# CONFIGURATIONS. So the panel shows ONE designated default (fluorostats Otsu+CC,
+# solid blue, the Table-1 / abstract 0.890 headline) dominant; the other thresholds
+# as the SAME blue at reduced opacity (the "tuning envelope", a range-of-a-knob);
+# and the three trained DL tools (StarDist orange, Cellpose vermillion, Omnipose
+# purple) as the genuine external comparison, plotted at their n=100 values.
+# Dot + 95% bootstrap CI (F.lollipop-style) instead of bars: the top pack all hugs
+# ~0.8-0.91, so full bars would waste ink.
 axa = fig.add_subplot(gs[0, :4])
-summ = pd.read_csv(R / "b2_nuclei_methods.csv")
-# summary method name -> (display label, per-image score array for the CI)
-perimg = {
-    "Li_1993": pi["Li (1993)"].values, "Isodata_1978": pi["Isodata (1978)"].values,
-    "Watershed_1991": pi["Watershed (1991)"].values,
-    "fluorostats(Otsu+watershed)": pi["Watershed (1991)"].values,
-    "Otsu_1979": pi["Otsu (1979)"].values,
-    "fluorostats(Otsu+CC)": pi["fluorostats (Otsu+CC)"].values, "Mean": pi["Mean"].values,
-    "StarDist_2018 (DL)": dl_pi["StarDist"], "Cellpose_2021 (DL)": dl_pi["Cellpose"],
-    "Triangle_1977": pi["Triangle (1977)"].values, "Minimum": pi["Minimum"].values,
-    "Yen_1995": pi["Yen (1995)"].values,
-}
-disp = {
-    "Li_1993": "Li (1993)", "Isodata_1978": "Isodata (1978)", "Watershed_1991": "Watershed (1991)",
-    "fluorostats(Otsu+watershed)": "fluorostats (Otsu+ws)", "Otsu_1979": "Otsu (1979)",
-    "fluorostats(Otsu+CC)": "fluorostats (Otsu+CC)", "Mean": "Mean",
-    "StarDist_2018 (DL)": "StarDist", "Cellpose_2021 (DL)": "Cellpose",
-    "Triangle_1977": "Triangle (1977)", "Minimum": "Minimum", "Yen_1995": "Yen (1995)",
-}
-labels, means, los, his, acol = [], [], [], [], []
-for _, r in summ.iterrows():
-    m = r["method"]
-    labels.append(disp[m]); means.append(float(r["mean_F1"]))
-    _, lo, hi = boot_ci(perimg[m]); los.append(lo); his.append(hi)
-    acol.append(F.color_for(m))
-F.ranked_barh(axa, labels, means, los, his, colors=acol, label_fs=6)
-axa.set_xlim(0, 1.0); axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
-panel(axa, "a", "twelve-method accuracy")
+BLUE = OKABE["blue"]
+# family: (display label, per-image score array, kind) — kind in
+# {"default","envelope","dl"}. Provenance kept in the label.
+fam = [
+    ("fluorostats (default, Otsu+CC)", pi["fluorostats (Otsu+CC)"].values, "default"),
+    ("fluorostats $\\cdot$ Li (1993)",       pi["Li (1993)"].values,       "envelope"),
+    ("fluorostats $\\cdot$ Isodata (1978)",  pi["Isodata (1978)"].values,  "envelope"),
+    ("fluorostats $\\cdot$ Otsu+watershed",  pi["Watershed (1991)"].values,"envelope"),
+    ("fluorostats $\\cdot$ Otsu (1979)",     pi["Otsu (1979)"].values,     "envelope"),
+    ("fluorostats $\\cdot$ Mean",            pi["Mean"].values,            "envelope"),
+    ("fluorostats $\\cdot$ Triangle (1977)", pi["Triangle (1977)"].values, "envelope"),
+    ("fluorostats $\\cdot$ Minimum",         pi["Minimum"].values,         "envelope"),
+    ("fluorostats $\\cdot$ Yen (1995)",      pi["Yen (1995)"].values,      "envelope"),
+    ("StarDist (trained DL)", dl_pi["StarDist"], "dl"),
+    ("Cellpose (trained DL)", dl_pi["Cellpose"], "dl"),
+    ("Omnipose (trained DL)", dl_pi["Omnipose"], "dl"),
+]
+DLCOL = {"StarDist": OKABE["orange"], "Cellpose": OKABE["vermillion"], "Omnipose": OKABE["purple"]}
+rows = []
+for lab, arr, kind in fam:
+    mean, lo, hi = boot_ci(arr)
+    if kind == "dl":
+        c = DLCOL[lab.split()[0]]
+    else:
+        c = BLUE
+    rows.append(dict(lab=lab, mean=mean, lo=lo, hi=hi, kind=kind, c=c))
+rows.sort(key=lambda d: d["mean"])                # worst -> best (bottom -> top)
+lo_x = 0.20                                        # zoom floor just below the min (Yen ~0.28)
+hi_x = 1.06                                         # headroom for value labels
+for row, d in enumerate(rows):
+    default = d["kind"] == "default"
+    env = d["kind"] == "envelope"
+    a = 1.0 if default else (0.42 if env else 1.0)   # envelope translucent
+    ms = 7 if default else 5.2
+    # stem
+    axa.plot([lo_x, d["mean"]], [row, row], color=d["c"], lw=1.0, alpha=a * 0.6,
+             zorder=2, solid_capstyle="butt")
+    # CI whisker
+    axa.plot([d["lo"], d["hi"]], [row, row], color=d["c"], lw=1.4, alpha=a * 0.9, zorder=3)
+    # dot: filled for default/DL, ringed (blue outline) for the envelope so it reads
+    # as "same family, other setting"
+    if env:
+        axa.plot(d["mean"], row, "o", mfc="white", mec=d["c"], mew=1.1, ms=ms,
+                 alpha=1.0, zorder=4)
+    else:
+        axa.plot(d["mean"], row, "o", color=d["c"], mec="white", mew=0.6, ms=ms, zorder=5)
+    axa.text(d["mean"] + 0.012, row, f"{d['mean']:.3f}", va="center", ha="left",
+             fontsize=5.4, color="#333", alpha=a)
+labcols = [BLUE if r["kind"] != "dl" else r["c"] for r in rows]
+axa.set_yticks(range(len(rows)))
+axa.set_yticklabels([r["lab"] for r in rows], fontsize=5.6)
+for tick, lc, r in zip(axa.get_yticklabels(), labcols, rows):
+    tick.set_color(lc)
+    tick.set_fontweight("bold" if r["kind"] == "default" else "normal")
+axa.set_xlim(lo_x, hi_x); axa.set_ylim(-0.6, len(rows) - 0.4)
+axa.set_xticks([0.2, 0.4, 0.6, 0.8, 1.0])
+axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
+# legend explaining the family (in axes white space, lower right)
+axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=7, label="fluorostats default")
+axa.plot([], [], "o", mfc="white", mec=BLUE, mew=1.1, ms=6, label="threshold envelope")
+axa.plot([], [], "o", color=OKABE["orange"], mec="white", mew=0.6, ms=6, label="trained deep learning")
+axa.legend(loc="lower right", bbox_to_anchor=(0.99, 0.02), fontsize=5.0,
+           handletextpad=0.3, borderpad=0.3, labelspacing=0.3, frameon=False)
+panel(axa, "a", "one tool, one default knob (n=100)")
 
 # (b) forest vs DL
 axb = fig.add_subplot(gs[0, 4:])
@@ -111,18 +154,26 @@ for row, (im, gt, stem) in enumerate(crops):
         if col == 0 and row == 0:
             F.scalebar(ax, 65, "20 µm")  # BBBC039 ~0.31 µm/px (approx, stated in caption)
             panel(ax, "c")
-# (d) crossover
+# (d) crossover — two directly-labelled line groups: fluorostats (blue) and the
+# classical-threshold envelope (grey), both collapsing under overlap while the DL
+# reference (dashed) holds ~0.96.
 axd = fig.add_subplot(gs[2, :2])
 cc = pd.read_csv(R/"b_clustering_curve.csv"); x = [0,25,50,75]
 for _, r in cc.iterrows():
     isf = "fluorostats" in r["method"]
+    if not isf and r[["c00","c25","c50","c75"]].sum() == 0:   # skip empty Triangle row
+        continue
     axd.plot(x, [r.c00,r.c25,r.c50,r.c75], marker="o" if isf else ".", ms=4 if isf else 3,
              color=OKABE["blue"] if isf else GREY, lw=2.0 if isf else 0.8, alpha=1 if isf else 0.6,
-             zorder=3 if isf else 1, label="fluorostats" if isf and "CC" in r["method"] else None)
+             zorder=3 if isf else 1)
 axd.axhline(0.96, ls="--", color=OKABE["black"], lw=1.0)
-axd.text(2, 0.90, "deep learning", fontsize=5.6, color="black")
+axd.text(2, 0.905, "deep learning holds $\\approx$0.96", fontsize=5.4, color="black")
 axd.axvspan(50, 75, color=OKABE["vermillion"], alpha=0.08)
-axd.text(62, 0.5, "DL wins", fontsize=6, color=OKABE["vermillion"], ha="center")
+axd.text(62, 0.55, "DL wins", fontsize=6, color=OKABE["vermillion"], ha="center")
+# direct labels on the two line groups (in white space, coloured to match)
+axd.text(30, 0.60, "fluorostats", fontsize=6.2, color=OKABE["blue"], fontweight="bold",
+         ha="left", va="bottom")
+axd.text(30, 0.35, "classical envelope", fontsize=5.8, color=GREY, ha="left", va="top")
 axd.set_xlabel("nuclear overlap (%)"); axd.set_ylabel("instance F1"); axd.set_ylim(0,1.02)
 panel(axd, "d", "crowding crossover")
 
@@ -151,9 +202,14 @@ axf.set_xlabel("instance overlap / crowding (%)")
 panel(axf, "f", "when to use which")
 
 cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
- "(a) Instance F1 (IoU 0.5) of twelve methods on BBBC039 (n=100 images); bars ranked, "
- "95% bootstrap CIs (10,000 resamples of per-image scores); fluorostats blue, deep-learning "
- "tools in colour, classical thresholds grey. (b) Forest plot vs validated DL (StarDist, Cellpose, "
+ "(a) Instance F1 (IoU 0.5) on BBBC039 (n=100 images), dots with 95% bootstrap CIs "
+ "(10,000 resamples of per-image scores). The eight classical thresholds (Otsu, Li, "
+ "Isodata, Triangle, Yen, Mean, Minimum, watershed) are fluorostats CONFIGURATIONS, not "
+ "rival tools: the designated default (fluorostats Otsu+CC, solid blue, F1 0.890) is the "
+ "headline; the remaining thresholds (open blue circles) trace the tuning envelope "
+ "(0.28-0.91, i.e. the range of one knob). The genuine external comparison is trained deep "
+ "learning at n=100 values (StarDist 0.861 orange, Cellpose 0.858 vermillion, Omnipose 0.798 "
+ "purple). (b) Forest plot vs validated DL (StarDist, Cellpose, "
  "Omnipose); paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
  "truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~0.31 µm/px). "
  "(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75): all non-DL methods (grey; fluorostats blue) "
@@ -161,5 +217,5 @@ cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  "well-separated (c00) and a crowded (c75) field, showing connected-component merging under overlap. "
  "(f) Data-anchored scope map: fluorostats is at parity with trained segmenters up to ~40% crowding "
  "(green), beyond which a trained instance segmenter is preferred (red).")
-save(fig, "fig2_nuclei_boundary"); caption("fig2_nuclei_boundary", cap)
+save(fig, "fig2_nuclei_boundary", tight=False); caption("fig2_nuclei_boundary", cap)
 print("Figure 2 done")

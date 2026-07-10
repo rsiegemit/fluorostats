@@ -52,53 +52,74 @@ def is_fluorostats(name: str) -> bool:
 
 
 def panel_a(ax):
-    """DSB2018 F1@0.5 ranking as horizontal bars, best at top."""
+    """DSB2018 F1@0.5 ranking as horizontal bars, best at top.
+
+    §1 unification: the classical thresholds ARE fluorostats configurations
+    (Otsu/IsoData/Li/Yen/Triangle). The former separate `fluorostats` vs `Otsu`
+    and `fluorostats (Li)` vs `Li` duplicate pairs are collapsed: Otsu+CC is the
+    designated default (solid-blue headline) and the remaining thresholds are the
+    fluorostats "tuning envelope" (same blue at reduced opacity). StarDist stays
+    the orange trained-DL reference line.
+    """
     df = pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv"))
-    df = df.sort_values("mean_f1@0.5", ascending=True)  # ascending -> best on top
+    df = df.set_index("method")
 
-    f1 = df["mean_f1@0.5"].to_numpy()
-    names = df["method"].tolist()
-    labels = [LABELS.get(n, n) for n in names]
-    colors = [figstyle.OKABE["blue"] if is_fluorostats(n) else figstyle.OKABE["lgrey"]
-              for n in names]
-    y = np.arange(len(names))
+    BLUE = figstyle.OKABE["blue"]
+    # (label, F1, is_default) — headline uses the fluorostats(Otsu+CC) score with
+    # connected-component post-processing (0.789); the envelope rows are the other
+    # thresholder configs. Sorted best->worst; drawn best-on-top.
+    rows = [
+        ("fluorostats (Otsu+CC)", float(df.loc["fluorostats", "mean_f1@0.5"]), True),
+        ("fluorostats · IsoData",     float(df.loc["isodata", "mean_f1@0.5"]),     False),
+        ("fluorostats · Li",          float(df.loc["fluorostats-li", "mean_f1@0.5"]), False),
+        ("fluorostats · Yen",         float(df.loc["yen", "mean_f1@0.5"]),         False),
+        ("fluorostats · Triangle",    float(df.loc["triangle", "mean_f1@0.5"]),    False),
+    ]
+    rows.sort(key=lambda r: r[1])  # ascending -> best on top
+    labels = [r[0] for r in rows]
+    f1 = np.array([r[1] for r in rows])
+    is_default = [r[2] for r in rows]
+    # default = solid blue headline; envelope = same blue at reduced opacity
+    alphas = [1.0 if d else 0.42 for d in is_default]
+    y = np.arange(len(rows))
 
-    ax.barh(y, f1, color=colors, edgecolor="#333333", linewidth=0.5, height=0.68,
-            zorder=3)
+    for yi, v, a in zip(y, f1, alphas):
+        ax.barh(yi, v, color=BLUE, alpha=a, edgecolor="#333333", linewidth=0.5,
+                height=0.68, zorder=3)
 
     # value labels at bar ends
     for yi, v in zip(y, f1):
         ax.text(v + 0.008, yi, f"{v:.3f}", va="center", ha="left", fontsize=6,
                 color="#222222")
 
-    # StarDist trained-DL reference line
+    # StarDist trained-DL reference line (raised so its vertical label sits above
+    # the annotation cluster in the lower-left)
     ax.axvline(STARDIST_AP50, color=figstyle.OKABE["orange"], ls="--", lw=1.1,
                zorder=2)
-    ax.text(STARDIST_AP50 + 0.015, 1.6, "StarDist (trained DL), published",
-            rotation=90, va="center", ha="left", fontsize=6,
+    ax.text(STARDIST_AP50 + 0.02, len(rows) - 1, "StarDist (trained DL), published",
+            rotation=90, va="top", ha="left", fontsize=6,
             color=figstyle.OKABE["orange"], fontweight="bold")
 
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
-    # emphasise the fluorostats tick label
-    for tick, n in zip(ax.get_yticklabels(), names):
-        if is_fluorostats(n) and "li" not in n.lower():
+    # emphasise the default (headline) fluorostats tick label
+    for tick, d in zip(ax.get_yticklabels(), is_default):
+        if d:
             tick.set_fontweight("bold")
-            tick.set_color(figstyle.OKABE["blue"])
+            tick.set_color(BLUE)
 
-    ax.set_xlim(0, 1.0)
+    ax.set_xlim(0, 1.05)
+    ax.set_ylim(-0.6, len(rows) - 0.4)
     ax.set_xlabel("Instance F1 @ IoU 0.5")
 
-
-    # annotate the "% of trained model" headline, placed in the clear
-    # bottom-right whitespace beside the two shortest bars (Yen, Triangle)
-    best = float(df["mean_f1@0.5"].max())
+    # "% of trained model" headline, placed in the clear whitespace beside the two
+    # shortest bars (Yen 0.578, Triangle 0.185): starts right of the Yen value
+    # label and stays left of the StarDist reference line, centred on rows 0-1.
+    best = float(f1.max())
     pct = 100.0 * best / STARDIST_AP50
-    ax.text(0.30, 0.04,
+    ax.text(0.335, 0.5,
             f"training-free fluorostats =\n{pct:.0f}% of the trained model",
-            transform=ax.transAxes, fontsize=6.2, va="bottom", ha="left",
-            color=figstyle.OKABE["blue"])
-    ax.margins(y=0.02)
+            fontsize=6.2, va="center", ha="left", color=BLUE, zorder=5)
 
 
 def panel_b(ax):
@@ -163,7 +184,7 @@ def main():
     panel_b(axes[1])
     figstyle.panel(axes[0], "a", "DSB2018 — StarDist\u2019s own dataset")
     figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)")
-    fig.subplots_adjust(wspace=0.55, bottom=0.28, left=0.16, right=0.97, top=0.86)
+    fig.subplots_adjust(wspace=0.62, bottom=0.28, left=0.19, right=0.97, top=0.86)
 
     figstyle.save(fig, "ed4_generalization", figstyle.EXT, tight=False)
 

@@ -40,8 +40,8 @@ for name, st in others.items():
 # fluorostats (Otsu + CC): bold blue; white dashes on top mark the identical Otsu curve
 ax_a.plot(noise["noise_sd"], noise[flu_col], color=FLU, marker="o", ls="-",
           lw=2.2, ms=4.2, mew=0.5, mec="white", label="fluorostats", zorder=6)
-ax_a.plot(noise["noise_sd"], noise["Otsu"], color="white", ls=(0, (2, 3)),
-          lw=0.9, zorder=7)
+ax_a.plot(noise["noise_sd"], noise["Otsu"], color="white", ls=(0, (2, 2.2)),
+          lw=1.3, zorder=7)
 ax_a.set_xlabel("Added Gaussian noise (s.d., grey levels)")
 ax_a.set_ylabel("Foreground Dice")
 ax_a.set_xticks(noise["noise_sd"])
@@ -76,7 +76,8 @@ ax_b.set_ylim(0.35, 0.96)
 i_hi = len(levels) - 1
 ax_b.annotate("", xy=(i_hi, 0.905), xytext=(i_hi, 0.42),
               arrowprops=dict(arrowstyle="->", color=OKABE["black"], lw=0.7))
-ax_b.text(i_hi - 0.02, 0.66, r"0.41 $\rightarrow$ 0.91", rotation=90, va="center",
+# horizontal label near the arrow head, nudged left so it clears the bars
+ax_b.text(i_hi - 0.14, 0.905, r"0.41 $\rightarrow$ 0.91", rotation=0, va="center",
           ha="right", fontsize=6, color=OKABE["black"])
 ax_b.legend(loc="lower left", ncol=2, columnspacing=0.9, handlelength=1.0,
             borderpad=0.2, labelspacing=0.25)

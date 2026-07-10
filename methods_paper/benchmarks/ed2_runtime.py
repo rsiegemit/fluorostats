@@ -1,12 +1,14 @@
 """Extended Data Figure 2 — Runtime and determinism.
 
-(a) Per-operation runtime (log x, horizontal bars): fluorostats metrics vs the
-    matched SciPy/scikit-image/DL comparators, timed on the same data per op-class.
-    Shared-operation parity is visible where a fluorostats bar sits beside its
-    library equivalent; the two whole-volume validation ops are set apart as
-    "once per volume (validation)" so they don't read as per-frame cost.
+(a) Per-operation runtime (log x, horizontal bars) for a curated, category-grouped
+    set of ~14 representative operations: the 2D-segmentation head-to-head
+    (fluorostats vs StarDist vs Cellpose) plus fluorostats metrics spanning the
+    dynamic range and their matched SciPy / scikit-image equivalents. fluorostats
+    sits at parity with the underlying library call on shared operations.
 (b) Determinism: three fluorostats metrics run N=20x on the SAME BBBC024 volume
     give bit-identical output (spread = 0), unlike seed/hardware-sensitive DL.
+(c) Reproducibility: run-to-run spread (CV%) — fluorostats 0.0 vs a trained
+    pipeline that varies with seed / GPU.
 """
 import glob
 import numpy as np
@@ -16,11 +18,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-import figstyle
-from figstyle import OKABE
+import figstyle as F
+from figstyle import OKABE, panel, save, caption
+
 from fluorostats import metrics_3d, morphometry
 
-figstyle.apply_style()
+F.apply_style()
 
 HERE = Path(__file__).resolve().parent
 RES = HERE / "results"
@@ -31,12 +34,11 @@ DATA = HERE.parent / "data" / "downloads"
 # ----------------------------------------------------------------------------
 N_RUNS = 20
 vol = tifffile.imread(sorted(glob.glob(str(DATA / "BBBC024/image-final_*.tif")))[0]).astype(np.float32)
-# fixed binary mask (deterministic threshold) so every run sees identical input
 from skimage import filters
 mask = vol > filters.threshold_otsu(vol)
 
 det_metrics = {
-    "volume_fraction": lambda: metrics_3d.volume_fraction(mask),
+    "volume\nfraction": lambda: metrics_3d.volume_fraction(mask),
     "connectivity\n(Euler no.)": lambda: metrics_3d.connectivity_metrics(mask)["euler_number"],
     "lateral\nhomogeneity": lambda: morphometry.lateral_homogeneity(mask.astype(np.float32))["lateral_cv"],
 }
@@ -46,145 +48,225 @@ print("determinism spread (max-min) per metric:", det_spread)
 assert all(s == 0.0 for s in det_spread.values()), "expected bit-identical output"
 
 # ----------------------------------------------------------------------------
-# Panel (a) data — runtime table
+# Panel (a) data — CURATED, category-grouped representative operations
+# All ms values read directly from results/b_timing_all_metrics.csv.
 # ----------------------------------------------------------------------------
 df = pd.read_csv(RES / "b_timing_all_metrics.csv")
+# 2D-segmentation head-to-head fluorostats value lives in the segmentation
+# benchmark table (b_timing.csv), row fluorostats(Otsu+CC) -> ms_per_image.
+df_seg = pd.read_csv(RES / "b_timing.csv")
+SEG_FLUORO_MS = float(df_seg[df_seg.method == "fluorostats(Otsu+CC)"].ms_per_image.iloc[0])
 
-# the two whole-volume validation ops are amortised once per volume, not per frame
-VALIDATION = {"validate.instance_f1", "validate.average_precision"}
-val = df[df.metric.isin(VALIDATION)].copy()
-main = df[~df.metric.isin(VALIDATION)].copy().sort_values("ms").reset_index(drop=True)
+
+# Category label -> list of (display_label, csv_metric, kind)
+# kind in {"fluorostats", "scipy", "stardist", "cellpose"} -> colour.
+# Ordered top->bottom within the axis; grouped by category with spacers.
+ROWS = [
+    # --- 2D instance segmentation (head-to-head) ---
+    ("2D segmentation",  "Cellpose (per 2D img)",     "comparator,Cellpose (per 2D img, CPU cluster)", "cellpose"),
+    ("2D segmentation",  "StarDist (per 2D img)",     "comparator,StarDist (per 2D img, CPU cluster)", "stardist"),
+    ("2D segmentation",  "fluorostats (Otsu + CC)",   "fluorostats(Otsu+CC)",                          "fluorostats"),
+    # --- 3D metrics ---
+    ("3D metrics",       "connectivity (Euler no.)",  "fluorostats,metrics_3d.connectivity_metrics",   "fluorostats"),
+    ("3D metrics",       "euler_number (skimage)",    "comparator,euler_number(skimage) 3D",           "scipy"),
+    ("3D metrics",       "volume fraction",           "fluorostats,metrics_3d.volume_fraction",        "fluorostats"),
+    # --- Skeleton / morphology ---
+    ("skeleton / morph", "skeleton metrics 2D",       "fluorostats,skeleton.skeleton_metrics 2D",      "fluorostats"),
+    ("skeleton / morph", "medial_axis (skimage)",     "comparator,medial_axis 2D",                     "scipy"),
+    ("skeleton / morph", "lateral homogeneity",       "fluorostats,morphometry.lateral_homogeneity",   "fluorostats"),
+    # --- Statistics ---
+    ("statistics",       "Mann-Whitney",              "fluorostats,stats.mann_whitney",                "fluorostats"),
+    ("statistics",       "scipy.mannwhitneyu",        "comparator,scipy.mannwhitneyu",                 "scipy"),
+    ("statistics",       "bootstrap fold-change CI",  "fluorostats,stats.bootstrap_fold_change_ci",    "fluorostats"),
+    # --- Validation (once per volume) ---
+    ("validation",       "instance F1",               "fluorostats,validate.instance_f1",              "fluorostats"),
+    ("validation",       "average precision",         "fluorostats,validate.average_precision",        "fluorostats"),
+]
+
+# resolve the ms for the two head-to-head rows and validation directly
+KIND_COLOR = {
+    "fluorostats": OKABE["blue"],
+    "scipy":       OKABE["grey"],
+    "stardist":    OKABE["orange"],
+    "cellpose":    OKABE["vermillion"],
+}
 
 
-def bar_color(row):
-    if row.group == "fluorostats":
-        return OKABE["blue"]
-    m = row.metric.lower()
-    if "stardist" in m:
-        return OKABE["orange"]
-    if "cellpose" in m:
-        return OKABE["vermillion"]
-    return OKABE["lgrey"]
+def lookup(metric_key):
+    """metric_key is the exact CSV metric string (after the 'group,' prefix we
+    stored above for uniqueness). We stored 'group,metric' to disambiguate the
+    two DL rows whose metric text contains a comma; strip the group if present."""
+    if metric_key == "fluorostats(Otsu+CC)":
+        return SEG_FLUORO_MS
+    if metric_key.startswith("comparator,") or metric_key.startswith("fluorostats,"):
+        grp, met = metric_key.split(",", 1)
+        hit = df[(df.group == grp) & (df.metric == met)]
+    else:
+        hit = df[df.metric == metric_key]
+    if len(hit) != 1:
+        raise KeyError(f"expected 1 row for {metric_key!r}, got {len(hit)}")
+    return float(hit.ms.iloc[0])
 
+
+# build the ordered plotting list with category spacers
+categories = []
+seen = []
+for cat, lab, key, kind in ROWS:
+    if cat not in categories:
+        categories.append(cat)
+    seen.append((cat, lab, lookup(key), kind))
+
+# y positions: leave a gap between categories
+ypos, ylabels, yvals, ycolors = [], [], [], []
+cat_bounds = {}  # category -> (ymin, ymax) for bracket labels
+y = 0.0
+prev_cat = None
+for cat, lab, val, kind in seen:
+    if prev_cat is not None and cat != prev_cat:
+        y += 1.0  # spacer between categories
+    ypos.append(y)
+    ylabels.append(lab)
+    yvals.append(val)
+    ycolors.append(KIND_COLOR[kind])
+    cat_bounds.setdefault(cat, [y, y])
+    cat_bounds[cat][1] = y
+    prev_cat = cat
+    y += 1.0
+
+ypos = np.array(ypos)
 
 # ----------------------------------------------------------------------------
-# Figure
+# Figure — constrained layout, double-column width
 # ----------------------------------------------------------------------------
-fig = plt.figure(figsize=(7.2, 6.6))
-gs = fig.add_gridspec(1, 2, width_ratios=[1.7, 1.0], wspace=0.55)
+fig = plt.figure(figsize=(F.COL2, 6.4), layout="constrained")
+fig.get_layout_engine().set(w_pad=0.06, h_pad=0.06, wspace=0.04, hspace=0.04)
+# reserve a wide left band for category labels + y-tick labels in panel a
+gs = fig.add_gridspec(1, 2, width_ratios=[1.55, 1.0], left=0.155)
 axA = fig.add_subplot(gs[0, 0])
-gsB = gs[0, 1].subgridspec(2, 1, height_ratios=[1.15, 1.0], hspace=0.5)
-axB = fig.add_subplot(gsB[0, 0])
-axH = fig.add_subplot(gsB[1, 0])
+gsR = gs[0, 1].subgridspec(2, 1, height_ratios=[1.0, 1.0], hspace=0.42)
+axB = fig.add_subplot(gsR[0, 0])
+axC = fig.add_subplot(gsR[1, 0])
 
-# --- Panel (a): horizontal bars, log x -------------------------------------
-y = np.arange(len(main))
-colors = [bar_color(r) for _, r in main.iterrows()]
-axA.barh(y, main.ms.values, color=colors, height=0.72, edgecolor="none")
-axA.set_yticks(y)
-axA.set_yticklabels(main.metric.values, fontsize=4.6)
+# --- Panel (a): grouped horizontal bars, log x ------------------------------
+axA.barh(ypos, yvals, color=ycolors, height=0.72, edgecolor="none", zorder=3)
+axA.set_yticks(ypos)
+axA.set_yticklabels(ylabels, fontsize=F.FS["small"])
+axA.invert_yaxis()  # first ROW on top
 axA.set_xscale("log")
-axA.set_xlim(0.005, 30000)
+axA.set_xlim(0.01, 30000)
 axA.set_xlabel("time per operation (ms, log scale)")
-axA.set_ylim(-0.8, len(main) - 0.2)
 axA.tick_params(axis="y", length=0)
 axA.spines["left"].set_visible(False)
-for x in (0.01, 0.1, 1, 10, 100, 1000, 10000):
-    axA.axvline(x, color="#EEEEEE", lw=0.5, zorder=0)
+for xg in (0.1, 1, 10, 100, 1000, 10000):
+    axA.axvline(xg, color="#EEEEEE", lw=0.5, zorder=0)
 
-# validation ops drawn as an offset callout band at the top (once per volume)
-val_sorted = val.sort_values("ms")
-yv = np.arange(len(main) + 1.0, len(main) + 1.0 + len(val_sorted))
-axA.barh(yv, val_sorted.ms.values, color=OKABE["purple"], height=0.72,
-         edgecolor="none", alpha=0.9)
-for yy, (_, r) in zip(yv, val_sorted.iterrows()):
-    axA.text(r.ms * 1.3, yy, f"{r.metric}", va="center", ha="left", fontsize=4.6)
-axA.axhline(len(main) + 0.1, color="#CCCCCC", lw=0.5, ls=(0, (2, 2)))
-axA.text(0.006, len(main) + len(val_sorted) + 0.35,
-         "once per volume (validation) — amortised, not per frame",
-         fontsize=5.2, color=OKABE["purple"], fontweight="bold", va="center")
-axA.set_ylim(-0.8, len(main) + len(val_sorted) + 0.9)
+# category labels in the far-left reserved margin (grey italic), placed left of
+# the (longest) y-tick labels so they never overlap them.
+for cat, (y0, y1) in cat_bounds.items():
+    ymid = (y0 + y1) / 2.0
+    axA.annotate(cat, xy=(0, ymid), xycoords=("axes fraction", "data"),
+                 xytext=(-150, 0), textcoords="offset points",
+                 fontsize=F.FS["small"], color="#666", style="italic",
+                 va="center", ha="left", rotation=0, annotation_clip=False)
 
-# headline annotation: 2D-seg speedups (upper-left, over the empty short-bar region)
-axA.text(1.4, len(main) * 0.80,
-         "2D segmentation, per image:\n"
-         "fluorostats  14.5 ms\n"
-         "StarDist  215 ms  (15x)\n"
-         "Cellpose  5547 ms  (380x)",
-         fontsize=5.4, va="top", ha="left",
-         bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="#CCCCCC", lw=0.5))
+# thin separator lines between categories
+for cat in categories[1:]:
+    y0 = cat_bounds[cat][0]
+    axA.axhline(y0 - 0.55, color="#DDDDDD", lw=0.5, zorder=1)
 
+axA.set_ylim(ypos.max() + 0.8, ypos.min() - 0.8)  # inverted, with margin
+
+# legend in clear white space (lower right of panel a)
 legA = [
     Line2D([0], [0], marker="s", ls="", mfc=OKABE["blue"], mec="none", ms=6, label="fluorostats"),
-    Line2D([0], [0], marker="s", ls="", mfc=OKABE["lgrey"], mec="none", ms=6, label="SciPy / scikit-image"),
+    Line2D([0], [0], marker="s", ls="", mfc=OKABE["grey"], mec="none", ms=6, label="SciPy / scikit-image"),
     Line2D([0], [0], marker="s", ls="", mfc=OKABE["orange"], mec="none", ms=6, label="StarDist (DL)"),
     Line2D([0], [0], marker="s", ls="", mfc=OKABE["vermillion"], mec="none", ms=6, label="Cellpose (DL)"),
-    Line2D([0], [0], marker="s", ls="", mfc=OKABE["purple"], mec="none", ms=6, label="validation op"),
 ]
-axA.legend(handles=legA, loc="lower right", fontsize=5.2, handletextpad=0.4,
-           borderaxespad=0.3, labelspacing=0.35)
-figstyle.panel(axA, "a", dx=0.0, dy=1.005)
+# legend in the empty right-hand white space over the short "statistics" bars
+axA.legend(handles=legA, loc="center right", bbox_to_anchor=(1.0, 0.30),
+           fontsize=F.FS["small"], handletextpad=0.4, borderaxespad=0.5,
+           labelspacing=0.35, frameon=True, facecolor="white",
+           edgecolor="#CCCCCC", framealpha=0.95)
 
-# --- Panel (b): determinism — 20 identical runs, spread = 0 -----------------
+# clean 2D-seg speedup annotation in the empty right-hand white space over the
+# short 3D-metric / skeleton bars (well clear of the long DL bars up top).
+seg_f = lookup("fluorostats(Otsu+CC)")
+seg_sd = lookup("comparator,StarDist (per 2D img, CPU cluster)")
+seg_cp = lookup("comparator,Cellpose (per 2D img, CPU cluster)")
+axA.text(0.985, 0.66,
+         "2D segmentation, per image (CPU)\n"
+         f"fluorostats  {seg_f:.1f} ms\n"
+         f"StarDist  {seg_sd:.0f} ms  ({seg_sd/seg_f:.0f}x)\n"
+         f"Cellpose  {seg_cp:.0f} ms  ({seg_cp/seg_f:.0f}x)",
+         transform=axA.transAxes, fontsize=F.FS["small"], va="top", ha="right",
+         bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="#CCCCCC", lw=0.5))
+
+F.panel(axA, "a")
+
+# --- Panel (b): determinism — 20 identical runs, spread = 0 ------------------
 names = list(det_runs.keys())
 xr = np.arange(len(names))
 rng = np.random.default_rng(0)
 for i, nm in enumerate(names):
     v = det_runs[nm]
-    # normalise to relative deviation from the mean so all three share one y-axis
     rel = (v - v.mean()) / (abs(v.mean()) + 1e-12) * 1e6  # ppm
     jit = (rng.random(len(v)) - 0.5) * 0.34
     axB.scatter(np.full(len(v), i) + jit, rel, s=9, color=OKABE["blue"],
                 alpha=0.85, edgecolors="none", zorder=3)
 axB.axhline(0, color="#BBBBBB", lw=0.6, zorder=1)
 axB.set_xticks(xr)
-axB.set_xticklabels(names, fontsize=5.6)
+axB.set_xticklabels(names, fontsize=F.FS["small"])
+axB.set_xlim(-0.6, len(names) - 0.4)
 axB.set_ylim(-1, 1)
-axB.set_ylabel("deviation from mean\n(parts per million)", fontsize=6)
-axB.text(0.5, 1.02, f"fluorostats: {N_RUNS} runs, same input", transform=axB.transAxes, ha="center", va="bottom", fontsize=6)
-axB.text(0.5, 0.82, "spread = 0  (bit-identical)", transform=axB.transAxes,
-         ha="center", va="center", fontsize=6.5, color=OKABE["blue"],
+axB.set_ylabel("deviation from mean\n(parts per million)", fontsize=F.FS["annot"])
+axB.text(0.5, 1.10, f"fluorostats: {N_RUNS} runs, same input",
+         transform=axB.transAxes, ha="center", va="bottom", fontsize=F.FS["annot"])
+axB.text(0.5, 0.80, "spread = 0  (bit-identical)", transform=axB.transAxes,
+         ha="center", va="center", fontsize=F.FS["annot"], color=OKABE["blue"],
          fontweight="bold")
-figstyle.panel(axB, "b", dx=-0.28, dy=1.02)
+F.panel(axB, "b")
 
-# --- Panel (b, lower): contrast bar — reproducibility spread ----------------
+# --- Panel (c): reproducibility — run-to-run spread (CV%) --------------------
 labels = ["fluorostats\n(CPU, any run)", "trained pipeline\n(seed / hardware)"]
 spreads = [0.0, 3.2]  # illustrative CV% for a seed/hardware-sensitive DL pipeline
-bars = axH.bar([0, 1], spreads, width=0.6,
-               color=[OKABE["blue"], OKABE["orange"]], edgecolor="none")
-axH.set_xticks([0, 1])
-axH.set_xticklabels(labels, fontsize=5.6)
-axH.set_ylabel("run-to-run spread\n(CV %)", fontsize=6)
-axH.set_ylim(0, 4)
-axH.text(0, 0.12, "0.0", ha="center", va="bottom", fontsize=6,
+axC.bar([0, 1], spreads, width=0.6,
+        color=[OKABE["blue"], OKABE["orange"]], edgecolor="none")
+axC.set_xticks([0, 1])
+axC.set_xticklabels(labels, fontsize=F.FS["small"])
+axC.set_xlim(-0.6, 1.6)
+axC.set_ylabel("run-to-run spread\n(CV %)", fontsize=F.FS["annot"])
+axC.set_ylim(0, 4)
+axC.text(0, 0.12, "0.0", ha="center", va="bottom", fontsize=F.FS["annot"],
          color=OKABE["blue"], fontweight="bold")
-axH.text(1, spreads[1] + 0.1, "seed / GPU\nvariable", ha="center", va="bottom",
-         fontsize=5.2, color=OKABE["orange"])
-axH.text(0.5, 1.02, "reproducibility", transform=axH.transAxes, ha="center", va="bottom", fontsize=6)
+axC.text(1, spreads[1] + 0.12, "seed / GPU\nvariable", ha="center", va="bottom",
+         fontsize=F.FS["small"], color=OKABE["orange"])
+F.panel(axC, "c")
 
-figstyle.save(fig, "ed2_runtime", figstyle.EXT, tight=False)
+F.save(fig, "ed2_runtime", F.EXT, tight=False)
 
 CAPTION = (
     "Extended Data Figure 2 | Runtime and determinism. "
-    "(a) Wall-clock time per operation (log scale) for fluorostats metrics (blue) "
-    "and their matched reference implementations, timed on identical inputs "
-    "(one BBBC024 3D volume; 2D nuclei image; synthetic live/dead field) on a "
-    "single Apple Silicon Mac CPU (darwin). Shared operations run at parity with "
-    "their SciPy / scikit-image equivalents (e.g. stats.mann_whitney vs "
-    "scipy.mannwhitneyu; objects.count_local_maxima vs skimage.peak_local_max), "
-    "confirming fluorostats adds negligible overhead over the underlying library "
-    "call. For headline 2D instance segmentation, fluorostats (Otsu + connected "
-    "components) runs at 14.5 ms/image versus 215 ms for StarDist (~15x) and "
-    "5547 ms for Cellpose (~380x), both measured on CPU. The two whole-volume "
-    "validation operations (validate.instance_f1 ~2.2 s; validate.average_precision "
-    "~19.5 s, purple) are computed once per volume during benchmarking and are "
-    "not part of per-frame analysis cost. (b) Determinism. Three representative "
-    "fluorostats metrics (volume_fraction, connectivity/Euler number, lateral "
-    "homogeneity) run N=20 times on the same BBBC024 volume return bit-identical "
-    "values (run-to-run spread = 0; deviations plotted in parts per million). "
-    "fluorostats is fully deterministic on CPU, whereas trained deep-learning "
-    "pipelines vary run-to-run with random seed and hardware/GPU non-determinism "
-    "(lower bar, illustrative)."
+    "(a) Wall-clock time per operation (log scale) for a curated, category-grouped "
+    "set of representative fluorostats operations (blue) and their matched "
+    "SciPy / scikit-image reference implementations (grey), timed on identical "
+    "inputs (one BBBC024 3D volume; 2D nuclei image; synthetic live/dead field) on "
+    "a single Apple Silicon Mac CPU (darwin). Shared operations run at parity with "
+    "their library equivalents (e.g. fluorostats connectivity vs euler_number; "
+    "stats.mann_whitney vs scipy.mannwhitneyu), confirming fluorostats adds "
+    "negligible overhead over the underlying call. For headline 2D instance "
+    "segmentation, fluorostats (Otsu + connected components) runs at "
+    f"{seg_f:.1f} ms/image versus {seg_sd:.0f} ms for StarDist (~{seg_sd/seg_f:.0f}x) "
+    f"and {seg_cp:.0f} ms for Cellpose (~{seg_cp/seg_f:.0f}x), both measured on CPU. "
+    "The two whole-volume validation operations (validate.instance_f1; "
+    "validate.average_precision) are computed once per volume during benchmarking "
+    "and are not part of per-frame analysis cost. (b) Determinism. Three "
+    "representative fluorostats metrics (volume fraction, connectivity/Euler "
+    "number, lateral homogeneity) run N=20 times on the same BBBC024 volume return "
+    "bit-identical values (run-to-run spread = 0; deviations plotted in parts per "
+    "million). (c) Reproducibility. Run-to-run spread (CV%): fluorostats is fully "
+    "deterministic on CPU (0.0), whereas trained deep-learning pipelines vary "
+    "run-to-run with random seed and hardware/GPU non-determinism (illustrative)."
 )
-figstyle.caption("ed2_runtime", CAPTION, figstyle.EXT)
+F.caption("ed2_runtime", CAPTION, F.EXT)
 print("done")
