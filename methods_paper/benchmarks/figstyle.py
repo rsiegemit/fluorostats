@@ -39,6 +39,11 @@ EXT = Path(__file__).resolve().parent / "figures" / "extended"
 MAIN.mkdir(parents=True, exist_ok=True)
 EXT.mkdir(parents=True, exist_ok=True)
 
+# Raw-image data root. Portable: override with $FLUOROSTATS_DATA, else default to
+# the sibling methods_paper/data/downloads (never a hardcoded absolute /Users path).
+DATA = Path(os.environ.get(
+    "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[1] / "data" / "downloads")))
+
 # Nature Methods column widths (inches). Use these as the figure WIDTH.
 COL1 = 3.46      # single column  (88 mm)
 COL15 = 4.72     # 1.5 column     (120 mm)
@@ -145,6 +150,42 @@ def composite2ch(live, dead, live_gain=1.0, dead_gain=1.0):
     """Green(live)/magenta(dead) 2-channel composite (colourblind-safe pairing)."""
     g = imnorm(live) * live_gain; r = imnorm(dead) * dead_gain
     return np.clip(np.dstack([r + 0.1 * g, g, r]), 0, 1)
+
+
+def fill_mask(ax, mask, rgb, alpha=0.85):
+    """Overlay a flat semi-transparent RGBA fill wherever mask>0 (rgb in 0-1)."""
+    ov = np.zeros((*mask.shape, 4)); ov[mask > 0] = (*rgb, alpha)
+    ax.imshow(ov, interpolation="nearest")
+
+
+def gt_instances_bbbc039(mask_path):
+    """Reconstruct BBBC039 instance ground truth from its 3-level mask PNG
+    (1=interior seed, >=2=boundary): seeded watershed over the object region."""
+    from PIL import Image
+    from scipy import ndimage as ndi
+    from skimage.segmentation import watershed
+    m = np.array(Image.open(mask_path)); r = m[..., 0] if m.ndim == 3 else m
+    seeds, _ = ndi.label(r == 1)
+    return watershed((r >= 2).astype(np.uint8), seeds, mask=(r > 0))
+
+
+def mid_slice(path):
+    """Middle z-slice of a TIFF volume as float32 (for a quick 2D preview)."""
+    import tifffile
+    vol = tifffile.imread(path)
+    return vol[vol.shape[0] // 2].astype(np.float32)
+
+
+def load_channels(path, ch, n_ch=3, down=1):
+    """Load one interleaved channel (ch of n_ch) from a multi-page TIFF as a
+    z-stack, optionally downsampled by `down`. Returns (z, y, x) float32."""
+    import tifffile
+    sl = []
+    with tifffile.TiffFile(path) as t:
+        nz = len(t.pages) // n_ch
+        for z in range(nz):
+            sl.append(t.pages[z * n_ch + ch].asarray()[::down, ::down].astype(np.float32))
+    return np.stack(sl)
 
 
 def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.06):

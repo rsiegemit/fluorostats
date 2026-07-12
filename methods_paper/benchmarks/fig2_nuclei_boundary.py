@@ -9,12 +9,10 @@ from matplotlib import gridspec
 from PIL import Image
 from skimage import filters
 from skimage.morphology import remove_small_objects
-from skimage.segmentation import watershed, find_boundaries
-from scipy import ndimage as ndi
 from fluorostats.objects import label_3d
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
-DL = Path("/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/data/downloads")
+DL = F.DATA
 GREY = OKABE["grey"]; LGREY = OKABE["lgrey"]
 outline = F.outline
 
@@ -136,8 +134,7 @@ panel(axb, "b", "vs trained deep learning")
 
 # (c) qualitative overlay: raw / GT / fluorostats, 3 crops
 def gt_inst(stem):
-    m = np.array(Image.open(DL/"BBBC039/masks/masks"/f"{stem}.png")); r = m[...,0] if m.ndim==3 else m
-    seeds,_ = ndi.label(r==1); return watershed((r>=2).astype(np.uint8), seeds, mask=(r>0))
+    return F.gt_instances_bbbc039(DL/"BBBC039/masks/masks"/f"{stem}.png")
 imgs = sorted(glob.glob(str(DL/"BBBC039/images/images/*.tif")))
 crops = []
 hh, ww = 150, 250   # landscape crops (aspect ~1.67) so the 2x3 band stays short
@@ -188,13 +185,10 @@ axd.set_xlabel("nuclear overlap (%)"); axd.set_ylabel("instance F1"); axd.set_yl
 panel(axd, "d", "crowding crossover")
 
 # (e) separated vs crowded fields
-def mid(fp):
-    v = np.asarray(Image.open(fp)) if fp.endswith(".png") else None
-    import tifffile; vol = tifffile.imread(fp); return vol[vol.shape[0]//2].astype(np.float32)
 gs_e = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[3, 2:4], wspace=0.06)
 for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separated"),
                                (sorted(glob.glob(str(DL/"BBBC024_c75/image-final_*.tif")))[0], "crowded")]):
-    import tifffile; vol = tifffile.imread(fp).astype(np.float32); sl = vol[vol.shape[0]//2]
+    sl = F.mid_slice(fp)
     ax = fig.add_subplot(gs_e[i]); ax.imshow(F.imnorm(sl), cmap="gray"); F.image_axes(ax)
     fsm = label_3d(remove_small_objects(sl > filters.threshold_otsu(sl), 15), min_size=15)[0]
     outline(ax, fsm, (0.0,0.45,0.70), width=2); ax.set_title(ttl, fontsize=7)
@@ -211,14 +205,21 @@ axf.set_xlim(0,100); axf.set_ylim(0,1); axf.set_yticks([])
 axf.set_xlabel("overlap / crowding (%)")
 panel(axf, "f", "when to use which")
 
+# caption numbers derived from the same per-image data the panels plot (never hand-typed)
+sd_m, cp_m, om_m = (float(np.mean(dl_pi[k])) for k in ("StarDist", "Cellpose", "Omnipose"))
+def_m = float(np.mean(pi["fluorostats (Otsu+CC)"].values))
+_env = [float(np.mean(pi[c].values)) for c in
+        ("Li (1993)", "Isodata (1978)", "Watershed (1991)", "Otsu (1979)", "Mean",
+         "Triangle (1977)", "Minimum", "Yen (1995)")]
+env_lo, env_hi = min(_env), max(_env)
 cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  "(a) Instance F1 (IoU 0.5) on BBBC039 (n=100 images), dots with 95% bootstrap CIs "
  "(10,000 resamples of per-image scores). The eight classical thresholds (Otsu, Li, "
  "Isodata, Triangle, Yen, Mean, Minimum, watershed) are fluorostats CONFIGURATIONS, not "
- "rival tools: the designated default (fluorostats Otsu+CC, solid blue, F1 0.890) is the "
+ f"rival tools: the designated default (fluorostats Otsu+CC, solid blue, F1 {def_m:.3f}) is the "
  "headline; the remaining thresholds (open blue circles) trace the tuning envelope "
- "(0.28-0.91, i.e. the range of one knob). The genuine external comparison is trained deep "
- "learning at n=100 values (StarDist 0.861 orange, Cellpose 0.858 vermillion, Omnipose 0.798 "
+ f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
+ f"learning at n=100 values (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
  "purple). (b) Forest plot vs validated DL (StarDist, Cellpose, "
  "Omnipose); paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
  "truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~0.31 µm/px). "

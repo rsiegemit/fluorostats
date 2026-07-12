@@ -55,9 +55,6 @@ panel(axa, "a", "vessel-tool accuracy   (REAVER, n = 36)")
 # (b) VE overlay: raw / VesselExpress seg / fluorostats(auto->li), 2 crops  [row 1, full width]
 crops = np.load(R/"ve_crops.npz")
 gs_b = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1, :], hspace=0.06, wspace=0.05)
-def fill_mask(ax, mask, rgb, alpha=0.85):
-    ov = np.zeros((*mask.shape, 4)); ov[mask > 0] = (*rgb, alpha)
-    ax.imshow(ov, interpolation="nearest")
 # Landscape crop: keep full 400 px width, take a 215 px vertical band (rows 90:305)
 # so the vessel band is shorter on the page while raw/VE/fluorostats columns, the
 # scale bar and auto->li label are preserved. Same window for every panel so the
@@ -70,7 +67,7 @@ for row in range(2):
     for col, (lab, ov) in enumerate(zip(labs, [None, ve_m, fs_m])):
         ax = fig.add_subplot(gs_b[row, col]); ax.imshow(p, cmap="gray"); F.image_axes(ax)
         if ov is not None:
-            fill_mask(ax, ov, (0.85,0.30,0.60) if col==1 else (0.13,0.55,0.85))
+            F.fill_mask(ax, ov, (0.85,0.30,0.60) if col==1 else (0.13,0.55,0.85))
         if row == 0: ax.set_title(lab, fontsize=6.0)
         if row == 0 and col == 0: F.scalebar(ax, 100, "100 µm"); panel(ax, "b")
 

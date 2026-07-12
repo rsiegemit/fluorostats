@@ -1,5 +1,5 @@
 """Figure 4 — Depth-resolved viability (a-c)."""
-import sys, numpy as np, pandas as pd, tifffile
+import sys, numpy as np, pandas as pd
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import figstyle as F
@@ -10,7 +10,7 @@ from scipy import stats as sps
 from fluorostats.segment import binarize
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
-STACK = Path("/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/data/downloads/viability/zccs1035_Day14_LiveDead.tif")
+STACK = F.DATA / "viability" / "zccs1035_Day14_LiveDead.tif"
 BLUE = OKABE["blue"]; GREEN = OKABE["green"]; MAG = OKABE["purple"]; VERM = OKABE["vermillion"]; GREY = OKABE["grey"]
 
 # Authored at the true submission text width (F.TW = 5.147 in) so
@@ -30,6 +30,7 @@ bm = bm[bm.method != "full_3D_voxelwise(REF)"].copy()
 lab = {"midplane_slice":"mid-plane","MIP":"MIP","mean_of_per_slice":"mean-of-slices",
        "attenuation_corrected_3D":"attn-corrected","brightest_focus_slice":"brightest focus"}
 bm["name"] = bm.method.map(lab); bm = bm.sort_values("rel_bias_pct").reset_index(drop=True)
+rbias = dict(zip(bm.method, bm.rel_bias_pct))   # per-method relative bias (for the caption)
 # attenuation-corrected 3D is the fluorostats result -> blue (the signal); the 2D
 # reductions are context -> neutral grey (never Cellpose vermillion, which is locked)
 y = np.arange(len(bm)); cols = [BLUE if "attn" in m else GREY for m in bm.method]
@@ -53,6 +54,11 @@ axb.legend(fontsize=6, loc="lower left"); panel(axb, "b", "depth gradient")
 # (c) tie to published Fiji macro (Kerkhoff synthetic GT)
 ext = pd.read_csv(R/"b_viability_external.csv")
 tv = ext.true_viability.values; mac = ext["Kerkhoff_macro_peakcount"].values; fx = ext["fluorostats_maxima(NEW)"].values
+# fluorostats-vs-ground-truth agreement (computed, not hand-typed): Lin's CCC + MAE
+def _ccc(a, b):
+    a = np.asarray(a, float); b = np.asarray(b, float)
+    return 2 * ((a - a.mean()) * (b - b.mean())).mean() / (a.var() + b.var() + (a.mean() - b.mean()) ** 2)
+ccc_v = _ccc(fx, tv); mae_v = float(np.abs(fx - tv).mean())
 axc = fig.add_subplot(gs[1, :2])
 axc.scatter(tv, ext["fluorostats_objcount"].values, s=10, color=GREY, alpha=0.55,
             zorder=1, label="fs alt. modes (count, area)")
@@ -69,18 +75,12 @@ axd = fig.add_subplot(gs[1, 2:])
 F.bland_altman(axd, fx, mac); axd.set_ylim(-0.02, 0.02)
 axd.set_xlabel("mean viability (fs, macro)"); axd.set_ylabel("fluorostats $-$ macro")
 axd.text(0.5, 0.30, "maxima = macro\n(same peak counting)", transform=axd.transAxes, ha="center", va="center", fontsize=5.6, color="#555")
-axd.text(0.5, 0.08, "vs ground truth: CCC 0.987, MAE 0.016", transform=axd.transAxes,
+axd.text(0.5, 0.08, f"vs ground truth: CCC {ccc_v:.3f}, MAE {mae_v:.3f}", transform=axd.transAxes,
          ha="center", va="bottom", fontsize=5.4, color="#777")
 panel(axd, "d", "fluorostats $-$ macro = 0 (same algorithm)")
 
 # (e) Live/Dead qualitative overlay
-def load_ch(ch, n=3, down=8):
-    sl=[]
-    with tifffile.TiffFile(STACK) as t:
-        nz=len(t.pages)//n
-        for z in range(nz): sl.append(t.pages[z*n+ch].asarray()[::down,::down].astype(np.float32))
-    return np.stack(sl)
-live = load_ch(2); dead = load_ch(1); z = live.shape[0]//2
+live = F.load_channels(STACK, 2, down=8); dead = F.load_channels(STACK, 1, down=8); z = live.shape[0]//2
 gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.10)
 seg = dict(method="otsu", min_size=8)
 lm_mid = binarize(live[z], **seg); dm_mid = binarize(dead[z], **seg)
@@ -97,14 +97,15 @@ for i,(img,ttl) in enumerate(panels_c):
 
 cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (BioImage Archive "
  "S-BIAD2130), 2D/heuristic reductions overestimate the live fraction relative to the true voxelwise "
- "3D value: mid-plane +1.5%, brightest-focus +1.7%, MIP +5.0%, naive mean-of-slices +25.2%; "
- "attenuation-corrected 3D stays within +2.7% (blue). (b) Per-z live fraction shows the depth "
+ f"3D value: mid-plane +{rbias['midplane_slice']:.1f}%, brightest-focus +{rbias['brightest_focus_slice']:.1f}%, "
+ f"MIP +{rbias['MIP']:.1f}%, naive mean-of-slices +{rbias['mean_of_per_slice']:.1f}%; "
+ f"attenuation-corrected 3D stays within +{rbias['attenuation_corrected_3D']:.1f}% (blue). (b) Per-z live fraction shows the depth "
  "gradient (raw) that a single 2D readout misses, and how attenuation correction flattens it. "
  "(c) On the published Kerkhoff Fiji Live/Dead macro's synthetic dataset (Zenodo 10395753, exact "
  "ground-truth viability), fluorostats live_dead_by_count(maxima; blue) reproduces the macro exactly "
  "(identity scatter); fluorostats count/area modes shown faint (grey). (d) Bland–Altman of "
  "fluorostats maxima minus macro: the difference is 0 because both apply the same peak-counting "
- "algorithm; the agreement with ground truth (CCC 0.987, MAE 0.016) is a separate, each-method-vs-"
+ f"algorithm; the agreement with ground truth (CCC {ccc_v:.3f}, MAE {mae_v:.3f}) is a separate, each-method-vs-"
  "truth comparison. (e) Two-channel Live/Dead crop (green live, magenta dead): raw mid-plane, "
  "fluorostats live/dead classification, and the maximum-intensity projection that collapses depth "
  "and inflates viability. Scale bar 200 µm (approx., downsampled).")
