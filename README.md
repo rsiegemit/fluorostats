@@ -38,6 +38,7 @@ Well suited for bioprinted constructs, tissue sections, organoids, and spheroids
 - **Euler number** — topological measure of network interconnectedness (more negative = more loops and tunnels)
 - **Largest component fraction** — whether the structure forms one connected network (e.g., 97%) or many scattered clusters (e.g., 19%)
 - **Skeleton length, branches, junctions** — extent and branching complexity of the cell network
+- **Depth-penetration profiles** — mean intensity vs depth, blank-subtracted and surface-normalised, with area-under-curve over a physical depth window (probe diffusion / permeability assays)
 
 ### 2D Fluorescence Images
 
@@ -96,6 +97,9 @@ fluorostats quant3d --input ./my_experiment/ --output ./results_3d/
 
 # 2D fluorescence images
 fluorostats quant2d --input ./endothelial_images/ --output ./results_2d/
+
+# depth-penetration / permeability (probe diffusion vs depth) — manifest driven
+fluorostats depth ./my_experiment/manifest.json
 ```
 
 ### Review Results
@@ -188,6 +192,30 @@ cent = depth_centroid(green, voxel_size_um=meta["voxel_size_um"])
 ```
 
 Useful for "is the signal uniformly distributed?" and "how deep do cells penetrate?" questions without committing to a binary mask.
+
+### Depth-penetration profiling (probe diffusion / permeability)
+
+```python
+from fluorostats import depth
+
+# mean intensity vs physical depth (slice 0 = surface)
+sig   = depth.intensity_depth_profile(vol, meta["voxel_size_um"][0])
+blank = depth.intensity_depth_profile(no_fluo_vol, blank_meta["voxel_size_um"][0])
+
+sig = depth.subtract_background(sig, blank)        # depth-matched blank subtraction
+sig = depth.normalize_to_surface(sig, n_surface=3) # surface (first 3 slices) = 1
+auc = depth.auc_depth(sig.depth_um, sig.normalized, z_min=0, z_max=100)  # µm·units
+```
+
+Turns a z-stack into mean-intensity-vs-depth, subtracts a no-fluo control (interpolated depth-for-depth, so blank and signal need not share slicing), normalises to the near-surface signal, and integrates over a physical depth window. Built for probe-penetration / permeability assays (e.g. FITC-dextran diffusion, "does material A retain signal deeper than material B?").
+
+For a batch, manifest-driven workflow — many stacks grouped by condition, matched blanks, multiple AUC windows, tidy CSVs + publication figures — run:
+
+```bash
+fluorostats depth manifest.json      # or: from fluorostats.depth_batch import run
+```
+
+The JSON manifest lists the groups, stacks, blanks, and AUC windows (fully generic; nothing hardcoded). See [`fluorostats.depth_batch`](src/fluorostats/depth_batch.py) for the schema.
 
 ### Per-object measurements
 

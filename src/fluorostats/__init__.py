@@ -45,6 +45,8 @@ from . import (  # noqa: F401
     metrics_3d,
     metrics_2d,
     morphometry,
+    depth,
+    depth_batch,
     objects,
     viability,
     stats,

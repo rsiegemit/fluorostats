@@ -29,6 +29,28 @@ def formats():
 
 
 # ---------------------------------------------------------------------------
+# depth — probe-penetration / permeability analysis (manifest driven)
+# ---------------------------------------------------------------------------
+
+@cli.command("depth")
+@click.argument("manifest", type=click.Path(exists=True))
+@click.option("--output", "output_dir", default=None, type=click.Path(),
+              help="Override the manifest's output_dir")
+def depth_cmd(manifest, output_dir):
+    """Depth-penetration analysis from a JSON manifest.
+
+    Compares how far a fluorescent probe penetrates a material across
+    conditions: blank-subtracted and surface-normalised mean-intensity-vs-
+    depth profiles plus AUC over one or more depth windows. Writes tidy CSVs
+    (for Prism/replotting) and publication figures. See
+    ``fluorostats.depth_batch`` for the manifest schema.
+    """
+    from . import depth_batch
+    out = depth_batch.run(Path(manifest), output_dir)
+    click.echo(f"Done. Outputs in {out}/")
+
+
+# ---------------------------------------------------------------------------
 # quant3d
 # ---------------------------------------------------------------------------
 
