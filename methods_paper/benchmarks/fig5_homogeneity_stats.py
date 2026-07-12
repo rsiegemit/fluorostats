@@ -14,7 +14,8 @@ R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]; VERM = OKABE["vermillion"]; GREEN = OKABE["green"]
 
 fig = plt.figure(figsize=(F.TW, 6.7), layout="constrained")
-gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[0.78, 1.18, 0.9], hspace=0.30, wspace=0.42)
+gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[0.78, 1.10, 1.05],
+                       width_ratios=[0.55, 1.45], hspace=0.20, wspace=0.30)
 
 # (a) three canonical point patterns with tile Gini
 rng = np.random.default_rng(1); N, S = 225, 500
@@ -63,7 +64,8 @@ for j, (g, v) in enumerate(groups.items()):
     x = np.full(len(v), j) + rng.normal(0, 0.05, len(v))
     axc.scatter(x, v, s=26, color=gcol[g], edgecolor="black", lw=0.4, zorder=3)
     axc.plot([j-0.22, j+0.22], [v.mean(), v.mean()], color="black", lw=1.3, zorder=2)
-axc.set_xticks([0,1,2]); axc.set_xticklabels(["VEGF 1","VEGF 3","VEGF 5"], fontsize=6.5)
+axc.set_xticks([0,1,2]); axc.set_xticklabels(["V1","V3","V5"], fontsize=6.5)
+axc.set_xlabel("VEGF dose", fontsize=6.5)
 axc.set_ylabel("vessel volume fraction (%)")
 # real fluorostats.stats output on groups 1 vs 3
 a, b = groups[1], groups[3]

@@ -96,7 +96,7 @@ for row, d in enumerate(rows):
                  alpha=1.0, zorder=4)
     else:
         axa.plot(d["mean"], row, "o", color=d["c"], mec="white", mew=0.6, ms=ms, zorder=5)
-    axa.annotate(f"{d['mean']:.3f}", (d["mean"], row), xytext=(6, 0),
+    axa.annotate(f"{d['mean']:.3f}", (d["mean"], row), xytext=(9, 0),
                  textcoords="offset points", va="center", ha="left",
                  fontsize=5.4, color="#333", alpha=a)
 labcols = [BLUE if r["kind"] != "dl" else r["c"] for r in rows]

@@ -18,9 +18,9 @@ BLUE = OKABE["blue"]; GREEN = OKABE["green"]; MAG = OKABE["purple"]; VERM = OKAB
 # page. Narrower canvas -> taller figure; the 2x2 plot grid (a-d) sits above a
 # full-width 3-across image row (e). Extra top/left margin + hspace keeps panel
 # letters, legends and titles clear of neighbours at this width.
-fig = plt.figure(figsize=(F.TW, 6.6))
-gs = gridspec.GridSpec(3, 4, figure=fig, height_ratios=[1.05, 1.05, 1.95],
-                       hspace=0.62, wspace=0.85,
+fig = plt.figure(figsize=(F.TW, 5.9))
+gs = gridspec.GridSpec(3, 4, figure=fig, height_ratios=[1.05, 1.05, 0.80],
+                       hspace=0.42, wspace=0.85,
                        left=0.135, right=0.975, top=0.955, bottom=0.045)
 
 # (a) 2D/heuristic bias vs true 3D + depth profile
