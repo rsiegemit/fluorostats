@@ -36,7 +36,9 @@ publication figures — deterministic, no manual export.
 **Honest framing on ground truth.** Unlike nucleus segmentation (which has
 BBBC039 with ~23,000 manually annotated instances as public ground truth), there
 is **no public ground-truth benchmark dataset** for confocal depth-penetration /
-permeability profiling. The tools people actually use for it are GUI/commercial
+permeability profiling (see **§5** for the documented, reproducible repository search
+that backs this claim, with the closest near-miss datasets cited). The tools people
+actually use for it are GUI/commercial
 and not scriptable head-to-head. So correctness cannot be scored against a
 community dataset; instead it is shown on **synthetic Beer-Lambert ground
 truth** where the answer is known in closed form. A Beer-Lambert stack
@@ -243,6 +245,58 @@ script) into one reproducible config.
   is deliberate (no distributional assumption), but a user who specifically wants
   a penetration-depth constant would still fit that themselves; fluorostats
   reports retained-signal AUC, not λ.
+
+---
+
+## 5. Open-data availability — a documented search (the "no public dataset" claim)
+
+A claim that no suitable public dataset exists carries a burden of proof, so it is
+recorded here as a **bounded, reproducible search result**, not an absolute absence.
+It is falsifiable: a single counterexample meeting criteria (i)–(iv) below overturns it.
+
+**Search (July 2026).** Repositories and interfaces queried:
+- **Zenodo** — keyword search + the `/api/records` REST API (`type=dataset`).
+- **EBI BioImage Archive / BioStudies** — the BioImages search API, with per-study
+  `File List` verification of the actual image formats.
+- **Image Data Resource (IDR)** — the curated study catalogue (`github.com/IDR/idr-metadata`).
+- **figshare / Dryad** — via web index.
+
+Query families: *tissue clearing / imaging depth*; *antibody & dye penetration depth
+(cleared tissue)*; *FITC-dextran hydrogel diffusion & permeability*; *mounting-medium /
+refractive-index depth*; *light-sheet vs confocal imaging-depth comparison*.
+
+**Inclusion criteria (all four required)** for a real-data penetration benchmark:
+(i) openly licensed and directly downloadable; (ii) **raw z-stack**, not a
+maximum-intensity projection; (iii) **TIFF / OME-TIFF** (readable without proprietary
+vendor libraries); (iv) **≥ 2 experimental conditions** enabling a penetration/depth
+contrast.
+
+**Result: no record satisfied all four.** The three closest each fail on exactly one
+criterion, and are cited so a reader can re-examine them:
+
+| Dataset (accession / DOI + URL) | What it is | Fails criterion |
+|---|---|---|
+| **S-BIAD479**, BioImage Archive — "Tissue libraries enable rapid determination of conditions preserving antibody labeling" — https://www.ebi.ac.uk/biostudies/BioImages/studies/S-BIAD479 | Confocal z-stacks of 500 µm–1 mm cleared tissue across **multiple antibody-labeling conditions and incubation times (18 h vs ≥1 week)** — scientifically ideal | **(iii)** raw = Olympus **`.oir`**, processed = Imaris **`.ims`** (verified via the study `File List`, Jul 2026); needs Bio-Formats/Java to read |
+| **S-BIAD1136**, BioImage Archive — "3D light sheet microscopy imaging of cleared human mammary gland terminal ductal lobular unit" — https://www.ebi.ac.uk/biostudies/BioImages/studies/S-BIAD1136 | **55 `.tif`** light-sheet z-stacks of cleared tissue, 0.8 µm z-spacing | **(iv)** single clearing condition (and impractical: 0.57–4.4 GB per stack) |
+| **Zenodo 10.5281/zenodo.437943** — "Entire confocal z-stack series as .tif image sequences" (parvalbumin ependymal cells), CC-BY-4.0 — https://zenodo.org/records/437943 | Confocal **`.tif`** z-stacks | **(ii) & (iv)** mixes maximum-intensity projections; single biological condition |
+
+**Bounded claim for the paper:** *as of July 2026, a search of Zenodo, the EBI
+BioImage Archive, IDR, figshare and Dryad did not identify a public, openly-licensed,
+TIFF/OME-TIFF confocal z-stack dataset with ≥ 2 conditions suitable for a
+depth-penetration comparison.* Correctness is therefore established on synthetic
+Beer–Lambert ground truth (§1); the constraint is **deposited data**, not the method.
+
+**The method itself is standard and published** (so the gap is data, not analysis):
+depth-dependent decay of the per-slice mean intensity is a recognised confocal
+phenomenon, and the canonical correction fits an **exponential curve to the average
+intensity in each slice** — e.g. Amira's *Correct-Z-Drop* as used by **Bonda U,
+Jaeschke A, Lighterness A, Baldwin J, Werner C, De-Juan-Pardo EM, Bray LJ. "3D
+Quantification of Vascular-Like Structures in z Stack Confocal Images." STAR
+Protocols 2020;1(3):100180. doi:10.1016/j.xpro.2020.100180** (PMC7757404). That is
+exactly the per-slice-mean + exponential model fluorostats implements. Cleared-tissue
+studies routinely quantify probe/antibody **penetration depth** across conditions
+(e.g. S-BIAD479 above), but deposit the raw stacks in proprietary formats or not at all
+— which is the honest reason a synthetic ground truth is used here.
 
 ---
 

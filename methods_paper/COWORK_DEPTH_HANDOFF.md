@@ -72,7 +72,9 @@ workflow (or a one-off MATLAB script) into one manifest.
 From §4 of the dossier — keep these in the text:
 - **Standard pipeline, not a novel algorithm.** Contribution = reproducibility +
   integration + a tested reference implementation, not a better number on any step.
-- **Correctness rests on synthetic ground truth** because **no public benchmark
+- **Correctness rests on synthetic ground truth** because — per a documented,
+  reproducible repository search (Zenodo, BioImage Archive, IDR, figshare, Dryad;
+  `competitor_depth_penetration.md` §5, with cited near-miss datasets) — **no public benchmark
   dataset exists** for confocal depth penetration (a genuine evidentiary limitation
   vs the nuclei/BBBC039 comparison — state it, don't hide it).
 - **Whole-image mean assumes a roughly uniform field**; heterogeneous fields need the

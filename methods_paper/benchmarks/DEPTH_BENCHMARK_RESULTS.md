@@ -7,7 +7,8 @@ pure per-stack functions + `src/fluorostats/depth_batch.py` manifest driver).
 profiling (Fiji Plot Z-axis Profile, Imaris, ZEISS ZEN, Nikon NIS-Elements,
 CellProfiler, MATLAB) are GUI/commercial and not scriptable head-to-head; there is
 **no public ground-truth dataset** for confocal depth penetration (unlike BBBC039 for
-nuclei); and the computation is sub-second numpy, so timing is not a differentiator.
+nuclei — backed by a documented repository search in `data/competitor_depth_penetration.md`
+§5); and the computation is sub-second numpy, so timing is not a differentiator.
 So correctness is shown on **constructed Beer–Lambert ground truth** and the field
 comparison is a **faithful-reimplementation parity check + a verified capability
 matrix** — mirroring the paper's existing correctness-phantom + competitor-dossier
