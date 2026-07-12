@@ -173,19 +173,24 @@ def panel_b(ax):
         if l not in seen:
             seen[l] = h
     ax.legend(seen.values(), seen.keys(), ncol=3, loc="upper center",
-              bbox_to_anchor=(0.5, -0.22), handlelength=1.0, columnspacing=1.0,
+              bbox_to_anchor=(0.5, -0.19), handlelength=1.0, columnspacing=1.2,
               handletextpad=0.4, fontsize=6)
 
 
 def main():
     figstyle.apply_style()
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.6))
+    # Author at the true manuscript text width (TW = 5.147 in) for a 1:1 include.
+    # At this narrower canvas the former 1x2 row is too cramped, so stack the two
+    # panels vertically: (a) DSB2018 ranking on top, (b) CTC grouped bars below.
+    fig = plt.figure(figsize=(figstyle.TW, 5.75))
+    gs = fig.add_gridspec(2, 1, height_ratios=[1.0, 1.02],
+                          hspace=0.42, left=0.235, right=0.965,
+                          top=0.945, bottom=0.155)
+    axes = [fig.add_subplot(gs[0]), fig.add_subplot(gs[1])]
     panel_a(axes[0])
     panel_b(axes[1])
     figstyle.panel(axes[0], "a", "DSB2018 — StarDist\u2019s own dataset")
     figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)")
-    fig.subplots_adjust(wspace=0.62, bottom=0.28, left=0.19, right=0.97, top=0.86)
-
     figstyle.save(fig, "ed4_generalization", figstyle.EXT, tight=False)
 
     caption = (

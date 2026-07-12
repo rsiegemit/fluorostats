@@ -28,9 +28,19 @@ dl_pi = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values[:100]
 methods = {c: pi[c].values for c in pi.columns if c != "image"}
 methods.update(dl_pi)
 # ---------- layout ----------
-fig = plt.figure(figsize=(7.2, 7.6), layout="constrained")
-fig.get_layout_engine().set(hspace=0.06, wspace=0.06)
-gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[1.05, 1.75, 0.82])
+# Authored at the true manuscript text width (F.TW = 5.147 in) so
+# \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt on the
+# page. The narrower canvas is re-fit as a TALLER 4-row stack: (a) the busy
+# 12-row unification dot-plot gets a full-width row of its own, (b) the forest plot
+# a shorter full-width row, (c) the 2x3 image band full width, and (d)-(e)-(f)
+# share the bottom row.
+# Plain GridSpec (not constrained-layout): the nested fixed-aspect image band (c)
+# collapses constrained-layout's sibling axes, so lay out manually with generous
+# margins/spacing and export with tight=True.
+fig = plt.figure(figsize=(F.TW, 6.28))
+gs = gridspec.GridSpec(4, 6, figure=fig, height_ratios=[1.72, 0.66, 0.92, 0.98],
+                       left=0.275, right=0.965, top=0.982, bottom=0.062,
+                       hspace=0.62, wspace=0.62)
 
 # (a) the fluorostats "unification" panel. Otsu / Li / Isodata / Triangle / Yen /
 # Mean / Minimum / watershed are NOT rival tools: they are fluorostats threshold
@@ -41,7 +51,7 @@ gs = gridspec.GridSpec(3, 6, figure=fig, height_ratios=[1.05, 1.75, 0.82])
 # purple) as the genuine external comparison, plotted at their n=100 values.
 # Dot + 95% bootstrap CI (F.lollipop-style) instead of bars: the top pack all hugs
 # ~0.8-0.91, so full bars would waste ink.
-axa = fig.add_subplot(gs[0, :4])
+axa = fig.add_subplot(gs[0, :])
 BLUE = OKABE["blue"]
 # family: (display label, per-image score array, kind) — kind in
 # {"default","envelope","dl"}. Provenance kept in the label.
@@ -108,7 +118,7 @@ axa.legend(loc="lower right", bbox_to_anchor=(0.99, 0.02), fontsize=5.0,
 panel(axa, "a", "one tool, one default knob (n=100)")
 
 # (b) forest vs DL
-axb = fig.add_subplot(gs[0, 4:])
+axb = fig.add_subplot(gs[1, :])
 ci = pd.read_csv(R/"b_dl_ci.csv")
 fb = {"fluorostats": boot_ci(methods["fluorostats (Otsu+CC)"]),
       "StarDist": boot_ci(dl_pi["StarDist"]), "Cellpose": boot_ci(dl_pi["Cellpose"]),
@@ -130,7 +140,7 @@ def gt_inst(stem):
     seeds,_ = ndi.label(r==1); return watershed((r>=2).astype(np.uint8), seeds, mask=(r>0))
 imgs = sorted(glob.glob(str(DL/"BBBC039/images/images/*.tif")))
 crops = []
-hh, ww = 178, 235   # crops sized to fill the image band (aspect ~1.3)
+hh, ww = 150, 250   # landscape crops (aspect ~1.67) so the 2x3 band stays short
 for f in imgs:
     im = np.asarray(Image.open(f)).astype(np.float32); stem = Path(f).stem
     gt = gt_inst(stem)
@@ -142,7 +152,7 @@ for f in imgs:
     if len(crops) == 2: break
 labs = ["raw", "expert GT", "fluorostats"]
 # 2x3 image grid via nested gridspec
-gs_c = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1, :], hspace=0.06, wspace=0.06)
+gs_c = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[2, :], hspace=0.06, wspace=0.06)
 for row, (im, gt, stem) in enumerate(crops):
     fs = label_3d(remove_small_objects(im > filters.threshold_otsu(im), 20), min_size=20)[0]
     p = F.imnorm(im)
@@ -157,7 +167,7 @@ for row, (im, gt, stem) in enumerate(crops):
 # (d) crossover — two directly-labelled line groups: fluorostats (blue) and the
 # classical-threshold envelope (grey), both collapsing under overlap while the DL
 # reference (dashed) holds ~0.96.
-axd = fig.add_subplot(gs[2, :2])
+axd = fig.add_subplot(gs[3, :2])
 cc = pd.read_csv(R/"b_clustering_curve.csv"); x = [0,25,50,75]
 for _, r in cc.iterrows():
     isf = "fluorostats" in r["method"]
@@ -181,7 +191,7 @@ panel(axd, "d", "crowding crossover")
 def mid(fp):
     v = np.asarray(Image.open(fp)) if fp.endswith(".png") else None
     import tifffile; vol = tifffile.imread(fp); return vol[vol.shape[0]//2].astype(np.float32)
-gs_e = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[2, 2:4], wspace=0.06)
+gs_e = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[3, 2:4], wspace=0.06)
 for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separated"),
                                (sorted(glob.glob(str(DL/"BBBC024_c75/image-final_*.tif")))[0], "crowded")]):
     import tifffile; vol = tifffile.imread(fp).astype(np.float32); sl = vol[vol.shape[0]//2]
@@ -191,14 +201,14 @@ for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separat
     if i == 0: panel(ax, "e")
 
 # (f) scope decision map
-axf = fig.add_subplot(gs[2, 4:])
+axf = fig.add_subplot(gs[3, 4:])
 axf.axvspan(0, 30, color=OKABE["green"], alpha=0.14); axf.axvspan(30, 50, color=OKABE["yellow"], alpha=0.16)
 axf.axvspan(50, 100, color=OKABE["vermillion"], alpha=0.14)
 axf.axvline(40, ls="--", color="black", lw=1.0); axf.text(41, 0.5, "measured\ncrossover ~c40", fontsize=5.4)
 axf.text(15, 0.82, "fluorostats\n= DL", ha="center", fontsize=6.2, color=OKABE["green"])
 axf.text(75, 0.82, "use trained\nsegmenter", ha="center", fontsize=6.2, color=OKABE["vermillion"])
 axf.set_xlim(0,100); axf.set_ylim(0,1); axf.set_yticks([])
-axf.set_xlabel("instance overlap / crowding (%)")
+axf.set_xlabel("overlap / crowding (%)")
 panel(axf, "f", "when to use which")
 
 cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "

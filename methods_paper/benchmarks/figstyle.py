@@ -44,6 +44,12 @@ COL1 = 3.46      # single column  (88 mm)
 COL15 = 4.72     # 1.5 column     (120 mm)
 COL2 = 7.20      # double column  (183 mm)
 
+# ACTUAL manuscript text width for THIS submission: sn-jnl [sn-nature] is single
+# column with \textwidth = 372.0 pt = 130.74 mm = 5.147 in. Author every figure at
+# this width so \includegraphics[width=\textwidth] is 1:1 (no LaTeX rescale) and the
+# 6-7 pt type stays 6-7 pt on the page. This is the width to use, not COL2.
+TW = 5.147       # submission \textwidth (130.7 mm)
+
 # One font scale for every figure (points), Nature's 5-7 pt window for body text
 # with 8 pt bold panel letters (the one documented exception). Reference these,
 # never hardcode sizes.

@@ -13,8 +13,8 @@ F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]; VERM = OKABE["vermillion"]; GREEN = OKABE["green"]
 
-fig = plt.figure(figsize=(7.2, 5.6), layout="constrained")
-gs = gridspec.GridSpec(2, 6, figure=fig, height_ratios=[1.0, 1.05], hspace=0.5, wspace=1.0)
+fig = plt.figure(figsize=(F.TW, 6.7), layout="constrained")
+gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[0.72, 1.0, 1.0], hspace=0.32, wspace=0.42)
 
 # (a) three canonical point patterns with tile Gini
 rng = np.random.default_rng(1); N, S = 225, 500
@@ -27,7 +27,7 @@ def pattern(kind):
     k = 7; cen = rng.uniform(60, S-60, (k, 2))
     return np.clip(np.array([cen[i % k] + rng.normal(0, 22, 2) for i in range(N)]), 5, S-5)
 titles = {"regular": "regular", "random": "random (CSR)", "clustered": "clustered"}
-gs_a = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[0, :], wspace=0.18)
+gs_a = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[0, :], wspace=0.14)
 for i, kind in enumerate(["regular", "random", "clustered"]):
     p = pattern(kind)
     p3 = np.column_stack([np.zeros(len(p)), p[:, 0], p[:, 1]])
@@ -41,7 +41,7 @@ for i, kind in enumerate(["regular", "random", "clustered"]):
     if i == 0: panel(ax, "a")
 
 # (b) five-statistic correlation — zoomed dot-plot (all |ρ| hug 1.0)
-axb = fig.add_subplot(gs[1, :2])
+axb = fig.add_subplot(gs[1, 0])
 corr = pd.read_csv(R/"b_homogeneity_multi_corr.csv").copy()
 corr["abs"] = corr["spearman_gini_vs_ref"].abs()
 names = {"clark_evans":"Clark–Evans NN","ripley_L_dev":"Ripley's K/L","morisita":"Morisita",
@@ -56,7 +56,7 @@ panel(axb, "b", "tracks 5 spatial statistics")
 # (c) end-to-end statistics worked example — SproutAngio VEGF dose (real .czi)
 sa = pd.read_csv(R/"b_vascular_sproutangio_multi.csv")
 groups = {g: sa[sa.group == g]["fluorostats"].values * 100 for g in (1, 3, 5)}  # % VF
-axc = fig.add_subplot(gs[1, 2:4])
+axc = fig.add_subplot(gs[1, 1])
 # non-blue sequential grey ramp for dose (blue reserved for fluorostats)
 gcol = {1: "#CFCFCF", 3: "#8A8A8A", 5: "#3A3A3A"}
 for j, (g, v) in enumerate(groups.items()):
@@ -79,7 +79,9 @@ axc.text(0.03, 0.97,
 panel(axc, "c", "statistics layer output")
 
 # power curve (real fluorostats.power)
-axp = fig.add_subplot(gs[1, 4:])
+gs_d = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.0,
+                                        width_ratios=[0.5, 2.0, 0.5])
+axp = fig.add_subplot(gs_d[0, 1])
 ns = [3, 4, 6, 8, 12, 16]
 pc = power_curve(a, b, ns, n_sims=400)
 ycol = [c for c in pc.columns if "power" in c.lower()][0]; ncol = [c for c in pc.columns if c.lower() in ("n","sample_size","n_per_group")][0]

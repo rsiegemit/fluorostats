@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import figstyle
-from figstyle import OKABE, apply_style, save, panel, caption, EXT
+from figstyle import OKABE, apply_style, save, panel, caption, EXT, TW
 
 apply_style()
 
@@ -20,8 +20,17 @@ size = pd.read_csv("results/b_nuclei_size.csv")
 
 FLU = OKABE["blue"]
 
-fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.5))
-ax_a, ax_b, ax_c = axes
+# Author at the true manuscript text width (TW = 5.147 in) for a 1:1 include.
+# At this narrower canvas the former 1x3 row is too cramped, so stack: panel a
+# (noise-robustness curves + legend) spans the full width on top; panels b
+# (denoising bars) and c (median-diameter error) sit side-by-side below.
+fig = plt.figure(figsize=(TW, 4.55))
+gs = fig.add_gridspec(2, 2, height_ratios=[1.05, 1.0],
+                      hspace=0.5, wspace=0.42,
+                      left=0.115, right=0.975, top=0.95, bottom=0.09)
+ax_a = fig.add_subplot(gs[0, :])
+ax_b = fig.add_subplot(gs[1, 0])
+ax_c = fig.add_subplot(gs[1, 1])
 
 # ---- (a) Noise robustness ----------------------------------------------------
 flu_col = "fluorostats(Otsu+CC)"
@@ -104,7 +113,7 @@ for y, v in zip(ypos, sz["pct_error"]):
     ax_c.text(v + 0.8, y, f"{v:.1f}", va="center", ha="left", fontsize=6)
 panel(ax_c, "c")
 
-save(fig, "ed3_robustness", EXT)
+save(fig, "ed3_robustness", EXT, tight=False)
 
 cap = (
     "Extended Data Figure 3 | Robustness of fluorostats segmentation to noise. "

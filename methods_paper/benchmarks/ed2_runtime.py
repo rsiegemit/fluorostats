@@ -136,16 +136,18 @@ for cat, lab, val, kind in seen:
 ypos = np.array(ypos)
 
 # ----------------------------------------------------------------------------
-# Figure — constrained layout, double-column width
+# Figure — constrained layout, TRUE manuscript text width (F.TW = 5.147 in).
+# Narrow single-column canvas: stack panel (a) full-width on top (it is
+# label-heavy: 14 bars + long left y-labels + a far-left category band), with
+# (b) and (c) side-by-side below. A tall H gives (a) room to breathe.
 # ----------------------------------------------------------------------------
-fig = plt.figure(figsize=(F.COL2, 6.4), layout="constrained")
-fig.get_layout_engine().set(w_pad=0.06, h_pad=0.06, wspace=0.04, hspace=0.04)
-# reserve a wide left band for category labels + y-tick labels in panel a
-gs = fig.add_gridspec(1, 2, width_ratios=[1.55, 1.0], left=0.155)
-axA = fig.add_subplot(gs[0, 0])
-gsR = gs[0, 1].subgridspec(2, 1, height_ratios=[1.0, 1.0], hspace=0.42)
-axB = fig.add_subplot(gsR[0, 0])
-axC = fig.add_subplot(gsR[1, 0])
+fig = plt.figure(figsize=(F.TW, 6.4), layout="constrained")
+fig.get_layout_engine().set(w_pad=0.04, h_pad=0.03, wspace=0.06, hspace=0.03)
+# (a) spans the top; (b)/(c) share the bottom row.
+gs = fig.add_gridspec(2, 2, height_ratios=[2.5, 1.0])
+axA = fig.add_subplot(gs[0, :])
+axB = fig.add_subplot(gs[1, 0])
+axC = fig.add_subplot(gs[1, 1])
 
 # --- Panel (a): grouped horizontal bars, log x ------------------------------
 axA.barh(ypos, yvals, color=ycolors, height=0.72, edgecolor="none", zorder=3)
@@ -160,14 +162,16 @@ axA.spines["left"].set_visible(False)
 for xg in (0.1, 1, 10, 100, 1000, 10000):
     axA.axvline(xg, color="#EEEEEE", lw=0.5, zorder=0)
 
-# category labels in the far-left reserved margin (grey italic), placed left of
-# the (longest) y-tick labels so they never overlap them.
+# category labels rotated vertically in the far-left reserved margin (grey
+# italic), left of the (longest) y-tick labels so they never overlap them.
+# On this narrow canvas a vertical bracket-style label saves horizontal room
+# that the long y-tick labels need.
 for cat, (y0, y1) in cat_bounds.items():
     ymid = (y0 + y1) / 2.0
     axA.annotate(cat, xy=(0, ymid), xycoords=("axes fraction", "data"),
-                 xytext=(-150, 0), textcoords="offset points",
+                 xytext=(-96, 0), textcoords="offset points",
                  fontsize=F.FS["small"], color="#666", style="italic",
-                 va="center", ha="left", rotation=0, annotation_clip=False)
+                 va="center", ha="center", rotation=90, annotation_clip=False)
 
 # thin separator lines between categories
 for cat in categories[1:]:

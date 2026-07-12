@@ -36,13 +36,20 @@ GREEN = OKABE["green"]
 VERM = OKABE["vermillion"]
 
 # ================================================================ figure
-# a, b on the top row; c spans the full bottom row (its wide legend needs the
-# room). constrained layout spaces everything; save with tight=False.
-fig = plt.figure(figsize=(7.2, 6.2), layout="constrained")
-gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.05])
+# Authored at the manuscript \textwidth (F.TW = 5.147 in) so
+# \includegraphics[width=\textwidth] is 1:1. At this narrow width a and b cannot
+# share a row without crushing their grouped bars + multi-entry legends, so the
+# three panels stack vertically (a, b, c), each spanning the full width.
+# constrained layout spaces everything; save with tight=False.
+# Height trimmed to fit the sn-jnl \textheight (7.65 in) with room for the short
+# caption: 6.5 in overall. constrained-layout padding pulled in tight so the three
+# stacked panels use the reduced height without empty gaps between rows.
+fig = plt.figure(figsize=(figstyle.TW, 6.5), layout="constrained")
+fig.set_constrained_layout_pads(h_pad=0.02, w_pad=0.02, hspace=0.03, wspace=0.02)
+gs = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.0, 1.15])
 axA = fig.add_subplot(gs[0, 0])
-axB = fig.add_subplot(gs[0, 1])
-axC = fig.add_subplot(gs[1, :])
+axB = fig.add_subplot(gs[1, 0])
+axC = fig.add_subplot(gs[2, 0])
 
 # ---------------------------------------------------------------- panel (a)
 # Grouped expected-vs-measured for Euler number and component count.
@@ -71,19 +78,20 @@ axA.plot(x + w / 2, ta["fluorostats_n_comp"], marker="D", ls="none", ms=3.2,
          mfc=GREEN, mec="none", label="fluorostats $n_{\\mathrm{comp}}$")
 
 axA.set_xticks(x)
-axA.set_xticklabels([labels_a[k] for k in order], fontsize=5.6)
+axA.set_xticklabels([labels_a[k] for k in order], fontsize=6.0)
 axA.set_ylabel("Euler number $\\chi$  /  component count")
-axA.set_ylim(-0.6, 7.4)
+axA.set_ylim(-0.6, 7.8)
 axA.axhline(0, color="#333333", lw=0.6)
 n_pass = int(ta.shape[0])
 axA.text(0.98, 0.97, f"0 / {n_pass} phantoms with error", transform=axA.transAxes,
          ha="right", va="top", fontsize=6.3, color=GREEN, fontweight="bold")
 # note that the diamonds encode component count (easy to miss vs the bars)
-axA.text(0.98, 0.865, "diamonds = component count",
-         transform=axA.transAxes, ha="right", va="top", fontsize=5.6,
+axA.text(0.98, 0.85, "diamonds = component count",
+         transform=axA.transAxes, ha="right", va="top", fontsize=6.0,
          color="#333333", style="italic")
-axA.legend(loc="upper left", fontsize=5.2, handlelength=1.3,
-           borderpad=0.2, labelspacing=0.25, ncol=1, bbox_to_anchor=(0.0, 1.0))
+axA.legend(loc="upper left", fontsize=5.8, handlelength=1.4,
+           borderpad=0.2, labelspacing=0.28, ncol=2, columnspacing=1.0,
+           bbox_to_anchor=(0.0, 1.0))
 panel(axA, "a")
 
 # ---------------------------------------------------------------- panel (b)
@@ -119,10 +127,11 @@ axB.set_xticks(xb)
 axB.set_xticklabels([f"depth {int(d)}" for d in depths])
 axB.set_ylabel("count")
 axB.set_ylim(0, 37)
-axB.text(0.02, 0.97, "exact at depth 2-3", transform=axB.transAxes,
-         ha="left", va="top", fontsize=6.0, color=GREEN, fontweight="bold")
-axB.legend(loc="upper left", fontsize=5.1, handlelength=1.2, borderpad=0.2,
-           labelspacing=0.22, bbox_to_anchor=(0.0, 0.90))
+axB.text(0.40, 0.62, "exact at depth 2-3", transform=axB.transAxes,
+         ha="center", va="top", fontsize=6.2, color=GREEN, fontweight="bold")
+axB.legend(loc="upper left", fontsize=5.8, handlelength=1.4, borderpad=0.2,
+           labelspacing=0.28, ncol=2, columnspacing=1.0,
+           bbox_to_anchor=(0.0, 1.0))
 panel(axB, "b")
 
 # ---------------------------------------------------------------- panel (c)

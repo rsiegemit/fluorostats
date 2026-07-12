@@ -12,11 +12,18 @@ F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]
 
-fig = plt.figure(figsize=(7.2, 5.8))
-gs = gridspec.GridSpec(2, 4, figure=fig, height_ratios=[1.0, 1.02],
-                       hspace=0.52, wspace=0.75)
+# Authored at the manuscript text width (F.TW = 5.147 in) so the LaTeX
+# \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt.
+# Narrower canvas -> taller stacked layout, three rows, reading order a->b->c->d:
+#   row 0  (a) six-tool REAVER accuracy ranking (full width)
+#   row 1  (b) light-sheet crops raw/VesselExpress/fluorostats (full-width image band)
+#   row 2  (c) 3D phantom  |  (d) Bland-Altman + rank-agreement sub-panel
+fig = plt.figure(figsize=(F.TW, 6.35))
+gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[0.98, 0.86, 1.02],
+                       hspace=0.44, wspace=0.34,
+                       left=0.11, right=0.94, top=0.955, bottom=0.072)
 
-# (a) REAVER 6-tool: accuracy (MAE) + precision (residual std) + unbiased test  [top-left]
+# (a) REAVER 6-tool: accuracy (MAE) + precision (residual std) + unbiased test  [row 0, full width]
 pi = pd.read_csv(R/"b4_reaver_ranking_perimage.csv")
 tools = ["REAVER","ImageJ","AngioTool","fluorostats","RAVE","AngioQuant"]
 gt = pi["manual_GT"].values
@@ -27,7 +34,7 @@ for t in tools:
     p = sps.ttest_1samp(res, 0).pvalue                      # bias test
     rec.append((t, mae, sd, p))
 rec.sort(key=lambda r: r[1])
-axa = fig.add_subplot(gs[0, :2])
+axa = fig.add_subplot(gs[0, :])
 ybias = 0.05 / len(tools)                                   # Bonferroni
 for i, (t, mae, sd, p) in enumerate(rec):
     c = BLUE if t == "fluorostats" else GREY
@@ -45,15 +52,20 @@ axa.text(0.98, 0.05, "'unbiased' = mean error not\nsignificantly ≠ 0 (t-test, 
          transform=axa.transAxes, ha="right", va="bottom", fontsize=5.1, color="#333")
 panel(axa, "a", "vessel-tool accuracy   (REAVER, n = 36)")
 
-# (b) VE overlay: raw / VesselExpress seg / fluorostats(auto->li), 2 crops  [top-right]
+# (b) VE overlay: raw / VesselExpress seg / fluorostats(auto->li), 2 crops  [row 1, full width]
 crops = np.load(R/"ve_crops.npz")
-gs_b = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[0, 2:], hspace=0.06, wspace=0.06)
+gs_b = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1, :], hspace=0.06, wspace=0.05)
 def fill_mask(ax, mask, rgb, alpha=0.85):
     ov = np.zeros((*mask.shape, 4)); ov[mask > 0] = (*rgb, alpha)
     ax.imshow(ov, interpolation="nearest")
+# Landscape crop: keep full 400 px width, take a 215 px vertical band (rows 90:305)
+# so the vessel band is shorter on the page while raw/VE/fluorostats columns, the
+# scale bar and auto->li label are preserved. Same window for every panel so the
+# raw / VesselExpress / fluorostats overlays stay pixel-aligned.
+YB0, YB1 = 90, 305
 labs = ["raw", "VesselExpress", r"fluorostats (auto$\rightarrow$li)"]
 for row in range(2):
-    raw = crops[f"raw{row}"]; ve_m = crops[f"ve{row}"]; fs_m = crops[f"fs{row}"]
+    raw = crops[f"raw{row}"][YB0:YB1]; ve_m = crops[f"ve{row}"][YB0:YB1]; fs_m = crops[f"fs{row}"][YB0:YB1]
     p = F.imnorm(raw, hi=99.7)
     for col, (lab, ov) in enumerate(zip(labs, [None, ve_m, fs_m])):
         ax = fig.add_subplot(gs_b[row, col]); ax.imshow(p, cmap="gray"); F.image_axes(ax)
@@ -62,8 +74,8 @@ for row in range(2):
         if row == 0: ax.set_title(lab, fontsize=6.0)
         if row == 0 and col == 0: F.scalebar(ax, 100, "100 µm"); panel(ax, "b")
 
-# (c) 3D phantom accuracy vs exact GT  [bottom-left]
-axc = fig.add_subplot(gs[1, :2])
+# (c) 3D phantom accuracy vs exact GT  [row 2, left]
+axc = fig.add_subplot(gs[2, 0])
 ph = pd.read_csv(R/"b_vascular_phantom_3d.csv")
 x = np.arange(len(ph)); w = 0.36
 axc.bar(x-w/2, ph.len_err_pct, w, color=BLUE, edgecolor="black", lw=0.4, label="centreline length")
@@ -85,8 +97,8 @@ axc.legend(handles=[Patch(facecolor=BLUE, edgecolor="black", lw=0.4, label="cent
            fontsize=5.2, loc="upper right", handlelength=1.1, handleheight=0.9)
 panel(axc, "c", "3D synthetic phantom")
 
-# (d) Bland-Altman VF fluorostats vs VesselExpress + rank sub-panel  [bottom-right]
-gs_d = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[1, 2:], wspace=0.62)
+# (d) Bland-Altman VF fluorostats vs VesselExpress + rank sub-panel  [row 2, right]
+gs_d = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, 1], wspace=0.70)
 axd = fig.add_subplot(gs_d[0, :2])
 m = pd.read_csv(R/"b_ve_metrics.csv")
 ve, fs = m.VesselExpress_VF.values, m.fluorostats_VF.values
@@ -102,10 +114,12 @@ panel(axd, "d", "metric agreement")
 axr = fig.add_subplot(gs_d[0, 2])
 rho = sps.spearmanr(ve, fs).statistic
 axr.scatter(sps.rankdata(ve), sps.rankdata(fs), s=13, color=BLUE, edgecolor="none")
-axr.set_title(f"rank agreement\n(Spearman ρ = {rho:.2f})", fontsize=5.4, pad=2)
+# left-anchored title so the descriptor never overflows the narrow sub-panel edge
+axr.set_title(f"rank agreement\nSpearman ρ = {rho:.2f}", fontsize=5.4, pad=2, loc="left")
 axr.set_xlabel("VesselExpress rank", fontsize=5.4)
 axr.set_ylabel("fluorostats rank", fontsize=5.4)
 axr.set_xticks([1, len(ve)]); axr.set_yticks([1, len(fs)])
+axr.set_xlim(0, len(ve) + 1); axr.set_ylim(0, len(fs) + 1)
 axr.tick_params(labelsize=5.0)
 for sp in axr.spines.values(): sp.set_linewidth(0.5); sp.set_color("#999")
 
@@ -121,5 +135,5 @@ cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool
  "VesselExpress (n=9): a ~1.7× systematic offset (bias line ± 95% limits) with consistent ranking "
  "(rank-agreement panel, Spearman 0.75) — a software-agreement comparison (VesselExpress GT is "
  "pipeline-generated, not manual).")
-save(fig, "fig3_vascular"); caption("fig3_vascular", cap)
+save(fig, "fig3_vascular", tight=False); caption("fig3_vascular", cap)
 print("Figure 3 done")

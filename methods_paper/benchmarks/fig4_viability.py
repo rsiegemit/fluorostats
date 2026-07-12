@@ -13,8 +13,15 @@ R = Path(__file__).resolve().parent / "results"
 STACK = Path("/Users/rsiegelmann/Downloads/Projects/fluorostats/methods_paper/data/downloads/viability/zccs1035_Day14_LiveDead.tif")
 BLUE = OKABE["blue"]; GREEN = OKABE["green"]; MAG = OKABE["purple"]; VERM = OKABE["vermillion"]; GREY = OKABE["grey"]
 
-fig = plt.figure(figsize=(7.2, 7.4))
-gs = gridspec.GridSpec(3, 4, figure=fig, height_ratios=[1.0, 1.0, 1.15], hspace=0.62, wspace=0.62)
+# Authored at the true submission text width (F.TW = 5.147 in) so
+# \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt on the
+# page. Narrower canvas -> taller figure; the 2x2 plot grid (a-d) sits above a
+# full-width 3-across image row (e). Extra top/left margin + hspace keeps panel
+# letters, legends and titles clear of neighbours at this width.
+fig = plt.figure(figsize=(F.TW, 6.6))
+gs = gridspec.GridSpec(3, 4, figure=fig, height_ratios=[1.05, 1.05, 1.60],
+                       hspace=0.62, wspace=0.85,
+                       left=0.135, right=0.975, top=0.955, bottom=0.045)
 
 # (a) 2D/heuristic bias vs true 3D + depth profile
 axa = fig.add_subplot(gs[0, :2])
@@ -74,17 +81,18 @@ def load_ch(ch, n=3, down=8):
         for z in range(nz): sl.append(t.pages[z*n+ch].asarray()[::down,::down].astype(np.float32))
     return np.stack(sl)
 live = load_ch(2); dead = load_ch(1); z = live.shape[0]//2
-gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.07)
+gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.10)
 seg = dict(method="otsu", min_size=8)
 lm_mid = binarize(live[z], **seg); dm_mid = binarize(dead[z], **seg)
+# short, wrapped titles so each ~1.6-in crop keeps its label inside its own cell
 panels_c = [
-    (F.composite2ch(live[z], dead[z]), "raw mid-plane (green live / magenta dead)"),
-    (np.dstack([dm_mid*0.85, lm_mid*0.85, dm_mid*0.85]), "fluorostats classification"),
-    (F.composite2ch(live.max(0), dead.max(0)), "MIP — 2D collapses depth (+5%)"),
+    (F.composite2ch(live[z], dead[z]), "raw mid-plane\n(green live / magenta dead)"),
+    (np.dstack([dm_mid*0.85, lm_mid*0.85, dm_mid*0.85]), "fluorostats\nclassification"),
+    (F.composite2ch(live.max(0), dead.max(0)), "MIP — 2D collapses\ndepth (+5%)"),
 ]
 for i,(img,ttl) in enumerate(panels_c):
     ax = fig.add_subplot(gs_c[i]); ax.imshow(np.clip(img,0,1)); F.image_axes(ax)
-    ax.set_title(ttl, fontsize=6.3)
+    ax.set_title(ttl, fontsize=6.0, loc="center")
     if i == 0: F.scalebar(ax, 12, "200 µm"); panel(ax, "e")
 
 cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (BioImage Archive "
@@ -100,5 +108,5 @@ cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (
  "truth comparison. (e) Two-channel Live/Dead crop (green live, magenta dead): raw mid-plane, "
  "fluorostats live/dead classification, and the maximum-intensity projection that collapses depth "
  "and inflates viability. Scale bar 200 µm (approx., downsampled).")
-save(fig, "fig4_viability"); caption("fig4_viability", cap)
+save(fig, "fig4_viability", tight=False); caption("fig4_viability", cap)
 print("Figure 4 done")
