@@ -188,15 +188,20 @@ def load_channels(path, ch, n_ch=3, down=1):
     return np.stack(sl)
 
 
-def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.06):
-    """Draw a scale bar on an image axis. length_px in data (pixel) units."""
+def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.07):
+    """Draw a scale bar on an image axis. length_px in data (pixel) units.
+
+    The label is anchored to the bar END nearest the image edge (right-aligned for a
+    right loc, left for a left loc) so a label wider than the bar can never overflow
+    the axes -- fixes the clipped 'm' in '20 um'/'200 um' at the crop edge."""
     x0, x1 = ax.get_xlim(); y0, y1 = ax.get_ylim()
     W = abs(x1 - x0); H = abs(y0 - y1)
-    xr = min(x0, x1) + (1 - pad) * W - length_px if "right" in loc else min(x0, x1) + pad * W
+    right = "right" in loc
+    xr = min(x0, x1) + (1 - pad) * W - length_px if right else min(x0, x1) + pad * W
     yb = max(y0, y1) - pad * H if "lower" in loc else min(y0, y1) + pad * H
     ax.plot([xr, xr + length_px], [yb, yb], color=color, lw=2.4, solid_capstyle="butt")
-    ax.text(xr + length_px / 2, yb - 0.02 * H, label, color=color, ha="center",
-            va="bottom", fontsize=6, fontweight="bold")
+    ax.text(xr + length_px if right else xr, yb - 0.02 * H, label, color=color,
+            ha="right" if right else "left", va="bottom", fontsize=6, fontweight="bold")
 
 
 def save(fig, name, folder=None, tight=True, pad=0.4):
@@ -269,8 +274,11 @@ def lollipop(ax, labels, values, *, colors=None, floor=None, los=None, his=None,
         ax.plot(values[i], row, "o", color=c, ms=5, mec="white", mew=0.5, zorder=4)
         if los is not None and his is not None:
             ax.plot([los[i], his[i]], [row, row], color=c, lw=1.4, alpha=0.9, zorder=3)
-        ax.text(values[i] + (hi_x - lo_x) * 0.015, row, fmt.format(values[i]),
-                va="center", ha="left", fontsize=value_fs, color="#333")
+        # offset the value label a few points off the dot (never centred on it, so
+        # it can't strike through the marker); offset-points is axis-scale robust
+        ax.annotate(fmt.format(values[i]), (values[i], row), xytext=(5, 0),
+                    textcoords="offset points", va="center", ha="left",
+                    fontsize=value_fs, color="#333")
     ax.set_yticks(range(len(order))); ax.set_yticklabels(order, fontsize=label_fs)
     ax.set_xlim(lo_x, hi_x); ax.set_ylim(-0.6, len(order) - 0.4)
     return order
@@ -297,6 +305,15 @@ def identity(ax, color="black", lw=0.7):
     """Draw a y=x identity line spanning the current axis limits."""
     lo = min(ax.get_xlim()[0], ax.get_ylim()[0]); hi = max(ax.get_xlim()[1], ax.get_ylim()[1])
     ax.plot([lo, hi], [lo, hi], ls="--", color=color, lw=lw, zorder=1)
+
+
+def round_sig(x, n=2):
+    """Round x to n significant figures. Use for annotation numbers that must match
+    the manuscript's rounding (e.g. 382.6 -> 380, 14.8 -> 15), kept derived not typed."""
+    from math import log10, floor
+    if not x:
+        return 0.0
+    return round(x, -int(floor(log10(abs(x)))) + (n - 1))
 
 
 def boot_ci(x, reps=10000, seed=0, ci=95):

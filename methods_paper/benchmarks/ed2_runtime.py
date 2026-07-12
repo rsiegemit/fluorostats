@@ -201,8 +201,8 @@ seg_cp = lookup("comparator,Cellpose (per 2D img, CPU cluster)")
 axA.text(0.985, 0.66,
          "2D segmentation, per image (CPU)\n"
          f"fluorostats  {seg_f:.1f} ms\n"
-         f"StarDist  {seg_sd:.0f} ms  ({seg_sd/seg_f:.0f}x)\n"
-         f"Cellpose  {seg_cp:.0f} ms  ({seg_cp/seg_f:.0f}x)",
+         f"StarDist  {seg_sd:.0f} ms  ({F.round_sig(seg_sd/seg_f):.0f}x)\n"
+         f"Cellpose  {seg_cp:.0f} ms  ({F.round_sig(seg_cp/seg_f):.0f}x)",
          transform=axA.transAxes, fontsize=F.FS["small"], va="top", ha="right",
          bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="#CCCCCC", lw=0.5))
 
@@ -260,8 +260,8 @@ CAPTION = (
     "stats.mann_whitney vs scipy.mannwhitneyu), confirming fluorostats adds "
     "negligible overhead over the underlying call. For headline 2D instance "
     "segmentation, fluorostats (Otsu + connected components) runs at "
-    f"{seg_f:.1f} ms/image versus {seg_sd:.0f} ms for StarDist (~{seg_sd/seg_f:.0f}x) "
-    f"and {seg_cp:.0f} ms for Cellpose (~{seg_cp/seg_f:.0f}x), both measured on CPU. "
+    f"{seg_f:.1f} ms/image versus {seg_sd:.0f} ms for StarDist (~{F.round_sig(seg_sd/seg_f):.0f}x) "
+    f"and {seg_cp:.0f} ms for Cellpose (~{F.round_sig(seg_cp/seg_f):.0f}x), both measured on CPU. "
     "The two whole-volume validation operations (validate.instance_f1; "
     "validate.average_precision) are computed once per volume during benchmarking "
     "and are not part of per-frame analysis cost. (b) Determinism. Three "

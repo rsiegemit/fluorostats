@@ -19,7 +19,7 @@ BLUE = OKABE["blue"]; GREEN = OKABE["green"]; MAG = OKABE["purple"]; VERM = OKAB
 # full-width 3-across image row (e). Extra top/left margin + hspace keeps panel
 # letters, legends and titles clear of neighbours at this width.
 fig = plt.figure(figsize=(F.TW, 6.6))
-gs = gridspec.GridSpec(3, 4, figure=fig, height_ratios=[1.05, 1.05, 1.60],
+gs = gridspec.GridSpec(3, 4, figure=fig, height_ratios=[1.05, 1.05, 1.95],
                        hspace=0.62, wspace=0.85,
                        left=0.135, right=0.975, top=0.955, bottom=0.045)
 
@@ -33,7 +33,7 @@ bm["name"] = bm.method.map(lab); bm = bm.sort_values("rel_bias_pct").reset_index
 rbias = dict(zip(bm.method, bm.rel_bias_pct))   # per-method relative bias (for the caption)
 # attenuation-corrected 3D is the fluorostats result -> blue (the signal); the 2D
 # reductions are context -> neutral grey (never Cellpose vermillion, which is locked)
-y = np.arange(len(bm)); cols = [BLUE if "attn" in m else GREY for m in bm.method]
+y = np.arange(len(bm)); cols = [BLUE if "attenuation" in m else GREY for m in bm.method]
 axa.hlines(y, 0, bm.rel_bias_pct, color=cols, lw=1.3, zorder=1)
 axa.scatter(bm.rel_bias_pct, y, color=cols, s=44, edgecolor="black", lw=0.4, zorder=3)
 for yi, rb in zip(y, bm.rel_bias_pct):
@@ -77,7 +77,7 @@ axd.set_xlabel("mean viability (fs, macro)"); axd.set_ylabel("fluorostats $-$ ma
 axd.text(0.5, 0.30, "maxima = macro\n(same peak counting)", transform=axd.transAxes, ha="center", va="center", fontsize=5.6, color="#555")
 axd.text(0.5, 0.08, f"vs ground truth: CCC {ccc_v:.3f}, MAE {mae_v:.3f}", transform=axd.transAxes,
          ha="center", va="bottom", fontsize=5.4, color="#777")
-panel(axd, "d", "fluorostats $-$ macro = 0 (same algorithm)")
+panel(axd, "d", "fluorostats $-$ macro = 0")
 
 # (e) Live/Dead qualitative overlay
 live = F.load_channels(STACK, 2, down=8); dead = F.load_channels(STACK, 1, down=8); z = live.shape[0]//2

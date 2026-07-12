@@ -112,9 +112,11 @@ bar_fj = axB.bar(xb + 1.5 * wb, tree["fs_n_junction_nodes"], wb, color=GREEN,
 
 for i, row in tree.reset_index().iterrows():
     if not row["branch_match"]:
+        # arrow lands on the RIGHT edge of the blue bar top so its shaft stays
+        # clear of the "27/31" label, which sits at the bar-top centre-left
         axB.annotate("raster\nundercount",
-                     xy=(xb[i] - 0.5 * wb, row["fs_n_branches"] + 0.3),
-                     xytext=(xb[i] + 0.9 * wb, row["true_branches"] + 3.6),
+                     xy=(xb[i], row["fs_n_branches"] + 0.3),
+                     xytext=(xb[i] + 1.0 * wb, row["true_branches"] + 3.6),
                      ha="center", va="bottom", fontsize=5.4, color=VERM,
                      arrowprops=dict(arrowstyle="-|>", color=VERM, lw=0.7,
                                      shrinkA=1, shrinkB=1))

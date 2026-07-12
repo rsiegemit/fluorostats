@@ -35,10 +35,10 @@ methods.update(dl_pi)
 # Plain GridSpec (not constrained-layout): the nested fixed-aspect image band (c)
 # collapses constrained-layout's sibling axes, so lay out manually with generous
 # margins/spacing and export with tight=True.
-fig = plt.figure(figsize=(F.TW, 6.28))
-gs = gridspec.GridSpec(4, 6, figure=fig, height_ratios=[1.72, 0.66, 0.92, 0.98],
-                       left=0.275, right=0.965, top=0.982, bottom=0.062,
-                       hspace=0.62, wspace=0.62)
+fig = plt.figure(figsize=(F.TW, 6.4))
+gs = gridspec.GridSpec(4, 6, figure=fig, height_ratios=[1.72, 0.66, 0.92, 1.02],
+                       left=0.275, right=0.965, top=0.958, bottom=0.058,
+                       hspace=0.70, wspace=0.62)
 
 # (a) the fluorostats "unification" panel. Otsu / Li / Isodata / Triangle / Yen /
 # Mean / Minimum / watershed are NOT rival tools: they are fluorostats threshold
@@ -96,8 +96,9 @@ for row, d in enumerate(rows):
                  alpha=1.0, zorder=4)
     else:
         axa.plot(d["mean"], row, "o", color=d["c"], mec="white", mew=0.6, ms=ms, zorder=5)
-    axa.text(d["mean"] + 0.012, row, f"{d['mean']:.3f}", va="center", ha="left",
-             fontsize=5.4, color="#333", alpha=a)
+    axa.annotate(f"{d['mean']:.3f}", (d["mean"], row), xytext=(6, 0),
+                 textcoords="offset points", va="center", ha="left",
+                 fontsize=5.4, color="#333", alpha=a)
 labcols = [BLUE if r["kind"] != "dl" else r["c"] for r in rows]
 axa.set_yticks(range(len(rows)))
 axa.set_yticklabels([r["lab"] for r in rows], fontsize=5.6)
@@ -108,11 +109,11 @@ axa.set_xlim(lo_x, hi_x); axa.set_ylim(-0.6, len(rows) - 0.4)
 axa.set_xticks([0.2, 0.4, 0.6, 0.8, 1.0])
 axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
 # legend explaining the family (in axes white space, lower right)
-axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=7, label="fluorostats default")
-axa.plot([], [], "o", mfc="white", mec=BLUE, mew=1.1, ms=6, label="threshold envelope")
-axa.plot([], [], "o", color=OKABE["orange"], mec="white", mew=0.6, ms=6, label="trained deep learning")
-axa.legend(loc="lower right", bbox_to_anchor=(0.99, 0.02), fontsize=5.0,
-           handletextpad=0.3, borderpad=0.3, labelspacing=0.3, frameon=False)
+axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=6, label="fluorostats default")
+axa.plot([], [], "o", mfc="white", mec=BLUE, mew=1.1, ms=5.5, label="threshold envelope")
+axa.plot([], [], "o", color=OKABE["orange"], mec="white", mew=0.6, ms=5.5, label="trained deep learning")
+axa.legend(loc="lower right", bbox_to_anchor=(1.0, 0.0), fontsize=4.8,
+           handletextpad=0.25, borderpad=0.2, labelspacing=0.22, frameon=False)
 panel(axa, "a", "one tool, one default knob (n=100)")
 
 # (b) forest vs DL
@@ -174,13 +175,14 @@ for _, r in cc.iterrows():
              color=OKABE["blue"] if isf else GREY, lw=2.0 if isf else 0.8, alpha=1 if isf else 0.6,
              zorder=3 if isf else 1)
 axd.axhline(0.96, ls="--", color=OKABE["black"], lw=1.0)
-axd.text(2, 0.905, "deep learning holds $\\approx$0.96", fontsize=5.4, color="black")
+axd.text(74, 0.905, "DL holds $\\approx$0.96", fontsize=5.4, color="black",
+         ha="right", va="top")
 axd.axvspan(50, 75, color=OKABE["vermillion"], alpha=0.08)
-axd.text(62, 0.55, "DL wins", fontsize=6, color=OKABE["vermillion"], ha="center")
-# direct labels on the two line groups (in white space, coloured to match)
-axd.text(30, 0.60, "fluorostats", fontsize=6.2, color=OKABE["blue"], fontweight="bold",
-         ha="left", va="bottom")
-axd.text(30, 0.35, "classical envelope", fontsize=5.8, color=GREY, ha="left", va="top")
+axd.text(63, 0.42, "DL wins", fontsize=6, color=OKABE["vermillion"], ha="center")
+# direct labels on the two line groups (in the clear triangle below both curves)
+axd.text(2, 0.40, "fluorostats", fontsize=6.2, color=OKABE["blue"], fontweight="bold",
+         ha="left", va="center")
+axd.text(2, 0.14, "classical envelope", fontsize=5.2, color=GREY, ha="left", va="center")
 axd.set_xlabel("nuclear overlap (%)"); axd.set_ylabel("instance F1"); axd.set_ylim(0,1.02)
 panel(axd, "d", "crowding crossover")
 

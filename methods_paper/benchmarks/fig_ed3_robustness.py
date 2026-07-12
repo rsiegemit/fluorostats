@@ -27,7 +27,7 @@ FLU = OKABE["blue"]
 fig = plt.figure(figsize=(TW, 4.55))
 gs = fig.add_gridspec(2, 2, height_ratios=[1.05, 1.0],
                       hspace=0.5, wspace=0.42,
-                      left=0.115, right=0.975, top=0.95, bottom=0.09)
+                      left=0.115, right=0.975, top=0.95, bottom=0.17)
 ax_a = fig.add_subplot(gs[0, :])
 ax_b = fig.add_subplot(gs[1, 0])
 ax_c = fig.add_subplot(gs[1, 1])
@@ -85,11 +85,15 @@ ax_b.set_ylim(0.35, 0.96)
 i_hi = len(levels) - 1
 ax_b.annotate("", xy=(i_hi, 0.905), xytext=(i_hi, 0.42),
               arrowprops=dict(arrowstyle="->", color=OKABE["black"], lw=0.7))
-# horizontal label near the arrow head, nudged left so it clears the bars
-ax_b.text(i_hi - 0.14, 0.905, r"0.41 $\rightarrow$ 0.91", rotation=0, va="center",
-          ha="right", fontsize=6, color=OKABE["black"])
-ax_b.legend(loc="lower left", ncol=2, columnspacing=0.9, handlelength=1.0,
-            borderpad=0.2, labelspacing=0.25)
+# label anchored right next to the arrow head (top of the arrow at the noise=160
+# group); small left offset in points so its right edge abuts the arrow, no float
+ax_b.annotate(r"0.41 $\rightarrow$ 0.91", xy=(i_hi, 0.905), xytext=(-4, 0),
+              textcoords="offset points", va="center", ha="right",
+              fontsize=6, color=OKABE["black"])
+# legend outside the axes (below), off every bar
+ax_b.legend(loc="upper center", bbox_to_anchor=(0.5, -0.30), ncol=3,
+            columnspacing=0.9, handlelength=1.0, borderpad=0.2,
+            labelspacing=0.25, handletextpad=0.4)
 panel(ax_b, "b")
 
 # ---- (c) Per-nucleus size recovery ------------------------------------------
