@@ -1,0 +1,9 @@
+check,value,ok
+fiji_perslice_mean_parity,0.0,True
+scipy_trapezoid_parity,0.0,True
+trapezoid_err_pct_vs_analytic,0.01646052379175249,True
+rectangular_err_pct_vs_analytic,2.80654170507359,True
+determinism_bit_identical,0.0,True
+timing_ms_30x512,12.30624999734573,True
+timing_ms_60x512,28.261291602393612,True
+timing_ms_60x1024,108.5911831993144,True
