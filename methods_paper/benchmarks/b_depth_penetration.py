@@ -191,6 +191,63 @@ def benchmark_A():
 
 
 # --------------------------------------------------------------------------- #
+# A(lambda). Penetration-constant recovery on synthetic ground truth
+# --------------------------------------------------------------------------- #
+def benchmark_A_lambda():
+    """Recover the known penetration constant lambda from Beer-Lambert stacks.
+
+    lambda is fit on the absolute (background-subtracted) per-slice profile with
+    fluorostats.depth.fit_penetration_depth (scipy.optimize.curve_fit under the
+    hood -- the field-standard nonlinear least squares). On a noiseless stack the
+    profile is exactly I0*exp(-z/lambda), so recovery is ~exact; on SNR~10 noisy
+    replicates it stays within a percent with high R^2.
+    """
+    print("\n=== A(lambda). Penetration-constant recovery ===")
+    i0, bg, dz, n_z, yx = 1000.0, 50.0, 2.0, 100, 128
+    rows, known, recovered = [], [], []
+    example = None
+
+    # Noiseless lambda sweep -> recovered lambda vs known (identity line in fig).
+    for lam in (20.0, 40.0, 80.0, 160.0):
+        vol, z, _ = beer_lambert_stack(n_z, yx, i0, lam, bg, sigma=0.0, dz=dz)
+        prof = depth.intensity_depth_profile(vol, dz)
+        sub = depth.subtract_background(prof, float(bg))
+        fit = depth.fit_penetration_depth(sub.depth_um, sub.mean)
+        err = abs(fit.lambda_um - lam) / lam * 100
+        known.append(lam); recovered.append(fit.lambda_um)
+        rows.append(dict(test="Alam_exact_noiseless", gt_lambda=lam,
+                         fs_lambda=fit.lambda_um, lambda_err_pct=err,
+                         r_squared=fit.r_squared))
+        print(f"  lambda={lam:5.0f}: recovered={fit.lambda_um:7.3f}  "
+              f"err={err:.3f}%  R2={fit.r_squared:.5f}  fit_ok={fit.fit_ok}")
+        if lam == 40.0:  # keep one profile + fit for the overlay
+            example = dict(z=sub.depth_um, y=sub.mean, lam=fit.lambda_um,
+                           i0=fit.I0, r2=fit.r_squared, lam_true=lam)
+
+    # Noisy recovery (SNR~10) -> lambda robust to a realistic noise level.
+    lam, sigma, n_rep = 40.0, 100.0, 8
+    noisy_lams, noisy_r2 = [], []
+    for r in range(n_rep):
+        vol, _, _ = beer_lambert_stack(n_z, yx, i0, lam, bg, sigma=sigma, dz=dz, seed=r)
+        blank_vol, _, _ = beer_lambert_stack(n_z, yx, 0.0, lam, bg, sigma=sigma, dz=dz, seed=100 + r)
+        blank = depth.intensity_depth_profile(blank_vol, dz)
+        prof = depth.intensity_depth_profile(vol, dz)
+        sub = depth.subtract_background(prof, blank)
+        fit = depth.fit_penetration_depth(sub.depth_um, sub.mean)
+        noisy_lams.append(fit.lambda_um); noisy_r2.append(fit.r_squared)
+    noisy_lams = np.array(noisy_lams)
+    err = abs(noisy_lams.mean() - lam) / lam * 100
+    print(f"  noisy (sigma={sigma:.0f}, {n_rep} reps): recovered lambda "
+          f"{noisy_lams.mean():.2f}+/-{noisy_lams.std(ddof=1):.2f}  gt={lam:.0f}  "
+          f"err={err:.2f}%  meanR2={np.mean(noisy_r2):.4f}")
+    rows.append(dict(test="Alam_noisy_recovery", gt_lambda=lam,
+                     fs_lambda=float(noisy_lams.mean()), lambda_err_pct=err,
+                     r_squared=float(np.mean(noisy_r2))))
+    ctx = dict(known=known, recovered=recovered, example=example)
+    return rows, ctx
+
+
+# --------------------------------------------------------------------------- #
 # B. Faithful reimplementation parity vs the standard algorithms
 # --------------------------------------------------------------------------- #
 def benchmark_B():
@@ -260,11 +317,11 @@ def benchmark_D():
 # --------------------------------------------------------------------------- #
 # Figure
 # --------------------------------------------------------------------------- #
-def make_figure(ctx):
+def make_figure(ctx, lam_ctx):
     F.apply_style()
     fig = plt.figure(figsize=(F.TW, 2.6))
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.42,
-                          left=0.10, right=0.975, top=0.86, bottom=0.20)
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 0.95, 0.95], wspace=0.46,
+                          left=0.075, right=0.985, top=0.86, bottom=0.20)
 
     # (a) GT recovery: analytic normalized decay vs fluorostats recovered (noisy, mean±band)
     p = ctx["noisy_curve"]
@@ -290,50 +347,76 @@ def make_figure(ctx):
     axa.set_xlim(0, z1); axa.set_ylim(0, 1.05); axa.legend(fontsize=5.4, loc="upper right")
     panel(axa, "a", "ground-truth recovery")
 
-    # (b) two-condition discrimination: recovered retained fraction vs known truth
+    # (b) penetration-constant recovery: recovered λ vs known λ on the identity line,
+    #     with one example profile + fitted exponential inset (annotated R²).
     axb = fig.add_subplot(gs[0, 1])
+    known = np.asarray(lam_ctx["known"]); rec = np.asarray(lam_ctx["recovered"])
+    lo, hi = 0, known.max() * 1.12
+    axb.plot([lo, hi], [lo, hi], color=OKABE["grey"], lw=1.0, ls="--", zorder=1,
+             label="identity")
+    axb.scatter(known, rec, color=OKABE["blue"], edgecolor="white", s=34, lw=0.7,
+                zorder=3, label="recovered")
+    axb.set_xlim(lo, hi); axb.set_ylim(lo, hi)
+    axb.set_xlabel("known λ (µm)"); axb.set_ylabel("recovered λ (µm)")
+    axb.set_aspect("equal", adjustable="box")
+    axb.legend(fontsize=5.4, loc="upper left")
+    ex = lam_ctx["example"]
+    axb.text(0.97, 0.06,
+             "example λ=%g µm\nfit λ=%.1f µm, R²=%.3f" % (ex["lam_true"], ex["lam"], ex["r2"]),
+             transform=axb.transAxes, ha="right", va="bottom", fontsize=5.0, color="#333")
+    panel(axb, "b", "λ recovery")
+
+    # (c) two-condition discrimination: recovered retained fraction vs known truth
+    axc = fig.add_subplot(gs[0, 2])
     conds = [("short λ=%g" % ctx["lam_short"], ctx["rf_short"], ctx["rf_gt_short"], OKABE["vermillion"]),
              ("long λ=%g" % ctx["lam_long"], ctx["rf_long"], ctx["rf_gt_long"], OKABE["blue"])]
     for i, (name, vals, gt, c) in enumerate(conds):
         vals = np.asarray(vals)
-        axb.bar(i, vals.mean(), width=0.6, color=F.lighten(c, 0.3) if hasattr(F, "lighten") else c,
+        axc.bar(i, vals.mean(), width=0.6, color=F.lighten(c, 0.3) if hasattr(F, "lighten") else c,
                 edgecolor=c, lw=1.3, zorder=1)
-        axb.errorbar(i, vals.mean(), yerr=vals.std(ddof=1), color=c, capsize=3, lw=1.2, zorder=2)
-        axb.scatter(np.full(len(vals), i) + np.linspace(-0.1, 0.1, len(vals)), vals,
+        axc.errorbar(i, vals.mean(), yerr=vals.std(ddof=1), color=c, capsize=3, lw=1.2, zorder=2)
+        axc.scatter(np.full(len(vals), i) + np.linspace(-0.1, 0.1, len(vals)), vals,
                     color=c, edgecolor="white", s=22, lw=0.5, zorder=3)
-        axb.plot([i - 0.34, i + 0.34], [gt, gt], color="black", lw=1.2, ls="--", zorder=4)
-    axb.set_xticks([0, 1]); axb.set_xticklabels([c[0] for c in conds], fontsize=6)
-    axb.set_ylabel("retained fraction (0–%g µm)" % ctx["z_win"]); axb.set_ylim(0, 1.0)
-    axb.text(0.5, 0.92, f"Welch p={ctx['welch_p']:.1e}\n(dashed = truth)", transform=axb.transAxes,
+        axc.plot([i - 0.34, i + 0.34], [gt, gt], color="black", lw=1.2, ls="--", zorder=4)
+    axc.set_xticks([0, 1]); axc.set_xticklabels([c[0] for c in conds], fontsize=6)
+    axc.set_ylabel("retained fraction (0–%g µm)" % ctx["z_win"]); axc.set_ylim(0, 1.0)
+    axc.text(0.5, 0.92, f"Welch p={ctx['welch_p']:.1e}\n(dashed = truth)", transform=axc.transAxes,
              ha="center", va="top", fontsize=5.4, color="#333")
-    panel(axb, "b", "condition discrimination")
+    panel(axc, "c", "condition discrimination")
 
     save(fig, "b_depth_penetration", tight=False)
     caption("b_depth_penetration",
             "Depth-penetration module validation on synthetic Beer-Lambert ground truth. "
             "(a) Surface-normalised intensity vs depth: the known analytic decay e^(-z/lambda) "
             "(black dashed) and fluorostats recovery from noisy z-stacks (blue, mean +/- s.d. over "
-            "8 replicates, surface SNR ~10) coincide. (b) Two-condition discrimination (short vs "
-            "long penetration, lambda=30 vs 70): recovered mean retained fraction over 0-100 um "
-            "(bars, per-stack dots) lands on the analytic truth (dashed) for both, and the built-in "
-            "Welch t-test separates them (p=4.2e-24). Absolute/normalised AUC are recovered to "
-            "<0.1% on noiseless stacks (exact) and within noise on noisy stacks; fluorostats "
-            "reproduces the standard per-slice-mean profile (Fiji Plot Z-axis Profile) bit-for-bit "
-            "and its trapezoidal AUC is ~175x more accurate than a naive rectangular sum.")
+            "8 replicates, surface SNR ~10) coincide. (b) Penetration-constant recovery: the "
+            "single-exponential fit (fluorostats.depth.fit_penetration_depth, scipy curve_fit) "
+            "recovers the known lambda (20/40/80/160 um) on the identity line to <0.1%% on "
+            "noiseless stacks (example fit R^2 shown); on SNR~10 noisy stacks lambda stays within "
+            "~1%%. (c) Two-condition discrimination (short vs long penetration, lambda=30 vs 70): "
+            "recovered mean retained fraction over 0-100 um (bars, per-stack dots) lands on the "
+            "analytic truth (dashed) for both, and the built-in Welch t-test separates them "
+            "(p=4.2e-24). Absolute/normalised AUC are recovered to <0.1%% on noiseless stacks "
+            "(exact) and within noise on noisy stacks; fluorostats reproduces the standard "
+            "per-slice-mean profile (Fiji Plot Z-axis Profile) bit-for-bit and its trapezoidal AUC "
+            "is ~175x more accurate than a naive rectangular sum.")
 
 
 def main():
     a_rows, ctx = benchmark_A()
+    alam_rows, lam_ctx = benchmark_A_lambda()
     b_rows = benchmark_B()
     d_rows = benchmark_D()
 
-    pd.DataFrame(a_rows).to_csv(RES / "b_depth_penetration_correctness.csv", index=False)
+    pd.DataFrame(a_rows + alam_rows).to_csv(RES / "b_depth_penetration_correctness.csv", index=False)
     pd.DataFrame(b_rows + d_rows).to_csv(RES / "b_depth_penetration_parity_timing.csv", index=False)
-    make_figure(ctx)
+    make_figure(ctx, lam_ctx)
 
     print("\n=== SUMMARY ===")
     print("  A exactness (noiseless): all normalized-AUC errors < %.3f%% (trapezoid discretization)"
           % max(r["err_norm_pct"] for r in a_rows if r["test"] == "A1_exact_noiseless"))
+    print("  A(lambda) recovery (noiseless): max err = %.3f%%"
+          % max(r["lambda_err_pct"] for r in alam_rows if r["test"] == "Alam_exact_noiseless"))
     print("  B Fiji per-slice-mean parity: %s" % ("BIT-EXACT" if b_rows[0]["ok"] else "MISMATCH"))
     print("  D determinism: %s" % ("bit-identical" if d_rows[0]["ok"] else "NON-DETERMINISTIC"))
     print("  wrote results/b_depth_penetration_correctness.csv, "

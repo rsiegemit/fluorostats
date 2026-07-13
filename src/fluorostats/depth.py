@@ -203,6 +203,182 @@ def normalize_to_surface(
     )
 
 
+@dataclass(frozen=True)
+class PenetrationFit:
+    """Single-exponential fit of an axial intensity profile.
+
+    Models the background-subtracted profile as ``I(z) = I0 · exp(−z/λ)``
+    (or ``+ offset`` when a non-penetrating floor is fitted). ``lambda_um``
+    is the physical penetration depth — the distance over which the signal
+    falls to ``1/e`` — and is the field-standard permeability/clearing
+    parameter (cf. Amira Correct-Z-Drop; Bonda et al. 2020).
+
+    Attributes
+    ----------
+    lambda_um:
+        Fitted penetration constant λ, in micrometres.
+    I0:
+        Fitted surface amplitude (absorbs acquisition gain/laser power, so
+        λ itself is gain-independent).
+    offset:
+        Fitted additive floor ``c`` if the 3-parameter model was used,
+        else ``None``.
+    r_squared:
+        Coefficient of determination of the fit (1 = perfect).
+    rmse:
+        Root-mean-square residual, in the profile's intensity units.
+    n_points:
+        Number of depth samples used in the fit.
+    fit_ok:
+        ``True`` only if the optimiser converged, ``r_squared`` clears the
+        acceptance threshold, AND λ falls within the acquired depth range
+        (a decay length longer than the stack is unmeasurable extrapolation).
+        A single-exponential is not guaranteed to describe a real profile —
+        always check this before quoting λ. When λ is out of range the fit is
+        degenerate: ``lambda_um``/``I0``/``offset`` are ``nan``.
+    """
+
+    lambda_um: float
+    I0: float
+    offset: float | None
+    r_squared: float
+    rmse: float
+    n_points: int
+    fit_ok: bool
+
+
+def _exp_decay(z, I0, lam):
+    return I0 * np.exp(-z / lam)
+
+
+def _exp_decay_offset(z, I0, lam, c):
+    return I0 * np.exp(-z / lam) + c
+
+
+def fit_penetration_depth(
+    depth_um: np.ndarray,
+    intensity: np.ndarray,
+    *,
+    offset: bool = False,
+    r2_threshold: float = 0.85,
+) -> PenetrationFit:
+    """Fit a single-exponential penetration constant λ to a depth profile.
+
+    Fits ``I(z) = I0 · exp(−z/λ)`` (or, with ``offset=True``,
+    ``I(z) = I0 · exp(−z/λ) + c`` for a plateau/non-penetrating floor) to
+    the **background-subtracted absolute** profile, so λ is independent of
+    acquisition gain (which is absorbed by ``I0``). λ is the field-standard
+    depth parameter that AUC — which stays the model-agnostic default —
+    does not report.
+
+    Parameters
+    ----------
+    depth_um:
+        Physical depth of each sample, in micrometres.
+    intensity:
+        Background-subtracted intensity at each depth (absolute, not
+        surface-normalised).
+    offset:
+        Fit the 3-parameter model with an additive floor ``c``.
+    r2_threshold:
+        Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default 0.85,
+        tuned against real hydrogel profiles: clean single-exponential decays
+        clear it, near-flat/non-exponential profiles do not).
+        An honest flag, not a hard gate: λ is always returned, but a poor
+        fit means "single-exponential does not hold; use AUC".
+
+    Returns
+    -------
+    PenetrationFit. On non-convergence, or when the fitted λ exceeds the
+    acquired depth range (degenerate near-flat profile), ``fit_ok`` is
+    ``False`` and ``lambda_um``/``I0``/``offset`` are ``nan`` — a bad or
+    unmeasurable λ is never silently reported.
+    """
+    from scipy.optimize import curve_fit
+
+    z = np.asarray(depth_um, dtype=np.float64)
+    y = np.asarray(intensity, dtype=np.float64)
+    if z.shape != y.shape:
+        raise ValueError("depth_um and intensity must have the same shape")
+    n = int(z.size)
+    min_pts = 3 if offset else 2
+    if n < min_pts:
+        raise ValueError(
+            f"need at least {min_pts} points to fit "
+            f"{'3' if offset else '2'}-parameter model, got {n}"
+        )
+
+    order = np.argsort(z)
+    z, y = z[order], y[order]
+
+    # Initial guesses. I0 ~ near-surface signal; λ0 ~ depth at which the
+    # profile first falls below I0/e; c ~ the tail floor.
+    surface = float(np.mean(y[: min(3, n)]))
+    i0_guess = surface if surface > 0 else float(np.nanmax(y))
+    if not np.isfinite(i0_guess) or i0_guess <= 0:
+        i0_guess = 1.0
+    below = np.where(y < i0_guess / np.e)[0]
+    span = float(z[-1] - z[0]) or 1.0
+    lam_guess = float(z[below[0]] - z[0]) if below.size and z[below[0]] > z[0] else span
+    if lam_guess <= 0:
+        lam_guess = span
+
+    try:
+        if offset:
+            c_guess = float(np.min(y))
+            p0 = [max(i0_guess - c_guess, i0_guess * 0.5), lam_guess, c_guess]
+            bounds = ([0.0, 1e-9, -np.inf], [np.inf, np.inf, np.inf])
+            popt, _ = curve_fit(
+                _exp_decay_offset, z, y, p0=p0, bounds=bounds, maxfev=20000
+            )
+            model = _exp_decay_offset(z, *popt)
+            i0_fit, lam_fit, c_fit = float(popt[0]), float(popt[1]), float(popt[2])
+        else:
+            p0 = [i0_guess, lam_guess]
+            bounds = ([0.0, 1e-9], [np.inf, np.inf])
+            popt, _ = curve_fit(
+                _exp_decay, z, y, p0=p0, bounds=bounds, maxfev=20000
+            )
+            model = _exp_decay(z, *popt)
+            i0_fit, lam_fit, c_fit = float(popt[0]), float(popt[1]), None
+    except (RuntimeError, ValueError):
+        return PenetrationFit(
+            lambda_um=float("nan"), I0=float("nan"), offset=None,
+            r_squared=float("nan"), rmse=float("nan"), n_points=n, fit_ok=False,
+        )
+
+    resid = y - model
+    ss_res = float(np.sum(resid ** 2))
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    rmse = float(np.sqrt(np.mean(resid ** 2)))
+
+    # A decay length longer than the acquired depth is NOT constrained by the
+    # data: over the measured window the profile is essentially flat, so λ is an
+    # extrapolation past the stack, not a measurement — and a near-flat model
+    # fitting a near-flat profile can still post a high R², so R² alone cannot
+    # catch it. Reject such degenerate fits and NaN the unreliable parameters
+    # (r_squared/rmse are kept so callers can see a fit was attempted).
+    depth_span = float(z[-1] - z[0])
+    lambda_in_range = bool(np.isfinite(lam_fit) and 0.0 < lam_fit <= depth_span)
+    fit_ok = bool(lambda_in_range and r_squared >= r2_threshold)
+    if not lambda_in_range:
+        lam_fit = float("nan")
+        i0_fit = float("nan")
+        if c_fit is not None:
+            c_fit = float("nan")
+
+    return PenetrationFit(
+        lambda_um=lam_fit,
+        I0=i0_fit,
+        offset=c_fit,
+        r_squared=r_squared,
+        rmse=rmse,
+        n_points=n,
+        fit_ok=fit_ok,
+    )
+
+
 def auc_depth(
     depth_um: np.ndarray,
     values: np.ndarray,
@@ -245,9 +421,11 @@ def auc_depth(
 
 __all__ = [
     "DepthProfile",
+    "PenetrationFit",
     "intensity_depth_profile",
     "resample_to_depth",
     "subtract_background",
     "normalize_to_surface",
     "auc_depth",
+    "fit_penetration_depth",
 ]

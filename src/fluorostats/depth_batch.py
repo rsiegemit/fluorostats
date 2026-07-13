@@ -81,6 +81,7 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("channel", 0)
     m.setdefault("reducer", "mean")
     m.setdefault("n_surface", 3)
+    m.setdefault("fit_offset", False)
     # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`.
     if "auc_windows_um" not in m:
         m["auc_windows_um"] = [m.get("auc_window_um", [0.0, 100.0])]
@@ -141,6 +142,15 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
             "covered_um": float(min(z1, max_depth) - z0),
             "width_um": float(z1 - z0),
         }
+
+    # Penetration constant λ from a single-exponential fit of the absolute
+    # (background-subtracted) profile — λ is gain-independent so it is fit on
+    # the absolute, not surface-normalised, curve. Added alongside AUC, not a
+    # replacement; carries r_squared/fit_ok so a poor fit is never hidden.
+    fit = depth.fit_penetration_depth(
+        raw.depth_um, subtracted.mean, offset=cfg.get("fit_offset", False)
+    )
+
     return {
         "depth_um": raw.depth_um,
         "raw_mean": raw.mean,
@@ -151,6 +161,7 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
         "n_slices": int(raw.depth_um.size),
         "max_depth_um": max_depth,
         "auc": auc,
+        "fit": fit,
     }
 
 
@@ -176,11 +187,27 @@ def aggregate_group(primary: list[dict]) -> dict | None:
     nrm = np.vstack([np.interp(grid, p["depth_um"], p["normalized"]) for p in primary])
     n = len(primary)
     sem = lambda a: a.std(axis=0, ddof=1) / np.sqrt(n) if n > 1 else np.zeros(a.shape[1])
+    # Penetration constant λ over primary stacks. Only fits that converged,
+    # cleared the R² threshold, AND landed within the acquired depth range
+    # (fit_ok) contribute to the group λ AND to the reported mean R², so the two
+    # describe the same set of accepted fits; degenerate/out-of-range fits are
+    # excluded rather than dragging the mean, and their count is reported.
+    ok_fits = [p["fit"] for p in primary if p["fit"].fit_ok]
+    ok_lams = [f.lambda_um for f in ok_fits]
+    ok_r2 = [f.r_squared for f in ok_fits]
+    lam_arr = np.asarray(ok_lams, dtype=np.float64)
+    lam_mean = float(lam_arr.mean()) if lam_arr.size else float("nan")
+    lam_sem = (float(lam_arr.std(ddof=1) / np.sqrt(lam_arr.size))
+               if lam_arr.size > 1 else 0.0)
     return {
         "depth_um": grid,
         "sub_mean": sub.mean(axis=0), "sub_sem": sem(sub),
         "norm_mean": nrm.mean(axis=0), "norm_sem": sem(nrm),
         "n": n,
+        "lambda_mean_um": lam_mean,
+        "lambda_sem_um": lam_sem,
+        "n_lambda_ok": int(lam_arr.size),
+        "r_squared_mean": float(np.mean(ok_r2)) if ok_r2 else float("nan"),
     }
 
 
@@ -205,7 +232,9 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
 def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
     labels = [window_label(w) for w in windows]
     header = ["group", "stack", "role", "voxel_z_um", "n_slices",
-              "max_depth_um", "surface_intensity_subtracted"]
+              "max_depth_um", "surface_intensity_subtracted",
+              "lambda_um", "lambda_I0", "lambda_offset",
+              "lambda_r_squared", "lambda_rmse", "lambda_fit_ok"]
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}",
                    f"window_covered_um_{lab}"]
@@ -214,9 +243,13 @@ def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
         w.writerow(header)
         for r in rows:
             res = r["result"]
+            fit = res["fit"]
             row = [r["group"], r["stack"], r["role"],
                    f"{res['voxel_z_um']:g}", res["n_slices"],
-                   f"{res['max_depth_um']:.4g}", f"{res['surface_reference']:.6g}"]
+                   f"{res['max_depth_um']:.4g}", f"{res['surface_reference']:.6g}",
+                   f"{fit.lambda_um:.6g}", f"{fit.I0:.6g}",
+                   "" if fit.offset is None else f"{fit.offset:.6g}",
+                   f"{fit.r_squared:.6g}", f"{fit.rmse:.6g}", int(fit.fit_ok)]
             for lab in labels:
                 a = res["auc"][lab]
                 row += [f"{a['absolute']:.6g}", f"{a['normalized']:.6g}",
@@ -229,14 +262,21 @@ def write_group_summary_csv(out: Path, aggregates: dict) -> None:
         w = csv.writer(fh)
         w.writerow(["group", "n_primary_stacks", "depth_um",
                     "bg_subtracted_mean", "bg_subtracted_sem",
-                    "normalized_mean", "normalized_sem"])
+                    "normalized_mean", "normalized_sem",
+                    "lambda_mean_um", "lambda_sem_um", "n_lambda_ok",
+                    "r_squared_mean"])
         for g, agg in aggregates.items():
             if agg is None:
                 continue
+            # Group λ is a single value per group (repeated per depth row so the
+            # long-form CSV stays self-contained for Prism/pandas).
+            lam = (f"{agg['lambda_mean_um']:.6g}", f"{agg['lambda_sem_um']:.6g}",
+                   agg["n_lambda_ok"], f"{agg['r_squared_mean']:.6g}")
             for i, z in enumerate(agg["depth_um"]):
                 w.writerow([g, agg["n"], f"{z:.4g}",
                             f"{agg['sub_mean'][i]:.6g}", f"{agg['sub_sem'][i]:.6g}",
-                            f"{agg['norm_mean'][i]:.6g}", f"{agg['norm_sem'][i]:.6g}"])
+                            f"{agg['norm_mean'][i]:.6g}", f"{agg['norm_sem'][i]:.6g}",
+                            *lam])
 
 
 # ---------------------------------------------------------------------------
@@ -272,8 +312,21 @@ def plot_depth_curves(rows, aggregates, colors, ykey, ylabel, title, out_base,
         sem = agg["sub_sem"] if ykey == "bg_subtracted" else agg["norm_sem"]
         ax.fill_between(agg["depth_um"], mean - sem, mean + sem,
                         color=lighten(c, 0.25), alpha=0.35, lw=0, zorder=2)
-        ax.plot(agg["depth_um"], mean, color=c, lw=2.2, zorder=3,
-                label=f"{g} (n={agg['n']})")
+        lam = agg.get("lambda_mean_um", float("nan"))
+        lab = f"{g} (n={agg['n']})"
+        if ykey == "bg_subtracted" and np.isfinite(lam):
+            # Overlay the single-exponential with the group λ (fit on absolute
+            # profile). I0 = near-surface group mean so the curve is anchored.
+            lam_sem = agg.get("lambda_sem_um", 0.0)
+            r2 = agg.get("r_squared_mean", float("nan"))
+            n_ok = agg.get("n_lambda_ok", 0)
+            i0 = float(np.mean(mean[:3]))
+            ax.plot(agg["depth_um"], i0 * np.exp(-agg["depth_um"] / lam),
+                    color=c, lw=1.1, ls=(0, (4, 2)), alpha=0.9, zorder=4)
+            # Show how many stacks yielded an in-range λ, so a single-stack or
+            # partly-degenerate group λ is never read as a confident group value.
+            lab += f"\n  λ={lam:.0f}±{lam_sem:.0f} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
+        ax.plot(agg["depth_um"], mean, color=c, lw=2.2, zorder=3, label=lab)
     ax.set_xlabel("Depth (µm)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
@@ -370,7 +423,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     apply_style()
 
-    cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows")}
+    cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}
     windows = cfg["windows"]
     # The narrowest fixed window is shaded on the depth-vs curves.
     fixed = [w for w in windows if w != ("full",)]
@@ -433,6 +486,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         plot_retention_multiwindow(rows, colors, windows, out_dir / "fig_auc_retention_multiwindow")
 
     _print_summary(rows, windows)
+    _print_lambda_summary(rows)
     print(f"\nOutputs written to {out_dir}/")
     return out_dir
 
@@ -459,3 +513,30 @@ def _print_summary(rows, windows) -> None:
                       f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
             except Exception:
                 pass
+
+
+def _print_lambda_summary(rows) -> None:
+    """Per-group penetration constant λ and a descriptive Welch contrast."""
+    print("\n=== Penetration constant λ (single-exponential fit, absolute profile) ===")
+    by_group: dict[str, list[float]] = {}
+    for r in rows:
+        fit = r["result"]["fit"]
+        flag = "" if fit.fit_ok else "  [fit_ok=False]"
+        print(f"  [{r['group']}/{r['role']}] {r['stack']}: "
+              f"λ={fit.lambda_um:7.2f} µm  R²={fit.r_squared:.4f}{flag}")
+        if r["role"] == "primary" and fit.fit_ok:
+            by_group.setdefault(r["group"], []).append(fit.lambda_um)
+    for g, vals in by_group.items():
+        m = np.mean(vals)
+        sem = np.std(vals, ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0.0
+        print(f"  {g:8s} n={len(vals)}  λ mean={m:7.2f} µm  SEM={sem:5.2f}  "
+              f"values={[round(v, 1) for v in vals]}")
+    if len(by_group) == 2:
+        (ga, va), (gb, vb) = list(by_group.items())
+        try:
+            from scipy import stats as ss
+            t, p = ss.ttest_ind(va, vb, equal_var=False)
+            print(f"  Welch t-test on λ, {ga} vs {gb}: t={t:.3f}, p={p:.4f} "
+                  f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
+        except Exception:
+            pass

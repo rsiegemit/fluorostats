@@ -23,7 +23,13 @@ profiling** from confocal z-stacks.
     with different gain/laser.
   - `auc_depth` — **trapezoidal area-under-curve** over one or more physical depth
     windows, with endpoints linearly interpolated so the window is exactly `[z0, z1]`
-    regardless of slice spacing.
+    regardless of slice spacing. **Model-agnostic default.**
+  - `fit_penetration_depth` — **single-exponential fit** `I(z)=I0·e^(−z/λ)` (or `+c`)
+    of the absolute, background-subtracted profile, returning the field-standard
+    **penetration constant λ (µm)** with `r_squared`/`rmse`/`fit_ok`. λ is fit on the
+    absolute (not surface-normalised) profile so it is **gain-independent** (I0 absorbs
+    gain). Added alongside AUC, not replacing it; `fit_ok` (converged **and** R² ≥ 0.85)
+    flags when the single-exponential does not hold so λ is never quoted from a bad fit.
 - `src/fluorostats/depth_batch.py` — **manifest-driven batch driver**. One JSON
   (groups, stacks, channel, reducer, background blanks, `n_surface`, `auc_windows_um`)
   → tidy CSVs (`depth_profiles_long.csv`, `auc_per_stack.csv`, `group_depth_summary.csv`)
@@ -44,7 +50,9 @@ Benchmark script: `benchmarks/b_depth_penetration.py`. Full write-up with the ta
   known closed-form AUC): recovers analytic AUC to **0.001–0.083 %** on noiseless
   stacks (exact), **0.07 %** on noisy stacks (surface SNR ≈ 10); a two-condition
   contrast (short λ=30 vs long λ=70) recovers the true retained fraction **exactly**
-  (0.309 / 0.548) with the built-in Welch test **p = 4.2 × 10⁻²⁴**.
+  (0.309 / 0.548) with the built-in Welch test **p = 4.2 × 10⁻²⁴**. The **penetration
+  constant λ** is recovered from the known λ=20/40/80/160 stacks **exactly (0.000 %,
+  R²=1.0)** on noiseless data and to **0.03 %** at SNR ≈ 10.
 - **B. Faithful reimplementation parity:** reproduces **Fiji "Plot Z-axis Profile"**
   (per-slice mean) **bit-for-bit**; `auc_depth` matches `scipy.integrate.trapezoid`
   exactly; its trapezoidal AUC is **0.016 %** off analytic vs **2.8 %** for the naive
@@ -81,14 +89,19 @@ From §4 of the dossier — keep these in the text:
   **user to pick the ROI upstream** (fluorostats profiles what it's given).
 - **Small-n stats:** the Welch test is labelled "underpowered, descriptive only" for
   the typical handful of stacks/condition.
-- **AUC, not a decay fit:** it integrates the observed curve (no distributional
-  assumption); it does **not** fit a penetration constant λ.
+- **λ is single-exponential, reported only with R²/`fit_ok`:** `fit_penetration_depth`
+  fits the field-standard `I(z)=I0·e^(−z/λ)` (Beer–Lambert / Amira Correct-Z-Drop /
+  Bonda et al. 2020). Where the single-exponential does not hold (e.g. a near-flat,
+  deeply-penetrating profile — as for the real hybrid gel), λ is huge/ill-determined and
+  the honest fallback is **AUC** (model-agnostic). State λ **with** its R²; never alone.
 
 ## 5. Display-item decision (for the writer)
 
 The validation figure is ready: `benchmarks/figures/main/b_depth_penetration.{pdf,png,txt}`
-(panel a = ground-truth recovery, panel b = two-condition discrimination; caption in
-the `.txt`). It is authored at the same 130.7 mm text width as the other figures.
+(panel a = ground-truth recovery, panel b = **λ recovery on the identity line**, panel c =
+two-condition discrimination; caption in the `.txt`). It is authored at the same 130.7 mm
+text width as the other figures. A **real-data** figure (per-gel mean±SEM profile + fitted
+exponential + λ/R² annotations) is at `methods_paper/permeability/fig_depth_absolute.{pdf,png}`.
 
 **Suggestion:** this is a *capability demonstration*, not a headline result, so it fits
 best as an **Extended Data / Supplementary figure** with a one-paragraph Results
@@ -96,9 +109,13 @@ mention and a Methods subsection — not a main figure. Your call on final numbe
 
 ## 6. Open decisions / what Claude Code can still do
 
-- **Real data:** the benchmark is on synthetic GT. If the real `permeability_fd2000`
-  `.oib` stacks are available locally, Claude Code can run the actual pipeline for a
-  real-data figure alongside the synthetic validation — say the word.
+- **Real data: DONE.** The pipeline was run on the real `.oib` stacks
+  (`fluorostats depth tools/permeability_fd2000.json`; GelMA vs GelMA-CMCMA hybrid,
+  FITC-dextran 2000 kDa; 100 × 4.8 µm = 480 µm). Result (see
+  `DEPTH_BENCHMARK_RESULTS.md` §E + `methods_paper/permeability/*.csv`): **GelMA λ = 81.9 ±
+  1.6 µm (R² ≈ 0.90); hybrid near-flat, λ ill-determined (AUC is the discriminator)**;
+  **ΔAUC(0–200 µm) Welch p = 0.0009** — the hybrid is clearly **more permeable / deeper
+  penetration**. This is the real-data panel for the paper if depth is included.
 - **Wire-in:** if you want the depth figure in the LaTeX, Claude Code can add it to
   the (untracked) manuscript zip and rebuild, same as the other figures.
 

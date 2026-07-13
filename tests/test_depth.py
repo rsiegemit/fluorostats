@@ -11,6 +11,7 @@ from fluorostats.depth import (
     normalize_to_surface,
     auc_depth,
     resample_to_depth,
+    fit_penetration_depth,
 )
 
 
@@ -122,3 +123,77 @@ def test_auc_interpolates_endpoint_between_slices():
 def test_auc_shape_mismatch_raises():
     with pytest.raises(ValueError):
         auc_depth(np.arange(3), np.arange(4))
+
+
+# ---------------------------------------------------------------------------
+# fit_penetration_depth
+# ---------------------------------------------------------------------------
+
+def test_fit_recovers_lambda_noiseless():
+    # I0=100, lambda=40 um over 0..200 um
+    z = np.arange(0, 200.0, 4.0)
+    I0, lam = 100.0, 40.0
+    y = I0 * np.exp(-z / lam)
+    fit = fit_penetration_depth(z, y)
+    assert fit.fit_ok
+    assert fit.offset is None
+    assert fit.lambda_um == pytest.approx(lam, rel=5e-3)  # < 0.5 %
+    assert fit.I0 == pytest.approx(I0, rel=5e-3)
+    assert fit.r_squared > 0.999
+
+
+def test_fit_recovers_lambda_and_offset():
+    z = np.arange(0, 200.0, 4.0)
+    I0, lam, c = 80.0, 30.0, 12.0
+    y = I0 * np.exp(-z / lam) + c
+    fit = fit_penetration_depth(z, y, offset=True)
+    assert fit.fit_ok
+    assert fit.lambda_um == pytest.approx(lam, rel=5e-3)
+    assert fit.I0 == pytest.approx(I0, rel=5e-3)
+    assert fit.offset == pytest.approx(c, rel=5e-3)
+
+
+def test_fit_flags_bad_fit_on_pure_noise():
+    # Deterministic non-exponential input (sawtooth) -> single-exp cannot fit.
+    z = np.arange(0, 200.0, 4.0)
+    y = np.tile([5.0, 40.0, 15.0, 30.0, 10.0], z.size // 5 + 1)[: z.size]
+    fit = fit_penetration_depth(z, y)
+    assert not fit.fit_ok
+    assert fit.r_squared < 0.90
+
+
+def test_fit_lambda_is_gain_independent():
+    # Same lambda, different gain (I0) -> identical recovered lambda.
+    z = np.arange(0, 200.0, 4.0)
+    lam = 55.0
+    fa = fit_penetration_depth(z, 50.0 * np.exp(-z / lam))
+    fb = fit_penetration_depth(z, 4000.0 * np.exp(-z / lam))
+    assert fa.lambda_um == pytest.approx(fb.lambda_um, rel=1e-4)
+    assert fa.lambda_um == pytest.approx(lam, rel=5e-3)
+
+
+def test_fit_rejects_lambda_beyond_acquired_range():
+    # True lambda (5000 um) >> acquired depth (0..100 um): the profile is nearly
+    # flat, so lambda is unmeasurable extrapolation even though R^2 is high.
+    z = np.arange(0, 100.0, 4.0)
+    y = 100.0 * np.exp(-z / 5000.0)
+    fit = fit_penetration_depth(z, y)
+    assert not fit.fit_ok                     # degenerate: lambda out of range
+    assert np.isnan(fit.lambda_um)            # unreliable lambda is NaN'd
+    assert np.isnan(fit.I0)
+    assert np.isfinite(fit.r_squared)         # r_squared kept (fit was attempted)
+
+
+def test_fit_accepts_lambda_at_edge_of_range():
+    # lambda equal to the acquired span is the boundary and must be accepted.
+    z = np.arange(0, 200.0, 4.0)
+    span = float(z[-1] - z[0])
+    y = 100.0 * np.exp(-z / span)
+    fit = fit_penetration_depth(z, y)
+    assert fit.fit_ok
+    assert fit.lambda_um == pytest.approx(span, rel=5e-3)
+
+
+def test_fit_rejects_shape_mismatch():
+    with pytest.raises(ValueError):
+        fit_penetration_depth(np.arange(3), np.arange(4))
