@@ -437,16 +437,31 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         gname = grp["name"]
         colors[gname] = _group_color(gname, grp.get("color"))
         blank = None
-        if grp.get("background"):
-            bvol, bmeta = load_volume(Path(grp["background"]))
-            bvz = float(bmeta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
-            blank = depth.intensity_depth_profile(
-                bvol, bvz, channel=cfg["channel"], reducer=cfg["reducer"]
-            )
+        bg = grp.get("background")
+        if bg:
+            from fluorostats.depth import DepthProfile
+            # accept a single blank path or a list of replicate blanks (averaged)
+            bg_paths = [bg] if isinstance(bg, str) else list(bg)
+            profs = []
+            for bp in bg_paths:
+                bvol, bmeta = load_volume(Path(bp))
+                bvz = float(bmeta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
+                profs.append(depth.intensity_depth_profile(
+                    bvol, bvz, channel=cfg["channel"], reducer=cfg["reducer"]))
+            if len(profs) == 1:
+                blank = profs[0]
+            else:
+                # average replicate blanks over the common depth range; blank SEM
+                # becomes the across-replicate SEM of the mean profile
+                import numpy as _np
+                n = min(len(p.mean) for p in profs)
+                stack = _np.stack([p.mean[:n] for p in profs])
+                blank = DepthProfile(profs[0].depth_um[:n], stack.mean(0),
+                                     stack.std(0, ddof=1) / len(profs) ** 0.5,
+                                     profs[0].n_pixels)
             # drop empty/truncated trailing slices (mean ~0) from the blank
             valid = blank.mean > 0
             if not valid.all():
-                from fluorostats.depth import DepthProfile
                 blank = DepthProfile(blank.depth_um[valid], blank.mean[valid],
                                      blank.sem[valid], blank.n_pixels)
         per_group_primary.setdefault(gname, [])

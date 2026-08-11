@@ -51,6 +51,28 @@ def depth_cmd(manifest, output_dir):
 
 
 # ---------------------------------------------------------------------------
+# viability — Live/Dead viability analysis (manifest driven)
+# ---------------------------------------------------------------------------
+
+@cli.command("viability")
+@click.argument("manifest", type=click.Path(exists=True))
+@click.option("--output", "output_dir", default=None, type=click.Path(),
+              help="Override the manifest's output_dir")
+def viability_cmd(manifest, output_dir):
+    """Live/Dead viability analysis from a JSON manifest.
+
+    Quantifies two-channel Live/Dead z-stacks grouped by condition: area /
+    coverage and count-based viability (cc/watershed/maxima consensus and
+    spread), transparent regime detection, per-FOV cell density, and 2D-MIP-
+    vs-3D coverage bias. Writes tidy CSVs. See ``fluorostats.viability_batch``
+    for the manifest schema.
+    """
+    from . import viability_batch
+    out = viability_batch.run(Path(manifest), output_dir)
+    click.echo(f"Done. Outputs in {out}/")
+
+
+# ---------------------------------------------------------------------------
 # quant3d
 # ---------------------------------------------------------------------------
 

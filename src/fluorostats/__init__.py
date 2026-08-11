@@ -49,6 +49,7 @@ from . import (  # noqa: F401
     depth_batch,
     objects,
     viability,
+    viability_batch,
     stats,
     agreement,
     validate,
