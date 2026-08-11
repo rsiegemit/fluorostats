@@ -1,6 +1,0 @@
-method,mean_largest_frac,mean_cluster_area_px,mean_n_components
-Otsu_1979,0.057,528.4,262.8
-Li_1993,0.054,708.2,242.6
-Isodata_1978,0.053,523.4,246.7
-Triangle_1977,0.06,800.6,307.5
-Yen_1995,0.353,304.1,80.0

@@ -1,8 +1,0 @@
-group,stack,role,voxel_z_um,n_slices,max_depth_um,surface_intensity_subtracted,lambda_um,lambda_I0,lambda_offset,lambda_r_squared,lambda_rmse,lambda_fit_ok,auc_absolute_0_100um,auc_normalized_0_100um,window_covered_um_0_100um,auc_absolute_0_200um,auc_normalized_0_200um,window_covered_um_0_200um,auc_absolute_full,auc_normalized_full,window_covered_um_full
-GelMA,GelMA deep 1,primary,4.8,100,475.2,2637.69,80.2858,3423.8,,0.925187,244.273,1,216846,82.2108,100,246520,93.4607,200,257486,97.6179,475.2
-GelMA,GelMA deep 2,primary,4.8,100,475.2,2238.87,83.441,3057.35,,0.883502,284.551,1,204147,91.1829,100,227304,101.526,200,232749,103.958,475.2
-GelMA,GelMA short (aux),aux,4.8,30,139.2,3510.24,71.2954,4503.83,,0.818807,584.618,0,257571,73.3771,100,269207,76.6919,139.2,269207,76.6919,139.2
-Hybrid,Hybrid deep,primary,4.8,100,475.2,755.332,nan,nan,,0.987845,4.15136,0,75366.2,99.7788,100,148070,196.032,200,333392,441.385,475.2
-Hybrid,Hybrid deep2 a,primary,4.8,100,475.2,1521.69,nan,nan,,0.72975,183.045,0,148888,97.8434,100,287488,188.926,200,555819,365.263,475.2
-Hybrid,Hybrid deep2 b,primary,4.8,100,475.2,1654.46,262.9,2042.16,,0.868687,205.282,1,159772,96.5704,100,299300,180.904,200,439427,265.601,475.2
-Hybrid,Hybrid short (aux),aux,4.8,30,139.2,665.428,nan,nan,,-1.43542e-07,8.04498,0,68161.5,102.433,100,95068,142.867,139.2,95068,142.867,139.2

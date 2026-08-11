@@ -1,3 +1,0 @@
-check,result
-raw p-values match scipy per-stratum,PASS
-BH-FDR q-values match hand-coded BH,PASS

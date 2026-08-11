@@ -30,5 +30,18 @@ publication_figures/
 cli_test*/
 .claude/
 
-# methods paper: exclude large raw data downloads (21GB), keep scripts/docs/results
-methods_paper/data/downloads/
+# methods paper: paper-specific drafts, handoffs, competitor research, and
+# benchmark scripts that hardcode local dataset paths — kept on disk, not public.
+# Reusable code lives in src/fluorostats/; a self-contained figure demo lives in
+# examples/publication_figure/ (curated, self-contained assets).
+methods_paper/
+
+# local raw microscopy data folders (also covered by *.oib)
+Hydrogel permability/
+Extrusion paper data Dextran/
+
+# regenerable example outputs (scripts recreate these on run).
+# NB: examples/benchmark_figures/results/ is bundled INPUT data (tracked);
+# only the publication_figure demo writes a regenerable results/ dir.
+examples/**/figures/
+examples/publication_figure/results/

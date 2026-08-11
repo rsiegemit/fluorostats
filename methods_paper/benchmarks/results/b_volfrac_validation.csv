@@ -1,8 +1,0 @@
-test,fluorostats,reference,PASS
-VF_random_p=0.05,0.0495,0.0495,True
-VF_random_p=0.1,0.0999,0.0999,True
-VF_random_p=0.2,0.199,0.199,True
-VF_random_p=0.35,0.3494,0.3494,True
-VF_sphere_vs_analytic,0.155,0.1551,True
-point_count_converges(step8->1 err),0.0,0.0086,True
-density_per_mm3_zoom_invariant,152587.9,152587.9,True

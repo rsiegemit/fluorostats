@@ -1,7 +1,0 @@
-method,viability,abs_bias_vs_3D,rel_bias_pct
-full_3D_voxelwise(REF),0.5697,0.0,0.0
-midplane_slice,0.578,0.0083,1.5
-MIP,0.5984,0.0287,5.0
-mean_of_per_slice,0.7132,0.1435,25.2
-attenuation_corrected_3D,0.5853,0.0156,2.7
-brightest_focus_slice,0.5796,0.0099,1.7

@@ -1,6 +1,0 @@
-measure,source,spearman_rho_vs_fragmentation,abs_rho,p_value
-euler_number,fluorostats,1.0,1.0,0.0
-mean_component_size,implemented (label_3d + component sizes),-0.9992,0.9992,1.5384870420933972e-75
-n_components,fluorostats,0.9702,0.9702,2.6435689462606177e-34
-largest_component_fraction,fluorostats,-0.967,0.967,3.739483194730525e-33
-spanning_indicator,implemented (label_3d + bbox span),-0.8727,0.8727,3.8949234657374814e-18

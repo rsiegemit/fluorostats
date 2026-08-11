@@ -1,6 +1,0 @@
-regime,true,cc,maxima,watershed,auto,auto_chose
-separated_small,0.9,,0.002,,,cc
-separated_large,0.9,0.0,0.0,0.0,0.0,cc
-noisy,0.9,0.1,0.404,,0.1,cc
-sparse_clean,0.9,0.0,0.013,0.0,0.0,cc
-crowded_kerkhoff,0.5,0.042,0.008,0.088,0.042,cc

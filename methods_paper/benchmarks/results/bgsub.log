@@ -1,8 +1,0 @@
-=== background correction: seg Dice under uneven illumination (BBBC024 mid-slab, n=3) ===
-method
-fluorostats(white_tophat_r45)    0.956
-rolling_ball_r15                 0.861
-gaussian_highpass                0.855
-none                             0.759
-fluorostats(white_tophat_r15)    0.664
-morphological_opening            0.564

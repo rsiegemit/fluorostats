@@ -1,7 +1,0 @@
-method,mean_F1,count_MAE,count_bias
-Otsu_1979,0.939,0.88,-0.88
-Isodata_1978,0.939,0.88,-0.88
-fluorostats(Otsu+CC),0.939,0.88,-0.88
-fluorostats(Otsu+watershed),0.939,0.88,-0.88
-Li_1993,0.826,2.25,-2.25
-Triangle_1977,0.0,6.62,-6.62
