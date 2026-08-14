@@ -146,6 +146,7 @@ def darken(color: str, amount: float = 0.2) -> str:
 
 
 def lighten(color: str, amount: float = 0.2) -> str:
+    """Return a slightly lighter version of a hex color."""
     import matplotlib.colors as mcolors
     rgb = mcolors.to_rgb(color)
     return mcolors.to_hex(tuple(min(1, c + amount) for c in rgb))

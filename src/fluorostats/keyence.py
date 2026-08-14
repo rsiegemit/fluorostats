@@ -16,8 +16,6 @@ is given) plus a metadata dict with pixel size, z-step, channel names/exposures.
 
 Note: Keyence stores ``System.Double`` values as the raw little-endian Int64 bit
 pattern of the IEEE-754 double, and lengths in nanometres; both are decoded here.
-The z-step is stored as ``Stack/Pitch`` in 0.1-µm units (documented convention);
-confirm against the acquisition GUI for a given dataset.
 """
 from __future__ import annotations
 

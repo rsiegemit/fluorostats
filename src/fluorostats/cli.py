@@ -1,4 +1,4 @@
-"""CLI entry point: image-quant quant3d / quant2d."""
+"""CLI entry point: fluorostats quant3d / quant2d / depth / viability / formats."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def viability_cmd(manifest, output_dir):
 @click.option("--threshold-scale", type=float, default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9)")
 @click.option("--min-size", type=int, default=64, help="Min object size in voxels")
 @click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=int, default=0, help="Background subtraction disk radius (0=off, recommended for confocal)")
+@click.option("--bg-radius", type=int, default=0, help="Background subtraction disk radius (0=off; enabling is recommended for confocal)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
 @click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster)")

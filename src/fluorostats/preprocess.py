@@ -98,6 +98,9 @@ def background_subtract(arr: np.ndarray, radius: int = 15) -> np.ndarray:
 
     Removes slowly varying background illumination. Applied per-slice
     for 3D data to handle confocal z-dependent intensity.
+
+    ``radius`` is the rolling-ball / disk structuring-element radius in
+    pixels; it should exceed the largest foreground feature.
     """
     selem = disk(radius)
 
@@ -113,9 +116,9 @@ def background_subtract(arr: np.ndarray, radius: int = 15) -> np.ndarray:
 def auto_crop(arr: np.ndarray, margin: int = 5) -> tuple[np.ndarray, tuple[int, int, int, int]]:
     """Crop away dark/gray borders added by microscope software.
 
-    Detects uniform-intensity border strips (scale bars, gray padding)
-    by checking if edge rows/columns have very low variance compared
-    to the image interior.
+    Detects uniform/low-variance border strips (gray padding) by checking
+    if edge rows/columns have very low variance compared to the image
+    interior.
 
     Parameters
     ----------

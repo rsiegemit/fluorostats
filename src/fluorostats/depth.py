@@ -235,7 +235,7 @@ class PenetrationFit:
         (a decay length longer than the stack is unmeasurable extrapolation).
         A single-exponential is not guaranteed to describe a real profile —
         always check this before quoting λ. When λ is out of range the fit is
-        degenerate: ``lambda_um``/``I0``/``offset`` are ``nan``.
+        degenerate: ``lambda_um`` / ``I0`` (and ``offset``, if fitted) are ``nan``.
     """
 
     lambda_um: float
@@ -291,8 +291,8 @@ def fit_penetration_depth(
     -------
     PenetrationFit. On non-convergence, or when the fitted λ exceeds the
     acquired depth range (degenerate near-flat profile), ``fit_ok`` is
-    ``False`` and ``lambda_um``/``I0``/``offset`` are ``nan`` — a bad or
-    unmeasurable λ is never silently reported.
+    ``False`` and ``lambda_um`` / ``I0`` (and ``offset``, if fitted) are
+    ``nan`` — a bad or unmeasurable λ is never silently reported.
     """
     from scipy.optimize import curve_fit
 

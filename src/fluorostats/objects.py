@@ -61,7 +61,9 @@ def watershed_split(
     min_size : int
         Drop objects below this voxel count after splitting.
     min_distance : int
-        Minimum separation (voxels) between seed maxima; larger = fewer splits.
+        Distance-transform value floor for seeds: only voxels with
+        ``dist > min_distance`` can seed (≈ min object radius, voxels);
+        larger → fewer seeds.
     footprint_size : int
         Size of the local-maximum neighbourhood.
 
@@ -212,8 +214,10 @@ def centroid_homogeneity(
 ) -> dict:
     """Spatial uniformity of object centroids over an XY tile grid.
 
-    Same Gini/CV summary as `morphometry.lateral_homogeneity`, but
-    computed on object *counts per tile* rather than intensity per tile.
+    Expects centroids as (N, 3) in (z, y, x) voxel order (as from
+    ``object_centroids``). Same Gini/CV summary as
+    `morphometry.lateral_homogeneity`, but computed on object *counts per
+    tile* rather than intensity per tile.
 
     Returns dict with keys: centroid_gini, centroid_cv, n_objects.
     """

@@ -85,7 +85,8 @@ def normalise_skeleton_metrics(
     shape_zyx: tuple[int, int, int],
     voxel_size_um: tuple[float, float, float],
 ) -> dict:
-    """Append `length_density_um_per_mm3` and `junction_density_per_mm3`.
+    """Append `length_density_um_per_mm3`, `junction_density_per_mm3`,
+    `branch_density_per_mm3`, and `fov_volume_mm3`.
 
     Returns a new dict; the input is not mutated.
     """

@@ -65,7 +65,7 @@ def bar_mean_sem(
     """Bar chart with mean +/- SEM and individual replicate points.
 
     Publication-standard format for n=3-5 replicates.
-    P-value brackets are off by default (use pvalues.csv instead).
+    P-value brackets are off by default; set show_pvalues=True to draw them.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -125,7 +125,7 @@ def summary_panel(
     """Multi-panel figure: one bar+SEM subplot per metric.
 
     Generates a publication-ready composite figure with all metrics.
-    P-value brackets are off by default (use pvalues.csv instead).
+    P-value brackets are off by default; set show_pvalues=True to draw them.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

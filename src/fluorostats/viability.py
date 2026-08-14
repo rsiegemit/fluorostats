@@ -94,8 +94,8 @@ def choose_count_method(channel, **seg) -> dict:
 
     - low SNR (< 3): ``"cc"`` — connected-component counting is the most
       noise-robust; peak finding would count noise.
-    - crowded touching cells (watershed splits >30% more objects than CC) with
-      adequate SNR: ``"maxima"`` (with auto ``smooth_sigma`` ≈ radius/1.5) — peaks
+    - crowded touching cells (peak count exceeds connected-components by >50%,
+      crowding > 1.5) with adequate SNR: ``"maxima"`` (with auto ``smooth_sigma`` ≈ radius/1.5) — peaks
       separate overlapping cells that CC merges.
     - otherwise (well-separated): ``"cc"`` — exact and robust.
 
@@ -244,7 +244,8 @@ def viability_2d_vs_3d(
     volume — quantifying how much a 2D readout overestimates viability.
 
     Returns dict: live_fraction_midplane, live_fraction_mip, live_fraction_3d,
-    and overestimate_mip = mip / 3d (>1 means the 2D MIP overstates coverage).
+    overestimate_mip = mip / 3d (>1 means the 2D MIP overstates coverage), and
+    overestimate_midplane = midplane / 3d.
     """
     lm = _mask(live, live_mask, **seg)
     nz = lm.shape[z_axis]

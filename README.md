@@ -238,6 +238,7 @@ The JSON manifest lists the groups, stacks, blanks, and AUC windows (fully gener
 ```python
 from fluorostats.objects import (
     label_3d, equivalent_diameters_um, object_density_per_mm3, centroid_homogeneity,
+    object_centroids,
 )
 
 labels, n = label_3d(mask, min_size=64)

@@ -244,7 +244,7 @@ def scheirer_ray_hare(
 ) -> pd.DataFrame:
     """Non-parametric 2-way ANOVA on ranks (Scheirer-Ray-Hare).
 
-    Returns one row per source: factor_a, factor_b, interaction, residual.
+    Returns one row per source: factor_a, factor_b, interaction.
     Columns: source, df, H (sum-of-squares / MS_total), p (chi² survival).
     """
     sub = df[[value_col, factor_a, factor_b]].dropna().copy()

@@ -62,8 +62,8 @@ def _require(package: str, extra: str):
 def load_auto(path: Path) -> tuple[np.ndarray, dict]:
     """Auto-detect format and load as volume or image.
 
-    Tries volume loading first; falls back to 2D if the file has
-    fewer than 3 spatial dimensions.
+    PNG/JPG/BMP load straight as 2D. Other formats try volume loading
+    first and fall back to 2D on any error (or when the volume has Z=1).
     """
     path = Path(path)
     suffix = path.suffix.lower()

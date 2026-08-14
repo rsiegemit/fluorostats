@@ -246,7 +246,7 @@ def render_voxel_cloud(
         if title:
             ax.set_title(title, fontsize=11)
         return ax
-    # voxels() expects shape (X, Y, Z) per axis aspect; we adopt it.
+    # matplotlib voxels() indexes as (X, Y, Z), so we transpose from (Z, Y, X).
     ax.voxels(ds.transpose(2, 1, 0), facecolors=color, edgecolor=None,
               alpha=alpha)
     nz, ny, nx = ds.shape
@@ -441,7 +441,7 @@ def depth_coded_mip(
     gamma: float = 0.8,
     background: tuple[int, int, int] = (0, 0, 0),
 ):
-    """Depth-coded MIP — argmax-of-z coloured by a colormap.
+    """Depth-coded MIP — intensity-weighted mean depth coloured by a colormap.
 
     For each XY pixel, takes the intensity-weighted depth and maps it
     through ``cmap``. Conveys 3D structure in a single 2D panel with

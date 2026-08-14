@@ -51,7 +51,7 @@ def overlay_2d(
     out_path : Path
         Output PNG path.
     alpha : float
-        Mask overlay opacity.
+        Mask overlay opacity (0–1).
     """
     _save_overlay(img.astype(np.float64), mask, out_path, alpha)
 

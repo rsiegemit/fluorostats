@@ -29,6 +29,7 @@ Manifest schema (all fields except groups/stacks are optional)::
       "channel": 0,                # channel index for 4D stacks
       "reducer": "mean",           # "mean" | "median" (per-slice spatial stat)
       "n_surface": 3,              # slices averaged for surface normalisation
+      "fit_offset": false,         # true → 3-parameter exp fit with additive floor
       "auc_windows_um": [[0, 100], [0, 200], "full"],  # one or more windows
       "output_dir": "results/permeability",
       "groups": [
@@ -122,7 +123,7 @@ def window_bounds(w, max_depth_um: float):
 # ---------------------------------------------------------------------------
 
 def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> dict:
-    """Load one stack and compute raw/subtracted/normalised profiles + AUC."""
+    """Load one stack and compute raw/subtracted/normalised profiles + AUC + penetration (λ) fit."""
     vol, meta = load_volume(path)
     vz = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
 
