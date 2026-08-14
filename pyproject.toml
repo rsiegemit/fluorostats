@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     {name = "Roy Siegelmann"},
 ]
-keywords = ["fluorescence", "microscopy", "confocal", "image-analysis", "quantification", "segmentation", "bioimage"]
+keywords = ["fluorescence", "microscopy", "confocal", "image-analysis", "quantification", "segmentation", "bioimage", "keyence"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

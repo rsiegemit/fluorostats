@@ -145,6 +145,18 @@ fluorostats formats   # check availability on the current system
 | `.czi` | Zeiss ZEN | `fluorostats[zeiss]` |
 | `.nd2` | Nikon NIS-Elements | `fluorostats[nikon]` |
 | `.lif` | Leica LAS X | `fluorostats[leica]` |
+| `*_CHF*.ome.tif` folder + `.gci` | Keyence BZ-X (per-slice z-stack export) | included |
+
+Keyence BZ-X exports a z-stack as one OME-TIFF per slice (all channels inside each file) plus an `Image .gci` metadata archive. Load the whole stack — pixel size, z-step, and channel names read from the `.gci` — in one call:
+
+```python
+from fluorostats import keyence
+
+arr, meta = keyence.load_keyence_stack("path/to/stack_folder")   # (C, Z, Y, X) + metadata
+# arr[0], arr[1] = acquired channels; meta = {px_um, z_step_um, channels, ...}
+```
+
+Only the `*_CHF*` files and `.gci` are needed — the 8-bit `Overlay` / `Preview` exports are derivable. See [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) for an end-to-end cell-laden-tube analysis (nuclei density, wall band, coverage/lumen, GFP network) built on this reader.
 
 ## Python API
 
