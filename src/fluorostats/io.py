@@ -83,8 +83,24 @@ def load_auto(path: Path) -> tuple[np.ndarray, dict]:
 
 
 def load_volume(path: Path) -> tuple[np.ndarray, dict]:
-    """Load a 3D volume. Returns (array[C,Z,Y,X], metadata)."""
+    """Load a 3D volume. Returns (array[C,Z,Y,X], metadata).
+
+    A directory is auto-detected as a Keyence BZ-X export (folder of per-slice
+    ``*_CHF*`` OME-TIFFs + ``.gci``) and assembled via ``fluorostats.keyence``.
+    """
     path = Path(path)
+
+    if path.is_dir():
+        from . import keyence
+        if not keyence.is_keyence_folder(path):
+            raise ValueError(f"Directory is not a recognised Keyence BZ-X export: {path}")
+        arr, meta = keyence.load_keyence_stack(path)
+        px, zs = meta.get("px_um") or 1.0, meta.get("z_step_um") or 1.0
+        meta["voxel_size_um"] = (zs, px, px)
+        chd = meta.get("channels") or {}
+        meta["channel_names"] = [chd.get(str(i), {}).get("name", f"CH{i}") for i in range(arr.shape[0])]
+        return arr, meta
+
     suffix = path.suffix.lower()
 
     loaders = {

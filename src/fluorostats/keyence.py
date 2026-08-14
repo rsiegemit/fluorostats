@@ -29,7 +29,17 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["parse_gci", "load_keyence_stack"]
+__all__ = ["parse_gci", "load_keyence_stack", "is_keyence_folder"]
+
+
+def is_keyence_folder(folder) -> bool:
+    """True if ``folder`` looks like a Keyence BZ-X export (has ``*_CHF*`` slices
+    or a ``.gci`` archive). Used by ``fluorostats.io.load_volume`` to auto-detect
+    a Keyence folder passed in place of a single file."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return False
+    return bool(next(folder.glob("*_CHF*.tif"), None) or next(folder.glob("*.gci"), None))
 
 
 def _int64_to_double(value) -> float | None:

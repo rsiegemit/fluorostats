@@ -154,6 +154,10 @@ from fluorostats import keyence
 
 arr, meta = keyence.load_keyence_stack("path/to/stack_folder")   # (C, Z, Y, X) + metadata
 # arr[0], arr[1] = acquired channels; meta = {px_um, z_step_um, channels, ...}
+
+# ...or just pass the folder to the generic loader — it auto-detects Keyence:
+from fluorostats.io import load_volume
+arr, meta = load_volume("path/to/stack_folder")   # (C, Z, Y, X); voxel_size_um, channel_names
 ```
 
 Only the `*_CHF*` files and `.gci` are needed — the 8-bit `Overlay` / `Preview` exports are derivable. See [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) for an end-to-end cell-laden-tube analysis (nuclei density, wall band, coverage/lumen, GFP network) built on this reader.

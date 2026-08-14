@@ -6,7 +6,8 @@ skeleton toolkit. A worked template for two-channel (nuclei + cell marker) 3D
 constructs; adapt the channel roles and metrics to your own assay.
 
 Input: a folder of Keyence `*_CHF*.ome.tif` z-slices (all channels inside each file;
-here C0 = DAPI nuclei, C1 = GFP) plus `Image .gci`. One folder = one stack/position.
+here C0 = DAPI nuclei, C1 = green channel — phalloidin / F-actin cytoskeleton in this
+dataset) plus `Image .gci`. One folder = one stack/position.
 Only these two file types are needed — the 8-bit `Overlay` / `Preview` exports are
 derivable, so requesting just `*_CHF*` + `.gci` keeps datasets ~60% smaller.
 
@@ -14,7 +15,8 @@ Computes, per stack:
   - nuclei: 3D count, density (nuclei/mm^3), size distribution, spatial homogeneity (Gini)
   - z / wall: cell signal vs depth -> wall-band depth, thickness (FWHM), span
   - lumen / coverage: cellular MIP mask, largest internal void (lumen) area, coverage
-  - GFP network: coverage, skeleton junction density, GFP-vs-nuclei overlap
+  - cytoskeleton network (green channel): coverage, skeleton junction density,
+    overlap with nuclei — apt for the F-actin/phalloidin filament network here
   - intensity: DAPI/GFP means (GAIN-SENSITIVE -> only compare within one exposure setting)
 
 Writes CSVs + figures to an output folder. `batch()` runs many folders and writes a

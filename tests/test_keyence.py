@@ -76,3 +76,18 @@ def test_load_stack_single_channel_and_downsample(keyence_folder):
 def test_missing_files(tmp_path):
     with pytest.raises(FileNotFoundError):
         keyence.load_keyence_stack(tmp_path)
+
+
+def test_is_keyence_folder(keyence_folder, tmp_path):
+    assert keyence.is_keyence_folder(keyence_folder) is True
+    assert keyence.is_keyence_folder(tmp_path / "does_not_exist") is False
+    (tmp_path / "empty").mkdir()
+    assert keyence.is_keyence_folder(tmp_path / "empty") is False
+
+
+def test_load_volume_autodetects_folder(keyence_folder):
+    from fluorostats.io import load_volume
+    arr, meta = load_volume(keyence_folder)                  # a folder, not a file
+    assert arr.shape == (2, 3, 24, 32)
+    assert meta["voxel_size_um"] == pytest.approx((2.5, 0.4, 0.4))
+    assert meta["channel_names"] == ["DAPI", "GFP"]
