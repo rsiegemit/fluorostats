@@ -3,6 +3,8 @@
 Public API surface, grouped by module:
 
   - ``io`` — load_volume (any supported format).
+  - ``keyence`` — assemble a z-stack from a Keyence BZ-X folder of per-slice
+    OME-TIFFs (load_keyence_stack) and parse the ``.gci`` acquisition metadata.
   - ``preprocess`` — channel selection, denoising, background subtraction.
   - ``segment`` — binarisation (Otsu, percentile, manual).
   - ``metrics_3d`` — volume_fraction, connectivity_metrics, fov_volume_mm3,
@@ -47,6 +49,7 @@ from . import (  # noqa: F401
     morphometry,
     depth,
     depth_batch,
+    keyence,
     objects,
     viability,
     viability_batch,
