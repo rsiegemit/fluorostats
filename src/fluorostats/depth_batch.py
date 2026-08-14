@@ -173,7 +173,8 @@ def _common_grid(profiles: list[dict]) -> np.ndarray:
     at every grid point (no extrapolation). Independent of the AUC window —
     AUC is computed per stack on full-resolution data.
     """
-    step = float(np.median([np.median(np.diff(p["depth_um"])) for p in profiles]))
+    steps = [np.median(np.diff(p["depth_um"])) for p in profiles if p["depth_um"].size >= 2]
+    step = float(np.median(steps)) if steps else 1.0   # guard single-slice stacks (np.diff -> [])
     top = min(p["max_depth_um"] for p in profiles)
     n = int(round(top / step)) + 1
     return np.arange(n) * step

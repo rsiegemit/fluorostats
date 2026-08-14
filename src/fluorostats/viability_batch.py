@@ -154,6 +154,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
             rows.append({"group": gname, "stack": st["label"], **r})
 
     # per-stack CSV
+    if not rows:
+        raise ValueError("no stacks analysed — every group's 'stacks' list is empty")
     fields = list(rows[0].keys())
     with open(out / "viability_per_stack.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields)

@@ -31,11 +31,11 @@ def boxplot_by_condition(
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.5), 5))
 
-    bp = ax.boxplot(
-        data, labels=conditions, patch_artist=True, widths=0.5, showfliers=False,
-    )
+    bp = ax.boxplot(data, patch_artist=True, widths=0.5, showfliers=False)
+    ax.set_xticks(range(1, len(conditions) + 1))
+    ax.set_xticklabels(conditions)   # avoids the deprecated boxplot(labels=) kwarg
 
-    colors = plt.cm.Set2(range(len(conditions)))
+    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
     for patch, color in zip(bp["boxes"], colors):
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
@@ -81,7 +81,7 @@ def bar_mean_sem(
         sems.append(vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0)
 
     x = np.arange(len(conditions))
-    colors = plt.cm.Set2(range(len(conditions)))
+    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
@@ -142,7 +142,7 @@ def summary_panel(
     axes = axes.flat
 
     conditions = sorted(df["condition"].unique())
-    colors = plt.cm.Set2(range(len(conditions)))
+    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
     x = np.arange(len(conditions))
 
     for idx, metric in enumerate(available):

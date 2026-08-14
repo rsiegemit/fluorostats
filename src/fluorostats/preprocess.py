@@ -158,10 +158,12 @@ def auto_crop(arr: np.ndarray, margin: int = 5) -> tuple[np.ndarray, tuple[int, 
         # No clear border detected, return unchanged
         return arr, (0, h, 0, w)
 
-    y0 = max(0, active_rows[0] + margin)
-    y1 = min(h, active_rows[-1] - margin + 1)
-    x0 = max(0, active_cols[0] + margin)
-    x1 = min(w, active_cols[-1] - margin + 1)
+    # apply the inward margin only on edges where a border was actually found,
+    # so a borderless image is not silently trimmed by `margin` on every side
+    y0 = active_rows[0] + margin if active_rows[0] > 0 else 0
+    y1 = active_rows[-1] + 1 - margin if active_rows[-1] < h - 1 else h
+    x0 = active_cols[0] + margin if active_cols[0] > 0 else 0
+    x1 = active_cols[-1] + 1 - margin if active_cols[-1] < w - 1 else w
 
     if y1 <= y0 or x1 <= x0:
         return arr, (0, h, 0, w)

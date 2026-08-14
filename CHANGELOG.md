@@ -16,11 +16,21 @@ versions follow [semantic versioning](https://semver.org).
   blanks, multi-window AUC, tidy CSVs + publication figures.
 
 ### Fixed
-- `plots`: strip-plot jitter was reseeded per group, so every group drew identical
-  jitter — now one RNG per figure (independent points, still reproducible).
+- `stats.stouffer_combine`: weights are now aligned with the surviving p-values after
+  NaN removal (they were previously mis-paired, silently corrupting weighted pooling).
+- `preprocess.auto_crop`: no longer trims `margin` pixels off a borderless image; the
+  inward margin is applied only on edges where a border was actually detected.
+- `objects.object_volumes_voxels` / `equivalent_diameters_um`: skip gaps in
+  non-contiguous label images (no more spurious zero-size objects).
+- `plots`: bar/box/summary colours no longer collide past 8 conditions; `boxplot` no
+  longer uses the deprecated Matplotlib `labels=` kwarg; strip-plot jitter uses one RNG
+  per figure (was reseeded per group, giving identical jitter).
+- `depth_batch` / `viability_batch`: guard a single-slice stack and an empty manifest
+  instead of crashing.
 - `render3d`: voxel-cloud box aspect now reflects anisotropic voxel size and per-axis
-  downsample rather than raw voxel counts; `__all__` now lists every public MIP helper.
+  downsample rather than raw voxel counts; `__all__` lists every public MIP helper.
 
 ### Changed
-- Release-hardening pass: removed dead imports/variables, corrected a few misleading
-  docstrings, and added depth-batch test coverage. No public API changed.
+- Release-hardening: removed dead code, corrected all inaccurate docstrings/comments,
+  and expanded the test suite to 146 tests (CLI + regression coverage; 80% overall).
+  No public API changed.

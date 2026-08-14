@@ -215,7 +215,8 @@ def stouffer_combine(
     p's were supplied.
     """
     p = np.asarray(p_values, dtype=float)
-    p = p[~np.isnan(p)]
+    keep = ~np.isnan(p)
+    p = p[keep]
     if p.size == 0:
         return {"z": float("nan"), "p": float("nan"), "n": 0}
     p = np.clip(p, np.finfo(float).tiny, 1 - 1e-15)
@@ -226,7 +227,7 @@ def stouffer_combine(
     if weights is None:
         z = z_individual.sum() / np.sqrt(p.size)
     else:
-        w = np.asarray(weights, dtype=float)[: p.size]
+        w = np.asarray(weights, dtype=float)[keep]   # align weights with surviving (non-NaN) p-values
         z = (w * z_individual).sum() / np.sqrt((w ** 2).sum())
     p_combined = float(sps.norm.sf(z) if one_sided else 2 * sps.norm.sf(abs(z)))
     return {"z": float(z), "p": p_combined, "n": int(p.size)}

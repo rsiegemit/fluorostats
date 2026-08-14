@@ -166,8 +166,8 @@ def object_volumes_voxels(labels: np.ndarray) -> np.ndarray:
     """Per-object volume in voxels (excluding background label 0)."""
     if labels.max() == 0:
         return np.array([], dtype=np.int64)
-    sizes = np.bincount(labels.ravel())
-    return sizes[1:].astype(np.int64)
+    sizes = np.bincount(labels.ravel())[1:]
+    return sizes[sizes > 0].astype(np.int64)   # drop gaps from non-contiguous label images
 
 
 def equivalent_diameters_um(
