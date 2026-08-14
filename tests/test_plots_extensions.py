@@ -10,7 +10,69 @@ from fluorostats.plots import (
     forest_plot,
     condition_strip,
     modality_panel,
+    bar_mean_sem,
+    boxplot_by_condition,
+    summary_panel,
+    compute_pvalues,
 )
+
+
+def _replicate_df():
+    """Two conditions with a clear separation -> significant p-values."""
+    rng = np.random.default_rng(0)
+    lo = rng.normal(1.0, 0.05, 6)
+    hi = rng.normal(5.0, 0.05, 6)
+    return pd.DataFrame({
+        "condition": ["ctrl"] * 6 + ["treat"] * 6,
+        "volume_fraction": np.concatenate([lo, hi]),
+        "n_components": np.concatenate([lo * 10, hi * 10]),
+    })
+
+
+def test_bar_mean_sem_with_pvalue_brackets(tmp_path):
+    """show_pvalues=True on separated data draws significance brackets."""
+    out = tmp_path / "bar.png"
+    bar_mean_sem(_replicate_df(), "volume_fraction", out, show_pvalues=True)
+    assert out.exists() and out.stat().st_size > 1000
+
+
+def test_boxplot_by_condition_writes_file(tmp_path):
+    out = tmp_path / "box.png"
+    boxplot_by_condition(_replicate_df(), "volume_fraction", out,
+                         ylabel="Volume Fraction")
+    assert out.exists() and out.stat().st_size > 1000
+
+
+def test_summary_panel_with_pvalues(tmp_path):
+    out = tmp_path / "summary.png"
+    summary_panel(_replicate_df(), ["volume_fraction", "n_components"], out,
+                  show_pvalues=True)
+    assert out.exists() and out.stat().st_size > 1000
+
+
+def test_summary_panel_no_available_metrics_is_noop(tmp_path):
+    out = tmp_path / "empty.png"
+    df = pd.DataFrame({"condition": ["a", "b"]})
+    summary_panel(df, ["does_not_exist"], out)
+    assert not out.exists()
+
+
+def test_compute_pvalues_flags_significance():
+    pvals = compute_pvalues(_replicate_df(), ["volume_fraction", "missing_metric"])
+    assert set(pvals["metric"]) == {"volume_fraction"}
+    assert (pvals["significance"] != "ns").all()
+
+
+def test_condition_strip_default_axes_and_palette():
+    """ax=None + no hue/marker exercises the auto-figure and default palette."""
+    df = pd.DataFrame({
+        "cond": ["a", "a", "b", "b", "b"],
+        "val": [1.0, 2.0, 3.0, 4.0, 5.0],
+    })
+    ax = condition_strip(df, "cond", "val")
+    assert ax is not None
+    import matplotlib.pyplot as plt
+    plt.close(ax.figure)
 
 
 def _stats_df():

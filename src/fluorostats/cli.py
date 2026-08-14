@@ -186,32 +186,10 @@ def quant3d(
                    "largest_component_fraction", "total_length_um",
                    "n_junctions", "mean_branch_length_um"]
 
-    if not no_plots and len(df["condition"].unique()) > 1:
-        plot_dir = output_path / "plots"
-        has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
-
-        for metric in _3d_metrics:
-            if metric not in df.columns or not df[metric].notna().any():
-                continue
-            if has_replicates:
-                plots.bar_mean_sem(df, metric, plot_dir / f"{metric}_bar.png")
-            plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
-
-        # Summary panel with all metrics
-        plots.summary_panel(
-            df, _3d_metrics, plot_dir / "summary_panel.png",
-            title="3D Confocal Quantification Summary",
-            show_pvalues=has_replicates,
-        )
-
-        # P-value table
-        if has_replicates:
-            pvals = plots.compute_pvalues(df, _3d_metrics)
-            if len(pvals) > 0:
-                pvals.to_csv(str(plot_dir / "pvalues.csv"), index=False)
-                click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
-
-        click.echo(f"Plots saved to {plot_dir}")
+    _write_plots_and_pvalues(
+        df, _3d_metrics, output_path, no_plots,
+        summary_title="3D Confocal Quantification Summary",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -311,35 +289,48 @@ def quant2d(
     _2d_metrics = ["area_fraction", "n_components", "largest_component_fraction",
                    "mean_cluster_area_px", "median_cluster_area_px"]
 
-    if not no_plots and len(df["condition"].unique()) > 1:
-        plot_dir = output_path / "plots"
-        has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
-
-        for metric in _2d_metrics:
-            if metric not in df.columns or not df[metric].notna().any():
-                continue
-            if has_replicates:
-                plots.bar_mean_sem(df, metric, plot_dir / f"{metric}_bar.png")
-            plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
-
-        plots.summary_panel(
-            df, _2d_metrics, plot_dir / "summary_panel.png",
-            title="2D Endothelial Coverage Summary",
-            show_pvalues=has_replicates,
-        )
-
-        if has_replicates:
-            pvals = plots.compute_pvalues(df, _2d_metrics)
-            if len(pvals) > 0:
-                pvals.to_csv(str(plot_dir / "pvalues.csv"), index=False)
-                click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
-
-        click.echo(f"Plots saved to {plot_dir}")
+    _write_plots_and_pvalues(
+        df, _2d_metrics, output_path, no_plots,
+        summary_title="2D Endothelial Coverage Summary",
+    )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
+    """Shared quant2d/quant3d tail: per-metric plots, summary panel, p-values.
+
+    No-op unless plots are enabled and there is more than one condition.
+    """
+    if no_plots or len(df["condition"].unique()) <= 1:
+        return
+
+    plot_dir = output_path / "plots"
+    has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
+
+    for metric in metrics:
+        if metric not in df.columns or not df[metric].notna().any():
+            continue
+        if has_replicates:
+            plots.bar_mean_sem(df, metric, plot_dir / f"{metric}_bar.png")
+        plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
+
+    plots.summary_panel(
+        df, metrics, plot_dir / "summary_panel.png",
+        title=summary_title,
+        show_pvalues=has_replicates,
+    )
+
+    if has_replicates:
+        pvals = plots.compute_pvalues(df, metrics)
+        if len(pvals) > 0:
+            pvals.to_csv(str(plot_dir / "pvalues.csv"), index=False)
+            click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
+
+    click.echo(f"Plots saved to {plot_dir}")
+
 
 def _find_files(root: Path, suffixes: set[str]) -> list[Path]:
     """Recursively find files with matching suffixes."""

@@ -65,6 +65,15 @@ def test_depth_profile_reveals_gradient():
     assert prof[10:].mean() == pytest.approx(0.0, abs=1e-6)  # deep empty
 
 
+def test_depth_profile_with_dead_channel_returns_viability_by_z():
+    live = np.zeros((4, 10, 10), np.float32); live[:, :5, :] = 100
+    dead = np.zeros((4, 10, 10), np.float32); dead[:, 5:, :] = 100
+    out = viability_depth_profile(live, dead)
+    assert "dead_by_z" in out and "viability_by_z" in out
+    # Equal live/dead area per slice -> viability ~0.5 on every slice
+    assert np.allclose(out["viability_by_z"], 0.5, atol=0.05)
+
+
 def test_2d_overestimates_vs_3d():
     live = _stack_with_depth_gradient()
     r = viability_2d_vs_3d(live)

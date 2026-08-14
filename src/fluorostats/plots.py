@@ -13,6 +13,27 @@ import pandas as pd
 
 
 # ---------------------------------------------------------------------------
+# Shared per-condition statistics
+# ---------------------------------------------------------------------------
+
+def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
+    """Per-condition (data, means, sems) for *metric*.
+
+    Returns three parallel lists aligned to *conditions*: the raw dropped-NA
+    value arrays, the means (0 when empty), and the SEMs (0 when n<=1).
+    """
+    data = []
+    means = []
+    sems = []
+    for c in conditions:
+        vals = df.loc[df["condition"] == c, metric].dropna().values
+        data.append(vals)
+        means.append(vals.mean() if len(vals) > 0 else 0)
+        sems.append(vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+    return data, means, sems
+
+
+# ---------------------------------------------------------------------------
 # Single-metric plots
 # ---------------------------------------------------------------------------
 
@@ -71,14 +92,7 @@ def bar_mean_sem(
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     conditions = sorted(df["condition"].unique())
-    means = []
-    sems = []
-    data = []
-    for c in conditions:
-        vals = df.loc[df["condition"] == c, metric].dropna().values
-        data.append(vals)
-        means.append(vals.mean() if len(vals) > 0 else 0)
-        sems.append(vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+    data, means, sems = _group_stats(df, metric, conditions)
 
     x = np.arange(len(conditions))
     colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
@@ -147,14 +161,7 @@ def summary_panel(
 
     for idx, metric in enumerate(available):
         ax = axes[idx]
-        data = []
-        means = []
-        sems = []
-        for c in conditions:
-            vals = df.loc[df["condition"] == c, metric].dropna().values
-            data.append(vals)
-            means.append(vals.mean() if len(vals) > 0 else 0)
-            sems.append(vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+        data, means, sems = _group_stats(df, metric, conditions)
 
         ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
                linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})

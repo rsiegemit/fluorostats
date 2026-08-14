@@ -32,5 +32,6 @@ versions follow [semantic versioning](https://semver.org).
 
 ### Changed
 - Release-hardening: removed dead code, corrected all inaccurate docstrings/comments,
-  and expanded the test suite to 146 tests (CLI + regression coverage; 80% overall).
-  No public API changed.
+  de-duplicated the per-condition stats helper in `plots` and the shared quant2d/quant3d
+  reporting tail in `cli`, and expanded the test suite to 215 tests (CLI + regression +
+  render/io/preprocess coverage; 88% overall). No public API changed.
