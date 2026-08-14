@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from fluorostats.skeleton import (
     skeleton_metrics, prune_skeleton, n_junction_nodes,

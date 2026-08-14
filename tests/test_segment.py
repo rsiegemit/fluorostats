@@ -1,7 +1,6 @@
 """Tests for segmentation: known-geometry synthetic volumes."""
 
 import numpy as np
-import pytest
 
 from fluorostats.segment import binarize, choose_threshold_method, THRESHOLD_METHODS
 from fluorostats.metrics_3d import volume_fraction

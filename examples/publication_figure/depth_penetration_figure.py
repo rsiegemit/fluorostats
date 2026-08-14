@@ -42,7 +42,6 @@ from figstyle import OKABE, panel, save, caption
 import matplotlib.pyplot as plt
 
 from fluorostats import depth
-from fluorostats.depth import DepthProfile
 
 RES = Path(__file__).resolve().parent / "results"
 RES.mkdir(parents=True, exist_ok=True)

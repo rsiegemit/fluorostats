@@ -77,10 +77,11 @@ def _resolve_override(
 
 
 def denoise(arr: np.ndarray, sigma: float = 1.0) -> np.ndarray:
-    """Gaussian denoise. Works for both 2D and 3D arrays.
+    """Gaussian denoise a 2D image or a 3D (Z, Y, X) stack.
 
-    For 3D, applies per-slice to keep memory low and match confocal
-    PSF (XY blur >> Z blur at typical confocal sampling).
+    A 3D stack is blurred in-plane, one z-slice at a time (no cross-slice
+    blur) — cheap on memory and matched to confocal sampling, where the
+    in-plane PSF dominates. Pass a single channel, not a (C, Z, Y, X) volume.
     """
     if arr.ndim == 2:
         return gaussian(arr, sigma=sigma, preserve_range=True)

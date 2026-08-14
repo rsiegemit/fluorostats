@@ -6,8 +6,7 @@ import figstyle as F
 from figstyle import OKABE, panel, save, caption
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-from scipy import stats as sps, ndimage as ndi
-from skimage.segmentation import find_boundaries
+from scipy import stats as sps
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]

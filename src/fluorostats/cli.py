@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import click
-import numpy as np
 
 from . import io as iq_io
 from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment
@@ -25,7 +24,7 @@ def formats():
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
         click.echo(f"  [{marker}] {ext:<8} {desc}")
-    click.echo(f"\nInstall all: pip install fluorostats[all]")
+    click.echo("\nInstall all: pip install fluorostats[all]")
 
 
 # ---------------------------------------------------------------------------

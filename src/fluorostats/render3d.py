@@ -250,13 +250,13 @@ def render_voxel_cloud(
     ax.voxels(ds.transpose(2, 1, 0), facecolors=color, edgecolor=None,
               alpha=alpha)
     nz, ny, nx = ds.shape
+    # physical box aspect (accounts for anisotropic voxels + per-axis downsample)
     spacing = (
         voxel_size_um[0] * downsample[0],
         voxel_size_um[1] * downsample[1],
         voxel_size_um[2] * downsample[2],
     )
-    box = (nx * spacing[2], ny * spacing[1], nz * spacing[0])
-    ax.set_box_aspect((nx, ny, nz))
+    ax.set_box_aspect((nx * spacing[2], ny * spacing[1], nz * spacing[0]))
     ax.view_init(elev=elev, azim=azim)
     ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
     if title:
@@ -458,7 +458,6 @@ def depth_coded_mip(
     # intensity-weighted depth
     z_idx = np.arange(nz)
     if z_axis == 0:
-        weights = vol_norm.sum(axis=(1, 2))[:, None, None] if False else vol_norm
         depth = (vol_norm * z_idx[:, None, None]).sum(axis=0) / np.where(
             vol_norm.sum(axis=0) == 0, 1, vol_norm.sum(axis=0))
     else:
@@ -528,5 +527,9 @@ __all__ = [
     "render_isosurface",
     "render_voxel_cloud",
     "mip_overlay",
+    "live_dead_mip",
+    "mip_grid",
+    "depth_coded_mip",
+    "layer_split_mip",
     "save_isosurface",
 ]

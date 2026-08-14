@@ -3,7 +3,6 @@
 import numpy as np
 import pytest
 import tifffile
-from pathlib import Path
 
 from fluorostats.io import load_volume, load_image
 

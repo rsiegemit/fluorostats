@@ -23,7 +23,6 @@ that other code can override.
 from __future__ import annotations
 
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 
 
 PALETTE = {
@@ -48,7 +47,6 @@ MATERIAL_COLORS = {
 DARK_PALETTE = {
     "background": "#000000",
     "mesh":       "#F5C518",   # rich yellow, slide-2 style
-    "mesh_alt":   "#FF8C42",   # alt warm orange for second material
     "grid":       "#3A3A3A",
     "ink":        "#FFFFFF",
     "scalebar":   "#FFFFFF",

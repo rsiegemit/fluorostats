@@ -16,7 +16,6 @@ domain-specific column names baked in.
 
 from __future__ import annotations
 
-from itertools import product
 
 import numpy as np
 import pandas as pd

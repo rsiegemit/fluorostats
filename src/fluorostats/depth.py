@@ -359,8 +359,8 @@ def fit_penetration_depth(
     # fitting a near-flat profile can still post a high R², so R² alone cannot
     # catch it. Reject such degenerate fits and NaN the unreliable parameters
     # (r_squared/rmse are kept so callers can see a fit was attempted).
-    depth_span = float(z[-1] - z[0])
-    lambda_in_range = bool(np.isfinite(lam_fit) and 0.0 < lam_fit <= depth_span)
+    depth_range_um = float(z[-1] - z[0])
+    lambda_in_range = bool(np.isfinite(lam_fit) and 0.0 < lam_fit <= depth_range_um)
     fit_ok = bool(lambda_in_range and r_squared >= r2_threshold)
     if not lambda_in_range:
         lam_fit = float("nan")

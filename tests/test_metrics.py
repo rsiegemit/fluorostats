@@ -1,7 +1,6 @@
 """Tests for 3D and 2D metrics on synthetic data."""
 
 import numpy as np
-import pytest
 
 from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
 from fluorostats.metrics_2d import area_fraction

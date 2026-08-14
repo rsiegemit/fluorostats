@@ -28,11 +28,10 @@ Usage:
     # or import: analyze_folder(in_dir, out_dir); batch({name: folder, ...}, out_dir)
 """
 from __future__ import annotations
-import sys, re, glob, json, warnings
+import sys, json, warnings
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import tifffile
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

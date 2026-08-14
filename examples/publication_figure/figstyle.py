@@ -15,7 +15,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
-from matplotlib import font_manager
 
 # ---- Okabe-Ito palette (colourblind-safe) ----
 # fluorostats is ALWAYS blue (#0072B2) and only fluorostats. DL tools: StarDist

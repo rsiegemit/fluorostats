@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import figstyle
 from figstyle import OKABE, apply_style, save, panel, caption, EXT, TW
 
 apply_style()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fluorostats.validate import instance_f1, match_instances, average_precision
+from fluorostats.validate import instance_f1, average_precision
 from fluorostats.objects import watershed_split, clear_border_labels, label_3d
 
 

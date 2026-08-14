@@ -40,8 +40,9 @@ def boxplot_by_condition(
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
 
+    rng = np.random.default_rng(42)
     for i, d in enumerate(data):
-        jitter = 0.1 * (np.random.default_rng(42).random(len(d)) - 0.5)
+        jitter = 0.1 * (rng.random(len(d)) - 0.5)
         ax.scatter(np.full(len(d), i + 1) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
 
     ax.set_ylabel(ylabel or _label_for(metric))
@@ -84,12 +85,13 @@ def bar_mean_sem(
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
-    bars = ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-                  linewidth=0.8, capsize=5, error_kw={"linewidth": 1.5})
+    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
+           linewidth=0.8, capsize=5, error_kw={"linewidth": 1.5})
 
     # Overlay individual replicate points
+    rng = np.random.default_rng(42)
     for i, d in enumerate(data):
-        jitter = 0.12 * (np.random.default_rng(42).random(len(d)) - 0.5)
+        jitter = 0.12 * (rng.random(len(d)) - 0.5)
         ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=30, alpha=0.7, zorder=3)
 
     # P-value annotations
@@ -157,8 +159,9 @@ def summary_panel(
         ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
                linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
 
+        rng = np.random.default_rng(42)
         for i, d in enumerate(data):
-            jitter = 0.1 * (np.random.default_rng(42).random(len(d)) - 0.5)
+            jitter = 0.1 * (rng.random(len(d)) - 0.5)
             ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
 
         if show_pvalues and len(conditions) > 1:

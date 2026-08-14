@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from fluorostats.power import bootstrap_power, power_curve, fdr_power_curve
 
