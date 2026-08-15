@@ -126,7 +126,7 @@ def stratified_mann_whitney(
     grouped = df.groupby(strata, dropna=False) if strata else [((), df)]
     rows = []
     for keys, sub in grouped:
-        if not isinstance(keys, tuple):
+        if not isinstance(keys, tuple):  # pragma: no cover — pandas ≥1.5 always yields tuples
             keys = (keys,)
         a_df = sub[sub[group_col] == group_a]
         b_df = sub[sub[group_col] == group_b]

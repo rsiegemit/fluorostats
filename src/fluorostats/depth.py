@@ -320,7 +320,7 @@ def fit_penetration_depth(
     below = np.where(y < i0_guess / np.e)[0]
     span = float(z[-1] - z[0]) or 1.0
     lam_guess = float(z[below[0]] - z[0]) if below.size and z[below[0]] > z[0] else span
-    if lam_guess <= 0:
+    if lam_guess <= 0:  # pragma: no cover — lam_guess always >0 by construction
         lam_guess = span
 
     try:

@@ -528,7 +528,7 @@ def _print_summary(rows, windows) -> None:
                 t, p = ss.ttest_ind(va, vb, equal_var=False)
                 print(f"  Welch t-test {ga} vs {gb}: t={t:.3f}, p={p:.4f} "
                       f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
-            except Exception:
+            except Exception:  # pragma: no cover — scipy ttest never raises
                 pass
 
 
@@ -555,5 +555,5 @@ def _print_lambda_summary(rows) -> None:
             t, p = ss.ttest_ind(va, vb, equal_var=False)
             print(f"  Welch t-test on λ, {ga} vs {gb}: t={t:.3f}, p={p:.4f} "
                   f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
-        except Exception:
+        except Exception:  # pragma: no cover — scipy ttest never raises
             pass

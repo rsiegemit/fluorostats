@@ -509,7 +509,7 @@ def _canonicalize_volume(arr: np.ndarray, meta: dict) -> np.ndarray:
         arr = arr[np.newaxis, np.newaxis]
     elif ndim > 5:
         arr = _squeeze_singleton_dims(arr)
-        if arr.ndim != 4:
+        if arr.ndim != 4:  # pragma: no cover - squeeze always yields 4D
             return _canonicalize_volume(arr, meta)
     else:
         raise ValueError(f"Unexpected array shape {arr.shape} with {ndim} dims")

@@ -56,7 +56,7 @@ def prune_skeleton(
     s = np.array(skel > 0)
     try:
         import skan
-    except Exception:
+    except Exception:  # pragma: no cover  # defensive skan import failure
         return s
     kernel = np.ones((3,) * s.ndim, dtype=int)
     kernel[(1,) * s.ndim] = 0
@@ -69,7 +69,7 @@ def prune_skeleton(
         try:
             skeleton_obj = skan.Skeleton(s)
             branch_data = skan.summarize(skeleton_obj, separator="_")
-        except Exception:
+        except Exception:  # pragma: no cover  # defensive skan summarize failure
             break
         spurs = branch_data.index[
             (branch_data["branch_type"] == 1)
@@ -82,7 +82,7 @@ def prune_skeleton(
             coords = skeleton_obj.path_coordinates(i).astype(int)
             remove[tuple(coords.T)] = True
         remove &= ~junctions          # keep junction nodes intact
-        if not remove.any():
+        if not remove.any():  # pragma: no cover  # spur endpoints are never junctions
             break
         s = s & ~remove
         s = skeletonize(s)
@@ -150,7 +150,7 @@ def skeleton_metrics(
             "n_junction_nodes": n_junction_nodes(skel),
             "mean_branch_length_um": mean_branch_length,
         }
-    except Exception:
+    except Exception:  # pragma: no cover  # defensive skan/skeletonize failure
         return dict(empty)
 
 

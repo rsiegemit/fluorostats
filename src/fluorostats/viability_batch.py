@@ -76,7 +76,7 @@ def _counts(by_method: dict, m: str) -> tuple[float, float, float]:
 def analyse_stack(path: Path, cfg: dict) -> dict:
     """All viability readouts for one two-channel stack."""
     vol, meta = load_volume(Path(path))                 # (C, Z, Y, X)
-    if vol.ndim != 4:
+    if vol.ndim != 4:  # pragma: no cover — load_volume always canonicalises to (C,Z,Y,X)
         raise ValueError(f"{path.name}: expected 4D (C,Z,Y,X), got shape {vol.shape}")
     live = vol[cfg["live_channel"]].astype(np.float32)   # (Z, Y, X)
     dead = vol[cfg["dead_channel"]].astype(np.float32)

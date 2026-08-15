@@ -127,7 +127,7 @@ def binarize(
     if min_size > 0:
         try:
             mask = remove_small_objects(mask, max_size=min_size)  # skimage >= 0.26
-        except TypeError:
+        except TypeError:  # pragma: no cover  # skimage<0.26 signature fallback
             mask = remove_small_objects(mask, min_size=min_size)  # skimage < 0.26
 
     return mask

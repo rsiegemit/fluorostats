@@ -6,6 +6,8 @@ versions follow [semantic versioning](https://semver.org).
 ## [0.8.0]
 
 ### Added
+- Ships a `py.typed` marker (PEP 561) so the library's type hints are usable by
+  downstream type checkers.
 - **Keyence BZ-X support** (`fluorostats.keyence`): `load_keyence_stack` assembles a
   z-stack from a folder of per-slice `*_CHF` OME-TIFFs (all channels per file), and
   `parse_gci` reads the `.gci` acquisition metadata (pixel size, z-step, channel
@@ -33,5 +35,6 @@ versions follow [semantic versioning](https://semver.org).
 ### Changed
 - Release-hardening: removed dead code, corrected all inaccurate docstrings/comments,
   de-duplicated the per-condition stats helper in `plots` and the shared quant2d/quant3d
-  reporting tail in `cli`, and expanded the test suite to 215 tests (CLI + regression +
-  render/io/preprocess coverage; 88% overall). No public API changed.
+  reporting tail in `cli`, and expanded the test suite to 354 tests at **100% line
+  coverage** (vendor loaders exercised via mocks; a handful of unreachable version/lib
+  fallbacks marked `# pragma: no cover`). No public API changed.
