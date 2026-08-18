@@ -65,6 +65,49 @@ def orientation_anisotropy(
             "n_pixels": int(sel.sum())}
 
 
+def orientation_order(
+    angles_deg: np.ndarray,
+    reference_deg: float | None = None,
+) -> dict:
+    """Nematic order of an axial-orientation set (period 180°).
+
+    For a collection of orientations (e.g. per-nucleus major-axis angles), the
+    nematic order parameter ``S = |mean(exp(2iθ))|`` is 0 for random orientations
+    and 1 when all point the same way — a directionless "how aligned are they?".
+    Pass ``reference_deg`` (e.g. the local network orientation) to also get how
+    well the set aligns to that axis.
+
+    Parameters
+    ----------
+    angles_deg : 1D array of orientations in degrees (treated modulo 180°).
+    reference_deg : optional reference axis in degrees.
+
+    Returns
+    -------
+    dict with keys:
+        order — nematic order parameter in [0, 1].
+        mean_orientation_deg — dominant axis in [0, 180).
+        alignment — mean cos(2·(θ − reference)) in [-1, 1] (1 = parallel to the
+            reference, -1 = perpendicular); NaN if no reference given.
+        n — number of angles.
+    """
+    a = np.asarray(angles_deg, dtype=float).ravel()
+    if a.size == 0:
+        return {"order": float("nan"), "mean_orientation_deg": float("nan"),
+                "alignment": float("nan"), "n": 0}
+    th = np.deg2rad(a) * 2.0
+    vec = np.mean(np.exp(1j * th))
+    order = float(np.abs(vec))
+    mean_deg = float((np.degrees(np.angle(vec)) / 2.0) % 180.0)
+    if reference_deg is None:
+        alignment = float("nan")
+    else:
+        ref = np.deg2rad(float(reference_deg)) * 2.0
+        alignment = float(np.mean(np.cos(th - ref)))
+    return {"order": order, "mean_orientation_deg": mean_deg,
+            "alignment": alignment, "n": int(a.size)}
+
+
 def mesh_size(mask: np.ndarray, spacing: float | tuple[float, ...] = 1.0) -> float:
     """Characteristic open-gap (pore / mesh) size of a network mask.
 
@@ -81,4 +124,4 @@ def mesh_size(mask: np.ndarray, spacing: float | tuple[float, ...] = 1.0) -> flo
     return float(2.0 * dt[bg].mean())
 
 
-__all__ = ["orientation_anisotropy", "mesh_size"]
+__all__ = ["orientation_anisotropy", "orientation_order", "mesh_size"]

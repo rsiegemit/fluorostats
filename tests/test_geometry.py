@@ -146,3 +146,103 @@ def test_radial_distribution_shell_and_degenerate():
     assert z["mean_norm_radius"] == 0.0
     # explicit r_max
     assert objects.radial_distribution(at_r, (100, 100), r_max=100.0)["r_max"] == 100.0
+
+
+# --------------------------------------------------------------------------- #
+# objects.object_shape_metrics
+# --------------------------------------------------------------------------- #
+def test_object_shape_metrics_elongation_and_scaling():
+    lab = np.zeros((40, 40), int)
+    lab[5:8, 5:35] = 1          # long thin horizontal bar -> elongated
+    lab[20:30, 20:30] = 2       # square -> ~round
+    s = objects.object_shape_metrics(lab)
+    assert s["elongation"][0] > 3.0
+    assert s["elongation"][1] < 1.5
+    assert 0.0 <= s["orientation_deg"][0] < 180.0
+    assert s["solidity"][1] == pytest.approx(1.0, abs=0.05)
+    # µm scaling multiplies axis lengths by the mean pixel pitch
+    s2 = objects.object_shape_metrics(lab, voxel_size_um=(2.0, 2.0))
+    assert s2["major_axis"][0] == pytest.approx(2.0 * s["major_axis"][0], rel=1e-6)
+
+
+def test_object_shape_metrics_empty_and_ndim_guard():
+    e = objects.object_shape_metrics(np.zeros((10, 10), int))
+    assert e["elongation"].size == 0
+    with pytest.raises(ValueError):
+        objects.object_shape_metrics(np.zeros((3, 3, 3), int))
+
+
+# --------------------------------------------------------------------------- #
+# objects.object_mask_association
+# --------------------------------------------------------------------------- #
+def test_object_mask_association_on_and_off_structure():
+    mask = np.zeros((50, 50), bool)
+    mask[25, :] = True                                  # a horizontal strand
+    on = np.array([[25.0, 10.0], [25.0, 40.0]])         # sit on the strand
+    off = np.array([[5.0, 10.0], [45.0, 40.0]])         # 20 px away
+    r_on = objects.object_mask_association(on, mask)
+    r_off = objects.object_mask_association(off, mask)
+    assert r_on["median_distance"] == pytest.approx(0.0)
+    assert r_on["frac_within"] == 1.0
+    assert r_off["median_distance"] > 15 and r_off["frac_within"] == 0.0
+    # µm scaling + explicit threshold
+    r = objects.object_mask_association(off, mask, voxel_size_um=(2.0, 2.0), max_dist_um=50.0)
+    assert r["frac_within"] == 1.0                       # 20 px * 2 µm = 40 µm < 50
+    # 3D centroids (z,y,x) against a 2D mask use the last two columns
+    p3 = np.array([[7.0, 25.0, 10.0]])
+    assert objects.object_mask_association(p3, mask)["median_distance"] == pytest.approx(0.0)
+
+
+def test_object_mask_association_degenerate():
+    r = objects.object_mask_association(np.zeros((0, 2)), np.ones((5, 5), bool))
+    assert r["n"] == 0 and np.isnan(r["median_distance"])
+    r2 = objects.object_mask_association(np.array([[1.0, 1.0]]), np.zeros((5, 5), bool))
+    assert np.isnan(r2["frac_within"])                   # empty mask
+
+
+# --------------------------------------------------------------------------- #
+# objects.nearest_neighbor_stats
+# --------------------------------------------------------------------------- #
+def test_nearest_neighbor_clustered_vs_regular():
+    rng = np.random.default_rng(0)
+    # two tight clusters -> clustered (R < 1)
+    clus = np.vstack([rng.normal([10, 10], 1.0, (40, 2)),
+                      rng.normal([90, 90], 1.0, (40, 2))])
+    # regular lattice -> dispersed (R > 1)
+    gy, gx = np.mgrid[0:10, 0:10]
+    grid = np.column_stack([gy.ravel() * 10.0, gx.ravel() * 10.0])
+    rc = objects.nearest_neighbor_stats(clus)
+    rg = objects.nearest_neighbor_stats(grid)
+    assert rc["clark_evans_R"] < 0.9 and rc["pattern"] == "clustered"
+    assert rg["clark_evans_R"] > 1.1 and rg["pattern"] == "dispersed"
+    assert rc["mean_nn_dist"] > 0
+
+
+def test_nearest_neighbor_3d_and_degenerate():
+    rng = np.random.default_rng(1)
+    p3 = rng.uniform(0, 50, (60, 3))
+    r = objects.nearest_neighbor_stats(p3, voxel_size_um=(2.0, 0.5, 0.5))
+    assert np.isfinite(r["clark_evans_R"]) and r["n"] == 60      # 3D branch
+    assert objects.nearest_neighbor_stats(np.zeros((1, 2)))["pattern"] == "n/a"   # <2 points
+    # unsupported dimensionality -> R is NaN but spacing still returned
+    r4 = objects.nearest_neighbor_stats(rng.uniform(0, 1, (5, 4)))
+    assert np.isnan(r4["clark_evans_R"]) and r4["mean_nn_dist"] > 0
+
+
+# --------------------------------------------------------------------------- #
+# texture.orientation_order
+# --------------------------------------------------------------------------- #
+def test_orientation_order_aligned_vs_random():
+    aligned = np.full(50, 30.0)
+    rng = np.random.default_rng(2)
+    rand = rng.uniform(0, 180, 500)
+    oa = texture.orientation_order(aligned, reference_deg=30.0)
+    orr = texture.orientation_order(rand)
+    assert oa["order"] == pytest.approx(1.0, abs=1e-6)
+    assert oa["mean_orientation_deg"] == pytest.approx(30.0, abs=1.0)
+    assert oa["alignment"] == pytest.approx(1.0, abs=1e-6)       # parallel to reference
+    assert orr["order"] < 0.2                                    # random -> low order
+    # perpendicular reference -> alignment ≈ -1
+    perp = texture.orientation_order(aligned, reference_deg=120.0)
+    assert perp["alignment"] == pytest.approx(-1.0, abs=1e-6)
+    assert texture.orientation_order(np.array([]))["n"] == 0

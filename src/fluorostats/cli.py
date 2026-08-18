@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from . import io as iq_io
-from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment
+from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, spatial
 
 
 @click.group()
@@ -102,7 +102,8 @@ def quant3d(
     no_plots,
     no_skeleton,
 ):
-    """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton."""
+    """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
+    and spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -163,6 +164,7 @@ def quant3d(
                 "volume_fraction": vf,
                 **conn,
                 **skel,
+                **_coverage_heterogeneity(mask),
             }
             rows.append(row)
 
@@ -184,7 +186,8 @@ def quant3d(
     # Plots
     _3d_metrics = ["volume_fraction", "n_components", "euler_number",
                    "largest_component_fraction", "total_length_um",
-                   "n_junctions", "mean_branch_length_um"]
+                   "n_junctions", "mean_branch_length_um",
+                   "coverage_tile_cv", "coverage_morans_i"]
 
     _write_plots_and_pvalues(
         df, _3d_metrics, output_path, no_plots,
@@ -223,7 +226,8 @@ def quant2d(
     no_overlays,
     no_plots,
 ):
-    """Quantify 2D fluorescence images: area fraction (cell coverage)."""
+    """Quantify 2D fluorescence images: area fraction (cell coverage) and
+    spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -270,6 +274,7 @@ def quant2d(
                 "replicate": replicate,
                 "shape": str(arr.shape),
                 **cov,
+                **_coverage_heterogeneity(mask),
             }
             rows.append(row)
 
@@ -287,7 +292,8 @@ def quant2d(
     click.echo(summary.to_string(index=False))
 
     _2d_metrics = ["area_fraction", "n_components", "largest_component_fraction",
-                   "mean_cluster_area_px", "median_cluster_area_px"]
+                   "mean_cluster_area_px", "median_cluster_area_px",
+                   "coverage_tile_cv", "coverage_morans_i"]
 
     _write_plots_and_pvalues(
         df, _2d_metrics, output_path, no_plots,
@@ -330,6 +336,20 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
+
+
+def _coverage_heterogeneity(mask, grid: tuple[int, int] = (4, 4)) -> dict:
+    """Spatial uniformity of a binary mask's coverage across a tile grid.
+
+    For a 3D ``(Z, Y, X)`` mask the through-z coverage map is used. Returns
+    ``coverage_tile_cv`` (tile-to-tile CV, 0 = evenly seeded) and
+    ``coverage_morans_i`` (spatial autocorrelation; >0 = patchy/clustered).
+    """
+    cov = mask.mean(axis=0) if mask.ndim == 3 else mask.astype(float)
+    het = spatial.spatial_heterogeneity(
+        spatial.tile_reduce(cov, lambda t: float(t.mean()), grid=grid)
+    )
+    return {"coverage_tile_cv": het["cv"], "coverage_morans_i": het["morans_i"]}
 
 
 def _find_files(root: Path, suffixes: set[str]) -> list[Path]:

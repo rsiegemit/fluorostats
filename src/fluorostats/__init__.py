@@ -20,13 +20,18 @@ Public API surface, grouped by module:
     background subtraction, surface normalisation, AUC, single-exponential λ fit).
   - ``depth_batch`` / ``viability_batch`` — manifest-driven batch drivers (many
     stacks by condition → tidy CSVs + figures).
-  - ``objects`` — per-object volumes, equivalent diameters, centroids,
-    object density, centroid / angular / radial spatial distribution,
-    watershed splitting of touching objects, and border-object clearing.
+  - ``objects`` — per-object volumes, equivalent diameters, centroids, shape
+    descriptors (elongation/orientation/solidity), object density, centroid /
+    angular / radial spatial distribution, nearest-neighbour clustering
+    (Clark-Evans), object-to-mask association (e.g. nuclei on a network),
+    watershed splitting, border clearing.
   - ``ring`` — annular cross-section morphometry: lumen area/circularity,
     wall thickness + coverage, inner/outer diameter, concentricity.
   - ``texture`` — oriented-texture and open-space descriptors for network
-    signal: structure-tensor orientation coherence and mesh (pore) size.
+    signal: structure-tensor orientation coherence, nematic orientation order /
+    alignment-to-reference, and mesh (pore) size.
+  - ``spatial`` — spatial sampling & heterogeneity: tile a field / slab a
+    volume with any reducer, plus Moran's I and CV uniformity summaries.
   - ``viability`` — Live/Dead quantification: live/dead fractions, depth-resolved
     viability profile, 2D-vs-3D overestimation, attenuation correction.
   - ``validate`` — instance-segmentation metrics: instance F1 / precision /
@@ -62,6 +67,7 @@ from . import (  # noqa: F401
     objects,
     ring,
     texture,
+    spatial,
     viability,
     viability_batch,
     stats,

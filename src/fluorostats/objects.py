@@ -195,6 +195,151 @@ def object_centroids(labels: np.ndarray) -> np.ndarray:
     return np.asarray(centers, dtype=float)
 
 
+def object_shape_metrics(
+    labels_2d: np.ndarray,
+    voxel_size_um: tuple[float, float] | None = None,
+) -> dict:
+    """Per-object 2D shape descriptors from a labelled image.
+
+    Quantifies object *shape* (as opposed to size/position): how elongated, how
+    convex, and which way it points — e.g. whether nuclei are rounded or spread,
+    and whether they share a common orientation (alignment).
+
+    Parameters
+    ----------
+    labels_2d : 2D int label image (0 = background).
+    voxel_size_um : optional (dy, dx); if given, axis lengths are returned in
+        micrometres (mean pixel pitch; exact for isotropic pixels), else in pixels.
+
+    Returns
+    -------
+    dict of 1D arrays in label order (empty arrays if no objects):
+        elongation — major/minor axis ratio (1 = round, larger = more elongated).
+        orientation_deg — major-axis angle in [0, 180).
+        solidity — area / convex-hull area (1 = convex, lower = ragged/concave).
+        major_axis, minor_axis — axis lengths (µm if voxel given, else pixels).
+    """
+    from skimage.measure import regionprops
+
+    lab = np.asarray(labels_2d)
+    if lab.ndim != 2:
+        raise ValueError("object_shape_metrics expects a 2D label image")
+    scale = float(np.mean(voxel_size_um)) if voxel_size_um is not None else 1.0
+    elong, orient, solid, maj, minr = [], [], [], [], []
+    for p in regionprops(lab):
+        mn = p.axis_minor_length
+        mj = p.axis_major_length
+        elong.append(mj / mn if mn > 0 else float("nan"))
+        orient.append(np.degrees(p.orientation) % 180.0)
+        solid.append(float(p.solidity))
+        maj.append(mj * scale)
+        minr.append(mn * scale)
+    return {
+        "elongation": np.asarray(elong, dtype=float),
+        "orientation_deg": np.asarray(orient, dtype=float),
+        "solidity": np.asarray(solid, dtype=float),
+        "major_axis": np.asarray(maj, dtype=float),
+        "minor_axis": np.asarray(minr, dtype=float),
+    }
+
+
+def nearest_neighbor_stats(
+    centroids: np.ndarray,
+    voxel_size_um: tuple[float, ...] | None = None,
+) -> dict:
+    """Nearest-neighbour spacing + Clark-Evans clustering index for a point set.
+
+    Characterises the spatial *pattern* of objects: are they clustered, randomly
+    (Poisson) placed, or regularly spaced? Uses each object's distance to its
+    nearest neighbour, compared to the value expected under complete spatial
+    randomness (CSR) at the same density in the point bounding box.
+
+    Parameters
+    ----------
+    centroids : (N, D) array of object positions (voxel coords); D is 2 or 3.
+    voxel_size_um : optional per-axis size for physical distances (else pixels).
+
+    Returns
+    -------
+    dict with keys:
+        mean_nn_dist, median_nn_dist — nearest-neighbour distance.
+        clark_evans_R — observed / CSR-expected mean NN (<1 clustered, ≈1 random,
+            >1 dispersed/regular); NaN if D not in {2, 3}.
+        pattern — "clustered" | "random" | "dispersed" from ``clark_evans_R``.
+        n — number of points.
+    """
+    from scipy.spatial import cKDTree
+
+    pts = np.asarray(centroids, dtype=float)
+    n, d = pts.shape if pts.ndim == 2 else (0, 0)
+    if n < 2:
+        return {"mean_nn_dist": float("nan"), "median_nn_dist": float("nan"),
+                "clark_evans_R": float("nan"), "pattern": "n/a", "n": int(n)}
+    scale = np.asarray(voxel_size_um if voxel_size_um is not None else (1.0,) * d, float)
+    xy = pts * scale
+    nn = cKDTree(xy).query(xy, k=2)[0][:, 1]      # distance to nearest other point
+    mean_nn = float(nn.mean())
+    ranges = xy.max(0) - xy.min(0)
+    vol = float(np.prod(ranges[ranges > 0]))
+    lam = n / vol if vol > 0 else 0.0
+    if lam > 0 and d == 2:
+        expected = 0.5 / np.sqrt(lam)
+    elif lam > 0 and d == 3:
+        expected = 0.55396 / lam ** (1.0 / 3.0)
+    else:
+        expected = float("nan")
+    R = mean_nn / expected if expected and expected == expected else float("nan")
+    pattern = "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")
+    return {"mean_nn_dist": mean_nn, "median_nn_dist": float(np.median(nn)),
+            "clark_evans_R": float(R) if R == R else float("nan"),
+            "pattern": pattern, "n": int(n)}
+
+
+def object_mask_association(
+    centroids: np.ndarray,
+    mask: np.ndarray,
+    voxel_size_um: tuple[float, ...] | None = None,
+    max_dist_um: float | None = None,
+) -> dict:
+    """How close objects sit to a reference structure (e.g. nuclei to a network).
+
+    Distance from each object centroid to the nearest ``True`` voxel of ``mask``.
+    The last ``mask.ndim`` columns of ``centroids`` are used, so 3D ``(z, y, x)``
+    centroids work against a 2D projection mask (uses ``y, x``) or a 3D mask.
+
+    Parameters
+    ----------
+    centroids : (N, >=mask.ndim) array of object positions in voxel coordinates.
+    mask : bool array — the reference structure to measure distance to.
+    voxel_size_um : optional per-axis size for physical distances (else pixels).
+    max_dist_um : "within" threshold for the co-localised fraction; defaults to
+        one voxel step (objects effectively on the structure).
+
+    Returns
+    -------
+    dict with keys: median_distance, mean_distance, frac_within, n.
+    NaN / 0 counts if there are no objects or an empty mask.
+    """
+    m = np.asarray(mask) > 0
+    pts = np.asarray(centroids, dtype=float)
+    if pts.shape[0] == 0 or not m.any():
+        return {"median_distance": float("nan"), "mean_distance": float("nan"),
+                "frac_within": float("nan"), "n": int(pts.shape[0])}
+    sampling = voxel_size_um if voxel_size_um is not None else (1.0,) * m.ndim
+    dt = ndi.distance_transform_edt(~m, sampling=sampling)
+    idx = np.round(pts[:, -m.ndim:]).astype(int)
+    for ax in range(m.ndim):
+        idx[:, ax] = np.clip(idx[:, ax], 0, m.shape[ax] - 1)
+    dist = dt[tuple(idx.T)]
+    thr = max_dist_um if max_dist_um is not None else float(max(sampling))
+    return {
+        "median_distance": float(np.median(dist)),
+        "mean_distance": float(np.mean(dist)),
+        "frac_within": float(np.mean(dist <= thr)),
+        "n": int(pts.shape[0]),
+    }
+
+
 def object_density_per_mm3(
     n_objects: int,
     shape_zyx: tuple[int, int, int],

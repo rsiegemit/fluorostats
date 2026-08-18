@@ -27,6 +27,13 @@ Optionally geometry-aware (`geometry=`), using the general fluorostats helpers:
   - "wall" (wall en face): F-actin orientation coherence + network mesh size
     (fluorostats.texture) and the through-wall (outer-third) nuclei fraction.
 
+Always (geometry-independent) via `analyze_organization`, exercising the general
+spatial toolkit: nuclei point pattern (objects.nearest_neighbor_stats), nuclei-on-
+network association (objects.object_mask_association), nucleus shape + nucleus↔network
+alignment (objects.object_shape_metrics + texture.orientation_order), cell-density
+spatial heterogeneity (spatial.tile_point_density + spatial_heterogeneity), and a
+through-depth network gradient (spatial.slab_reduce).
+
 Writes CSVs + figures to an output folder. `batch()` runs many folders and writes a
 combined cross-sample table (use count/structure metrics for cross-formulation
 comparison; flag intensity metrics as gain-dependent).
@@ -53,7 +60,7 @@ warnings.filterwarnings("ignore")
 
 from fluorostats.segment import binarize
 from fluorostats.objects import centroid_homogeneity
-from fluorostats import keyence, ring, texture, objects
+from fluorostats import keyence, ring, texture, objects, spatial
 
 
 # --------------------------------------------------------------------------- #
@@ -167,6 +174,63 @@ def analyze_gfp(gfp, dapi_bw, vox):
     return {"gfp_coverage_pct": round(100 * mask.mean(), 1),
             "gfp_skeleton_junctions_per_mm2": round(junctions / max(area_mm2, 1e-9), 0),
             "gfp_on_nuclei_overlap_pct": round(overlap, 1)}, mip, mask, skel
+
+
+def analyze_organization(dapi, gfp, peaks, bw, gmip, gmask, vox):
+    """Geometry-independent spatial-organisation metrics, via the general
+    fluorostats helpers — applies to any 2-channel construct:
+
+      - nuclei point pattern (``objects.nearest_neighbor_stats``): clustered / random / regular
+      - nuclei on the network (``objects.object_mask_association``): co-localised fraction
+      - nucleus shape + nucleus↔network alignment (``objects.object_shape_metrics``,
+        ``texture.orientation_order`` vs the network's dominant orientation)
+      - cell-density spatial heterogeneity (``spatial.tile_point_density`` +
+        ``spatial.spatial_heterogeneity``): tile-to-tile CV + Moran's I
+      - through-depth network gradient (``spatial.slab_reduce``): outer vs inner coverage
+    """
+    vz, vy, vx = vox
+    ny, nx = dapi.shape[1:]
+    out: dict = {}
+
+    if len(peaks) >= 2:
+        nn = objects.nearest_neighbor_stats(peaks, voxel_size_um=vox)
+        out["nn_dist_um"] = round(nn["mean_nn_dist"], 1)
+        out["clark_evans_R"] = round(nn["clark_evans_R"], 3)
+        out["nuclei_pattern"] = nn["pattern"]
+
+    assoc = objects.object_mask_association(peaks, gmask, voxel_size_um=(vy, vx))
+    if assoc["frac_within"] == assoc["frac_within"]:
+        out["nuclei_on_network_frac"] = round(assoc["frac_within"], 3)
+        out["nuclei_to_network_um"] = round(assoc["median_distance"], 1)
+
+    # per-nucleus shape (2D, touching nuclei split) + alignment to the F-actin network
+    lab2d, _ = objects.watershed_split(bw.max(0), min_size=max(8, int(round(20 / (vy * vx)))),
+                                       min_distance=max(2, int(round(4 / vx))))
+    shape = objects.object_shape_metrics(lab2d, voxel_size_um=(vy, vx))
+    if shape["elongation"].size:
+        out["nucleus_elongation_median"] = round(float(np.nanmedian(shape["elongation"])), 2)
+        net = texture.orientation_anisotropy(gmip, mask=gmask)
+        oo = texture.orientation_order(shape["orientation_deg"],
+                                       reference_deg=net["dominant_orientation_deg"])
+        out["nucleus_order"] = round(oo["order"], 3)                       # self-alignment
+        out["nucleus_vs_network_alignment"] = round(oo["alignment"], 3)    # -1..1
+
+    # spatial heterogeneity of cell density (tile the FOV)
+    den_grid = spatial.tile_point_density(peaks, (ny, nx), grid=(5, 5),
+                                          per_area=True, pixel_area=vy * vx)
+    het = spatial.spatial_heterogeneity(den_grid)
+    if het["cv"] == het["cv"]:
+        out["density_tile_cv"] = round(het["cv"], 3)
+    if het["morans_i"] == het["morans_i"]:
+        out["density_morans_i"] = round(het["morans_i"], 3)
+
+    # through-depth network coverage gradient (outer surface -> inner)
+    thr = float(np.percentile(gfp, 85))
+    _, cov = spatial.slab_reduce(gfp, lambda s: float((s > thr).mean()), n_slabs=6)
+    valid = cov[~np.isnan(cov)]
+    if valid.size >= 2:
+        out["network_depth_gradient"] = round(float(valid[0] - valid[-1]), 4)
+    return out
 
 
 def analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox):
@@ -284,7 +348,8 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
     wall, mip_d, cmask, holes, radial = analyze_wall_lumen(dapi, vox, band_slices)
     gfpm, gmip, gmask, skel = analyze_gfp(gfp, bw, vox)
     geom = analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox)
-    summary = {"sample": name, **nuc, **band, **wall, **gfpm, **geom,
+    org = analyze_organization(dapi, gfp, peaks, bw, gmip, gmask, vox)
+    summary = {"sample": name, **nuc, **band, **wall, **gfpm, **geom, **org,
                "gfp_mean": round(float(gfp.mean()), 1), "dapi_mean": round(float(dapi.mean()), 1),
                "px_um": meta["px_um"], "z_step_um": meta["z_step_um"], "objective": meta["objective"],
                "n_slices": meta["n_slices_loaded"]}

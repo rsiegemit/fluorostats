@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fluorostats"
 version = "0.8.0"
-description = "Universal fluorescence microscopy image quantification — 2D coverage, 3D volume fraction, connectivity, skeleton, intensity morphometry, per-object metrics, non-parametric statistics, bootstrap power, and 3D rendering"
+description = "Universal fluorescence microscopy image quantification — 2D coverage, 3D volume fraction, connectivity, skeleton, intensity morphometry, per-object metrics, annular/tube morphometry, network organisation, spatial heterogeneity, non-parametric statistics, bootstrap power, and 3D rendering"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "Roy Siegelmann"},
 ]
-keywords = ["fluorescence", "microscopy", "confocal", "image-analysis", "quantification", "segmentation", "bioimage", "keyence"]
+keywords = ["fluorescence", "microscopy", "confocal", "image-analysis", "quantification", "segmentation", "bioimage", "keyence", "morphometry", "heterogeneity"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

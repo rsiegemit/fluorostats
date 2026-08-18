@@ -21,7 +21,7 @@ fluorostats quant3d --input ./my_confocal_data/ --output ./results/
 ```
 
 This produces:
-- **Per-file CSV** with volume fraction, connectivity metrics, and skeleton analysis
+- **Per-file CSV** with volume fraction, connectivity metrics, skeleton analysis, and spatial-coverage uniformity (tile CV + Moran's I)
 - **Per-condition summary** with mean, std, and median across replicates
 - **QC overlays** for visual verification of segmentation accuracy
 - **Publication plots** — bar charts with SEM and boxplots with individual data points
@@ -39,6 +39,7 @@ Well suited for bioprinted constructs, tissue sections, organoids, and spheroids
 - **Largest component fraction** — whether the structure forms one connected network (e.g., 97%) or many scattered clusters (e.g., 19%)
 - **Skeleton length, branches, junctions** — extent and branching complexity of the cell network
 - **Depth-penetration profiles** — mean intensity vs depth, blank-subtracted and surface-normalised, with area-under-curve over a physical depth window (probe diffusion / permeability assays)
+- **Tube / network / heterogeneity** — annular cross-section morphometry (lumen, wall, diameter), F-actin-style network organisation (orientation coherence, mesh size), per-object shape, and within-field spatial heterogeneity (see [Advanced Analysis](#advanced-analysis))
 
 ### 2D Fluorescence Images
 
@@ -348,6 +349,31 @@ radial_distribution(centroids, center, n_bins=3)          # inner→outer shells
 ```
 
 General, assay-agnostic geometry helpers for tubular / networked constructs — see [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) (`geometry="cross_section"` / `"wall"`) for an end-to-end use.
+
+### Spatial sampling & heterogeneity
+
+```python
+from fluorostats.spatial import tile_reduce, tile_point_density, slab_reduce, spatial_heterogeneity
+from fluorostats.objects import (object_shape_metrics, nearest_neighbor_stats,
+                                 object_mask_association)
+from fluorostats.texture import orientation_order
+
+# one big FOV -> a grid of sub-region measurements (any reducer)
+cov_grid = tile_reduce(net_mask, lambda t: 100 * t.mean(), grid=(5, 5))   # per-tile coverage
+den_grid = tile_point_density(centroids, mask.shape, grid=(5, 5))         # per-tile object counts
+het = spatial_heterogeneity(den_grid)          # {cv, morans_i, n}: uniform vs patchy/clustered
+
+# through-depth structural profile: reduce each axial slab of a volume
+centers, coverage_vs_depth = slab_reduce(volume, lambda s: (s > thr).mean(), n_slabs=10)
+
+# per-object shape / point pattern / association
+shape = object_shape_metrics(labels_2d, voxel_size_um=(0.4, 0.4))         # elongation/orientation/solidity
+nn = nearest_neighbor_stats(centroids, voxel_size_um=(2.5, 0.4, 0.4))     # Clark-Evans clustering
+assoc = object_mask_association(centroids, net_mask)                      # do nuclei sit on the network?
+align = orientation_order(shape["orientation_deg"], reference_deg=net_angle)  # nucleus↔network alignment
+```
+
+`spatial` samples a field at sub-region scale with any callable and scores uniformity (tile-to-tile CV, Moran's I spatial autocorrelation); `objects`/`texture` add point-pattern clustering, object–structure association, and orientation alignment. All are assay-agnostic and used end-to-end in [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py).
 
 ### Multi-group statistics
 

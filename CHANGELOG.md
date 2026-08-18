@@ -8,15 +8,29 @@ versions follow [semantic versioning](https://semver.org).
 ### Added
 - Ships a `py.typed` marker (PEP 561) so the library's type hints are usable by
   downstream type checkers.
-- **Geometry helpers** (general, assay-agnostic): `ring.ring_morphometry` — annular
-  cross-section morphometry (lumen area/circularity, inner/outer diameter, wall
-  thickness + wall-relative coverage, concentricity, robust to an off-centre or
-  partly open ring); `texture.orientation_anisotropy` + `texture.mesh_size` —
-  structure-tensor orientation coherence and network pore/mesh size for fibrous
-  signal; and `objects.angular_homogeneity` / `objects.radial_distribution` —
-  circumferential and radial point-distribution statistics around a centre. The
-  `keyence_tube_analysis` example gains an optional `geometry=` mode wiring these
-  into cross-section vs wall analyses.
+- **Spatial sampling & heterogeneity** (`fluorostats.spatial`, general): `tile_reduce`
+  (partition a 2D field into a grid and reduce each cell with any callable),
+  `tile_point_density` (bin object centroids into a grid), `slab_reduce` (split a
+  volume into axial slabs for through-depth profiling), `morans_i` (spatial
+  autocorrelation), and `spatial_heterogeneity` (CV + Moran's I). Turns one large
+  field of view into many sub-region measurements and quantifies how uniform vs
+  patchy/clustered a signal is.
+- **Object spatial-pattern & shape analysis** (`fluorostats.objects`):
+  `object_shape_metrics` (elongation / orientation / solidity / axis lengths per
+  object), `nearest_neighbor_stats` (nearest-neighbour spacing + Clark-Evans
+  clustering index: clustered vs random vs regular), and `object_mask_association`
+  (distance from objects to a reference structure + co-localised fraction, e.g.
+  nuclei sitting on a network).
+- **Geometry & orientation helpers** (general, assay-agnostic): `ring.ring_morphometry`
+  — annular cross-section morphometry (lumen area/circularity, inner/outer diameter,
+  wall thickness + wall-relative coverage, concentricity, robust to an off-centre or
+  partly open ring); `texture.orientation_anisotropy`, `texture.orientation_order`
+  (nematic order + alignment-to-reference), and `texture.mesh_size` — orientation
+  coherence, orientation alignment, and network pore/mesh size for fibrous signal;
+  `objects.angular_homogeneity` / `objects.radial_distribution` — circumferential and
+  radial point-distribution statistics around a centre. The `keyence_tube_analysis`
+  example gains an optional `geometry=` mode wiring these into cross-section vs wall
+  analyses.
 - **Keyence BZ-X support** (`fluorostats.keyence`): `load_keyence_stack` assembles a
   z-stack from a folder of per-slice `*_CHF` OME-TIFFs (all channels per file), and
   `parse_gci` reads the `.gci` acquisition metadata (pixel size, z-step, channel
