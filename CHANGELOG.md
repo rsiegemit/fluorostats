@@ -8,6 +8,15 @@ versions follow [semantic versioning](https://semver.org).
 ### Added
 - Ships a `py.typed` marker (PEP 561) so the library's type hints are usable by
   downstream type checkers.
+- **Geometry helpers** (general, assay-agnostic): `ring.ring_morphometry` — annular
+  cross-section morphometry (lumen area/circularity, inner/outer diameter, wall
+  thickness + wall-relative coverage, concentricity, robust to an off-centre or
+  partly open ring); `texture.orientation_anisotropy` + `texture.mesh_size` —
+  structure-tensor orientation coherence and network pore/mesh size for fibrous
+  signal; and `objects.angular_homogeneity` / `objects.radial_distribution` —
+  circumferential and radial point-distribution statistics around a centre. The
+  `keyence_tube_analysis` example gains an optional `geometry=` mode wiring these
+  into cross-section vs wall analyses.
 - **Keyence BZ-X support** (`fluorostats.keyence`): `load_keyence_stack` assembles a
   z-stack from a folder of per-slice `*_CHF` OME-TIFFs (all channels per file), and
   `parse_gci` reads the `.gci` acquisition metadata (pixel size, z-step, channel

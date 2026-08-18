@@ -238,6 +238,79 @@ def centroid_homogeneity(
     }
 
 
+def angular_homogeneity(
+    centroids: np.ndarray,
+    center: tuple[float, float],
+    bins: int = 36,
+) -> dict:
+    """Circumferential uniformity of points around a centre (polar angle).
+
+    Complements `centroid_homogeneity` (Cartesian tiles) for annular geometry:
+    are objects spread evenly around the ring or clustered on one side? Uses
+    the last two columns of ``centroids`` as (y, x); ``center`` is (cy, cx).
+
+    Returns dict with keys:
+        angular_gini — 0 when counts are even across all angle bins, → 1 when
+            concentrated in a narrow arc.
+        resultant_length — circular concentration |mean(e^{iθ})|, 0 (uniform)
+            to 1 (all one direction).
+        dominant_angle_deg — direction of the mean vector, in [0, 360).
+        n — number of points.
+    """
+    pts = np.asarray(centroids, dtype=float)
+    if pts.shape[0] == 0:
+        return {"angular_gini": float("nan"), "resultant_length": float("nan"),
+                "dominant_angle_deg": float("nan"), "n": 0}
+    dy = pts[:, -2] - center[0]
+    dx = pts[:, -1] - center[1]
+    ang = np.arctan2(dy, dx)
+    counts, _ = np.histogram(ang, bins=bins, range=(-np.pi, np.pi))
+    resultant = np.mean(np.exp(1j * ang))
+    return {
+        "angular_gini": float(_gini(counts)),
+        "resultant_length": float(np.abs(resultant)),
+        "dominant_angle_deg": float(np.degrees(np.angle(resultant)) % 360.0),
+        "n": int(pts.shape[0]),
+    }
+
+
+def radial_distribution(
+    centroids: np.ndarray,
+    center: tuple[float, float],
+    n_bins: int = 8,
+    r_max: float | None = None,
+) -> dict:
+    """Fraction of points per normalised-radius shell from a centre.
+
+    Answers "do objects sit near the lumen edge, the outer edge, or evenly
+    through the wall?" Uses the last two columns of ``centroids`` as (y, x).
+
+    Returns dict with keys:
+        fractions — length-``n_bins`` array summing to 1 (inner→outer shells of
+            equal normalised-radius width).
+        mean_norm_radius — mean radius normalised to ``r_max`` (0 = centre).
+        r_max — the radius used for normalisation.
+        n — number of points.
+    """
+    pts = np.asarray(centroids, dtype=float)
+    if pts.shape[0] == 0:
+        return {"fractions": np.zeros(n_bins), "mean_norm_radius": float("nan"),
+                "r_max": float("nan"), "n": 0}
+    r = np.hypot(pts[:, -2] - center[0], pts[:, -1] - center[1])
+    rmax = float(r_max) if r_max is not None else float(r.max())
+    if rmax <= 0:
+        return {"fractions": np.zeros(n_bins), "mean_norm_radius": 0.0,
+                "r_max": rmax, "n": int(pts.shape[0])}
+    rn = np.clip(r / rmax, 0.0, 1.0)
+    counts, _ = np.histogram(rn, bins=n_bins, range=(0.0, 1.0))
+    return {
+        "fractions": counts / counts.sum(),
+        "mean_norm_radius": float(rn.mean()),
+        "r_max": rmax,
+        "n": int(pts.shape[0]),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Local helpers (duplicated from morphometry to keep modules independent)
 # ---------------------------------------------------------------------------

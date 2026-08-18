@@ -21,8 +21,12 @@ Public API surface, grouped by module:
   - ``depth_batch`` / ``viability_batch`` — manifest-driven batch drivers (many
     stacks by condition → tidy CSVs + figures).
   - ``objects`` — per-object volumes, equivalent diameters, centroids,
-    object density, centroid homogeneity, watershed splitting of touching
-    objects, and border-object clearing.
+    object density, centroid / angular / radial spatial distribution,
+    watershed splitting of touching objects, and border-object clearing.
+  - ``ring`` — annular cross-section morphometry: lumen area/circularity,
+    wall thickness + coverage, inner/outer diameter, concentricity.
+  - ``texture`` — oriented-texture and open-space descriptors for network
+    signal: structure-tensor orientation coherence and mesh (pore) size.
   - ``viability`` — Live/Dead quantification: live/dead fractions, depth-resolved
     viability profile, 2D-vs-3D overestimation, attenuation correction.
   - ``validate`` — instance-segmentation metrics: instance F1 / precision /
@@ -56,6 +60,8 @@ from . import (  # noqa: F401
     depth_batch,
     keyence,
     objects,
+    ring,
+    texture,
     viability,
     viability_batch,
     stats,

@@ -19,13 +19,22 @@ Computes, per stack:
     overlap with nuclei — apt for the F-actin/phalloidin filament network here
   - intensity: DAPI/GFP means (GAIN-SENSITIVE -> only compare within one exposure setting)
 
+Optionally geometry-aware (`geometry=`), using the general fluorostats helpers:
+  - "cross_section" (tube cut across): annular ring morphometry (fluorostats.ring)
+    — lumen area/circularity, inner/outer diameter, wall thickness + wall-relative
+    coverage, concentricity — plus circumferential/radial cell distribution
+    (fluorostats.objects.angular_homogeneity / radial_distribution).
+  - "wall" (wall en face): F-actin orientation coherence + network mesh size
+    (fluorostats.texture) and the through-wall (outer-third) nuclei fraction.
+
 Writes CSVs + figures to an output folder. `batch()` runs many folders and writes a
 combined cross-sample table (use count/structure metrics for cross-formulation
 comparison; flag intensity metrics as gain-dependent).
 
 Usage:
     python keyence_tube_analysis.py <input_folder> <output_folder> [downsample]
-    # or import: analyze_folder(in_dir, out_dir); batch({name: folder, ...}, out_dir)
+    # or import: analyze_folder(in_dir, out_dir, geometry="cross_section")
+    #            batch({name: folder, ...}, out_dir, geometry="wall")
 """
 from __future__ import annotations
 import sys, json, warnings
@@ -44,7 +53,7 @@ warnings.filterwarnings("ignore")
 
 from fluorostats.segment import binarize
 from fluorostats.objects import centroid_homogeneity
-from fluorostats import keyence
+from fluorostats import keyence, ring, texture, objects
 
 
 # --------------------------------------------------------------------------- #
@@ -160,6 +169,54 @@ def analyze_gfp(gfp, dapi_bw, vox):
             "gfp_on_nuclei_overlap_pct": round(overlap, 1)}, mip, mask, skel
 
 
+def analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox):
+    """Geometry-aware metrics via the general fluorostats helpers.
+
+    geometry="cross_section" -> annular ring morphometry (fluorostats.ring) +
+      circumferential/radial cell distribution (fluorostats.objects);
+    geometry="wall" -> F-actin orientation/mesh (fluorostats.texture) +
+      through-wall (depth) nuclei distribution.
+    Returns a flat metric dict (empty if geometry is None).
+    """
+    vz, vy, vx = vox
+    out: dict = {}
+    if geometry == "cross_section":
+        rm = ring.ring_morphometry(cmask, spacing=(vy, vx))
+        cv = rm["wall_thickness_cv"]
+        cov = rm["wall_coverage_frac"]
+        out.update({
+            "lumen_area_um2_ring": rm["lumen_area"],
+            "lumen_circularity": rm["lumen_circularity"],
+            "inner_diam_um": rm["inner_diam"],
+            "outer_diam_um": rm["outer_diam"],
+            "wall_thickness_um": rm["wall_thickness_mean"],
+            "wall_thickness_cv_pct": cv * 100 if cv == cv else float("nan"),
+            "wall_rel_coverage_pct": cov * 100 if cov == cov else float("nan"),
+            "concentricity": rm["concentricity"],
+        })
+        filled = ndi.binary_fill_holes(cmask)
+        if filled.any() and len(peaks):
+            center = ndi.center_of_mass(filled)                      # (y, x)
+            ah = objects.angular_homogeneity(peaks, center)
+            rd = objects.radial_distribution(peaks, center, n_bins=3)
+            out["circumferential_gini"] = ah["angular_gini"]
+            out["circumferential_R"] = ah["resultant_length"]
+            out["cells_inner_third_frac"] = float(rd["fractions"][0])
+            out["cells_outer_third_frac"] = float(rd["fractions"][-1])
+    elif geometry == "wall":
+        oa = texture.orientation_anisotropy(gmip, mask=gmask)
+        out["factin_coherence"] = oa["coherence"]
+        out["factin_mesh_size_um"] = texture.mesh_size(gmask, spacing=(vy, vx))
+        # through-wall depth distribution: shallowest (objective-facing = outer)
+        # third of the nucleus z-range vs the rest.
+        if len(peaks):
+            z = peaks[:, 0].astype(float)
+            zlo, zhi = float(z.min()), float(z.max())
+            if zhi > zlo:
+                out["nuclei_outer_third_frac"] = float((z <= zlo + (zhi - zlo) / 3).mean())
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Figures
 # --------------------------------------------------------------------------- #
@@ -212,7 +269,8 @@ def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
-def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None):
+def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None,
+                   geometry: str | None = None):
     in_dir = Path(in_dir); out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     name = name or in_dir.name.strip().replace(" ", "_")
     print(f"[{name}] loading ({downsample}x)...")
@@ -225,7 +283,8 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
     if len(band_slices) == 0: band_slices = np.arange(dapi.shape[0])
     wall, mip_d, cmask, holes, radial = analyze_wall_lumen(dapi, vox, band_slices)
     gfpm, gmip, gmask, skel = analyze_gfp(gfp, bw, vox)
-    summary = {"sample": name, **nuc, **band, **wall, **gfpm,
+    geom = analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox)
+    summary = {"sample": name, **nuc, **band, **wall, **gfpm, **geom,
                "gfp_mean": round(float(gfp.mean()), 1), "dapi_mean": round(float(dapi.mean()), 1),
                "px_um": meta["px_um"], "z_step_um": meta["z_step_um"], "objective": meta["objective"],
                "n_slices": meta["n_slices_loaded"]}
@@ -238,11 +297,12 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
     return {k: v for k, v in summary.items() if not k.startswith("_")}
 
 
-def batch(samples: dict, out_dir, downsample: int = 3):
+def batch(samples: dict, out_dir, downsample: int = 3, geometry: str | None = None):
     out_dir = Path(out_dir); rows = []
     for name, folder in samples.items():
         try:
-            rows.append(analyze_folder(folder, Path(out_dir) / name, downsample, name=name))
+            rows.append(analyze_folder(folder, Path(out_dir) / name, downsample,
+                                       name=name, geometry=geometry))
         except Exception as e:
             print(f"[{name}] FAILED: {type(e).__name__}: {e}")
     if rows:

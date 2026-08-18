@@ -328,6 +328,27 @@ labels, n = clear_border_labels(labels)             # drop partial edge objects 
 
 Connected-component labeling merges touching objects; `watershed_split` seeds a distance-transform watershed to separate them (the training-free fix for crowded fields), and `clear_border_labels` removes edge objects that would bias counts.
 
+### Annular morphometry & network organisation
+
+```python
+from fluorostats.ring import ring_morphometry
+from fluorostats.texture import orientation_anisotropy, mesh_size
+from fluorostats.objects import angular_homogeneity, radial_distribution
+
+# tube / vessel cross-section (2D wall mask): lumen, wall, diameters, concentricity
+r = ring_morphometry(wall_mask, spacing=(dy_um, dx_um))   # off-centre / open-ring safe
+
+# fibrous network (e.g. F-actin MIP): alignment + pore scale
+o = orientation_anisotropy(image, mask=net_mask)          # coherence 0=isotropic … 1=aligned
+gap = mesh_size(net_mask, spacing=(dy_um, dx_um))          # typical open-gap size
+
+# distribution of points around a centre (last two centroid cols = y, x)
+angular_homogeneity(centroids, center)                    # circumferential evenness
+radial_distribution(centroids, center, n_bins=3)          # inner→outer shells
+```
+
+General, assay-agnostic geometry helpers for tubular / networked constructs — see [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) (`geometry="cross_section"` / `"wall"`) for an end-to-end use.
+
 ### Multi-group statistics
 
 ```python
