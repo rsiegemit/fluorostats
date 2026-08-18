@@ -291,7 +291,7 @@ def quant2d(
 
     _write_plots_and_pvalues(
         df, _2d_metrics, output_path, no_plots,
-        summary_title="2D Endothelial Coverage Summary",
+        summary_title="2D Coverage Summary",
     )
 
 

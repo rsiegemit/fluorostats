@@ -26,6 +26,7 @@ Manifest schema (all fields except groups/stacks are optional)::
 
     {
       "title": "FITC-dextran 2000 kDa penetration",
+      "signal_label": "FITC-dextran",  # probe/signal name on figure axes/titles (default "Signal")
       "channel": 0,                # channel index for 4D stacks
       "reducer": "mean",           # "mean" | "median" (per-slice spatial stat)
       "n_surface": 3,              # slices averaged for surface normalisation
@@ -79,6 +80,7 @@ def load_manifest(path: Path) -> dict:
     with open(path) as fh:
         m = json.load(fh)
     m.setdefault("title", "Depth-penetration analysis")
+    m.setdefault("signal_label", "Signal")
     m.setdefault("channel", 0)
     m.setdefault("reducer", "mean")
     m.setdefault("n_surface", 3)
@@ -368,7 +370,8 @@ def plot_auc(rows, colors, window, out_base, use_normalized=True):
     _save(fig, out_base)
 
 
-def plot_retention_multiwindow(rows, colors, windows, out_base):
+def plot_retention_multiwindow(rows, colors, windows, out_base,
+                               title="Signal retained vs depth window"):
     """Grouped bars: mean retained fraction (AUC_norm / window width) per window.
 
     Dividing normalised AUC by window width gives the average fraction of
@@ -402,7 +405,7 @@ def plot_retention_multiwindow(rows, colors, windows, out_base):
     ax.set_xticks(x)
     ax.set_xticklabels(titles)
     ax.set_ylabel("Mean retained fraction (surface = 1)")
-    ax.set_title("FITC-dextran retained vs depth window")
+    ax.set_title(title)
     ax.set_ylim(0, 1.05)
     ax.legend()
     _save(fig, out_base)
@@ -427,6 +430,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
     cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}
     windows = cfg["windows"]
+    sig = m["signal_label"]
     # The narrowest fixed window is shaded on the depth-vs curves.
     fixed = [w for w in windows if w != ("full",)]
     shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
@@ -484,12 +488,12 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
     # Depth-vs figures (shared across windows)
     plot_depth_curves(rows, aggregates, colors, "bg_subtracted",
-                      "Mean FITC intensity (a.u., blank-subtracted)",
-                      "FITC intensity vs depth",
+                      f"Mean {sig} intensity (a.u., blank-subtracted)",
+                      f"{sig} intensity vs depth",
                       out_dir / "fig_depth_absolute", auc_window=shade_window)
     plot_depth_curves(rows, aggregates, colors, "normalized",
                       "Normalised intensity (surface = 1)",
-                      "Normalised FITC intensity vs depth",
+                      f"Normalised {sig} intensity vs depth",
                       out_dir / "fig_depth_normalized", auc_window=shade_window)
 
     # One AUC dot/bar plot per window (normalised + absolute)
@@ -500,7 +504,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
     # Combined multi-window retention summary
     if len(windows) > 1:
-        plot_retention_multiwindow(rows, colors, windows, out_dir / "fig_auc_retention_multiwindow")
+        plot_retention_multiwindow(rows, colors, windows, out_dir / "fig_auc_retention_multiwindow",
+                                   title=f"{sig} retained vs depth window")
 
     _print_summary(rows, windows)
     _print_lambda_summary(rows)

@@ -33,6 +33,11 @@ versions follow [semantic versioning](https://semver.org).
   downsample rather than raw voxel counts; `__all__` lists every public MIP helper.
 
 ### Changed
+- Figure labels are now fully data-driven rather than probe-specific: `depth_batch`
+  takes an optional `signal_label` manifest field (default `"Signal"`) that names the
+  probe on all axis/title text, and the `quant2d` summary panel no longer hardcodes a
+  tissue type — so the general tools produce correctly-labelled figures for any
+  experiment without code changes.
 - Release-hardening: removed dead code, corrected all inaccurate docstrings/comments,
   de-duplicated the per-condition stats helper in `plots` and the shared quant2d/quant3d
   reporting tail in `cli`, and expanded the test suite to 354 tests at **100% line
