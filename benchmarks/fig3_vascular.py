@@ -75,22 +75,22 @@ axc = fig.add_subplot(gs[2, 0])
 ph = pd.read_csv(R/"b_vascular_phantom_3d.csv")
 x = np.arange(len(ph)); w = 0.36
 axc.bar(x-w/2, ph.len_err_pct, w, color=BLUE, edgecolor="#333333", lw=0.4, label="centreline length")
-# volume-fraction error is exactly 0 for every phantom -> avoid an invisible/"missing" bar
-axc.bar(x+w/2, np.zeros(len(ph)), w, color=OKABE["sky"], edgecolor="#333333", lw=0.4)
+# volume-fraction error is exactly 0 for every phantom -> zero-height bars. Annotate it
+# directly (green, the S1 torus "exact" convention) rather than legending a sky-blue
+# swatch that never appears in the panel.
+_ytop = max(3.2, ph.len_err_pct.max()*1.5)
 for xi in x:
-    axc.text(xi+w/2, max(3.2, ph.len_err_pct.max()*1.5)*0.02, "0",
-             ha="center", va="bottom", fontsize=5.0, color="#555", rotation=0)
+    axc.text(xi+w/2, _ytop*0.04, "vol. frac.\n0% (exact)", ha="center", va="bottom",
+             fontsize=4.6, color=OKABE["green"], fontweight="bold", linespacing=1.05)
 axc.set_xticks(x)
 # prose "depth N" labels (tree_d1 -> depth 1), matching Fig S1b's naming
 axc.set_xticklabels([f"{p.replace('tree_d', 'depth ')}\nbranches {b}/{t} exact" for p,b,t in
     zip(ph.phantom, ph.fs_branches, ph.true_segments)], fontsize=5.0)
 axc.set_ylabel("error vs exact GT (%)")
-axc.set_ylim(0, max(3.2, ph.len_err_pct.max()*1.5))
-# legend explains both series; annotate the exact-zero vol-frac in clear space
+axc.set_ylim(0, _ytop)
+# legend now describes only the one visible series (centreline-length error bars)
 from matplotlib.patches import Patch
-axc.legend(handles=[Patch(facecolor=BLUE, edgecolor="#333333", lw=0.4, label="centreline length"),
-                    Patch(facecolor=OKABE["sky"], edgecolor="#333333", lw=0.4,
-                          label="volume fraction = 0.0 (exact)")],
+axc.legend(handles=[Patch(facecolor=BLUE, edgecolor="#333333", lw=0.4, label="centreline length")],
            fontsize=5.0, loc="upper right", handlelength=1.1, handleheight=0.9)
 panel(axc, "c", "3D synthetic phantom", xanchor=0.0315)   # row-leader
 

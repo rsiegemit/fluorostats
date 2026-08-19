@@ -114,8 +114,9 @@ axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
 axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=6, label="fluorostats default")
 axa.plot([], [], "o", mfc="white", mec=BLUE, mew=1.1, ms=5.5, label="envelope")
 # neutral key: the DL family is drawn in 3 colours (StarDist/Cellpose/Omnipose), so a
-# single coloured key would mis-map; caption carries the colour mapping.
-axa.plot([], [], "o", mfc="none", mec="black", mew=0.8, ms=5.5, label="trained DL")
+# single coloured key would mis-map; caption + coloured row labels carry the mapping.
+# FILLED grey (not open) to match how the DL rows are actually drawn (filled markers).
+axa.plot([], [], "o", mfc="0.35", mec="0.2", mew=0.6, ms=5.5, label="trained DL")
 # legend OUTSIDE the axes: single row in the band above the top spine, right-aligned.
 # The panel title is left-aligned in the same band, so the two cannot meet at the page width.
 axa.legend(loc="lower right", bbox_to_anchor=(1.0, 1.005), ncol=3,
