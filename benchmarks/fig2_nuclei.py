@@ -150,6 +150,9 @@ panel(axb, "b", "vs trained deep learning (n = 200)", xanchor=0.0315)   # row-le
 def gt_inst(stem):
     return F.gt_instances_bbbc039(DL/"BBBC039/masks/masks"/f"{stem}.png")
 imgs = sorted(glob.glob(str(DL/"BBBC039/images/images/*.tif")))
+if not imgs:
+    raise SystemExit("BBBC039 images not found under $FLUOROSTATS_DATA "
+                     f"({DL}/BBBC039) — download per benchmarks/DATA_MANIFEST.md")
 crops = []
 hh, ww = 150, 250   # landscape crops (aspect ~1.67) so the 2x3 band stays short
 for f in imgs:
@@ -202,8 +205,12 @@ panel(axd, "d", "crowding crossover", xanchor=0.0315)   # row-leader
 
 # (e) separated vs crowded fields
 gs_e = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[3, 2:4], wspace=0.06)
+_c75 = sorted(glob.glob(str(DL/"BBBC024_c75/image-final_*.tif")))
+if not _c75:
+    raise SystemExit("BBBC024 (c75 crowded set) not found under $FLUOROSTATS_DATA "
+                     f"({DL}/BBBC024_c75) — download per benchmarks/DATA_MANIFEST.md")
 for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separated"),
-                               (sorted(glob.glob(str(DL/"BBBC024_c75/image-final_*.tif")))[0], "crowded")]):
+                               (_c75[0], "crowded")]):
     sl = F.mid_slice(fp)
     ax = fig.add_subplot(gs_e[i]); ax.imshow(F.imnorm(sl), cmap="gray"); F.image_axes(ax)
     fsm = label_3d(remove_small_objects(sl > filters.threshold_otsu(sl), 15), min_size=15)[0]
