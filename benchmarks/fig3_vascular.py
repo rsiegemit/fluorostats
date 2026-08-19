@@ -81,7 +81,8 @@ for xi in x:
     axc.text(xi+w/2, max(3.2, ph.len_err_pct.max()*1.5)*0.02, "0",
              ha="center", va="bottom", fontsize=5.0, color="#555", rotation=0)
 axc.set_xticks(x)
-axc.set_xticklabels([f"{p}\nbranches {b}/{t} exact" for p,b,t in
+# prose "depth N" labels (tree_d1 -> depth 1), matching Fig S1b's naming
+axc.set_xticklabels([f"{p.replace('tree_d', 'depth ')}\nbranches {b}/{t} exact" for p,b,t in
     zip(ph.phantom, ph.fs_branches, ph.true_segments)], fontsize=5.0)
 axc.set_ylabel("error vs exact GT (%)")
 axc.set_ylim(0, max(3.2, ph.len_err_pct.max()*1.5))

@@ -9,6 +9,7 @@ from matplotlib import gridspec
 from fluorostats.objects import centroid_homogeneity
 from fluorostats.stats import mann_whitney, cliffs_delta, bh_fdr, bootstrap_fold_change_ci
 from fluorostats.power import power_curve
+from scipy import stats as sps
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]; GREY = OKABE["grey"]; VERM = OKABE["vermillion"]; GREEN = OKABE["green"]
@@ -42,17 +43,31 @@ for i, kind in enumerate(["regular", "random", "clustered"]):
             fontweight="bold", color=BLUE)
     if i == 0: panel(ax, "a", xanchor=0.0315)   # row-leader -> common page anchor
 
-# (b) five-statistic correlation — zoomed dot-plot (all |ρ| hug 1.0)
+# (b) tracking scatter across the full regular→clustered sweep (50 synthetic
+# fields), NOT a zoomed correlation dot-plot: x = mean sign-aligned z-score of the
+# five reference statistics (a "clustering consensus"), y = fluorostats tile Gini.
+# A tight monotonic band shows the metric tracks the references honestly, without an
+# axis floor that visually exaggerates the near-perfect agreement.
 axb = fig.add_subplot(gs[1, 0])
-corr = pd.read_csv(R/"b_homogeneity_multi_corr.csv").copy()
-corr["abs"] = corr["spearman_gini_vs_ref"].abs()
-names = {"clark_evans":"Clark–Evans NN","ripley_L_dev":"Ripley’s K/L","morisita":"Morisita",
-         "lacunarity":"lacunarity","quadrat_var":"quadrat variance"}
-labels_b = [names[r] for r in corr.reference]
-# single-series fluorostats-blue dots (this is the fluorostats metric's correlation)
-F.lollipop(axb, labels_b, list(corr["abs"]), colors=[BLUE]*len(labels_b),
-           floor=0.90, fmt="{:.3f}", value_fs=6.0)
-axb.set_xlabel("|Spearman ρ| vs fluorostats tile Gini")
+raw = pd.read_csv(R/"b_homogeneity_multi.csv")
+REFSIGN = {"clark_evans": -1, "ripley_L_dev": 1, "morisita": 1, "lacunarity": 1, "quadrat_var": 1}
+Z = np.zeros(len(raw))
+for r, s in REFSIGN.items():
+    v = raw[r].to_numpy(float) * s
+    Z += (v - v.mean()) / (v.std() + 1e-9)
+consensus = Z / len(REFSIGN)
+gini = raw["gini"].to_numpy(float); lvl = raw["level"].to_numpy(int)
+ramp = ["#BFBFBF", "#8C8C8C", "#6FA8CF", "#2E7BB5", "#0A4C8A"]   # regular(grey)→clustered(blue)
+for L in range(5):
+    m = lvl == L
+    axb.scatter(consensus[m], gini[m], s=15, color=ramp[L], edgecolor="white", lw=0.3, zorder=3)
+rho = sps.spearmanr(consensus, gini).statistic
+axb.text(0.05, 0.97, f"ρ = {rho:.3f}\nper-stat 0.96–0.997", transform=axb.transAxes,
+         va="top", ha="left", fontsize=5.5, color=BLUE, fontweight="bold")
+axb.text(0.03, 0.04, "regular", transform=axb.transAxes, fontsize=5.0, color="#888", ha="left")
+axb.text(0.97, 0.04, "clustered", transform=axb.transAxes, fontsize=5.0, color=ramp[-1], ha="right")
+axb.set_xlabel("clustering consensus (z)", fontsize=6.0)
+axb.set_ylabel("fluorostats tile Gini", fontsize=6.0)
 panel(axb, "b", "tracks 5 spatial statistics", xanchor=0.0315)   # row-leader
 
 # (c) end-to-end statistics worked example — SproutAngio VEGF dose (real .czi)
@@ -100,10 +115,11 @@ panel(axp, "d", "power (same pipeline)", xanchor=0.0315)   # row-leader
 cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "(a) Three canonical spatial patterns (regular, random/CSR, clustered) with fluorostats' "
  "tile-based Gini index beneath each — the segmentation-free homogeneity metric increases from "
- "regular to clustered. (b) Across a regular→clustered sweep, the tile Gini tracks five established "
- "spatial statistics (Clark–Evans nearest-neighbour, Ripley's K/L, Morisita, quadrat variance, "
- "gliding-box lacunarity); dot plot of |Spearman ρ| on a zoomed 0.90–1.00 axis shows every "
- "correlation at 0.96–0.997 (uniform-vs-clustered AUC = 1.0). "
+ "regular to clustered. (b) Across 50 synthetic fields spanning a regular→clustered sweep, the tile "
+ "Gini tracks the consensus of five independently-computed spatial statistics (Clark–Evans "
+ "nearest-neighbour, Ripley's K/L, Morisita, quadrat variance, gliding-box lacunarity): each point "
+ "is one field (coloured regular→clustered), x = mean sign-aligned z-score of the five references, "
+ "y = tile Gini; per-statistic |Spearman ρ| = 0.96–0.997, uniform-vs-clustered AUC = 1.0. "
  "(c) End-to-end statistics on a small VEGF dose experiment (SproutAngio, .czi): vessel "
  "volume fraction by dose (group means as bars), with the fluorostats.stats output "
  "computed live for VEGF 1 vs 3 — Mann–Whitney U, Cliff's δ, bootstrap fold-change CI and "
