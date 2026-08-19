@@ -192,18 +192,13 @@ axA.legend(handles=legA, loc="center right", bbox_to_anchor=(1.0, 0.30),
            fontsize=F.FS["small"], handletextpad=0.4, borderaxespad=0.5,
            labelspacing=0.35, frameon=False)
 
-# clean 2D-seg speedup annotation in the empty right-hand white space over the
-# short 3D-metric / skeleton bars (well clear of the long DL bars up top).
+# 2D-seg per-image runtimes feed the caption only. The on-panel inset that used to
+# sit here was removed: it duplicated the caption and, floating over the short
+# 3D-metric/skeleton bars, read as if it belonged to that row group. The three
+# 2D-segmentation bars already show the fluorostats-vs-DL speedup visually.
 seg_f = lookup("fluorostats(Otsu+CC)")
 seg_sd = lookup("comparator,StarDist (per 2D img, CPU cluster)")
 seg_cp = lookup("comparator,Cellpose (per 2D img, CPU cluster)")
-axA.text(0.985, 0.66,
-         "2D segmentation, per image (CPU)\n"
-         f"fluorostats  {seg_f:.1f} ms\n"
-         f"StarDist  {seg_sd:.0f} ms  ({F.round_sig(seg_sd/seg_f):.0f}×)\n"
-         f"Cellpose  {seg_cp:.0f} ms  ({F.round_sig(seg_cp/seg_f):.0f}×)",
-         transform=axA.transAxes, fontsize=F.FS["small"], va="top", ha="right",
-         bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="none"))
 
 F.panel(axA, "a", xanchor=0.0315)   # row-leader
 
