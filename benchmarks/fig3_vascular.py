@@ -78,10 +78,12 @@ axc.bar(x-w/2, ph.len_err_pct, w, color=BLUE, edgecolor="#333333", lw=0.4, label
 # volume-fraction error is exactly 0 for every phantom -> zero-height bars. Annotate it
 # directly (green, the S1 torus "exact" convention) rather than legending a sky-blue
 # swatch that never appears in the panel.
-_ytop = max(3.2, ph.len_err_pct.max()*1.5)
-for xi in x:
-    axc.text(xi+w/2, _ytop*0.04, "vol. frac.\n0% (exact)", ha="center", va="bottom",
-             fontsize=4.6, color=OKABE["green"], fontweight="bold", linespacing=1.05)
+_ytop = max(4.0, ph.len_err_pct.max()*1.6)   # headroom so the above-bar labels fit
+# annotate ON each bar (centred at x-w/2, just above its top), NOT offset to the right —
+# offsetting right pushed the depth-2 label out of panel (c) and onto panel (d)'s y label.
+for xi, h in zip(x, ph.len_err_pct.values):
+    axc.text(xi-w/2, h + _ytop*0.035, "vol. frac.\n0% (exact)", ha="center", va="bottom",
+             fontsize=4.8, color=OKABE["green"], fontweight="bold", linespacing=1.05)
 axc.set_xticks(x)
 # prose "depth N" labels (tree_d1 -> depth 1), matching Fig S1b's naming
 axc.set_xticklabels([f"{p.replace('tree_d', 'depth ')}\nbranches {b}/{t} exact" for p,b,t in
