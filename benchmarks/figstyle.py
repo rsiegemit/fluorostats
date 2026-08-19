@@ -39,8 +39,8 @@ EXT = Path(__file__).resolve().parent / "figures" / "extended"
 MAIN.mkdir(parents=True, exist_ok=True)
 EXT.mkdir(parents=True, exist_ok=True)
 
-# Raw-image data root. Portable: override with $FLUOROSTATS_DATA, else default to
-# the sibling methods_paper/data/downloads (never a hardcoded absolute /Users path).
+# Raw-image data root. Portable: override with $FLUOROSTATS_DATA (see
+# DATA_MANIFEST.md), else default to ./data/downloads relative to the repo root.
 DATA = Path(os.environ.get(
     "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[1] / "data" / "downloads")))
 

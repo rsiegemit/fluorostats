@@ -40,8 +40,10 @@ methods_paper/
 Hydrogel permability/
 Extrusion paper data Dextran/
 
-# regenerable example outputs (scripts recreate these on run).
-# NB: examples/benchmark_figures/results/ is bundled INPUT data (tracked);
-# only the publication_figure demo writes a regenerable results/ dir.
+# regenerable example / benchmark outputs (scripts recreate these on run).
+# NB: benchmarks/results/ is bundled INPUT data (tracked); only figures/ output
+# and downloaded raw data under benchmarks/ are regenerable and ignored.
 examples/**/figures/
 examples/publication_figure/results/
+benchmarks/figures/
+benchmarks/data/

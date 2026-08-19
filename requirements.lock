@@ -1,0 +1,30 @@
+# Pinned dependency versions — reproducibility lockfile for fluorostats 0.8.0.
+#
+# These are the exact versions used to produce the benchmark numbers and figures
+# in the methods paper. pyproject.toml carries permissive lower bounds (>=) for
+# normal installation; this file records the tested, frozen environment so the
+# published results can be reproduced bit-for-bit.
+#
+# Environment: CPython 3.13.  Install with:
+#     python -m pip install -r requirements.lock
+# then `pip install -e .` for fluorostats itself.
+
+# --- core runtime dependencies (from pyproject [project].dependencies) ---
+numpy==2.4.6
+scipy==1.17.1
+scikit-image==0.26.0
+tifffile==2026.3.3
+imageio==2.37.2
+imagecodecs==2026.3.6
+matplotlib==3.10.8
+pandas==3.0.2
+skan==0.13.1
+click==8.3.1
+
+# --- optional vendor-format readers (fluorostats[all]) ---
+# Needed only for the corresponding microscopy formats; the core library and
+# all benchmarks that ship precomputed tables run without them.
+czifile==2026.4.11        # Zeiss .czi
+oiffile==2026.2.8         # Olympus .oib / .oif
+nd2==0.11.3               # Nikon .nd2
+readlif==0.6.6            # Leica .lif

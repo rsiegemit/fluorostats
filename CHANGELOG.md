@@ -8,6 +8,12 @@ versions follow [semantic versioning](https://semver.org).
 ### Added
 - Ships a `py.typed` marker (PEP 561) so the library's type hints are usable by
   downstream type checkers.
+- **Reproducibility artifacts** for the methods paper: a top-level `benchmarks/`
+  harness (figure-regeneration scripts + precomputed metric tables), a
+  `benchmarks/DATA_MANIFEST.md` listing every dataset with licence and source, a
+  `benchmarks/VALIDATION.md` recording published-vs-observed baselines, and a
+  pinned `requirements.lock`. The benchmark harness moved from
+  `examples/benchmark_figures/` to `benchmarks/`.
 - **Spatial sampling & heterogeneity** (`fluorostats.spatial`, general): `tile_reduce`
   (partition a 2D field into a grid and reduce each cell with any callable),
   `tile_point_density` (bin object centroids into a grid), `slab_reduce` (split a

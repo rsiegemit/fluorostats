@@ -10,7 +10,7 @@ Three panels:
       schemes; fluorostats per-mm3 is flat (CV<=0.2%), competitors drift. CV per
       scheme annotated.
 
-Run from methods_paper/benchmarks: python3.13 make_ed1_correctness.py
+Run from benchmarks/: python3.13 make_ed1_correctness.py
 """
 from __future__ import annotations
 import numpy as np
