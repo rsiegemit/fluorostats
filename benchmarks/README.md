@@ -35,13 +35,19 @@ These read raw microscopy rather than a bundled table. Fetch the dataset from
 
 | script | figure | dataset |
 |---|---|---|
-| `fig2_nuclei.py` | 2D nuclei: fluorostats vs threshold panel + DL baselines | BBBC039 |
+| `fig2_nuclei.py` | Figure 2 — nucleus segmentation & the deep-learning boundary (a–f) | BBBC039 + BBBC024 |
 | `fig4_viability.py` | depth-resolved Live/Dead viability | S-BIAD2130 |
 | `fig_ed2_runtime.py` | runtime + determinism | BBBC024 |
 
-The deep-learning baselines (StarDist, Cellpose) were evaluated on a GPU/ROCm
-cluster; their per-image outputs are shipped in `results/`, so the comparison
-figures regenerate without re-running the networks (see `VALIDATION.md`).
+For Figure 2, the summary panels (b forest, d crowding curve) reproduce from the
+bundled `results/` tables; only the image panels (a/c/e) need the raw BBBC039/BBBC024
+images. `b2_nuclei_methods.py` is the per-image compute step that produces
+`b2_nuclei_methods_perimage.csv` (the threshold-panel F1 table the figure plots).
+
+The deep-learning baselines (StarDist, Cellpose, Omnipose) were evaluated on a
+GPU/ROCm cluster; their per-image outputs are shipped in `results/`
+(`stardist_eval.csv` etc.), so the comparison panels regenerate without re-running
+the networks (see `VALIDATION.md`).
 
 ## Not scriptable here
 

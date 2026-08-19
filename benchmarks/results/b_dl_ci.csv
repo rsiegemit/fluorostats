@@ -1,0 +1,6 @@
+method,mean_F1,CI_low,CI_high,diff_significant
+fluorostats,0.8962,0.8726,0.9156,
+StarDist,0.8713,0.8576,0.883,
+Cellpose,0.8619,0.8446,0.8773,
+fluorostats - StarDist,0.0249,0.0044,0.042,YES (excludes 0)
+fluorostats - Cellpose,0.0342,0.0083,0.0574,YES (excludes 0)
