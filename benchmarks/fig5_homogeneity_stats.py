@@ -8,15 +8,14 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from fluorostats.objects import centroid_homogeneity
 from fluorostats.stats import mann_whitney, cliffs_delta, bh_fdr, bootstrap_fold_change_ci
-from fluorostats.power import power_curve
 from scipy import stats as sps
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
-BLUE = OKABE["blue"]; GREY = OKABE["grey"]; VERM = OKABE["vermillion"]; GREEN = OKABE["green"]
+BLUE = OKABE["blue"]
 
-fig = plt.figure(figsize=(F.TW, 6.2), layout="constrained")
+fig = plt.figure(figsize=(F.TW, 4.4), layout="constrained")
 fig.set_constrained_layout_pads(h_pad=0.02, w_pad=0.02)
-gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[0.78, 1.10, 1.05],
+gs = gridspec.GridSpec(2, 2, figure=fig, height_ratios=[0.72, 1.30],
                        width_ratios=[0.55, 1.45], hspace=0.05, wspace=0.30)
 
 # (a) three canonical point patterns with tile Gini
@@ -62,10 +61,11 @@ for L in range(5):
     m = lvl == L
     axb.scatter(consensus[m], gini[m], s=15, color=ramp[L], edgecolor="white", lw=0.3, zorder=3)
 rho = sps.spearmanr(consensus, gini).statistic
-axb.text(0.05, 0.97, f"ρ = {rho:.3f}\nper-stat 0.96–0.997", transform=axb.transAxes,
-         va="top", ha="left", fontsize=5.5, color=BLUE, fontweight="bold")
-axb.text(0.03, 0.04, "regular", transform=axb.transAxes, fontsize=5.0, color="#888", ha="left")
-axb.text(0.97, 0.04, "clustered", transform=axb.transAxes, fontsize=5.0, color=ramp[-1], ha="right")
+# ρ in the empty lower-right (points rise bottom-left→top-right). The per-statistic
+# |ρ| range and the regular→clustered colouring are stated in the caption, not
+# on-panel, so nothing overlaps the point cloud in this narrow panel.
+axb.text(0.97, 0.06, f"ρ = {rho:.3f}", transform=axb.transAxes,
+         va="bottom", ha="right", fontsize=6.0, color=BLUE, fontweight="bold")
 axb.set_xlabel("clustering consensus (z)", fontsize=6.0)
 axb.set_ylabel("fluorostats tile Gini", fontsize=6.0)
 panel(axb, "b", "tracks 5 spatial statistics", xanchor=0.0315)   # row-leader
@@ -100,17 +100,11 @@ axc.text(0.02, 0.985,
          bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none"))
 panel(axc, "c", "statistics layer output")
 
-# power curve (real fluorostats.power) — span the full width of its row
-axp = fig.add_subplot(gs[2, :])
-ns = [3, 4, 6, 8, 12, 16]
-pc = power_curve(a, b, ns, n_sims=400)
-ycol = [c for c in pc.columns if "power" in c.lower()][0]; ncol = [c for c in pc.columns if c.lower() in ("n","sample_size","n_per_group")][0]
-axp.plot(pc[ncol], pc[ycol], marker="o", color=BLUE, lw=1.8, ms=4)
-axp.axhline(0.8, ls="--", color=VERM, lw=0.9); axp.text(ns[-1], 0.82, "80%", fontsize=5.0, color=VERM, ha="right")
-axp.set_xlabel("n per group"); axp.set_ylabel("power"); axp.set_ylim(0, 1.02)
-axp.text(0.97, 0.18, "bootstrap power from an\nn = 4 pilot — optimistic\n(see text)", transform=axp.transAxes,
-         ha="right", va="bottom", fontsize=5.0, color="#555", style="italic")
-panel(axp, "d", "power (same pipeline)", xanchor=0.0315)   # row-leader
+# NB power analysis intentionally has no panel here: under complete separation
+# (Cliff's δ=−1) a Mann-Whitney power-vs-n curve is fixed by the rank test's
+# discreteness (min two-sided p = 0.10 at n=3, 0.029 at n=4), so it would render
+# identically for any perfectly-separated data. It lives in Methods / Limitations
+# and in fluorostats.power instead.
 
 cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "(a) Three canonical spatial patterns (regular, random/CSR, clustered) with fluorostats' "
@@ -125,7 +119,6 @@ cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "computed live for VEGF 1 vs 3 — Mann–Whitney U, Cliff's δ, bootstrap fold-change CI and "
  "BH-FDR across contrasts — showing image→statistic with no manual export. This contrast is an "
  "illustrative toy example (n=4/group; Cliff's δ=−1.00 reflects complete separation), not a headline "
- "result. (d) Bootstrap power curve from the same pipeline; the 80% reference line is dashed. Because "
- "it is estimated from an n=4 pilot the power is optimistic (see text).")
+ "result.")
 save(fig, "fig5_homogeneity_stats", tight=False); caption("fig5_homogeneity_stats", cap)
 print("Figure 5 done")

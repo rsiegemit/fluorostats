@@ -85,6 +85,11 @@ axA.axhline(0, color="#333333", lw=0.6)
 n_pass = int(ta.shape[0])
 axA.text(0.98, 0.97, f"0 / {n_pass} phantoms with error", transform=axA.transAxes,
          ha="right", va="top", fontsize=6.0, color=GREEN, fontweight="bold")
+# the torus has chi = 0, so BOTH bars have zero height and the column reads as
+# missing data unless it is labelled explicitly (y=0.16 clears the two diamonds at y=1).
+i_torus = order.index("solid_torus")
+axA.text(i_torus, 0.16, "$\\chi=0$ (exact)", ha="center", va="bottom",
+         fontsize=5.5, color=GREEN, fontweight="bold")
 # note that the diamonds encode component count (easy to miss vs the bars)
 axA.text(0.98, 0.85, "diamonds = component count",
          transform=axA.transAxes, ha="right", va="top", fontsize=6.0,
