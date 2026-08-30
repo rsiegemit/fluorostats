@@ -9,9 +9,13 @@ from skimage.filters import gaussian
 from skimage.morphology import disk, white_tophat
 
 
-# Patterns that indicate the green / F-actin channel
+# Real dye/fluorophore names that indicate the green / F-actin channel. Deliberately
+# NOT a positional token like "ch2": the loader pads missing channel names with
+# placeholders "Ch1", "Ch2", … (always placeholders for Leica), so a "ch2" pattern would
+# match invented metadata as if it were a real dye. The "channel 2 is green" convention is
+# instead handled by the positional fallback below (n_ch == 2 → index 1).
 _GREEN_PATTERNS = re.compile(
-    r"(alexa.*488|fitc|gfp|green|factin|f-actin|ch2|488)",
+    r"(alexa.*488|fitc|gfp|green|factin|f-actin|488)",
     re.IGNORECASE,
 )
 

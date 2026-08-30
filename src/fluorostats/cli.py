@@ -88,6 +88,11 @@ def viability_cmd(manifest, output_dir):
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
 @click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster)")
+@click.option("--prune/--no-prune", default=False,
+              help="Prune short skeleton spurs before counting (field-standard branch/junction counts, "
+                   "matching Fiji AnalyzeSkeleton / AngioTool / REAVER). Default off = raw skeleton.")
+@click.option("--min-branch-length", type=float, default=5.0,
+              help="Minimum branch length in µm for spur pruning when --prune is set (default 5).")
 def quant3d(
     input_dir,
     output_dir,
@@ -101,6 +106,8 @@ def quant3d(
     no_overlays,
     no_plots,
     no_skeleton,
+    prune,
+    min_branch_length,
 ):
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
@@ -157,7 +164,9 @@ def quant3d(
             skel = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
                     "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
             if not no_skeleton:
-                skel = metrics_3d.skeleton_metrics(mask, voxel_size_um=voxel_size)
+                skel = metrics_3d.skeleton_metrics(
+                    mask, voxel_size_um=voxel_size,
+                    prune=prune, min_branch_length_um=min_branch_length)
 
             row = {
                 "file": fpath.name,
