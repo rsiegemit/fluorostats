@@ -370,7 +370,10 @@ def _load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
     if frames[0].ndim == 3:
         frames = [f[:, :, 0] if f.ndim == 3 else f for f in frames]
 
-    arr = np.array(frames).reshape(n_channels, n_z, h, w)
+    # frames were appended Z-major, C-minor (for z: for c:), i.e. index = z*n_channels + c,
+    # so reshape to (Z, C, H, W) THEN transpose to (C, Z, H, W). Reshaping straight to
+    # (C, Z, ...) interleaves channels for multi-channel z-stacks (only 1-channel is safe).
+    arr = np.array(frames).reshape(n_z, n_channels, h, w).transpose(1, 0, 2, 3)
     arr = _canonicalize_volume(arr, meta)
     return arr, meta
 

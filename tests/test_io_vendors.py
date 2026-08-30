@@ -322,6 +322,40 @@ def _make_fake_readlif(n_channels, n_z, scale, frame_ndim=2, empty=False):
     return fake
 
 
+def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
+    """Multi-channel LIF: frames are appended Z-major/C-minor, so channel c, slice z
+    must come back de-interleaved (regression for the (Z,C)-vs-(C,Z) reshape bug)."""
+    fake = types.ModuleType("readlif")
+
+    class Dims:
+        z = 3
+
+    class Image:
+        channels = 2
+        dims = Dims()
+        scale = [1e6, 1e6, 1e6]
+
+        def get_frame(self, z, t, c):
+            return np.full((4, 4), z * 10 + c, dtype=np.uint16)   # encodes (z, c)
+
+    class LifFile:
+        def __init__(self, path):
+            self.image_list = [{"name": "img0"}]
+
+        def get_image(self, i):
+            return Image()
+
+    fake.LifFile = LifFile
+    monkeypatch.setitem(sys.modules, "readlif", fake)
+    path = tmp_path / "m.lif"
+    path.write_bytes(b"")
+    arr, _ = io.load_volume(path)                 # (C, Z, Y, X)
+    assert arr.shape == (2, 3, 4, 4)
+    for c in range(2):
+        for z in range(3):
+            assert arr[c, z, 0, 0] == z * 10 + c   # correct de-interleave
+
+
 def test_load_lif_volume(monkeypatch, tmp_path):
     fake = _make_fake_readlif(2, 3, [1e6, 2e6, 1e6])
     monkeypatch.setitem(sys.modules, "readlif", fake)

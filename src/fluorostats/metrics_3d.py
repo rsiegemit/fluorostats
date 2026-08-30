@@ -18,7 +18,7 @@ from .skeleton import skeleton_metrics, prune_skeleton, n_junction_nodes  # noqa
 
 
 def volume_fraction(mask: np.ndarray) -> float:
-    """Fraction of voxels that are foreground."""
+    """Fraction of voxels that are foreground, in [0, 1] (not a percent)."""
     return float(mask.sum() / mask.size)
 
 
@@ -102,8 +102,12 @@ def normalise_skeleton_metrics(
     out["length_density_um_per_mm3"] = (
         float(metrics.get("total_length_um", 0.0) / v) if v > 0 else 0.0
     )
+    # junction DENSITY uses the same field-standard branchpoint definition as the
+    # reported junction COUNT (n_junction_nodes, degree>=3 nodes — AngioTool/REAVER),
+    # not skan's n_junctions (junction-to-junction branch segments), so count and
+    # density describe the same quantity per unit volume.
     out["junction_density_per_mm3"] = (
-        float(metrics.get("n_junctions", 0) / v) if v > 0 else 0.0
+        float(metrics.get("n_junction_nodes", 0) / v) if v > 0 else 0.0
     )
     out["branch_density_per_mm3"] = (
         float(metrics.get("n_branches", 0) / v) if v > 0 else 0.0

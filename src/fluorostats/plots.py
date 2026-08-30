@@ -312,8 +312,10 @@ def compute_pvalues(
 # ---------------------------------------------------------------------------
 
 _LABELS = {
+    # volume_fraction / area_fraction are FRACTIONS in [0, 1] (no ×100 in the pipeline),
+    # so they are NOT labelled "(%)". Viability is the only percent-denominated output.
     "volume_fraction": "Volume Fraction",
-    "area_fraction": "Area Fraction (%)",
+    "area_fraction": "Area Fraction",
     "n_components": "Connected Components",
     "euler_number": "Euler Number",
     "largest_component_fraction": "Largest Component Fraction",

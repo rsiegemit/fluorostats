@@ -7,7 +7,7 @@ from scipy.ndimage import label
 
 
 def area_fraction(mask: np.ndarray) -> float:
-    """Fraction of pixels that are foreground (cell-covered)."""
+    """Fraction of pixels that are foreground (cell-covered), in [0, 1] (not a percent)."""
     return float(mask.sum() / mask.size)
 
 
