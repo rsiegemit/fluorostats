@@ -37,6 +37,9 @@ def coverage_metrics(
             Average cluster size in pixels.
         median_cluster_area_px : float
             Median cluster size in pixels (robust to outliers).
+        mean_cluster_area_um2, median_cluster_area_um2 : float
+            The same cluster areas calibrated by ``pixel_size_um`` (× pixel_size_um²);
+            equal to the pixel values when ``pixel_size_um`` is 1.0 (uncalibrated).
     """
     af = area_fraction(mask)
     labeled, n_comp = label(mask)
@@ -50,6 +53,8 @@ def coverage_metrics(
             "largest_component_fraction": 0.0,
             "mean_cluster_area_px": 0.0,
             "median_cluster_area_px": 0.0,
+            "mean_cluster_area_um2": 0.0,
+            "median_cluster_area_um2": 0.0,
         }
 
     component_sizes = np.bincount(labeled.ravel())
@@ -58,10 +63,13 @@ def coverage_metrics(
     largest = int(fg_sizes.max())
     lcf = largest / total_fg
 
+    px2 = float(pixel_size_um) ** 2
     return {
         "area_fraction": af,
         "n_components": n_comp,
         "largest_component_fraction": float(lcf),
         "mean_cluster_area_px": float(fg_sizes.mean()),
         "median_cluster_area_px": float(np.median(fg_sizes)),
+        "mean_cluster_area_um2": float(fg_sizes.mean()) * px2,
+        "median_cluster_area_um2": float(np.median(fg_sizes)) * px2,
     }

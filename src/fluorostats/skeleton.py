@@ -150,7 +150,14 @@ def skeleton_metrics(
             "n_junction_nodes": n_junction_nodes(skel),
             "mean_branch_length_um": mean_branch_length,
         }
-    except Exception:  # pragma: no cover  # defensive skan/skeletonize failure
+    except Exception as exc:  # pragma: no cover  # defensive skan/skeletonize failure
+        # A skan/skeletonize failure (e.g. skan not installed) would otherwise return
+        # all-zeros, indistinguishable from a genuinely empty mask — warn so it's visible.
+        import warnings
+        warnings.warn(f"skeleton_metrics failed ({type(exc).__name__}: {exc}); returning "
+                      "zeros. A non-empty mask with zero skeleton length indicates this "
+                      "failure, not an empty structure (is `skan` installed?).",
+                      RuntimeWarning, stacklevel=2)
         return dict(empty)
 
 

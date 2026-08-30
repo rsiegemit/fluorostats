@@ -26,6 +26,7 @@ Metadata dict carries:
 from __future__ import annotations
 
 import re
+import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -78,7 +79,11 @@ def load_auto(path: Path) -> tuple[np.ndarray, dict]:
             arr = arr[:, 0, :, :]  # (C, 1, Y, X) -> (C, Y, X)
             meta["voxel_size_um"] = meta["voxel_size_um"][1:]
         return arr, meta
-    except Exception:
+    except Exception as exc:
+        # A genuine volume-read failure (not a format we recognise as 2D) should not
+        # be silently retried as a 2D read — surface it so a real error is visible.
+        warnings.warn(f"load_volume failed for {path.name} ({type(exc).__name__}: {exc}); "
+                      "falling back to a 2D image read.", RuntimeWarning, stacklevel=2)
         return load_image(path)
 
 
@@ -216,6 +221,9 @@ def _parse_olympus_metadata(oif) -> dict:
                     elif pix_unit.lower() == "um":
                         voxel_z = interval
                     else:
+                        warnings.warn(f"Olympus PixUnit {pix_unit!r} not recognised; "
+                                      "assuming nm (interval/1000). Verify the z voxel size.",
+                                      RuntimeWarning, stacklevel=2)
                         voxel_z = interval / 1000.0
 
     meta["channel_names"] = channel_names
@@ -501,7 +509,15 @@ def _canonicalize_volume(arr: np.ndarray, meta: dict) -> np.ndarray:
     if ndim == 3:
         arr = arr[np.newaxis]
     elif ndim == 4:
-        if arr.shape[0] > 10:
+        # Axis-order heuristic: a leading axis larger than this is far more likely to be
+        # Z (many slices) than C (few channels), so treat the array as channel-LAST and
+        # move the trailing axis to front. This is genuinely ambiguous for a channel-last
+        # stack with few z-slices — pass explicit channel metadata upstream to be sure.
+        _MAX_LEADING_CHANNELS = 10
+        if arr.shape[0] > _MAX_LEADING_CHANNELS:
+            warnings.warn(f"4D array leading axis = {arr.shape[0]} (> {_MAX_LEADING_CHANNELS}); "
+                          "assuming channel-last and transposing to (C, Z, Y, X).",
+                          RuntimeWarning, stacklevel=3)
             arr = np.moveaxis(arr, -1, 0)
     elif ndim == 5:
         arr = arr[0]

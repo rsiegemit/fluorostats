@@ -240,7 +240,9 @@ def quant2d(
 
     files = _find_files(input_path, iq_io.IMAGE_SUFFIXES)
     if not files:
-        click.echo(f"No image files found in {input_path}")
+        click.echo(f"No image files found in {input_path} "
+                   f"(quant2d matches {sorted(iq_io.IMAGE_SUFFIXES)}). "
+                   "Vendor volume formats (.oib/.czi/.nd2/.lif) are handled by `quant3d`.")
         return
 
     click.echo(f"Found {len(files)} image file(s)")
@@ -342,7 +344,7 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     click.echo(f"Plots saved to {plot_dir}")
 
 
-def _coverage_heterogeneity(mask, grid: tuple[int, int] = (4, 4)) -> dict:
+def _coverage_heterogeneity(mask, grid: tuple[int, int] = (5, 5)) -> dict:
     """Spatial uniformity of a binary mask's coverage across a tile grid.
 
     For a 3D ``(Z, Y, X)`` mask the through-z coverage map is used. Returns
@@ -395,14 +397,37 @@ def _parse_channel(channel: str | None) -> int | str | None:
         return channel
 
 
+def _environment() -> dict:
+    """Package versions + optional-reader availability, for the reproducibility record.
+
+    (The resolved per-file ``voxel_size_um`` is recorded per row in ``per_file.csv``.)
+    """
+    import importlib.metadata as _im
+    import importlib.util as _iu
+    import platform
+
+    pkgs: dict[str, str | None] = {}
+    for p in ("fluorostats", "numpy", "scipy", "scikit-image", "tifffile",
+              "pandas", "matplotlib", "skan"):
+        try:
+            pkgs[p] = _im.version(p)
+        except Exception:  # pragma: no cover - core deps are always installed
+            pkgs[p] = None
+    readers = {r: _iu.find_spec(r) is not None
+               for r in ("oiffile", "czifile", "nd2", "readlif")}
+    return {"python": platform.python_version(), "packages": pkgs,
+            "optional_readers": readers}
+
+
 def _save_config(output_dir: Path, params: dict) -> None:
-    """Save run parameters for reproducibility."""
-    config = {}
+    """Save run parameters + environment for reproducibility."""
+    config: dict = {}
     for k, v in params.items():
         if isinstance(v, Path):
             config[k] = str(v)
         elif isinstance(v, (str, int, float, bool, type(None))):
             config[k] = v
+    config["_environment"] = _environment()
 
     config_path = output_dir / "run_config.json"
     with open(config_path, "w") as f:
