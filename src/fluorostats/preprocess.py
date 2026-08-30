@@ -99,8 +99,8 @@ def background_subtract(arr: np.ndarray, radius: int = 15) -> np.ndarray:
     Removes slowly varying background illumination. Applied per-slice
     for 3D data to handle confocal z-dependent intensity.
 
-    ``radius`` is the rolling-ball / disk structuring-element radius in
-    pixels; it should exceed the largest foreground feature.
+    ``radius`` is the disk structuring-element (footprint) radius in pixels
+    for the white top-hat; it should exceed the largest foreground feature.
     """
     selem = disk(radius)
 

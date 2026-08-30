@@ -151,7 +151,11 @@ def quant3d(
             vf = metrics_3d.volume_fraction(mask)
             conn = metrics_3d.connectivity_metrics(mask)
 
-            skel = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0}
+            # same keys as skeleton_metrics() so the CSV row shape is identical
+            # whether or not --no-skeleton is set (else n_junction_nodes /
+            # mean_branch_length_um show as blank cells for skipped rows).
+            skel = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
+                    "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
             if not no_skeleton:
                 skel = metrics_3d.skeleton_metrics(mask, voxel_size_um=voxel_size)
 
@@ -186,7 +190,7 @@ def quant3d(
     # Plots
     _3d_metrics = ["volume_fraction", "n_components", "euler_number",
                    "largest_component_fraction", "total_length_um",
-                   "n_junctions", "mean_branch_length_um",
+                   "n_junctions", "n_junction_nodes", "mean_branch_length_um",
                    "coverage_tile_cv", "coverage_morans_i"]
 
     _write_plots_and_pvalues(

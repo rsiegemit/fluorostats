@@ -296,6 +296,8 @@ def attenuation_correct(
 
 __all__ = [
     "live_dead_fractions",
+    "live_dead_by_count",
+    "choose_count_method",
     "viability_depth_profile",
     "viability_2d_vs_3d",
     "attenuation_correct",

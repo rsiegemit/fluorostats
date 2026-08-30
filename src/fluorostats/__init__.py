@@ -35,10 +35,11 @@ Public API surface, grouped by module:
   - ``viability`` — Live/Dead quantification: live/dead fractions, depth-resolved
     viability profile, 2D-vs-3D overestimation, attenuation correction.
   - ``validate`` — instance-segmentation metrics: instance F1 / precision /
-    recall at a single IoU threshold, plus average precision (AP) averaged
-    over a range of IoU thresholds.
-  - ``stats`` — Mann-Whitney, BH-FDR, Cliff's delta, bootstrap fold-change
-    CIs, Stouffer pooling, Scheirer-Ray-Hare 2-way non-parametric ANOVA.
+    recall at a single IoU threshold (match_instances), plus average precision
+    (AP, Kaggle DSB2018 formula) averaged over a range of IoU thresholds.
+  - ``stats`` — Mann-Whitney, stratified Mann-Whitney (BH-FDR across strata),
+    BH-FDR, Cliff's delta, bootstrap fold-change CIs, Stouffer pooling,
+    Scheirer-Ray-Hare 2-way non-parametric ANOVA.
   - ``power`` — bootstrap power and power curves.
   - ``render3d`` — isosurface mesh (light/dark, smoothed, shaded), voxel
     cloud, two-channel live/dead MIP, MIP grid, depth-coded MIP, and

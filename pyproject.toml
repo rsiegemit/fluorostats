@@ -63,8 +63,8 @@ dev = [
 fluorostats = "fluorostats.cli:cli"
 
 [project.urls]
-Homepage = "https://github.com/rsiegelmann/fluorostats"
-Issues = "https://github.com/rsiegelmann/fluorostats/issues"
+Homepage = "https://github.com/rsiegemit/fluorostats"
+Issues = "https://github.com/rsiegemit/fluorostats/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

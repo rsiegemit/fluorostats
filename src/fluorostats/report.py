@@ -21,7 +21,10 @@ _COLUMNS_3D = [
     "total_length_um",
     "n_branches",
     "n_junctions",
+    "n_junction_nodes",
     "mean_branch_length_um",
+    "coverage_tile_cv",
+    "coverage_morans_i",
 ]
 
 _COLUMNS_2D = [
@@ -34,6 +37,8 @@ _COLUMNS_2D = [
     "largest_component_fraction",
     "mean_cluster_area_px",
     "median_cluster_area_px",
+    "coverage_tile_cv",
+    "coverage_morans_i",
 ]
 
 _NUMERIC_3D = [
@@ -44,7 +49,10 @@ _NUMERIC_3D = [
     "total_length_um",
     "n_branches",
     "n_junctions",
+    "n_junction_nodes",
     "mean_branch_length_um",
+    "coverage_tile_cv",
+    "coverage_morans_i",
 ]
 
 _NUMERIC_2D = [
@@ -53,6 +61,8 @@ _NUMERIC_2D = [
     "largest_component_fraction",
     "mean_cluster_area_px",
     "median_cluster_area_px",
+    "coverage_tile_cv",
+    "coverage_morans_i",
 ]
 
 
