@@ -37,6 +37,12 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
             Fraction of total foreground volume in the largest component.
             Near 1.0 = one dominant connected network; low = fragmented.
     """
+    # Dual-connectivity pairing (intentional, not a mismatch): foreground components
+    # are counted under 6-connectivity (scipy.ndimage.label default, face-adjacency),
+    # and the Euler number under 26-connectivity. In 3D these are the DUAL pair required
+    # by the Jordan-Brouwer separation theorem — using the same connectivity for both
+    # gives topologically inconsistent χ. This pairing is what reproduces the analytic
+    # χ on the topology phantoms to zero error (see benchmarks/results/b1_topology_phantoms.csv).
     labeled, n_comp = label(mask)
     euler = int(euler_number(mask, connectivity=3))
 

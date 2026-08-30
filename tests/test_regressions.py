@@ -4,7 +4,20 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fluorostats import stats, objects, preprocess, metrics_2d, plots, qc
+from fluorostats import stats, objects, preprocess, metrics_2d, metrics_3d, plots, qc
+
+
+def test_connectivity_dual_convention_pinned():
+    """n_components (6-conn foreground) and euler (26-conn) are the intentional DUAL
+    pair — pin it so a refactor can't silently unify the two connectivities."""
+    from scipy.ndimage import label
+    from skimage.measure import euler_number
+    m = np.zeros((10, 10, 20), bool)
+    m[2:8, 2:8, 2:8] = True          # two disjoint solid blobs (each chi = 1)
+    m[2:8, 2:8, 12:18] = True
+    res = metrics_3d.connectivity_metrics(m)
+    assert res["n_components"] == int(label(m)[1]) == 2
+    assert res["euler_number"] == int(euler_number(m, connectivity=3)) == 2
 
 
 def test_stouffer_weights_align_after_nan_drop():

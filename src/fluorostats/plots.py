@@ -265,7 +265,13 @@ def compute_pvalues(
 ) -> pd.DataFrame:
     """Compute pairwise Mann-Whitney U p-values for all condition pairs.
 
-    Returns a DataFrame with columns: metric, condition_a, condition_b, p_value, significance.
+    Multiple-comparison corrected: a Benjamini-Hochberg ``q_value`` is computed
+    across the whole grid (every metric × condition-pair), and the ``significance``
+    stars reflect the corrected q, matching the library's default correction
+    (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
+
+    Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
+    p_value, q_value, significance (empty if no pair has >=2 samples per group).
     """
     from scipy.stats import mannwhitneyu
 
@@ -289,12 +295,16 @@ def compute_pvalues(
                     "n_a": len(a),
                     "n_b": len(b),
                     "p_value": p,
-                    "significance": _pvalue_stars(p),
                 })
             except ValueError:
                 continue
 
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        from .stats import bh_fdr
+        out["q_value"] = bh_fdr(out["p_value"].values)
+        out["significance"] = out["q_value"].map(_pvalue_stars)   # stars on CORRECTED q
+    return out
 
 
 # ---------------------------------------------------------------------------
