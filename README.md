@@ -234,6 +234,14 @@ fluorostats depth manifest.json      # or: from fluorostats.depth_batch import r
 
 The JSON manifest lists the groups, stacks, blanks, and AUC windows (fully generic; nothing hardcoded). See [`fluorostats.depth_batch`](src/fluorostats/depth_batch.py) for the schema.
 
+A parallel manifest-driven driver quantifies **Live/Dead viability** across many two-channel stacks grouped by condition (area/count consensus, regime detection, per-FOV density, 2D-vs-3D bias → tidy CSVs):
+
+```bash
+fluorostats viability manifest.json   # or: from fluorostats.viability_batch import run
+```
+
+See [`fluorostats.viability_batch`](src/fluorostats/viability_batch.py) for the schema. (The five CLI subcommands are `quant3d`, `quant2d`, `depth`, `viability`, and `formats`.)
+
 ### Per-object measurements
 
 ```python
@@ -242,7 +250,7 @@ from fluorostats.objects import (
     object_centroids,
 )
 
-labels, n = label_3d(mask, min_size=64)
+labels, n = label_3d(mask, min_size=64)   # min_size default is 0 (keep all); 64 shown as an example
 diams_um = equivalent_diameters_um(labels, meta["voxel_size_um"])
 density = object_density_per_mm3(n, mask.shape, meta["voxel_size_um"])
 centroids = object_centroids(labels)
@@ -345,7 +353,7 @@ gap = mesh_size(net_mask, spacing=(dy_um, dx_um))          # typical open-gap si
 
 # distribution of points around a centre (last two centroid cols = y, x)
 angular_homogeneity(centroids, center)                    # circumferential evenness
-radial_distribution(centroids, center, n_bins=3)          # inner→outer shells
+radial_distribution(centroids, center, n_bins=3)          # inner→outer shells (n_bins default 8; 3 = thirds)
 ```
 
 General, assay-agnostic geometry helpers for tubular / networked constructs — see [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) (`geometry="cross_section"` / `"wall"`) for an end-to-end use.

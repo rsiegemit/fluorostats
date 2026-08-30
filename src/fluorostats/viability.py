@@ -99,6 +99,11 @@ def choose_count_method(channel, **seg) -> dict:
       separate overlapping cells that CC merges.
     - otherwise (well-separated): ``"cc"`` — exact and robust.
 
+    NOTE: ``"maxima"`` is the mode validated against the published Fiji Live/Dead macro
+    (CCC 0.987 vs ground truth, Fig 4). ``auto`` only escalates to it in the clean +
+    crowded regime above, so to reproduce that headline pass ``method="maxima"`` explicitly
+    to ``live_dead_by_count`` rather than relying on the regime default.
+
     Returns dict: method, smooth_sigma, and the estimated regime metrics.
     """
     r = _estimate_regime(channel, **seg)
