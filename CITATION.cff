@@ -6,6 +6,14 @@ version: 0.8.0
 date-released: "2026-09-24"
 license: MIT
 repository-code: "https://github.com/rsiegemit/fluorostats"
+doi: 10.5281/zenodo.22942365
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22942365
+    description: "Archived v0.8.0 release"
+  - type: doi
+    value: 10.5281/zenodo.22942364
+    description: "Concept DOI, always resolves to the latest release"
 authors:
   - family-names: Siegelmann
     given-names: Roy
