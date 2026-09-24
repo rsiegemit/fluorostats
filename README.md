@@ -54,21 +54,33 @@ Well suited for endothelial coverage, monolayer confluence, wound healing assays
 
 ### Install
 
+fluorostats is not on PyPI. Install it from source, either directly:
+
 ```bash
-pip install fluorostats
+pip install "fluorostats @ git+https://github.com/rsiegemit/fluorostats.git"
 ```
 
-For microscope-specific proprietary formats, add the corresponding extra:
+or from a clone, which is what the benchmark scripts expect:
 
 ```bash
-pip install fluorostats[olympus]    # .oib, .oif files
-pip install fluorostats[zeiss]      # .czi files
-pip install fluorostats[nikon]      # .nd2 files
-pip install fluorostats[leica]      # .lif files
-pip install fluorostats[all]        # all formats
+git clone https://github.com/rsiegemit/fluorostats.git
+cd fluorostats
+pip install -e .
+```
+
+For microscope-specific proprietary formats, add the corresponding extra —
+`olympus` (.oib, .oif), `zeiss` (.czi), `nikon` (.nd2), `leica` (.lif), or
+`all`:
+
+```bash
+pip install -e ".[all]"                                                     # from a clone
+pip install "fluorostats[all] @ git+https://github.com/rsiegemit/fluorostats.git"   # without cloning
 ```
 
 TIFF, OME-TIFF, PNG, JPEG, and BMP are supported out of the box.
+
+To reproduce the published benchmarks exactly, install the pinned environment
+first with `pip install -r requirements.lock`.
 
 ### Organize Data
 

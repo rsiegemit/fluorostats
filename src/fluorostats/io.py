@@ -7,10 +7,10 @@ Supported formats:
     .npy            — NumPy arrays
 
   Optional (install extras):
-    .oib, .oif      — Olympus FluoView     (pip install fluorostats[olympus])
-    .czi            — Zeiss ZEN             (pip install fluorostats[zeiss])
-    .nd2            — Nikon NIS-Elements    (pip install fluorostats[nikon])
-    .lif            — Leica LAS X          (pip install fluorostats[leica])
+    .oib, .oif      — Olympus FluoView     (pip install oiffile)
+    .czi            — Zeiss ZEN             (pip install czifile)
+    .nd2            — Nikon NIS-Elements    (pip install nd2)
+    .lif            — Leica LAS X          (pip install readlif)
 
 All loaders return (array, metadata_dict) where array is canonicalized to:
   - 3D volumes: (C, Z, Y, X)
@@ -52,7 +52,8 @@ def _require(package: str, extra: str):
     except ImportError:
         raise ImportError(
             f"Reading this format requires the '{package}' package.\n"
-            f"Install it with: pip install fluorostats[{extra}]"
+            f"Install it with: pip install {package}\n"
+            f"(or, from a fluorostats checkout: pip install -e \".[{extra}]\")"
         ) from None
 
 
@@ -163,7 +164,7 @@ def supported_formats() -> dict[str, str]:
             formats.update(ext_map)
         except ImportError:
             for ext, desc in ext_map.items():
-                formats[ext] = f"{desc} (requires: pip install fluorostats[{extra}])"
+                formats[ext] = f"{desc} (requires: pip install {pkg})"
     return formats
 
 
