@@ -1,0 +1,5 @@
+group,time_h,n_ok,guarded_lambda_mean,guarded_lambda_sem,guarded_r2_mean,naive_repr_lambda,naive_repr_r2,naive_repr_stack
+4h,4,4,126.43249999999999,19.655085357654055,0.88108425,,,
+12h,12,6,433.9998333333333,9.425287318049138,0.9987153333333333,,,
+24h,24,0,,,,830.9,0.9997,24 h (1).oib
+72h,72,0,,,,2137.9,0.994,72 h (1).oib

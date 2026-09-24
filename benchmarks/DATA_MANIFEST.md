@@ -30,7 +30,9 @@ preserving the sub-folder names noted below.
 - **Deep-learning baselines** (StarDist, Cellpose) were evaluated on an external GPU/ROCm
   cluster; their per-image outputs are shipped as CSVs in `results/`, so the comparison
   figures/tables regenerate without re-running the networks. See `VALIDATION.md`.
-- **Application confocal data (Fig 6, lab GelMA/hybrid constructs)** are the authors' own
-  microscopy and are not publicly deposited; the closest public analogues are listed above
-  (S-BIAD2130, S-BIAD2920). The analysis scripts are provided; only these specific inputs
-  are unavailable.
+- **Application confocal data (Fig 6: FITC-dextran penetration time-course; HUVEC/GelMA
+  Live/Dead series)** are the authors' own microscopy, available under a data-use agreement
+  and not deposited; the closest public analogues are listed above (S-BIAD2130, S-BIAD2920).
+  The derived per-stack tables *are* bundled as `results/fig6_*.csv`, so the quantitative
+  panels can be recomputed without the raw stacks; the representative micrograph panel
+  cannot, since it renders the raw data directly.

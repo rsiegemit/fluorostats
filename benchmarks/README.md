@@ -49,9 +49,22 @@ GPU/ROCm cluster; their per-image outputs are shipped in `results/`
 (`stardist_eval.csv` etc.), so the comparison panels regenerate without re-running
 the networks (see `VALIDATION.md`).
 
-## Not scriptable here
+## Collaborator application figure (Fig 6)
 
-The combined applications panel (Fig 6) is built from the authors' own confocal
-constructs (GelMA/hybrid `.oib` stacks), which are not publicly deposited; the
-closest public analogues are listed in `DATA_MANIFEST.md`. The analysis runs
-through the same `fluorostats` modules as everything above.
+Fig 6 is built from the authors' own confocal data — a FITC-dextran penetration
+time-course and a HUVEC/GelMA Live/Dead series. The raw microscopy is available
+from the authors under a data-use agreement and is not deposited, but the derived
+per-stack tables are bundled here so the quantitative panels can be recomputed:
+
+| table | content |
+|---|---|
+| `results/fig6_depth_profiles_long.csv` | per-stack normalized intensity vs depth |
+| `results/fig6_depth_auc_per_stack.csv` | per-stack retention AUC and λ fit with range-guard flag |
+| `results/fig6_depth_lambda_timecourse.csv` | per-timepoint λ summary (guarded vs naive) |
+| `results/fig6_depth_group_summary.csv` | group mean ± SEM depth profiles |
+| `results/fig6_viability_per_stack.csv` | per-stack Live/Dead coverage, counts, viability, regime flags |
+| `results/fig6_viability_group_summary.csv` | day-1 vs day-5 group summaries |
+
+The representative micrograph panel cannot be regenerated from these tables — it
+renders the raw stacks directly. The analysis runs through the same `fluorostats`
+modules as everything above.
