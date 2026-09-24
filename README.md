@@ -541,8 +541,10 @@ If you use fluorostats in published work, please cite the archived release:
 
 Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) (GitHub's
 "Cite this repository" button reads it) and [`.zenodo.json`](.zenodo.json).
-The derived benchmark tables underlying every figure are deposited separately
-under CC-BY-4.0; see [`benchmarks/DATA_MANIFEST.md`](benchmarks/DATA_MANIFEST.md).
+The archive is self-contained: the derived metric tables underlying every figure
+ship inside it at [`benchmarks/results/`](benchmarks/results), so each figure
+regenerates from the deposit alone. Source dataset licences and URLs are listed
+in [`benchmarks/DATA_MANIFEST.md`](benchmarks/DATA_MANIFEST.md).
 
 ## License
 
