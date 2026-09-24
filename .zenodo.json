@@ -1,7 +1,7 @@
 {
   "upload_type": "software",
   "title": "fluorostats: deterministic, CPU-only quantification of fluorescence microscopy",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "access_right": "open",
   "creators": [
     {

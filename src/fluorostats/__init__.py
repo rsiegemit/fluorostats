@@ -52,7 +52,7 @@ Public API surface, grouped by module:
   - ``report`` — per-condition aggregation.
 """
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 
 from . import (  # noqa: F401
     io,

@@ -3,6 +3,23 @@
 Notable changes to fluorostats. Format follows [Keep a Changelog](https://keepachangelog.com);
 versions follow [semantic versioning](https://semver.org).
 
+## [0.8.1]
+
+### Fixed
+- **Benchmark data manifest reconciled with the manuscript.** The manifest ships
+  inside the Zenodo deposit, so its drift from the paper was reviewer-visible.
+  Removed three datasets it over-listed (VascuSynth, S-BIAD2215, S-BIAD2920) that
+  were downloaded during exploration but back no script, results table or claim;
+  added two it omitted (DSB2018, SproutAngio) that are cited in the paper and
+  backed by bundled results tables; renumbered the supplementary figures from the
+  old ED 1-4 to S1-S4; pointed VesselExpress at the Zenodo record the paper cites;
+  and aligned the Fig 6 data-availability wording with the manuscript.
+- `CITATION.cff` now carries the concept DOI, which resolves to the latest release,
+  rather than a version DOI that goes stale inside the archive.
+
+No change to the measurement code: the only edit under `src/fluorostats/` is the
+`__version__` string, so every number in the manuscript is unaffected.
+
 ## [0.8.0]
 
 ### Added
