@@ -51,9 +51,9 @@ the networks (see `VALIDATION.md`).
 
 ## Collaborator application figure (Fig 6)
 
-Fig 6 is built from the authors' own confocal data — a FITC-dextran penetration
-time-course and a HUVEC/GelMA Live/Dead series. The raw microscopy is available
-from the authors under a data-use agreement and is not deposited, but the derived
+Fig 6 is built from the originating laboratory's own confocal data — a FITC-dextran
+penetration time-course and a HUVEC/GelMA Live/Dead series. The raw microscopy remains
+with that laboratory and is available on request; it is not deposited. The derived
 per-stack tables are bundled here so the quantitative panels can be recomputed:
 
 | table | content |
