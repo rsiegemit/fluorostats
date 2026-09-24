@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use fluorostats, please cite it using the metadata below."
 type: software
 title: "fluorostats: deterministic, CPU-only quantification of fluorescence microscopy"
-version: 0.8.1
+version: 0.8.2
 date-released: "2026-09-24"
 license: MIT
 repository-code: "https://github.com/rsiegemit/fluorostats"
@@ -14,6 +14,9 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.22942365
     description: "Archived v0.8.0 release"
+  - type: doi
+    value: 10.5281/zenodo.22945043
+    description: "Archived v0.8.1 release"
 authors:
   - family-names: Siegelmann
     given-names: Roy

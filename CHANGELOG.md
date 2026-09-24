@@ -3,6 +3,22 @@
 Notable changes to fluorostats. Format follows [Keep a Changelog](https://keepachangelog.com);
 versions follow [semantic versioning](https://semver.org).
 
+## [0.8.2]
+
+### Fixed
+- **Install instructions pointed at a package that isn't published.** fluorostats
+  is not on PyPI, so every `pip install fluorostats[...]` in the docs and in
+  runtime errors handed users a command that fails. The `src/` ones were the worse
+  half: they fire the moment a `.czi` or `.oib` fails to open, so a user hit a dead
+  end exactly when they needed a working instruction. The README now installs from
+  source, and `io.py` / `cli.py` name the actual distribution (`oiffile`,
+  `czifile`, `nd2`, `readlif`), which pip can install today.
+- README citation block now leads with the concept DOI, which resolves to the
+  newest release, instead of pinning a version DOI that goes stale every release.
+
+Measurement code unchanged apart from the `__version__` string and the text of
+those install messages, so no manuscript number is affected.
+
 ## [0.8.1]
 
 ### Fixed
