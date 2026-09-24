@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use fluorostats, please cite it using the metadata below."
+type: software
+title: "fluorostats: deterministic, CPU-only quantification of fluorescence microscopy"
+version: 0.8.0
+date-released: "2026-09-24"
+license: MIT
+repository-code: "https://github.com/rsiegemit/fluorostats"
+authors:
+  - family-names: Siegelmann
+    given-names: Roy
+    affiliation: "Massachusetts Institute of Technology"
+keywords:
+  - fluorescence microscopy
+  - bioimage analysis
+  - image quantification
+  - reproducible research

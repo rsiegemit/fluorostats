@@ -1,0 +1,32 @@
+{
+  "upload_type": "software",
+  "title": "fluorostats: deterministic, CPU-only quantification of fluorescence microscopy",
+  "version": "0.8.0",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Siegelmann, Roy",
+      "affiliation": "Massachusetts Institute of Technology"
+    }
+  ],
+  "description": "<p>fluorostats is an open-source Python library and command-line tool for quantifying fluorescence microscopy images and volumes. Every metric is a deterministic, training-free, CPU-only function of its inputs: repeated runs return identical bits, and no step holds a learned weight or draws a random seed.</p><p>The library spans 2D coverage and 3D volume fraction, connectivity and topology (Euler number, connected components), skeleton and vascular network metrics, per-object morphometry, annular/tube morphometry, network organisation, spatial heterogeneity, depth-resolved viability, and 3D rendering. It integrates a statistics layer that general imaging platforms omit, including non-parametric tests with effect sizes, stratified and interaction tests, Benjamini-Hochberg multiplicity control, bootstrap confidence intervals, agreement statistics and bootstrap power analysis, so that quantification and inference never leave the same pipeline.</p><p>Every metric, and the scoring code used to benchmark it, is validated against a canonical reference implementation or against analytic ground truth. This deposit is the exact version used in the accompanying manuscript, and includes the full benchmark harness with pinned dependencies.</p>",
+  "keywords": [
+    "fluorescence microscopy",
+    "confocal microscopy",
+    "image quantification",
+    "bioimage analysis",
+    "segmentation",
+    "morphometry",
+    "stereology",
+    "vascular network analysis",
+    "spatial heterogeneity",
+    "reproducible research"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/rsiegemit/fluorostats",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

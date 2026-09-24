@@ -532,6 +532,18 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 
 </details>
 
+## Citation
+
+If you use fluorostats in published work, please cite the archived release:
+
+> Siegelmann, R. *fluorostats: deterministic, CPU-only quantification of
+> fluorescence microscopy* (v0.8.0). Zenodo (2026). doi:10.5281/zenodo.XXXXXXX
+
+Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) (GitHub's
+"Cite this repository" button reads it) and [`.zenodo.json`](.zenodo.json).
+The derived benchmark tables underlying every figure are deposited separately
+under CC-BY-4.0; see [`benchmarks/DATA_MANIFEST.md`](benchmarks/DATA_MANIFEST.md).
+
 ## License
 
 MIT
