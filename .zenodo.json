@@ -22,12 +22,5 @@
     "vascular network analysis",
     "spatial heterogeneity",
     "reproducible research"
-  ],
-  "related_identifiers": [
-    {
-      "identifier": "https://github.com/rsiegemit/fluorostats",
-      "relation": "isSupplementTo",
-      "scheme": "url"
-    }
   ]
 }
