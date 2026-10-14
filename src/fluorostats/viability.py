@@ -167,6 +167,7 @@ def live_dead_by_count(
     min_distance: int = 3,
     threshold_rel: float = 0.15,
     smooth_sigma: float = 0.0,
+    threshold: str = DEFAULT_SEG_METHOD,
     **seg,
 ) -> dict:
     """Viability from per-object COUNTS rather than area — robust to crowding.
@@ -190,14 +191,21 @@ def live_dead_by_count(
     ``min_distance`` and ``smooth_sigma`` are in voxels (pixels in 2D) on every
     axis, so they assume isotropic voxels.
 
-    No single mode is universally best. Returns dict: n_live, n_dead, viability,
-    plus (auto) the chosen method + reasoning, or (all) per-method viabilities,
-    consensus, and spread.
+    ``threshold`` is the `segment.binarize` method the counts segment with (``method``
+    is the counting mode); other ``seg`` keys (``min_size``, ``threshold_scale``)
+    pass through to it.
+
+    No single mode is universally best. Every mode returns n_live, n_dead and
+    viability, plus (auto) the chosen method + reasoning, or (all) per-method
+    counts and viabilities (``by_method``), ``consensus`` and ``spread``; for
+    ``all`` the top-level counts are NaN (no single count) and ``viability`` is
+    the consensus.
     """
     methods = ("auto", "all", *COUNT_METHODS)
     if method not in methods:
         raise ValueError(f"unknown method {method!r}; use one of {methods}")
-    cseg = {"min_size": COUNT_MIN_SIZE, **seg}
+    cseg = {"min_size": COUNT_MIN_SIZE, **seg, "method": threshold}
+    rseg = {**seg, "method": threshold}       # regime estimate, same segmentation
 
     def _count_one(ch, m, sig):
         return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
@@ -205,8 +213,8 @@ def live_dead_by_count(
     if method == "all":
         modes = COUNT_METHODS
         # auto-smooth the maxima channel from each channel's estimated radius
-        sig_l = choose_count_method(live, **seg)["radius"] / 1.5
-        sig_d = choose_count_method(dead, **seg)["radius"] / 1.5
+        sig_l = choose_count_method(live, **rseg)["radius"] / 1.5
+        sig_d = choose_count_method(dead, **rseg)["radius"] / 1.5
         per = {}
         for m in modes:
             nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)
@@ -215,14 +223,14 @@ def live_dead_by_count(
         vals = [p["viability"] for p in per.values() if p["viability"] == p["viability"]]
         consensus = float(np.median(vals)) if vals else float("nan")
         spread = float(max(vals) - min(vals)) if vals else float("nan")
-        return {"by_method": per, "consensus": consensus, "spread": spread,
-                "viability": consensus}
+        return {"n_live": float("nan"), "n_dead": float("nan"), "viability": consensus,
+                "by_method": per, "consensus": consensus, "spread": spread}
 
     def _count(ch):
         m, sig = method, smooth_sigma
         info = None
         if method == "auto":
-            info = choose_count_method(ch, **seg)
+            info = choose_count_method(ch, **rseg)
             m, sig = info["method"], info["smooth_sigma"]
         n = _count_one(ch, m, sig)
         return n, (info["method"] if info else m), (info["reason"] if info else "")

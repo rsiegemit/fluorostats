@@ -218,3 +218,23 @@ def test_count_method_error_lists_the_registry():
     with pytest.raises(ValueError, match="'cc', 'watershed', 'maxima'"):
         live_dead_by_count(live, live, method="bogus")
     assert viability.COUNT_METHODS == ("cc", "watershed", "maxima")
+
+
+def test_count_threshold_method_is_passed_to_segmentation():
+    """`threshold` picks the binarize method for counting; `method` stays the count mode."""
+    from fluorostats.objects import label_3d
+    from fluorostats.segment import binarize
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method="cc", threshold="li")
+    assert out["n_live"] == label_3d(binarize(live, method="li", min_size=5), min_size=5)[1]
+    assert out["n_dead"] == label_3d(binarize(dead, method="li", min_size=5), min_size=5)[1]
+
+
+def test_count_all_has_the_same_top_level_keys():
+    """method="all" returns n_live/n_dead/viability like every other mode (NaN counts:
+    there is no single count), plus its per-method detail."""
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method="all")
+    assert {"n_live", "n_dead", "viability"} <= set(out)
+    assert np.isnan(out["n_live"]) and np.isnan(out["n_dead"])
+    assert out["viability"] == out["consensus"]

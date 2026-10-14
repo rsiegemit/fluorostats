@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import csv
 import json
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -135,11 +134,12 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     py, px = (float(v) for v in meta.get("voxel_size_um", (1.0, 1.0, 1.0))[-2:])  # µm/pixel
     fov_mm2 = (px * nx) * (py * ny) / 1e6
 
-    # live_dead_by_count reserves `method` for the COUNT mode, so the segmentation
-    # method (e.g. otsu, its default in binarize) is passed via the other seg keys only.
+    # live_dead_by_count's `method` is the COUNT mode; the threshold goes as `threshold`
     seg_count = {k: v for k, v in seg.items() if k != "method"}
     area = viab.live_dead_fractions(live_mip, dead_mip, **seg)     # area / coverage
-    counts = viab.live_dead_by_count(live_mip, dead_mip, method=cfg["count_method"], **seg_count)
+    counts = viab.live_dead_by_count(live_mip, dead_mip, method=cfg["count_method"],
+                                     threshold=seg.get("method", viab.DEFAULT_SEG_METHOD),
+                                     **seg_count)
     regime = viab.choose_count_method(live_mip, **seg)             # transparent regime
     bias = viab.viability_2d_vs_3d(live, **seg)                    # MIP vs full 3D
 
@@ -189,13 +189,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)
-    # live_dead_by_count reserves `method` for the count mode, so cell counts
-    # always segment with the library default; record that, and say so if it differs.
-    count_seg = viab.DEFAULT_SEG_METHOD
-    if m["seg"].get("method", count_seg) != count_seg:
-        warnings.warn(f"seg.method={m['seg']['method']!r} applies to area, coverage and "
-                      f"regime; cell counts segment with {count_seg!r}", RuntimeWarning,
-                      stacklevel=2)
+    count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)   # counts use seg.method too
     report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
                             nested={"resolved": m})
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}

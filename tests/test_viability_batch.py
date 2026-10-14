@@ -152,13 +152,15 @@ def test_per_stack_csv_records_voxel_size_source(tmp_path):
     assert "voxel_size_source" not in summary
 
 
-def test_count_segmentation_method_is_recorded_and_warned(tmp_path):
-    mp = _one_stack_manifest(tmp_path, seg={"method": "li", "min_size": 5})
-    with pytest.warns(RuntimeWarning, match="cell counts segment with 'otsu'"):
-        out = viability_batch.run(mp)
+def test_count_segmentation_follows_seg_method(tmp_path, monkeypatch):
+    """seg.method thresholds the cell counts too (it used to be dropped for counts)."""
+    seen = []
+    real = viability_batch.viab.live_dead_by_count
+    monkeypatch.setattr(viability_batch.viab, "live_dead_by_count",
+                        lambda *a, **k: seen.append(k.get("threshold")) or real(*a, **k))
+    out = viability_batch.run(_one_stack_manifest(tmp_path, seg={"method": "li", "min_size": 5}))
     cfg = json.loads((out / "run_config.json").read_text())
-    assert cfg["count_seg_method"] == "otsu"
-    assert cfg["resolved"]["seg"]["method"] == "li"
+    assert seen == ["li"] and cfg["count_seg_method"] == "li"
 
 
 def test_two_group_contrast_reports_effect_size_and_bh(tmp_path, capsys):
