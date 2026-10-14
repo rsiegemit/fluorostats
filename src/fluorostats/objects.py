@@ -11,6 +11,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
+from .metrics_3d import fov_volume_mm3
 from .stats import coefficient_of_variation, gini
 
 
@@ -348,7 +349,7 @@ def object_density_per_mm3(
     voxel_size_um: tuple[float, float, float],
 ) -> float:
     """Object count divided by the imaged volume in mm³."""
-    vol_mm3 = float(np.prod(shape_zyx)) * float(np.prod(voxel_size_um)) * 1e-9
+    vol_mm3 = fov_volume_mm3(shape_zyx, voxel_size_um)
     if vol_mm3 == 0:
         return 0.0
     return float(n_objects / vol_mm3)

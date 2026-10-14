@@ -168,7 +168,20 @@ def spatial_heterogeneity(grid: np.ndarray, connectivity: str = "rook") -> dict:
     return {"cv": cv, "morans_i": morans_i(g, connectivity), "n": int(v.size)}
 
 
+
+def coverage_heterogeneity(mask: np.ndarray, grid: tuple[int, int] = (5, 5)) -> dict:
+    """Spatial uniformity of a binary mask's coverage across a tile grid.
+
+    For a 3D ``(Z, Y, X)`` mask the through-z coverage map is used. Returns
+    ``coverage_tile_cv`` (tile-to-tile CV, 0 = evenly seeded) and
+    ``coverage_morans_i`` (spatial autocorrelation; >0 = patchy/clustered).
+    """
+    cov = mask.mean(axis=0) if mask.ndim == 3 else mask.astype(float)
+    het = spatial_heterogeneity(tile_reduce(cov, lambda t: float(t.mean()), grid=grid))
+    return {"coverage_tile_cv": het["cv"], "coverage_morans_i": het["morans_i"]}
+
 __all__ = [
     "tile_bounds", "tile_reduce", "tile_point_density", "slab_reduce",
+    "coverage_heterogeneity",
     "morans_i", "spatial_heterogeneity",
 ]

@@ -178,7 +178,7 @@ def quant3d(
                 "volume_fraction": vf,
                 **conn,
                 **skel,
-                **_coverage_heterogeneity(mask),
+                **spatial.coverage_heterogeneity(mask),
             }
             rows.append(row)
 
@@ -290,7 +290,7 @@ def quant2d(
                 "replicate": replicate,
                 "shape": str(arr.shape),
                 **cov,
-                **_coverage_heterogeneity(mask),
+                **spatial.coverage_heterogeneity(mask),
             }
             rows.append(row)
 
@@ -352,20 +352,6 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
-
-
-def _coverage_heterogeneity(mask, grid: tuple[int, int] = (5, 5)) -> dict:
-    """Spatial uniformity of a binary mask's coverage across a tile grid.
-
-    For a 3D ``(Z, Y, X)`` mask the through-z coverage map is used. Returns
-    ``coverage_tile_cv`` (tile-to-tile CV, 0 = evenly seeded) and
-    ``coverage_morans_i`` (spatial autocorrelation; >0 = patchy/clustered).
-    """
-    cov = mask.mean(axis=0) if mask.ndim == 3 else mask.astype(float)
-    het = spatial.spatial_heterogeneity(
-        spatial.tile_reduce(cov, lambda t: float(t.mean()), grid=grid)
-    )
-    return {"coverage_tile_cv": het["cv"], "coverage_morans_i": het["morans_i"]}
 
 
 def _find_files(root: Path, suffixes: set[str]) -> list[Path]:

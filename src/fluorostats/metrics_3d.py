@@ -79,11 +79,15 @@ def fov_volume_mm3(
     return float(np.prod(shape_zyx)) * float(np.prod(voxel_size_um)) * 1e-9
 
 
+def _per_unit(count: float, volume: float) -> float:
+    """``count / volume``, or 0.0 for a non-positive volume."""
+    return float(count / volume) if volume > 0 else 0.0
+
+
 def density_per_mm3(count: float, shape_zyx: tuple[int, int, int],
                     voxel_size_um: tuple[float, float, float]) -> float:
     """Convert a per-FOV count (or length in µm) to per-mm³ density."""
-    v = fov_volume_mm3(shape_zyx, voxel_size_um)
-    return float(count / v) if v > 0 else 0.0
+    return _per_unit(count, fov_volume_mm3(shape_zyx, voxel_size_um))
 
 
 def normalise_skeleton_metrics(
@@ -99,17 +103,11 @@ def normalise_skeleton_metrics(
     v = fov_volume_mm3(shape_zyx, voxel_size_um)
     out = dict(metrics)
     out["fov_volume_mm3"] = v
-    out["length_density_um_per_mm3"] = (
-        float(metrics.get("total_length_um", 0.0) / v) if v > 0 else 0.0
-    )
+    out["length_density_um_per_mm3"] = _per_unit(metrics.get("total_length_um", 0.0), v)
     # junction DENSITY uses the same field-standard branchpoint definition as the
     # reported junction COUNT (n_junction_nodes, degree>=3 nodes — AngioTool/REAVER),
     # not skan's n_junctions (junction-to-junction branch segments), so count and
     # density describe the same quantity per unit volume.
-    out["junction_density_per_mm3"] = (
-        float(metrics.get("n_junction_nodes", 0) / v) if v > 0 else 0.0
-    )
-    out["branch_density_per_mm3"] = (
-        float(metrics.get("n_branches", 0) / v) if v > 0 else 0.0
-    )
+    out["junction_density_per_mm3"] = _per_unit(metrics.get("n_junction_nodes", 0), v)
+    out["branch_density_per_mm3"] = _per_unit(metrics.get("n_branches", 0), v)
     return out
