@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
-from .metrics_3d import fov_volume_mm3
+from .metrics_3d import density_per_mm3
 from .stats import coefficient_of_variation, gini
 
 
@@ -186,10 +186,11 @@ def equivalent_diameters_um(
 
 
 def object_centroids(labels: np.ndarray) -> np.ndarray:
-    """Centroid (z, y, x) per object, shape (N, 3) in voxel units."""
+    """Centroid per object in voxel units, shape (N, labels.ndim): (z, y, x) for a
+    3D label image, (y, x) for 2D."""
     n = int(labels.max())
     if n == 0:
-        return np.zeros((0, 3), dtype=float)
+        return np.zeros((0, labels.ndim), dtype=float)
     centers = ndi.center_of_mass(labels > 0, labels, np.arange(1, n + 1))
     return np.asarray(centers, dtype=float)
 
@@ -344,11 +345,9 @@ def object_density_per_mm3(
     shape_zyx: tuple[int, int, int],
     voxel_size_um: tuple[float, float, float],
 ) -> float:
-    """Object count divided by the imaged volume in mm³."""
-    vol_mm3 = fov_volume_mm3(shape_zyx, voxel_size_um)
-    if vol_mm3 == 0:
-        return 0.0
-    return float(n_objects / vol_mm3)
+    """Object count divided by the imaged volume in mm³ (see
+    `metrics_3d.density_per_mm3`; NaN with a warning for a zero volume)."""
+    return density_per_mm3(n_objects, shape_zyx, voxel_size_um)
 
 
 def centroid_homogeneity(

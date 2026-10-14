@@ -8,6 +8,8 @@ densities that can be compared across acquisition settings.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.ndimage import label
 from skimage.measure import euler_number
@@ -80,13 +82,21 @@ def fov_volume_mm3(
 
 
 def _per_unit(count: float, volume: float) -> float:
-    """``count / volume``, or 0.0 for a non-positive volume."""
-    return float(count / volume) if volume > 0 else 0.0
+    """``count / volume``; NaN, with a warning, for a non-positive volume."""
+    if volume > 0:
+        return float(count / volume)
+    warnings.warn(f"non-positive imaged volume ({volume} mm³); density is NaN",
+                  RuntimeWarning, stacklevel=3)
+    return float("nan")
 
 
 def density_per_mm3(count: float, shape_zyx: tuple[int, int, int],
                     voxel_size_um: tuple[float, float, float]) -> float:
-    """Convert a per-FOV count (or length in µm) to per-mm³ density."""
+    """Convert a per-FOV count (or length in µm) to per-mm³ density.
+
+    NaN, with a RuntimeWarning, when the imaged volume is zero (an empty shape
+    or a zero voxel size).
+    """
     return _per_unit(count, fov_volume_mm3(shape_zyx, voxel_size_um))
 
 
