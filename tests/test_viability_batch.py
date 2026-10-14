@@ -173,3 +173,9 @@ def test_two_group_contrast_reports_effect_size_and_bh(tmp_path, capsys):
 def test_contrast_skipped_notice_for_one_group(tmp_path, capsys):
     viability_batch.run(_one_stack_manifest(tmp_path))
     assert "two-group contrast skipped: 1 group" in capsys.readouterr().out
+
+
+def test_manifest_rejects_bool_channel(tmp_path):
+    mp = _one_stack_manifest(tmp_path, live_channel=False, dead_channel=True)
+    with pytest.raises(ValueError, match="live_channel must be a non-negative integer"):
+        viability_batch.load_manifest(mp)

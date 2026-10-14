@@ -82,7 +82,7 @@ def _validate(m: dict) -> None:
     """Check a viability manifest before any image is loaded; raise listing every problem."""
     problems = []
     for key in ("live_channel", "dead_channel"):
-        if not isinstance(m[key], int) or m[key] < 0:
+        if not isinstance(m[key], int) or isinstance(m[key], bool) or m[key] < 0:
             problems.append(f"{key} must be a non-negative integer, got {m[key]!r}")
     if m["live_channel"] == m["dead_channel"]:
         problems.append(f"live_channel and dead_channel are both {m['live_channel']}")
