@@ -236,8 +236,8 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
     """quant3d's per-file metrics (volume fraction, connectivity, skeleton, coverage)."""
     arr, meta = iq_io.load_volume(fpath)
     voxel_size = meta["voxel_size_um"]
-    vol = preprocess.select_green_channel(arr, meta["channel_names"], override=ch_override)
-    vol, mask = _segment(vol, **seg)
+    ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
+    vol, mask = _segment(arr[ch], **seg)
 
     # same keys as skeleton_metrics() so the CSV row shape is identical
     # whether or not --no-skeleton is set.
@@ -251,6 +251,8 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
     return {
         "shape": str(arr.shape),
         "voxel_size_um": str(voxel_size),
+        "voxel_size_source": meta.get("voxel_size_source", ""),
+        "channel_used": _channel_label(ch, meta["channel_names"]),
         "volume_fraction": metrics_3d.volume_fraction(mask),
         **metrics_3d.connectivity_metrics(mask),
         **skel,
@@ -263,15 +265,21 @@ def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict
     arr, meta = iq_io.load_image(fpath)
     if auto_crop:   # crop microscope borders before channel selection
         arr, _ = preprocess.auto_crop(arr)
-    img = preprocess.select_green_channel(arr, meta["channel_names"], override=ch_override)
-    img, mask = _segment(img, **seg)
+    ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
+    img, mask = _segment(arr[ch], **seg)
     if overlay_dir is not None:
         qc.overlay_2d(img, mask, overlay_dir / f"{fpath.stem}_overlay.png")
     return {
         "shape": str(arr.shape),
+        "channel_used": _channel_label(ch, meta["channel_names"]),
         **metrics_2d.coverage_metrics(mask),
         **spatial.coverage_heterogeneity(mask),
     }
+
+
+def _channel_label(index: int, names: list[str]) -> str:
+    """The measured channel as ``"<index> (<name>)"`` for the per-file record."""
+    return f"{index} ({names[index]})" if index < len(names) else str(index)
 
 
 def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) -> None:

@@ -34,8 +34,9 @@ METRICS_2D = [
 ]
 
 # Identifier columns that precede the metrics in the per-file CSV.
-_ID_COLUMNS_3D = ["file", "condition", "replicate", "shape", "voxel_size_um"]
-_ID_COLUMNS_2D = ["file", "condition", "replicate", "shape"]
+_ID_COLUMNS_3D = ["file", "condition", "replicate", "shape", "voxel_size_um",
+                  "voxel_size_source", "channel_used"]
+_ID_COLUMNS_2D = ["file", "condition", "replicate", "shape", "channel_used"]
 
 _COLUMNS_3D = _ID_COLUMNS_3D + METRICS_3D
 _COLUMNS_2D = _ID_COLUMNS_2D + METRICS_2D

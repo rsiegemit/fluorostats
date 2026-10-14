@@ -158,3 +158,19 @@ def test_select_green_channel():
     arr[1] = 5.0
     g = preprocess.select_green_channel(arr, ["Red", "GFP"])
     assert g.shape == (8, 8) and g.mean() == pytest.approx(5.0)
+
+
+def test_green_channel_index_warns_only_when_guessing_by_position():
+    import warnings
+
+    from fluorostats.preprocess import green_channel_index
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert green_channel_index(["DAPI", "Alexa 488"], 2) == 1   # named
+        assert green_channel_index([], 1) == 0                       # single channel
+        assert green_channel_index(["a", "b"], 2, override=0) == 0   # explicit
+    with pytest.warns(RuntimeWarning, match="by position"):
+        assert green_channel_index(["Ch1", "Ch2"], 2) == 1
+    with pytest.warns(RuntimeWarning, match="by position"):
+        assert green_channel_index([], 4) == 0                       # e.g. RGBA

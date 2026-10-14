@@ -45,6 +45,12 @@ def test_cli_quant3d(tmp_path):
                                    "--output", str(tmp_path / "out"), "--no-skeleton"])
     assert res.exit_code == 0, res.output
     assert list((tmp_path / "out").rglob("*.csv"))
+    # each row records which channel was measured and where its calibration came from
+    import pandas as pd
+    df = pd.read_csv(tmp_path / "out" / "per_file.csv")
+    assert {"voxel_size_source", "channel_used"} <= set(df.columns)
+    assert df["voxel_size_source"].str.contains("default").all()   # synthetic TIFFs
+    assert df["channel_used"].iloc[0].startswith("0")
 
 
 def test_cli_formats():

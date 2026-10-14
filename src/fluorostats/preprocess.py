@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 
 import numpy as np
 from skimage.filters import gaussian
@@ -18,6 +19,35 @@ _GREEN_PATTERNS = re.compile(
     r"(alexa.*488|fitc|gfp|green|factin|f-actin|488)",
     re.IGNORECASE,
 )
+
+
+def green_channel_index(
+    channel_names: list[str],
+    n_channels: int,
+    override: int | str | None = None,
+) -> int:
+    """Index of the green / F-actin channel among ``n_channels``.
+
+    Resolution order: an explicit ``override`` (index or name substring); else the
+    first channel whose name matches a green dye; else a positional convention
+    (1 channel -> 0; 2 or 3 channels -> 1, i.e. RGB green / the usual confocal
+    second channel; otherwise 0). The positional fallback is a guess and is
+    announced with a RuntimeWarning.
+    """
+    if override is not None:
+        return _resolve_override(override, channel_names, n_channels)
+    for i, name in enumerate(channel_names):
+        if _GREEN_PATTERNS.search(name):
+            return i
+    if n_channels == 1:
+        return 0
+    idx = 1 if n_channels in (2, 3) else 0
+    warnings.warn(
+        f"no channel name identifies the green channel among {n_channels} channels "
+        f"{channel_names}; using channel {idx} by position. Pass an explicit channel "
+        "(e.g. --channel) if that is not the signal to measure.",
+        RuntimeWarning, stacklevel=3)
+    return idx
 
 
 def select_green_channel(
@@ -39,31 +69,10 @@ def select_green_channel(
     Returns
     -------
     ndarray
-        Single-channel array with channel axis removed.
+        Single-channel array with channel axis removed. See
+        `green_channel_index` for how the channel is chosen.
     """
-    n_ch = arr.shape[0]
-
-    if override is not None:
-        idx = _resolve_override(override, channel_names, n_ch)
-        return arr[idx]
-
-    # Try matching channel names against known green patterns
-    for i, name in enumerate(channel_names):
-        if _GREEN_PATTERNS.search(name):
-            return arr[i]
-
-    # Fallback heuristics
-    if n_ch == 1:
-        return arr[0]
-    if n_ch == 3:
-        # RGB — green is index 1
-        return arr[1]
-    if n_ch == 2:
-        # Common confocal layout: Ch1=red/transmitted, Ch2=green/fluorescence
-        return arr[1]
-
-    # Default to first channel
-    return arr[0]
+    return arr[green_channel_index(channel_names, arr.shape[0], override)]
 
 
 def _resolve_override(
