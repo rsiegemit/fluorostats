@@ -47,7 +47,7 @@ BBBC039_UM_PER_PX = 0.31
 # Global thresholds the comparison tables score: the library's registry plus
 # Minimum (Prewitt 1966), which the library does not offer as a binarize method.
 THRESHOLD_FNS = {**THRESHOLD_METHODS, "minimum": threshold_minimum}
-# Column labels "<Name>_<year of the method's paper>" used by most tables.
+# Column labels "<Name>_<year the method was published>" used by most tables.
 YEAR_LABELS = {"otsu": "Otsu_1979", "li": "Li_1993", "isodata": "Isodata_1978",
                "triangle": "Triangle_1977", "yen": "Yen_1995"}
 

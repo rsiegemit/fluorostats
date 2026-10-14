@@ -1,0 +1,20 @@
+{
+  "table": "b_homogeneity_consensus_corr.csv",
+  "producer": "benchmarks/producers/b_homogeneity_consensus.py",
+  "params": {
+    "refsign": {
+      "clark_evans": -1,
+      "ripley_L_dev": 1,
+      "morisita": 1,
+      "lacunarity": 1,
+      "quadrat_var": 1
+    }
+  },
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.8.2"
+  }
+}

@@ -72,7 +72,11 @@ FLUOROSTATS_DATA=/path/to/downloads PYTHONPATH=src python benchmarks/producers/b
 
 "Verified" is the check made when the producers were added: the producer was run on
 the full dataset and its output compared with the committed table (EXACT =
-byte-identical; NUMERIC = every value equal within 1e-9 relative).
+byte-identical; NUMERIC = every value equal within 1e-9 relative). STALE marks a
+table that a re-run with the current library no longer reproduces: since
+`segment.binarize` stopped removing objects of exactly `min_size` pixels, its
+fluorostats values differ in the third or fourth decimal. Stale tables are not
+regenerated here.
 
 | table(s) | producer | data | verified |
 |---|---|---|---|
@@ -80,13 +84,13 @@ byte-identical; NUMERIC = every value equal within 1e-9 relative).
 | `b2_ctc_multi.csv` | `b2_ctc_multi.py` | CTC A549 + CHO | EXACT |
 | `b2_nuclei_methods_perimage.csv` | `b2_nuclei_methods_perimage.py` | BBBC039 | EXACT |
 | `b3_viability_depth_profile.csv` | `b3_viability_depth_profile.py` | S-BIAD2130 | EXACT |
-| `b3_viability_multi.csv` | `b3_viability_multi.py` | S-BIAD2130 | EXACT |
-| `b4_reaver_ranking_perimage.csv` | `b4_reaver_ranking_perimage.py` | REAVER | NUMERIC (equal to 1e-9; the committed `fluorostats` column was written after a CSV round-trip, so its last digit differs) |
+| `b3_viability_multi.csv` | `b3_viability_multi.py` | S-BIAD2130 | EXACT when added; STALE |
+| `b4_reaver_ranking_perimage.csv` | `b4_reaver_ranking_perimage.py` | REAVER | NUMERIC when added (the committed `fluorostats` column was written after a CSV round-trip, so its last digit differs); STALE |
 | `b_clustering_curve.csv` | `b_clustering_curve.py` | BBBC024 (+ c25/c50/c75) | EXACT |
 | `b_denoising.csv` | `b_denoising.py` | BBBC024 | EXACT |
 | `b_density_normalization.csv`, `b_density_normalization_cv.csv` | `b_density_normalization.py` | BBBC024 | EXACT |
-| `b_dl_ci.csv` | `b_dl_ci.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`) | BBBC039 | EXACT |
-| `b_dsb2018.csv` | `b_dsb2018.py` | DSB2018 | EXACT |
+| `b_dl_ci.csv` | `b_dl_ci.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`) | BBBC039 | EXACT when added; STALE |
+| `b_dsb2018.csv` | `b_dsb2018.py` | DSB2018 | EXACT when added; STALE |
 | `b_homogeneity_multi.csv`, `b_homogeneity_multi_corr.csv` | `b_homogeneity_multi.py` | none (synthetic) | EXACT |
 | `b_noise_robustness.csv` | `b_noise_robustness.py` | BBBC024 | EXACT |
 | `b_nuclei_size.csv` | `b_nuclei_size.py` | BBBC024 | EXACT |
@@ -94,9 +98,9 @@ byte-identical; NUMERIC = every value equal within 1e-9 relative).
 | `b_timing.csv` | `b_timing.py` | BBBC039 | re-run differs (wall-clock) |
 | `b_timing_all_metrics.csv` | `b_timing_all_metrics.py` | BBBC024, BBBC039, Kerkhoff | re-run differs (wall-clock) |
 | `b_vascular_phantom_3d.csv` | `b_vascular_phantom_3d.py` | none (synthetic) | EXACT |
-| `b_vascular_sproutangio_multi.csv` | `b_vascular_sproutangio_multi.py` | SproutAngio | EXACT |
+| `b_vascular_sproutangio_multi.csv` | `b_vascular_sproutangio_multi.py` | SproutAngio | EXACT when added; STALE |
 | `b_ve_metrics.csv` | `b_ve_metrics.py` | VesselExpress Figure 2C–E volumes | not run (data not downloaded locally; produced on the cluster) |
-| `b_viability_external.csv` | `b_viability_external.py` | Kerkhoff synthetic | EXACT |
+| `b_viability_external.csv` | `b_viability_external.py` | Kerkhoff synthetic | EXACT when added; STALE |
 
 Derived tables summarise committed tables for the figures, so a figure script only
 reads and plots (no metric is computed in a figure script). Their producers need no
