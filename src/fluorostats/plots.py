@@ -313,7 +313,7 @@ def compute_pvalues(
 
 _LABELS = {
     # volume_fraction / area_fraction are FRACTIONS in [0, 1] (no ×100 in the pipeline),
-    # so they are NOT labelled "(%)". Viability is the only percent-denominated output.
+    # so they are NOT labelled "(%)".
     "volume_fraction": "Volume Fraction",
     "area_fraction": "Area Fraction",
     "n_components": "Connected Components",
@@ -321,10 +321,13 @@ _LABELS = {
     "largest_component_fraction": "Largest Component Fraction",
     "total_length_um": "Total Skeleton Length (µm)",
     "n_branches": "Number of Branches",
-    "n_junctions": "Number of Junctions",
+    "n_junctions": "Junction-to-Junction Branches",
+    "n_junction_nodes": "Junctions (Branch Points)",
     "mean_branch_length_um": "Mean Branch Length (µm)",
     "mean_cluster_area_px": "Mean Cluster Area (px)",
     "median_cluster_area_px": "Median Cluster Area (px)",
+    "coverage_tile_cv": "Coverage Tile-to-Tile CV",
+    "coverage_morans_i": "Coverage Moran's I",
 }
 
 

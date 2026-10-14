@@ -9,8 +9,8 @@ rc file) to opt every figure into the FluoroStats look:
 
 The palette is intentionally small and bioscience-friendly:
 
-    PALETTE["primary"]     muted slate blue   — GelMA / baseline
-    PALETTE["accent"]      coral red          — Hybrid / treatment
+    PALETTE["primary"]     muted slate blue   — baseline / control
+    PALETTE["accent"]      coral red          — treatment
     PALETTE["highlight"]   warm amber         — flagged metrics
     PALETTE["muted"]       soft grey          — n.s. / supporting bars
     PALETTE["ink"]         deep blue-grey     — body text, spines
@@ -43,10 +43,10 @@ MATERIAL_COLORS = {
     "Control": PALETTE["muted"],
 }
 
-# Dark/PPTX-style render palette
+# Dark render palette (presentation slides)
 DARK_PALETTE = {
     "background": "#000000",
-    "mesh":       "#F5C518",   # rich yellow, slide-2 style
+    "mesh":       "#F5C518",   # rich yellow
     "grid":       "#3A3A3A",
     "ink":        "#FFFFFF",
     "scalebar":   "#FFFFFF",

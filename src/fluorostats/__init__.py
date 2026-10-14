@@ -44,7 +44,7 @@ Public API surface, grouped by module:
   - ``power`` — bootstrap power and power curves.
   - ``render3d`` — isosurface mesh (light/dark, smoothed, shaded), voxel
     cloud, two-channel live/dead MIP, MIP grid, depth-coded MIP, and
-    top/bottom layer split for slide-style image panels.
+    top/bottom layer split for image panels.
   - ``plots`` — bar/box/strip plots, summary panels, effect-size heatmaps,
     forest plots, modality panels.
   - ``style`` — publication matplotlib defaults, palette, and per-condition

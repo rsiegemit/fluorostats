@@ -212,7 +212,7 @@ def _print_summary(rows: list[dict], groups: list[str]) -> None:
         print(f"  {mk:<26} " + "   ".join(parts))
     # two-group contrast (Mann-Whitney U — small n, non-normal safe) on coverage & density
     if len(groups) == 2:
-        print("\n=== Day contrast (Mann-Whitney U, two-sided) ===")
+        print("\n=== Two-group contrast (Mann-Whitney U, two-sided) ===")
         for mk in ("live_cov_pct", "live_density_permm2", "viability_area"):
             a = [r[mk] for r in rows if r["group"] == groups[0] and r[mk] == r[mk]]
             b = [r[mk] for r in rows if r["group"] == groups[1] and r[mk] == r[mk]]

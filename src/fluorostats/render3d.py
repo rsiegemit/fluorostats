@@ -70,7 +70,7 @@ def render_isosurface(
     style : "light" | "dark"
         ``"light"`` keeps the white-on-grey publication look. ``"dark"``
         renders on a black background with bright mesh and faint grey
-        grid — matches the PPTX slide-2 reference (Matrigel/rCOL style).
+        grid, for dark presentation slides.
     smooth_iter : int
         Number of Laplacian smoothing passes applied to the vertex
         positions before rendering. 0 = raw marching-cubes (slightly
@@ -187,7 +187,7 @@ def _style_mesh_axes(ax, box, style: str, bg: str, grid_color: str,
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_zticks([])
-        # Manually draw box edges for the slide-2 grid look
+        # Draw the bounding-box edges explicitly for the dark grid look
         for edge in _box_edges(box):
             ax.plot(*edge, color=grid_color, linewidth=0.6, alpha=0.7, zorder=0)
     else:
@@ -301,7 +301,7 @@ def mip_overlay(
 ):
     """Grey-scale maximum-intensity projection with optional magenta mask.
 
-    Returns the axis. Convenient cell renderer for a slide-3-style grid
+    Returns the axis. Convenient cell renderer for a condition × time grid
     of representative stacks (one cell per condition × region × day).
     """
     if ax is None:
@@ -335,7 +335,7 @@ def live_dead_mip(
     border: str | None = PALETTE["ink"],
     border_lw: float = 1.0,
 ):
-    """Two-channel maximum-intensity projection (slide-3 style).
+    """Two-channel (live/dead) maximum-intensity projection.
 
     ``live`` is the live-cell channel (typically Alexa-488 / Calcein /
     GFP), ``dead`` is the dead-cell channel (typically PI / Alexa-568).
@@ -471,7 +471,7 @@ def depth_coded_mip(
 
     For each XY pixel, takes the intensity-weighted depth and maps it
     through ``cmap``. Conveys 3D structure in a single 2D panel with
-    less abstraction than an isosurface; cousin of the slide-4 layered
+    less abstraction than an isosurface; cousin of the layered
     look.
     """
     if ax is None:
@@ -514,7 +514,7 @@ def layer_split_mip(
 ):
     """Render top half and bottom half of a volume on two axes.
 
-    Mirrors slide-4 layout (top layers vs middle layers). ``split`` is
+    Top layers vs deeper layers side by side. ``split`` is
     the fractional Z position; ``render_func`` is called for each half
     with the half-volume passed under ``channel_key``.
     """

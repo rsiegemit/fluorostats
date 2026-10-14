@@ -35,13 +35,13 @@ Manifest schema (all fields except groups/stacks are optional)::
       "output_dir": "results/permeability",
       "groups": [
         {
-          "name": "GelMA",
+          "name": "Control",
           "color": "#3F6AB3",              # optional; else fluorostats palette
           "background": "/path/blank.oib",  # optional no-fluo control
           "stacks": [
-            {"label": "GelMA deep 1", "path": "/path/a.oib"},
-            {"label": "GelMA deep 2", "path": "/path/b.oib"},
-            {"label": "GelMA short", "path": "/path/c.oib", "role": "aux"}
+            {"label": "Control 1", "path": "/path/a.oib"},
+            {"label": "Control 2", "path": "/path/b.oib"},
+            {"label": "Control short", "path": "/path/c.oib", "role": "aux"}
           ]
         }
       ]

@@ -108,8 +108,8 @@ def plot_retention_multiwindow(rows, colors, windows, out_base,
 
     Dividing normalised AUC by window width gives the average fraction of
     surface signal retained across that depth window (0-1), so windows of
-    different sizes sit on one comparable axis and the widening GelMA/hybrid
-    gap is visible at a glance.
+    different sizes sit on one comparable axis and a gap between groups that
+    widens with depth is visible at a glance.
     """
     groups = list(colors.keys())
     labels = [window_label(w) for w in windows]
