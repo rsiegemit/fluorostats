@@ -23,10 +23,17 @@ from __future__ import annotations
 
 import numpy as np
 
+from .objects import count_local_maxima, label_3d, watershed_split
 from .segment import binarize
 
+# Smallest object (voxels) kept when segmenting a channel for area/coverage.
+AREA_MIN_SIZE = 32
+# Smallest object (voxels) kept when counting cells: counting keeps small real cells.
+COUNT_MIN_SIZE = 5
 
-def _mask(channel, mask=None, method="otsu", threshold_scale=1.0, min_size=32):
+
+def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None, method: str = "otsu",
+          threshold_scale: float = 1.0, min_size: int = AREA_MIN_SIZE) -> np.ndarray:
     if mask is not None:
         return mask > 0
     return binarize(channel, method=method, threshold_scale=threshold_scale,
@@ -38,7 +45,7 @@ def _mask(channel, mask=None, method="otsu", threshold_scale=1.0, min_size=32):
 COUNT_METHODS = ("cc", "watershed", "maxima")
 
 
-def live_ratio(n_live, n_dead) -> float:
+def live_ratio(n_live: float, n_dead: float) -> float:
     """Viability ``live / (live + dead)``; NaN when there is nothing to count."""
     total = n_live + n_dead
     return float(n_live / total) if total > 0 else float("nan")
@@ -48,8 +55,8 @@ def live_dead_fractions(
     live: np.ndarray,
     dead: np.ndarray | None = None,
     *,
-    live_mask=None,
-    dead_mask=None,
+    live_mask: np.ndarray | None = None,
+    dead_mask: np.ndarray | None = None,
     **seg,
 ) -> dict:
     """Whole-volume live / dead fractions and viability ratio.
@@ -68,28 +75,28 @@ def live_dead_fractions(
     return out
 
 
-def _estimate_regime(channel, **seg) -> dict:
+def _estimate_regime(channel: np.ndarray, **seg) -> dict:
     """Estimate cell size, SNR, and crowding to pick a counting method.
 
     Crowding = (smoothed peak count) / (connected-component count): when cells
     overlap, CC merges them into few blobs while one peak still marks each cell,
     so the ratio rises. Gated behind SNR so noise (which inflates peaks) does not
     masquerade as crowding.
-    """
-    import numpy as _np
-    from .objects import label_3d, count_local_maxima
 
-    seg = {**seg, "min_size": 5}          # never let a large min_size hide cells
+    The radius is in voxels, from the median object voxel count, so it assumes
+    isotropic voxels (on anisotropic stacks it is a voxel-count equivalent).
+    """
+    seg = {**seg, "min_size": COUNT_MIN_SIZE}   # never let a large min_size hide cells
     mask = _mask(channel, **seg)
     if not mask.any():
         return {"radius": 0.0, "snr": 0.0, "crowding": 1.0, "n_cc": 0}
-    ch = _np.asarray(channel, float)
+    ch = np.asarray(channel, float)
     fg, bg = ch[mask], ch[~mask]
     snr = float((fg.mean() - bg.mean()) / (bg.std() + 1e-9))
-    labels, n_cc = label_3d(mask, min_size=5)
-    sizes = _np.bincount(labels.ravel())[1:]
-    med = float(_np.median(sizes)) if sizes.size else 0.0
-    radius = (med / _np.pi) ** 0.5 if ch.ndim == 2 else (med * 0.75 / _np.pi) ** (1 / 3)
+    labels, n_cc = label_3d(mask, min_size=COUNT_MIN_SIZE)
+    sizes = np.bincount(labels.ravel())[1:]
+    med = float(np.median(sizes)) if sizes.size else 0.0
+    radius = (med / np.pi) ** 0.5 if ch.ndim == 2 else (med * 0.75 / np.pi) ** (1 / 3)
     n_pk = count_local_maxima(ch, min_distance=max(2, int(radius / 1.5)),
                               threshold_rel=0.2,
                               smooth_sigma=max(1.0, radius / 1.5))["count"]
@@ -97,7 +104,7 @@ def _estimate_regime(channel, **seg) -> dict:
     return {"radius": radius, "snr": snr, "crowding": float(crowding), "n_cc": n_cc}
 
 
-def choose_count_method(channel, **seg) -> dict:
+def choose_count_method(channel: np.ndarray, **seg) -> dict:
     """Pick a counting method for an intensity channel from its image regime.
 
     Transparent heuristic (returns its reasoning; always overridable):
@@ -114,7 +121,8 @@ def choose_count_method(channel, **seg) -> dict:
     crowded regime above, so to reproduce that headline pass ``method="maxima"`` explicitly
     to ``live_dead_by_count`` rather than relying on the regime default.
 
-    Returns dict: method, smooth_sigma, and the estimated regime metrics.
+    Returns dict: method, smooth_sigma, and the estimated regime metrics. The
+    radius and smooth_sigma are in voxels (isotropic voxels assumed).
     """
     r = _estimate_regime(channel, **seg)
     # Conservative: default to the noise-robust method (CC), escalate to maxima
@@ -163,15 +171,16 @@ def live_dead_by_count(
       cannot know which single method is "best" for a given image, so ``all`` reports
       a consensus and a disagreement flag rather than silently picking one.
 
+    ``min_distance`` and ``smooth_sigma`` are in voxels (pixels in 2D) on every
+    axis, so they assume isotropic voxels.
+
     No single mode is universally best. Returns dict: n_live, n_dead, viability,
     plus (auto) the chosen method + reasoning, or (all) per-method viabilities,
     consensus, and spread.
     """
-    from .objects import count_local_maxima, watershed_split, label_3d
-
-    cseg = {"min_size": 5, **seg}     # counting keeps small real cells
+    cseg = {"min_size": COUNT_MIN_SIZE, **seg}
     counters = {
-        "cc": lambda ch, sig: label_3d(_mask(ch, **cseg), min_size=5)[1],
+        "cc": lambda ch, sig: label_3d(_mask(ch, **cseg), min_size=COUNT_MIN_SIZE)[1],
         "watershed": lambda ch, sig: watershed_split(_mask(ch, **cseg),
                                                      min_distance=min_distance)[1],
         "maxima": lambda ch, sig: count_local_maxima(ch, min_distance, threshold_rel,
@@ -222,8 +231,8 @@ def viability_depth_profile(
     dead: np.ndarray | None = None,
     z_axis: int = 0,
     *,
-    live_mask=None,
-    dead_mask=None,
+    live_mask: np.ndarray | None = None,
+    dead_mask: np.ndarray | None = None,
     **seg,
 ) -> dict:
     """Per-z live (and dead) area fraction — the depth-resolved viability.
@@ -251,7 +260,7 @@ def viability_2d_vs_3d(
     live: np.ndarray,
     z_axis: int = 0,
     *,
-    live_mask=None,
+    live_mask: np.ndarray | None = None,
     **seg,
 ) -> dict:
     """Compare live fraction from a single mid plane, a MIP, and the full 3D

@@ -15,14 +15,16 @@ they take an array/points and a callable, nothing domain-specific.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Iterator
 
 import numpy as np
 
 from .stats import coefficient_of_variation
 
 
-def tile_bounds(shape: tuple[int, int], grid: tuple[int, int] = (5, 5)):
+def tile_bounds(
+    shape: tuple[int, int], grid: tuple[int, int] = (5, 5),
+) -> Iterator[tuple[int, int, int, int]]:
     """Yield ``(y0, y1, x0, x1)`` pixel bounds for each cell of a ``grid`` partition.
 
     Cells tile the full 2D ``shape`` with near-equal size (last cell absorbs any

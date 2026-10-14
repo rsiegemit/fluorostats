@@ -55,7 +55,7 @@ from .manifest import check_groups
 from . import report
 from . import viability as viab
 
-DEFAULT_SEG = {"method": "otsu", "min_size": 32}
+DEFAULT_SEG = {"method": "otsu", "min_size": viab.AREA_MIN_SIZE}
 
 
 def load_manifest(path: Path) -> dict:
