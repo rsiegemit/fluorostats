@@ -11,6 +11,7 @@ import types
 
 import numpy as np
 import pytest
+import tifffile
 
 from fluorostats import io, io_vendors
 
@@ -626,3 +627,34 @@ def test_imagej_metadata_returns_new_dict():
     assert meta == {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
     assert io_vendors._parse_imagej_metadata({}, meta) is meta
 
+
+
+@pytest.mark.parametrize("unit, scale", [("micron", 1.0), ("nm", 1e-3)])
+def test_imagej_xy_resolution_is_read_with_its_unit(tmp_path, unit, scale):
+    """ImageJ stores x/y pixel size as resolution tags (pixels per `unit`)."""
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), imagej=True, resolution=(2.0, 4.0),
+                     metadata={"axes": "ZYX", "spacing": 3.0, "unit": unit})
+    vol, meta = io.load_volume(p)
+    assert meta["voxel_size_um"] == pytest.approx((3.0 * scale, 0.25 * scale, 0.5 * scale))
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"
+    img, imeta = io.load_image(p)
+    assert imeta["voxel_size_um"] == pytest.approx((0.25 * scale, 0.5 * scale))
+    assert imeta["voxel_size_source"] == "y:file,x:file"
+
+
+def test_imagej_resolution_without_a_unit_is_not_calibration(tmp_path):
+    """No unit is ImageJ's uncalibrated 'pixel': the tags say nothing about µm."""
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), imagej=True, resolution=(2.0, 4.0),
+                     metadata={"axes": "ZYX"})
+    with pytest.warns(RuntimeWarning, match="no y/x calibration"):
+        img, imeta = io.load_image(p)
+    assert imeta["voxel_size_um"] == (1.0, 1.0)
+
+
+@pytest.mark.parametrize("tags", [{}, {"XResolution": types.SimpleNamespace(value=(0, 1)),
+                                       "YResolution": types.SimpleNamespace(value=(0, 1))}])
+def test_imagej_xy_missing_or_zero_resolution_is_not_calibration(tags):
+    tif = types.SimpleNamespace(pages=[types.SimpleNamespace(tags=tags)])
+    assert io_vendors._imagej_xy_um(tif, {"unit": "micron"}) is None

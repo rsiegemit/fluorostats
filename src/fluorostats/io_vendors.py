@@ -365,7 +365,8 @@ def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
             meta = _parse_ome_metadata(tif.ome_metadata, meta)
             meta["format"] = "ome_tiff"
         elif tif.imagej_metadata:
-            meta = _parse_imagej_metadata(tif.imagej_metadata, meta)
+            meta = _parse_imagej_metadata(tif.imagej_metadata, meta,
+                                          _imagej_xy_um(tif, tif.imagej_metadata))
             meta["format"] = "imagej_tiff"
 
     data = canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
@@ -373,10 +374,15 @@ def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
 
 
 def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
-    """TIFF -> ((C, Y, X), meta), series 0; no calibration is read."""
+    """TIFF -> ((C, Y, X), meta), series 0; ImageJ y/x pixel size is read when the
+    file names a length unit."""
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
+        xy = _imagej_xy_um(tif, tif.imagej_metadata) if tif.imagej_metadata else None
     meta: dict = {"voxel_size_um": (1.0, 1.0), "channel_names": [], "format": "tiff"}
+    if xy:
+        meta = {**meta, "voxel_size_um": (xy["y"][0], xy["x"][0]), "_read_axes": set(xy),
+                "_axis_source": {a: s for a, (_, s) in xy.items() if s != "file"}}
     data = canonicalize_image(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 
@@ -430,17 +436,47 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
             "_axis_source": noted, "channel_names": meta["channel_names"] + [n for n in names if n]}
 
 
-def _parse_imagej_metadata(ij_meta: dict, meta: dict) -> dict:
-    """``meta`` plus the ImageJ z spacing converted to µm, as a new dict. ImageJ
-    x/y resolution tags are not read."""
-    if "spacing" not in ij_meta:
+def _imagej_xy_um(tif: tifffile.TiffFile, ij_meta: dict) -> dict | None:
+    """ImageJ y/x pixel size in µm from the resolution tags, ``{axis: (µm, source)}``.
+
+    ImageJ writes pixels per ``unit``; with no unit (its uncalibrated "pixel")
+    the tags carry no length, so None is returned and the axes stay defaulted.
+    """
+    unit = ij_meta.get("unit")
+    if unit in (None, "", "pixel", "pixels"):
+        return None
+    tags = tif.pages[0].tags
+    out = {}
+    for axis, key in (("y", "YResolution"), ("x", "XResolution")):
+        tag = tags.get(key)
+        num, den = tag.value if tag is not None else (0, 0)
+        if not num or not den:
+            return None
+        out[axis] = _length_um(den / num, unit, axis)
+    return out
+
+
+def _parse_imagej_metadata(ij_meta: dict, meta: dict, xy: dict | None = None) -> dict:
+    """``meta`` plus the ImageJ voxel size converted to µm, as a new dict: z from
+    ``spacing``, y/x from ``xy`` (see `_imagej_xy_um`)."""
+    size = dict(zip("zyx", meta["voxel_size_um"]))
+    read, noted = set(), {}
+    if "spacing" in ij_meta:
+        try:
+            spacing = float(ij_meta["spacing"])
+        except (TypeError, ValueError):
+            warnings.warn(f"ImageJ spacing {ij_meta['spacing']!r} is not a number; the z "
+                          "spacing is not read.", RuntimeWarning, stacklevel=3)
+        else:
+            size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")),
+                                           "z")
+            read.add("z")
+            noted.update({} if source == "file" else {"z": source})
+    for axis, (value, source) in (xy or {}).items():
+        size[axis] = value
+        read.add(axis)
+        noted.update({} if source == "file" else {axis: source})
+    if not read:
         return meta
-    try:
-        spacing = float(ij_meta["spacing"])
-    except (TypeError, ValueError):
-        warnings.warn(f"ImageJ spacing {ij_meta['spacing']!r} is not a number; the z spacing "
-                      "is not read.", RuntimeWarning, stacklevel=3)
-        return meta
-    z, source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
-    return {**meta, "voxel_size_um": (z, *meta["voxel_size_um"][1:]), "_read_axes": {"z"},
-            "_axis_source": {} if source == "file" else {"z": source}}
+    return {**meta, "voxel_size_um": (size["z"], size["y"], size["x"]), "_read_axes": read,
+            "_axis_source": noted}
