@@ -20,7 +20,7 @@ reported in cells/mm^2 using the stack's own pixel calibration, so 800^2 and
 
 Usage::
 
-    fluorostats viability manifest.json [--output-dir DIR]
+    fluorostats viability manifest.json [--output DIR]
     # or
     from fluorostats import viability_batch
     viability_batch.run(Path("manifest.json"))
@@ -31,7 +31,9 @@ Manifest schema (all fields except groups/stacks optional)::
       "title": "...",
       "live_channel": 0,          # channel index of the live (e.g. Calcein/AF488) signal
       "dead_channel": 1,          # channel index of the dead (e.g. PI) signal
-      "seg": {"method": "otsu", "min_size": 32},   # segmentation kwargs (segment.binarize)
+      "seg": {"method": "otsu", "min_size": 32},   # segment.binarize kwargs: method,
+                                  # min_size, threshold_scale. Cell counts always
+                                  # threshold with otsu (recorded in run_config.json).
       "count_method": "all",      # live_dead_by_count method: all | cc | watershed | maxima | auto
       "output_dir": "viability_out",
       "groups": [
@@ -45,6 +47,7 @@ from __future__ import annotations
 
 import csv
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -53,9 +56,12 @@ from .io import load_volume
 from . import stats
 from .manifest import check_groups
 from . import report
+from . import segment
 from . import viability as viab
 
-DEFAULT_SEG = {"method": "otsu", "min_size": 32}
+DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE}
+# Viability runs analyse every stack; there is no auxiliary stack role.
+_ROLES = ("primary",)
 
 
 def load_manifest(path: Path) -> dict:
@@ -76,16 +82,36 @@ def _validate(m: dict) -> None:
     """Check a viability manifest before any image is loaded; raise listing every problem."""
     problems = []
     for key in ("live_channel", "dead_channel"):
-        if not isinstance(m[key], int) or m[key] < 0:
+        if not isinstance(m[key], int) or isinstance(m[key], bool) or m[key] < 0:
             problems.append(f"{key} must be a non-negative integer, got {m[key]!r}")
     if m["live_channel"] == m["dead_channel"]:
         problems.append(f"live_channel and dead_channel are both {m['live_channel']}")
     methods = ("all", "auto", *viab.COUNT_METHODS)
     if m["count_method"] not in methods:
         problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
-    problems += check_groups(m["groups"])
+    problems += _check_seg(m["seg"])
+    problems += check_groups(m["groups"], roles=_ROLES)
     if problems:
         raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
+
+
+def _check_seg(seg) -> list[str]:
+    """Problems with the manifest's ``seg`` block (keyword arguments of `segment.binarize`)."""
+    if not isinstance(seg, dict):
+        return [f"seg must be an object of segmentation settings, got {seg!r}"]
+    problems = []
+    unknown = sorted(set(seg) - {"method", "min_size", "threshold_scale"})
+    if unknown:
+        problems.append(f"seg has unknown keys {unknown} (use method, min_size, threshold_scale)")
+    if "method" in seg and seg["method"] not in segment.METHODS:
+        problems.append(f"seg.method must be one of {segment.METHODS}, got {seg['method']!r}")
+    ms = seg.get("min_size", 0)
+    if not isinstance(ms, int) or isinstance(ms, bool) or ms < 0:
+        problems.append(f"seg.min_size must be a non-negative integer, got {ms!r}")
+    ts = seg.get("threshold_scale", 1.0)
+    if not isinstance(ts, (int, float)) or isinstance(ts, bool) or ts <= 0:
+        problems.append(f"seg.threshold_scale must be a positive number, got {ts!r}")
+    return problems
 
 
 def _counts(by_method: dict, m: str) -> tuple[float, float, float]:
@@ -106,8 +132,8 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     # surface culture -> analyse the maximum-intensity projection (quasi-monolayer)
     live_mip, dead_mip = live.max(0), dead.max(0)
     nz, ny, nx = live.shape
-    px = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[-1])   # xy micrometres/pixel
-    fov_mm2 = (px * nx) * (px * ny) / 1e6
+    py, px = (float(v) for v in meta.get("voxel_size_um", (1.0, 1.0, 1.0))[-2:])  # µm/pixel
+    fov_mm2 = (px * nx) * (py * ny) / 1e6
 
     # live_dead_by_count reserves `method` for the COUNT mode, so the segmentation
     # method (e.g. otsu, its default in binarize) is passed via the other seg keys only.
@@ -118,7 +144,7 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     bias = viab.viability_2d_vs_3d(live, **seg)                    # MIP vs full 3D
 
     row = {
-        "px_um": px, "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
+        "px_um": px, "voxel_size_source": meta.get("voxel_size_source", ""), "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
         # area / coverage on the surface MIP
         "live_cov_pct": 100.0 * area["live_fraction"],
         "dead_cov_pct": 100.0 * area["dead_fraction"],
@@ -165,7 +191,15 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)
-    report.write_run_config(out, {"manifest": Path(manifest_path)}, nested={"resolved": m})
+    # live_dead_by_count reserves `method` for the count mode, so cell counts
+    # always segment with the library default; record that, and say so if it differs.
+    count_seg = viab.DEFAULT_SEG_METHOD
+    if m["seg"].get("method", count_seg) != count_seg:
+        warnings.warn(f"seg.method={m['seg']['method']!r} applies to area, coverage and "
+                      f"regime; cell counts segment with {count_seg!r}", RuntimeWarning,
+                      stacklevel=2)
+    report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
+                            nested={"resolved": m})
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
@@ -184,7 +218,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         w.writerows(rows)
 
     # group summary CSV (mean +/- SEM for the numeric metrics)
-    metrics = [k for k in fields if k not in ("group", "stack", "regime_method")]
+    metrics = [k for k in fields
+               if k not in ("group", "stack", "voxel_size_source", "regime_method")]
     groups = [g["name"] for g in m["groups"]]
     with open(out / "viability_group_summary.csv", "w", newline="") as f:
         w = csv.writer(f)
@@ -210,15 +245,25 @@ def _print_summary(rows: list[dict], groups: list[str]) -> None:
             mean, sem, n = _mean_sem([r[mk] for r in rows if r["group"] == g])
             parts.append(f"{g}: {mean:.3g}±{sem:.2g} (n={n})")
         print(f"  {mk:<26} " + "   ".join(parts))
-    # two-group contrast (Mann-Whitney U — small n, non-normal safe) on coverage & density
-    if len(groups) == 2:
-        print("\n=== Two-group contrast (Mann-Whitney U, two-sided) ===")
-        for mk in ("live_cov_pct", "live_density_permm2", "viability_area"):
-            a = [r[mk] for r in rows if r["group"] == groups[0] and r[mk] == r[mk]]
-            b = [r[mk] for r in rows if r["group"] == groups[1] and r[mk] == r[mk]]
-            if len(a) >= 1 and len(b) >= 1:
-                mw = stats.mann_whitney(a, b)
-                u, p = mw["u"], mw["p"]
-                fold = (np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
-                print(f"  {mk:<26} {groups[0]} vs {groups[1]}: U={u:.0f}, p={p:.4g}, "
-                      f"fold={fold:.2f}x")
+    _print_contrast(rows, groups)
+
+
+def _print_contrast(rows: list[dict], groups: list[str]) -> None:
+    """Two-group Mann-Whitney U with Cliff's delta, BH-FDR across the printed tests."""
+    if len(groups) != 2:
+        print(f"\n(two-group contrast skipped: {len(groups)} group(s); it compares exactly two)")
+        return
+    g0, g1 = groups
+    tests = []
+    for mk in ("live_cov_pct", "live_density_permm2", "viability_area"):
+        a = [r[mk] for r in rows if r["group"] == g0 and r[mk] == r[mk]]
+        b = [r[mk] for r in rows if r["group"] == g1 and r[mk] == r[mk]]
+        if len(a) >= 1 and len(b) >= 1:
+            fold = (np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
+            tests.append((mk, stats.mann_whitney(a, b), fold))
+    q = stats.bh_fdr(np.array([mw["p"] for _, mw, _ in tests]))
+    print("\n=== Two-group contrast (Mann-Whitney U, two-sided; Cliff's delta; "
+          "BH-FDR q across these tests) ===")
+    for (mk, mw, fold), qv in zip(tests, q):
+        print(f"  {mk:<26} {g0} vs {g1}: U={mw['u']:.0f}, p={mw['p']:.4g}, q={qv:.4g}, "
+              f"delta={mw['cliffs_delta']:+.2f}, fold={fold:.2f}x (n={mw['n_x']},{mw['n_y']})")

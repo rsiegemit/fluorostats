@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
+import pytest
 
 from fluorostats.skeleton import (
     skeleton_metrics, prune_skeleton, n_junction_nodes,
@@ -151,3 +154,56 @@ def test_prune_skeleton_no_spurs():
     line[1, :] = True  # a straight line: no type-1 spur branches
     out = skeleton.prune_skeleton(line, min_branch_length_px=100.0)
     assert out.sum() == 20
+
+
+# ---------------------------------------------------------------------------
+# Spur threshold is in micrometres along the branch, per axis (anisotropic)
+# ---------------------------------------------------------------------------
+def test_prune_threshold_is_micrometres_in_2d():
+    """2D image with 0.5 µm pixels: an 8-px (4 µm) spur is below a 5 µm cutoff.
+    The z size of a (z, y, x) voxel tuple must not enter the 2D threshold."""
+    v = np.zeros((64, 64), bool)
+    v[32, 10:54] = True
+    v[33:41, 32] = True
+    m = skeleton_metrics(v, (5.0, 0.5, 0.5), prune=True, min_branch_length_um=5)
+    assert m["n_junction_nodes"] == 0
+    assert m["n_branches"] == 1
+
+
+def test_prune_keeps_long_z_spur_on_anisotropic_stack():
+    """A 3-slice z spur at 5 µm steps is 15 µm long: a 5 µm cutoff must keep it."""
+    w = np.zeros((8, 40, 40), bool)
+    w[1, 20, 5:35] = True
+    w[2:5, 20, 20] = True
+    m = skeleton_metrics(w, (5.0, 0.5, 0.5), prune=True, min_branch_length_um=5)
+    assert m["n_branches"] == 3
+    assert m["n_junction_nodes"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Failure is NaN (not measured), never zeros; isolated points are a real zero
+# ---------------------------------------------------------------------------
+def test_skeleton_failure_returns_nan_and_warns(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("simulated skan failure")
+    monkeypatch.setattr(skeleton.skan, "summarize", boom)
+    with pytest.warns(RuntimeWarning, match="simulated skan failure"):
+        m = skeleton_metrics(_plus())
+    assert set(m) == set(skeleton.EMPTY_METRICS)
+    assert all(np.isnan(v) for v in m.values())
+
+
+def _isolated_points():
+    v = np.zeros((20, 20), bool)
+    v[1, 1] = v[5, 5] = v[9, 9] = True
+    return v
+
+
+def test_isolated_points_measure_zero_without_warning():
+    """A skeleton of isolated points has no branch: zero length, not a failure."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        m = skeleton_metrics(_isolated_points())
+        pruned = prune_skeleton(_isolated_points())
+    assert m == skeleton.EMPTY_METRICS
+    assert pruned.sum() == 3

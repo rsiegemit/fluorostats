@@ -89,3 +89,93 @@ def test_viability_batch_manifest_errors(tmp_path):
     with pytest.raises(ValueError, match="has no stacks"):   # rejected by load_manifest
         run_man({**base, "output_dir": str(tmp_path / "o2"),
                  "groups": [{"name": "g", "stacks": []}]}, "nostacks")
+
+
+def _cfg(**kw):
+    return {"live_channel": 0, "dead_channel": 1, "seg": {"method": "otsu", "min_size": 5},
+            "count_method": "cc", **kw}
+
+
+def test_fov_area_uses_y_and_x_pixel_sizes(monkeypatch):
+    """Non-square pixels: the field of view is (dx * nx) * (dy * ny)."""
+    vol = _blob_stack(5, 5)[:, :, :, :80]                      # ny = 96, nx = 80
+    meta = {"voxel_size_um": (2.0, 0.5, 1.0), "voxel_size_source": "file"}
+    monkeypatch.setattr(viability_batch, "load_volume", lambda p: (vol, meta))
+    row = viability_batch.analyse_stack(Path("x.npy"), _cfg())
+    assert row["fov_mm2"] == pytest.approx((1.0 * 80) * (0.5 * 96) / 1e6)
+
+
+def _one_stack_manifest(tmp_path, **over):
+    p = tmp_path / "s.npy"
+    np.save(p, _blob_stack(3, 3))
+    man = {"live_channel": 0, "dead_channel": 1, "count_method": "cc",
+           "output_dir": str(tmp_path / "o"),
+           "groups": [{"name": "g", "stacks": [{"label": "s", "path": str(p)}]}], **over}
+    mp = tmp_path / "m.json"
+    mp.write_text(json.dumps(man))
+    return mp
+
+
+def test_manifest_rejects_aux_role(tmp_path):
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text())
+    man["groups"][0]["stacks"][0]["role"] = "aux"
+    mp.write_text(json.dumps(man))
+    with pytest.raises(ValueError, match="role must be one of"):
+        viability_batch.load_manifest(mp)
+
+
+@pytest.mark.parametrize("seg, msg", [
+    ({"method": "bogus"}, "seg.method must be one of"),
+    ({"min_size": -1}, "seg.min_size must be a non-negative integer"),
+    ({"min_size": 2.5}, "seg.min_size must be a non-negative integer"),
+    ({"threshold_scale": 0}, "seg.threshold_scale must be a positive number"),
+    ({"sigma": 1.0}, "seg has unknown keys"),
+    ("otsu", "seg must be an object"),
+])
+def test_manifest_rejects_bad_seg_block(tmp_path, seg, msg):
+    with pytest.raises(ValueError, match=msg):
+        viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))
+
+
+def test_manifest_accepts_full_seg_block(tmp_path):
+    seg = {"method": "li", "min_size": 0, "threshold_scale": 0.8}
+    assert viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))["seg"] == seg
+
+
+def test_per_stack_csv_records_voxel_size_source(tmp_path):
+    import csv
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
+    assert rows[0]["voxel_size_source"] == "z:default,y:default,x:default"
+    summary = (out / "viability_group_summary.csv").read_text()
+    assert "voxel_size_source" not in summary
+
+
+def test_count_segmentation_method_is_recorded_and_warned(tmp_path):
+    mp = _one_stack_manifest(tmp_path, seg={"method": "li", "min_size": 5})
+    with pytest.warns(RuntimeWarning, match="cell counts segment with 'otsu'"):
+        out = viability_batch.run(mp)
+    cfg = json.loads((out / "run_config.json").read_text())
+    assert cfg["count_seg_method"] == "otsu"
+    assert cfg["resolved"]["seg"]["method"] == "li"
+
+
+def test_two_group_contrast_reports_effect_size_and_bh(tmp_path, capsys):
+    viability_batch.run(_manifest(tmp_path))
+    text = capsys.readouterr().out
+    assert "Cliff's delta" in text and "BH-FDR" in text
+    lines = [ln for ln in text.splitlines() if "sparse vs dense" in ln]
+    assert len(lines) == 3
+    assert all("delta=" in ln and "q=" in ln for ln in lines)
+
+
+def test_contrast_skipped_notice_for_one_group(tmp_path, capsys):
+    viability_batch.run(_one_stack_manifest(tmp_path))
+    assert "two-group contrast skipped: 1 group" in capsys.readouterr().out
+
+
+def test_manifest_rejects_bool_channel(tmp_path):
+    mp = _one_stack_manifest(tmp_path, live_channel=False, dead_channel=True)
+    with pytest.raises(ValueError, match="live_channel must be a non-negative integer"):
+        viability_batch.load_manifest(mp)

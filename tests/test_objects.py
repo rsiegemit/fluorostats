@@ -6,7 +6,7 @@ import numpy as np
 from fluorostats import stats
 import pytest
 
-from fluorostats import objects
+from fluorostats import metrics_3d, objects
 from fluorostats.objects import (
     label_3d,
     object_volumes_voxels,
@@ -136,6 +136,21 @@ def test_watershed_split_min_size_filter():
     assert n == 1
 
 
+def _touching_discs() -> np.ndarray:
+    yy, xx = np.mgrid[:40, :60]
+    return ((yy - 20) ** 2 + (xx - 20) ** 2 < 100) | ((yy - 20) ** 2 + (xx - 37) ** 2 < 100)
+
+
+def test_watershed_split_min_size_keeps_the_split():
+    """Size filtering must not re-merge the touching objects watershed split."""
+    mask = _touching_discs()
+    _, n_all = objects.watershed_split(mask, min_size=0)
+    labels, n = objects.watershed_split(mask, min_size=10)
+    assert n_all == 2
+    assert n == 2
+    assert set(np.unique(labels)) == {0, 1, 2}
+
+
 def test_count_local_maxima_with_mask_and_smoothing():
     img = np.zeros((40, 40), np.float32)
     img[10, 10] = 100.0
@@ -155,8 +170,19 @@ def test_object_centroids_empty_label():
     assert objects.object_centroids(np.zeros((3, 3, 3), int)).shape == (0, 3)
 
 
-def test_object_density_per_mm3_zero_volume():
-    assert objects.object_density_per_mm3(5, (0, 10, 10), (1.0, 1.0, 1.0)) == 0.0
+def test_object_density_per_mm3_zero_volume_is_nan():
+    with pytest.warns(RuntimeWarning, match="non-positive"):
+        d = objects.object_density_per_mm3(5, (0, 10, 10), (1.0, 1.0, 1.0))
+    assert np.isnan(d)
+
+
+def test_object_density_per_mm3_is_metrics_3d_density():
+    args = (17, (4, 30, 20), (2.0, 0.5, 0.25))
+    assert objects.object_density_per_mm3(*args) == metrics_3d.density_per_mm3(*args)
+
+
+def test_object_centroids_empty_2d_label_has_two_columns():
+    assert objects.object_centroids(np.zeros((5, 5), int)).shape == (0, 2)
 
 
 def test_centroid_homogeneity_empty_is_nan():

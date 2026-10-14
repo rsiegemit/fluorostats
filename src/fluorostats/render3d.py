@@ -11,13 +11,14 @@ resolution.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
-import matplotlib as mpl
-mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import marching_cubes
 
 from .style import DARK_PALETTE, PALETTE
@@ -50,7 +51,7 @@ def block_reduce_max(mask: np.ndarray, factors: tuple[int, int, int]) -> np.ndar
 def render_isosurface(
     mask: np.ndarray,
     voxel_size_um: tuple[float, float, float] = (1.0, 1.0, 1.0),
-    ax=None,
+    ax: Axes3D | None = None,
     color: str = "#d62728",
     alpha: float = 0.95,
     downsample: tuple[int, int, int] = (1, 4, 4),
@@ -62,7 +63,7 @@ def render_isosurface(
     style: str = "light",
     smooth_iter: int = 0,
     shade: bool = True,
-):
+) -> Axes3D:
     """Marching-cubes isosurface render on a physical-micrometre grid.
 
     Parameters
@@ -121,6 +122,9 @@ def render_isosurface(
 
 def _theme_colors(style: str) -> tuple[str, str, str, str]:
     """(background, grid, text, scale-bar) colours for the "light"/"dark" style."""
+    styles = ("light", "dark")
+    if style not in styles:
+        raise ValueError(f"style must be one of {styles}, got {style!r}")
     if style == "dark":
         return (DARK_PALETTE["background"], DARK_PALETTE["grid"],
                 DARK_PALETTE["ink"], DARK_PALETTE["scalebar"])
@@ -248,14 +252,14 @@ def _box_edges(box: tuple[float, float, float]):
 def render_voxel_cloud(
     mask: np.ndarray,
     voxel_size_um: tuple[float, float, float] = (1.0, 1.0, 1.0),
-    ax=None,
+    ax: Axes3D | None = None,
     color: str = "#d62728",
     alpha: float = 0.4,
     downsample: tuple[int, int, int] = (1, 8, 8),
     elev: float = 22.0,
     azim: float = -58.0,
     title: str | None = None,
-):
+) -> Axes3D:
     """Voxel-cloud render — chunky but clear "is there material here?"."""
     if ax is None:
         fig = plt.figure(figsize=(6, 5))
@@ -294,11 +298,11 @@ def render_voxel_cloud(
 def mip_overlay(
     intensity: np.ndarray,
     mask: np.ndarray | None = None,
-    ax=None,
+    ax: Axes | None = None,
     z_axis: int = 0,
     overlay_color: tuple[int, int, int] = (220, 60, 220),
     overlay_alpha: float = 0.6,
-):
+) -> Axes:
     """Grey-scale maximum-intensity projection with optional magenta mask.
 
     Returns the axis. Convenient cell renderer for a condition × time grid
@@ -324,7 +328,7 @@ def mip_overlay(
 def live_dead_mip(
     live: np.ndarray,
     dead: np.ndarray | None = None,
-    ax=None,
+    ax: Axes | None = None,
     z_axis: int = 0,
     *,
     live_color: tuple[int, int, int] = (40, 220, 60),
@@ -334,7 +338,7 @@ def live_dead_mip(
     background: tuple[int, int, int] = (0, 0, 0),
     border: str | None = PALETTE["ink"],
     border_lw: float = 1.0,
-):
+) -> Axes:
     """Two-channel (live/dead) maximum-intensity projection.
 
     ``live`` is the live-cell channel (typically Alexa-488 / Calcein /
@@ -385,7 +389,7 @@ def mip_grid(
     *,
     rows: list,
     cols: list,
-    render_func=live_dead_mip,
+    render_func: Callable[..., Axes] = live_dead_mip,
     figsize: tuple[float, float] | None = None,
     row_labels: list[str] | None = None,
     col_labels: list[str] | None = None,
@@ -393,7 +397,7 @@ def mip_grid(
     cell_kwargs: dict | None = None,
     label_color: str = PALETTE["ink"],
     background: str = "white",
-):
+) -> Figure:
     """Render a (row × col) grid of MIPs.
 
     Parameters
@@ -459,14 +463,14 @@ def mip_grid(
 
 def depth_coded_mip(
     volume: np.ndarray,
-    ax=None,
+    ax: Axes | None = None,
     z_axis: int = 0,
     *,
     cmap: str = "viridis",
     percentile_clip: tuple[float, float] = (1, 99.5),
     gamma: float = 0.8,
     background: tuple[int, int, int] = (0, 0, 0),
-):
+) -> Axes:
     """Depth-coded MIP — intensity-weighted mean depth coloured by a colormap.
 
     For each XY pixel, takes the intensity-weighted depth and maps it
@@ -504,14 +508,14 @@ def depth_coded_mip(
 
 def layer_split_mip(
     volume: np.ndarray,
-    ax_top=None, ax_bot=None,
+    ax_top: Axes | None = None, ax_bot: Axes | None = None,
     z_axis: int = 0,
     *,
     split: float = 0.5,
-    render_func=live_dead_mip,
+    render_func: Callable[..., Axes] = live_dead_mip,
     channel_key: str = "live",
     **kwargs,
-):
+) -> tuple[Axes | None, Axes | None]:
     """Render top half and bottom half of a volume on two axes.
 
     Top layers vs deeper layers side by side. ``split`` is

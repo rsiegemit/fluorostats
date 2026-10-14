@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
-from .metrics_3d import fov_volume_mm3
+from .metrics_3d import density_per_mm3
 from .stats import coefficient_of_variation, gini
 
 
@@ -35,6 +35,11 @@ def label_3d(mask: np.ndarray, min_size: int = 0) -> tuple[np.ndarray, int]:
     labels, n = ndi.label(mask)
     if min_size <= 0 or n == 0:
         return labels, int(n)
+    return _drop_small(labels, min_size)
+
+
+def _drop_small(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
+    """Remove labels with fewer than ``min_size`` voxels; relabel survivors 1..N."""
     sizes = np.bincount(labels.ravel())
     keep = sizes >= min_size
     keep[0] = False  # background
@@ -84,16 +89,7 @@ def watershed_split(
     markers, _ = ndi.label(local_max)
     labels = _watershed(-dist, markers, mask=m)
     if min_size > 0:
-        labels, n = label_3d(labels > 0, min_size=0)  # relabel contiguous
-        # re-apply size filter on the watershed labels
-        sizes = np.bincount(labels.ravel())
-        keep = sizes >= min_size
-        keep[0] = False
-        if not keep.any():
-            return np.zeros_like(labels), 0
-        remap = np.zeros(sizes.size, dtype=labels.dtype)
-        remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
-        return remap[labels], int(keep.sum())
+        return _drop_small(labels, min_size)
     return labels, int(labels.max())
 
 
@@ -190,10 +186,11 @@ def equivalent_diameters_um(
 
 
 def object_centroids(labels: np.ndarray) -> np.ndarray:
-    """Centroid (z, y, x) per object, shape (N, 3) in voxel units."""
+    """Centroid per object in voxel units, shape (N, labels.ndim): (z, y, x) for a
+    3D label image, (y, x) for 2D."""
     n = int(labels.max())
     if n == 0:
-        return np.zeros((0, 3), dtype=float)
+        return np.zeros((0, labels.ndim), dtype=float)
     centers = ndi.center_of_mass(labels > 0, labels, np.arange(1, n + 1))
     return np.asarray(centers, dtype=float)
 
@@ -348,11 +345,9 @@ def object_density_per_mm3(
     shape_zyx: tuple[int, int, int],
     voxel_size_um: tuple[float, float, float],
 ) -> float:
-    """Object count divided by the imaged volume in mm³."""
-    vol_mm3 = fov_volume_mm3(shape_zyx, voxel_size_um)
-    if vol_mm3 == 0:
-        return 0.0
-    return float(n_objects / vol_mm3)
+    """Object count divided by the imaged volume in mm³ (see
+    `metrics_3d.density_per_mm3`; NaN with a warning for a zero volume)."""
+    return density_per_mm3(n_objects, shape_zyx, voxel_size_um)
 
 
 def centroid_homogeneity(

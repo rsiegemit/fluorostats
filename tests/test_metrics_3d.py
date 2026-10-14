@@ -1,6 +1,7 @@
 """Tests for fluorostats.metrics_3d."""
 
 import numpy as np
+import pytest
 
 from fluorostats import metrics_3d
 from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
@@ -66,3 +67,13 @@ def test_connectivity_dual_convention_pinned():
     res = metrics_3d.connectivity_metrics(m)
     assert res["n_components"] == int(label(m)[1]) == 2
     assert res["euler_number"] == int(euler_number(m, connectivity=3)) == 2
+
+
+def test_density_zero_volume_is_nan_with_warning():
+    from fluorostats.metrics_3d import density_per_mm3, normalise_skeleton_metrics
+    with pytest.warns(RuntimeWarning, match="non-positive"):
+        assert np.isnan(density_per_mm3(5, (0, 10, 10), (1.0, 1.0, 1.0)))
+    with pytest.warns(RuntimeWarning, match="non-positive"):
+        out = normalise_skeleton_metrics({"total_length_um": 3.0}, (0, 10, 10), (1.0, 1.0, 1.0))
+    assert np.isnan(out["length_density_um_per_mm3"])
+    assert np.isnan(out["branch_density_per_mm3"])

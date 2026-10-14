@@ -15,14 +15,16 @@ they take an array/points and a callable, nothing domain-specific.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Iterator
 
 import numpy as np
 
 from .stats import coefficient_of_variation
 
 
-def tile_bounds(shape: tuple[int, int], grid: tuple[int, int] = (5, 5)):
+def tile_bounds(
+    shape: tuple[int, int], grid: tuple[int, int] = (5, 5),
+) -> Iterator[tuple[int, int, int, int]]:
     """Yield ``(y0, y1, x0, x1)`` pixel bounds for each cell of a ``grid`` partition.
 
     Cells tile the full 2D ``shape`` with near-equal size (last cell absorbs any
@@ -118,6 +120,13 @@ def slab_reduce(
     return centers, values
 
 
+# Neighbour offsets for `morans_i`, by connectivity name.
+_NEIGHBOUR_OFFSETS = {
+    "rook": [(0, 1), (1, 0), (0, -1), (-1, 0)],
+    "queen": [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)],
+}
+
+
 def morans_i(grid: np.ndarray, connectivity: str = "rook") -> float:
     """Spatial autocorrelation (Moran's I) of a 2D value grid.
 
@@ -126,16 +135,16 @@ def morans_i(grid: np.ndarray, connectivity: str = "rook") -> float:
     ``connectivity`` is ``"rook"`` (4-neighbour) or ``"queen"`` (8-neighbour).
     Returns ``NaN`` for <3 valid cells or zero variance.
     """
+    if connectivity not in _NEIGHBOUR_OFFSETS:
+        raise ValueError(f"connectivity must be one of {tuple(_NEIGHBOUR_OFFSETS)}, "
+                         f"got {connectivity!r}")
     g = np.asarray(grid, dtype=float)
     mask = ~np.isnan(g)
     if mask.sum() < 3:
         return float("nan")
     mu = g[mask].mean()
     z = np.where(mask, g - mu, 0.0)
-    if connectivity == "queen":
-        offs = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-    else:
-        offs = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+    offs = _NEIGHBOUR_OFFSETS[connectivity]
     nr, nc = g.shape
     num = 0.0
     s0 = 0.0
