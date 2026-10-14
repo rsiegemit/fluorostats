@@ -505,10 +505,11 @@ def test_ome_metadata_parse_error():
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
-def test_imagej_metadata_exception():
-    # spacing present but non-float -> except: pass leaves defaults
+def test_imagej_metadata_unparseable_spacing_warns():
+    # spacing present but non-float -> announced, defaults kept
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io._parse_imagej_metadata({"spacing": "notanumber"}, meta)
+    with pytest.warns(RuntimeWarning, match="'notanumber' is not a number"):
+        out = io._parse_imagej_metadata({"spacing": "notanumber"}, meta)
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 

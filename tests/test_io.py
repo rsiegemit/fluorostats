@@ -213,6 +213,20 @@ def test_ome_metadata_channel_name_append():
     out = io._parse_ome_metadata(ome_xml, meta)
     assert out["channel_names"] == ["EGFP", "mCherry"]
     assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}   # not mutated
+
+
+def test_ome_metadata_without_pixels_returns_meta_unchanged():
+    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
+    assert io._parse_ome_metadata("<OME><Image/></OME>", meta) == meta
+
+
+def test_imagej_metadata_returns_new_dict():
+    meta = {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
+    out = io._parse_imagej_metadata({"spacing": 2.0, "unit": "micron"}, meta)
+    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta == {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
+    assert io._parse_imagej_metadata({}, meta) is meta
 
 
 def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
@@ -224,7 +238,7 @@ def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
 
     p = tmp_path / "ij.tif"
     tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
-                     metadata={"spacing": 2.5, "axes": "ZCYX"})
+                     metadata={"spacing": 2.5, "unit": "micron", "axes": "ZCYX"})
     with pytest.warns(RuntimeWarning, match="no y/x calibration"):
         _, meta = load_volume(p)
     assert meta["voxel_size_source"] == "z:file,y:default,x:default"
@@ -345,3 +359,55 @@ def test_unlabelled_tiff_keeps_shape_heuristic(tmp_path):
     with pytest.warns(RuntimeWarning, match="assuming channel-last"):
         arr, _ = load_volume(p)
     assert arr.shape == (3, 20, 8, 8)
+
+
+# ---------------------------------------------------------------------------
+# Physical-size units are converted to µm; unknown units are kept and flagged
+# ---------------------------------------------------------------------------
+
+def _ome_with_units(tmp_path, **sizes_and_units):
+    p = tmp_path / "u.ome.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "ZYX", **sizes_and_units})
+    return p
+
+
+def test_ome_physical_size_units_converted_to_um(tmp_path):
+    p = _ome_with_units(tmp_path, PhysicalSizeX=500, PhysicalSizeXUnit="nm",
+                        PhysicalSizeY=500, PhysicalSizeYUnit="nm",
+                        PhysicalSizeZ=0.002, PhysicalSizeZUnit="mm")
+    _, meta = load_volume(p)
+    assert meta["voxel_size_um"] == pytest.approx((2.0, 0.5, 0.5))
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"
+
+
+def test_ome_unknown_unit_kept_flagged_and_warned(tmp_path):
+    p = _ome_with_units(tmp_path, PhysicalSizeX=0.5, PhysicalSizeY=0.5,
+                        PhysicalSizeZ=3.0, PhysicalSizeZUnit="pixel")
+    with pytest.warns(RuntimeWarning, match="length unit 'pixel', which is not recognised"):
+        _, meta = load_volume(p)
+    assert meta["voxel_size_um"] == (3.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:file-unit-unknown,y:file,x:file"
+
+
+# ImageJ descriptions are ASCII: Fiji writes µm as the escape "\\u00B5m" or as "micron".
+@pytest.mark.parametrize("unit, z_um", [("nm", 2.0), ("micron", 2000.0), ("\\u00B5m", 2000.0),
+                                        ("mm", 2e6)])
+def test_imagej_spacing_unit_converted_to_um(tmp_path, unit, z_um):
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
+                     metadata={"spacing": 2000.0, "unit": unit, "axes": "ZCYX"})
+    _, meta = load_volume(p)
+    assert meta["voxel_size_um"][0] == pytest.approx(z_um)
+    assert meta["voxel_size_source"].startswith("z:file,")
+
+
+@pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "inch"}, "'inch'")])
+def test_imagej_spacing_without_known_unit_is_flagged(tmp_path, extra, said):
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
+                     metadata={"spacing": 2.0, "axes": "ZCYX", **extra})
+    with pytest.warns(RuntimeWarning, match=said):
+        _, meta = load_volume(p)
+    assert meta["voxel_size_um"][0] == 2.0
+    assert meta["voxel_size_source"].startswith("z:file-unit-unknown,")

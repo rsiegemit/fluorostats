@@ -59,12 +59,15 @@ def _record_calibration(meta: dict, axes: str, path: Path) -> None:
     of ``voxel_size_um`` is the 1.0 µm placeholder. Sets ``voxel_size_source``
     (e.g. ``"z:file,y:default,x:default"``) and warns when any axis defaulted,
     because calibrated lengths, areas, volumes and densities along it are then
-    in pixel units. Values in ``voxel_size_um`` are not changed.
+    in pixel units. Values in ``voxel_size_um`` are not changed. A loader that
+    took an axis from the file with a caveat (e.g. an unknown length unit)
+    names it in ``meta["_axis_source"]`` ({axis: source}) and warns itself.
     """
     read = meta.pop("_read_axes", set())
+    noted = meta.pop("_axis_source", {})
     meta["voxel_size_source"] = ",".join(
-        f"{a}:{'file' if a in read else 'default'}" for a in axes)
-    missing = [a for a in axes if a not in read]
+        f"{a}:{noted.get(a) or ('file' if a in read else 'default')}" for a in axes)
+    missing = [a for a in axes if a not in read and a not in noted]
     if missing:
         warnings.warn(
             f"{path.name}: no {'/'.join(missing)} calibration found in the file; assuming "
@@ -498,39 +501,64 @@ def _load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
 _TIFF_INDEX_AXES = {"T": "time point"}
 
 
+# Length units as OME (UnitsLength) and ImageJ write them -> µm per unit.
+# ImageJ descriptions are ASCII, so Fiji spells µm "micron" or "\\u00B5m".
+_UM_PER_UNIT = {"pm": 1e-6, "Å": 1e-4, "nm": 1e-3, "µm": 1.0, "μm": 1.0, "um": 1.0,
+                "micron": 1.0, "microns": 1.0, "\\u00B5m": 1.0, "\\u00b5m": 1.0,
+                "mm": 1e3, "cm": 1e4, "m": 1e6}
+
+
+def _length_um(value: float, unit: str | None, axis: str) -> tuple[float, str]:
+    """``value`` in ``unit`` converted to µm, with its ``voxel_size_source``.
+
+    An unknown or missing unit keeps the value as if it were µm, records the
+    source ``"file-unit-unknown"`` and warns.
+    """
+    factor = _UM_PER_UNIT.get(unit)
+    if factor is not None:
+        return value * factor, "file"
+    said = "no length unit" if unit is None else f"length unit {unit!r}, which is not recognised"
+    warnings.warn(f"the file gives the {axis} voxel size {value} with {said}; keeping it as µm. "
+                  "Check voxel_size_um.", RuntimeWarning, stacklevel=3)
+    return value, "file-unit-unknown"
+
+
 def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
+    """``meta`` plus the OME voxel size (converted to µm) and channel names, as a
+    new dict; ``meta`` itself is returned unchanged for unparseable XML."""
     try:
         root = ET.fromstring(ome_xml)
-        pixels = root.find(".//{*}Pixels")
-        if pixels is not None:
-            x = _safe_float(pixels.get("PhysicalSizeX"), 1.0)
-            y = _safe_float(pixels.get("PhysicalSizeY"), 1.0)
-            z = _safe_float(pixels.get("PhysicalSizeZ"), 1.0)
-            meta["voxel_size_um"] = (z, y, x)
-            meta["_read_axes"] = {a for a in "xyz"
-                                  if _valid_size(pixels.get(f"PhysicalSize{a.upper()}"))}
-
-            for ch in pixels.findall("{*}Channel"):
-                name = ch.get("Name", "") or ch.get("Fluor", "")
-                if name:
-                    meta["channel_names"].append(name)
     except ET.ParseError:
-        pass
-    return meta
+        return meta
+    pixels = root.find(".//{*}Pixels")
+    if pixels is None:
+        return meta
+    size, noted = {"z": 1.0, "y": 1.0, "x": 1.0}, {}
+    read = [a for a in "zyx" if _valid_size(pixels.get(f"PhysicalSize{a.upper()}"))]
+    for a in read:
+        key = f"PhysicalSize{a.upper()}"
+        size[a], source = _length_um(float(pixels.get(key)), pixels.get(f"{key}Unit", "µm"), a)
+        if source != "file":                    # the OME default unit is µm
+            noted[a] = source
+    names = [ch.get("Name", "") or ch.get("Fluor", "") for ch in pixels.findall("{*}Channel")]
+    return {**meta, "voxel_size_um": (size["z"], size["y"], size["x"]), "_read_axes": set(read),
+            "_axis_source": noted, "channel_names": meta["channel_names"] + [n for n in names if n]}
 
 
 def _parse_imagej_metadata(ij_meta: dict, meta: dict) -> dict:
+    """``meta`` plus the ImageJ z spacing converted to µm, as a new dict. ImageJ
+    x/y resolution tags are not read."""
+    if "spacing" not in ij_meta:
+        return meta
     try:
-        if "spacing" in ij_meta:
-            meta["voxel_size_um"] = (
-                float(ij_meta["spacing"]),
-                meta["voxel_size_um"][1],
-                meta["voxel_size_um"][2],
-            )
-            meta["_read_axes"] = {"z"}   # ImageJ x/y resolution tags are not read
-    except Exception:
-        pass
-    return meta
+        spacing = float(ij_meta["spacing"])
+    except (TypeError, ValueError):
+        warnings.warn(f"ImageJ spacing {ij_meta['spacing']!r} is not a number; the z spacing "
+                      "is not read.", RuntimeWarning, stacklevel=3)
+        return meta
+    z, source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
+    return {**meta, "voxel_size_um": (z, *meta["voxel_size_um"][1:]), "_read_axes": {"z"},
+            "_axis_source": {} if source == "file" else {"z": source}}
 
 
 # ---------------------------------------------------------------------------
