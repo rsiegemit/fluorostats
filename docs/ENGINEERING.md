@@ -175,13 +175,9 @@ Now compliant:
 
 Open, each needing an owner decision (unifying or fixing changes numbers or API):
 
-- [ ] **Fig S2 (c)** plots and the manuscript legend states a trained-pipeline
-  run-to-run CV of 3.2% that was never measured (typed as "illustrative").
-- [ ] **Fig 6 Live/Dead** counts were not re-run under the `min_size` fix; the raw
-  HUVEC stacks are not on this machine.
-- [ ] **Manuscript text vs data**: "F1 falls from 0.94 to 0.15" (Fig 2d's table: 0.922
-  to 0.134); "≈40% crossover" is not derivable from the 0/25/50/75% curve; Fig S4's
-  CTC SEG 0.908/0.925 is uncited.
+- [ ] Manuscript-side discrepancies (figure claims that disagree with their data) are
+  tracked with the manuscript, not in this repository. One repo change waits on them:
+  `benchmarks/figS2_runtime.py` panel (c) plots a typed, unmeasured value.
 - [ ] SIN-1, kept separate because unifying changes numbers: three tile-grid
   remainder conventions (`morphometry` crop, `objects` float bins, `spatial`
   linspace); mean/SEM empty/NaN conventions in `plots`, `depth_batch`,
