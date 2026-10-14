@@ -238,9 +238,10 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
     ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
     vol, mask = _segment(arr[ch], **seg)
 
-    # same keys as skeleton_metrics() so the CSV row shape is identical
-    # whether or not --no-skeleton is set.
-    skel = dict(skeleton.EMPTY_METRICS)
+    # --no-skeleton: same keys as skeleton_metrics() so the CSV keeps its shape, but
+    # NaN (not measured) rather than 0 (measured, nothing there), so skipped
+    # metrics are left out of plots and statistics instead of entering as zeros.
+    skel = {k: float("nan") for k in skeleton.EMPTY_METRICS}
     if not no_skeleton:
         skel = metrics_3d.skeleton_metrics(
             mask, voxel_size_um=voxel_size,

@@ -407,3 +407,26 @@ def test_cli_rejects_out_of_range_options(tmp_path, opt, val):
         res = CliRunner().invoke(cli, [cmd, "--input", str(tmp_path / "in"),
                                        "--output", str(tmp_path / "out"), opt, val])
         assert res.exit_code == 2 and "Invalid value" in res.output
+
+
+def test_no_skeleton_leaves_skeleton_columns_blank_not_zero(tmp_path):
+    # Regression: --no-skeleton wrote 0 into the skeleton columns, which were then
+    # summarised, plotted and Mann-Whitney-tested as if they had been measured.
+    import pandas as pd
+
+    _make_dataset(tmp_path / "in", _blob_3d)
+    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"),
+                                   "--output", str(tmp_path / "out"), "--no-skeleton",
+                                   "--no-overlays"])
+    assert res.exit_code == 0, res.output
+    df = pd.read_csv(tmp_path / "out" / "per_file.csv")
+    for col in ("total_length_um", "n_branches", "n_junctions", "n_junction_nodes",
+                "mean_branch_length_um"):
+        assert df[col].isna().all()
+    assert df["volume_fraction"].notna().all()
+    plots_dir = tmp_path / "out" / "plots"
+    if plots_dir.exists():
+        assert not list(plots_dir.glob("total_length_um_*"))
+        pv = plots_dir / "pvalues.csv"
+        if pv.exists():
+            assert "total_length_um" not in pd.read_csv(pv)["metric"].tolist()
