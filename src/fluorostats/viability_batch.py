@@ -20,7 +20,7 @@ reported in cells/mm^2 using the stack's own pixel calibration, so 800^2 and
 
 Usage::
 
-    fluorostats viability manifest.json [--output-dir DIR]
+    fluorostats viability manifest.json [--output DIR]
     # or
     from fluorostats import viability_batch
     viability_batch.run(Path("manifest.json"))
@@ -245,15 +245,25 @@ def _print_summary(rows: list[dict], groups: list[str]) -> None:
             mean, sem, n = _mean_sem([r[mk] for r in rows if r["group"] == g])
             parts.append(f"{g}: {mean:.3g}±{sem:.2g} (n={n})")
         print(f"  {mk:<26} " + "   ".join(parts))
-    # two-group contrast (Mann-Whitney U — small n, non-normal safe) on coverage & density
-    if len(groups) == 2:
-        print("\n=== Two-group contrast (Mann-Whitney U, two-sided) ===")
-        for mk in ("live_cov_pct", "live_density_permm2", "viability_area"):
-            a = [r[mk] for r in rows if r["group"] == groups[0] and r[mk] == r[mk]]
-            b = [r[mk] for r in rows if r["group"] == groups[1] and r[mk] == r[mk]]
-            if len(a) >= 1 and len(b) >= 1:
-                mw = stats.mann_whitney(a, b)
-                u, p = mw["u"], mw["p"]
-                fold = (np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
-                print(f"  {mk:<26} {groups[0]} vs {groups[1]}: U={u:.0f}, p={p:.4g}, "
-                      f"fold={fold:.2f}x")
+    _print_contrast(rows, groups)
+
+
+def _print_contrast(rows: list[dict], groups: list[str]) -> None:
+    """Two-group Mann-Whitney U with Cliff's delta, BH-FDR across the printed tests."""
+    if len(groups) != 2:
+        print(f"\n(two-group contrast skipped: {len(groups)} group(s); it compares exactly two)")
+        return
+    g0, g1 = groups
+    tests = []
+    for mk in ("live_cov_pct", "live_density_permm2", "viability_area"):
+        a = [r[mk] for r in rows if r["group"] == g0 and r[mk] == r[mk]]
+        b = [r[mk] for r in rows if r["group"] == g1 and r[mk] == r[mk]]
+        if len(a) >= 1 and len(b) >= 1:
+            fold = (np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
+            tests.append((mk, stats.mann_whitney(a, b), fold))
+    q = stats.bh_fdr(np.array([mw["p"] for _, mw, _ in tests]))
+    print("\n=== Two-group contrast (Mann-Whitney U, two-sided; Cliff's delta; "
+          "BH-FDR q across these tests) ===")
+    for (mk, mw, fold), qv in zip(tests, q):
+        print(f"  {mk:<26} {g0} vs {g1}: U={mw['u']:.0f}, p={mw['p']:.4g}, q={qv:.4g}, "
+              f"delta={mw['cliffs_delta']:+.2f}, fold={fold:.2f}x (n={mw['n_x']},{mw['n_y']})")

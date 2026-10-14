@@ -159,3 +159,17 @@ def test_count_segmentation_method_is_recorded_and_warned(tmp_path):
     cfg = json.loads((out / "run_config.json").read_text())
     assert cfg["count_seg_method"] == "otsu"
     assert cfg["resolved"]["seg"]["method"] == "li"
+
+
+def test_two_group_contrast_reports_effect_size_and_bh(tmp_path, capsys):
+    viability_batch.run(_manifest(tmp_path))
+    text = capsys.readouterr().out
+    assert "Cliff's delta" in text and "BH-FDR" in text
+    lines = [ln for ln in text.splitlines() if "sparse vs dense" in ln]
+    assert len(lines) == 3
+    assert all("delta=" in ln and "q=" in ln for ln in lines)
+
+
+def test_contrast_skipped_notice_for_one_group(tmp_path, capsys):
+    viability_batch.run(_one_stack_manifest(tmp_path))
+    assert "two-group contrast skipped: 1 group" in capsys.readouterr().out
