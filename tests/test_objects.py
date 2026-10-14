@@ -355,3 +355,13 @@ def test_centroid_homogeneity_accepts_2d_centroids():
     yx = np.array([[3.0, 4.0], [20.0, 30.0], [40.0, 10.0], [60.0, 60.0]])
     zyx = np.column_stack([np.zeros(4), yx])
     assert centroid_homogeneity(yx, (64, 64)) == centroid_homogeneity(zyx, (5, 64, 64))
+
+
+def test_centroid_homogeneity_is_gini_of_tile_point_density():
+    """One point-binning rule: centroid_homogeneity summarises spatial.tile_point_density."""
+    from fluorostats import spatial, stats
+    pts = np.random.default_rng(5).uniform(0, 500, (60, 2))
+    counts = spatial.tile_point_density(pts, (500, 500), grid=(8, 8)).ravel()
+    res = centroid_homogeneity(pts, (500, 500), tiles=8)
+    assert res["centroid_gini"] == pytest.approx(stats.gini(counts))
+    assert res["centroid_cv"] == pytest.approx(stats.coefficient_of_variation(counts))

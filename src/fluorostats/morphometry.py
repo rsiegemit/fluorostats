@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .spatial import tile_reduce
 from .stats import coefficient_of_variation, gini
 
 
@@ -48,12 +49,12 @@ def lateral_homogeneity(
     """
     xy = volume.mean(axis=z_axis)
     ny, nx = xy.shape
-    ty = ny // tiles
-    tx = nx // tiles
-    if ty == 0 or tx == 0:
+    if ny < tiles or nx < tiles:
         return {"lateral_gini": float("nan"), "lateral_cv": float("nan"), "n_tiles": 0}
-    cropped = xy[: ty * tiles, : tx * tiles]
-    tile_means = cropped.reshape(tiles, ty, tiles, tx).mean(axis=(1, 3)).ravel()
+    # spatial.tile_bounds cells: every pixel counts, the last cell absorbing any
+    # remainder; means accumulate in float64 so float32 input does not round them
+    tile_means = tile_reduce(xy, lambda t: float(t.mean(dtype=np.float64)),
+                             grid=(tiles, tiles)).ravel()
     return {
         "lateral_gini": float(gini(tile_means)),
         "lateral_cv": float(coefficient_of_variation(tile_means)),

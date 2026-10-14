@@ -69,23 +69,22 @@ def tile_point_density(
     """Bin a point set into a grid of counts (or densities).
 
     ``points_yx`` is ``(N, >=2)``; the last two columns are taken as ``(y, x)`` (so
-    3D ``(z, y, x)`` centroids work directly). With ``per_area=True`` each cell is
-    divided by its area (cell pixel count × ``pixel_area``) to give a density.
+    3D ``(z, y, x)`` centroids work directly). Points are continuous coordinates, so
+    they are binned against the exact cell edges ``k · n / grid`` (not the whole-pixel
+    edges `tile_bounds` gives an image); a point on or past the field border counts
+    in the nearest edge cell. With ``per_area=True`` each count is divided by the
+    cell area (``(ny / gy) · (nx / gx) · pixel_area``) to give a density.
     """
     gy, gx = grid
+    ny, nx = shape
     out = np.zeros((gy, gx), dtype=float)
     pts = np.asarray(points_yx, dtype=float)
-    for k, (y0, y1, x0, x1) in enumerate(tile_bounds(shape, grid)):
-        if pts.shape[0]:
-            inb = ((pts[:, -2] >= y0) & (pts[:, -2] < y1)
-                   & (pts[:, -1] >= x0) & (pts[:, -1] < x1))
-            c = float(inb.sum())
-        else:
-            c = 0.0
-        if per_area:
-            area = (y1 - y0) * (x1 - x0) * pixel_area
-            c = c / area if area > 0 else np.nan
-        out[k // gx, k % gx] = c
+    if pts.shape[0]:
+        iy = np.clip((pts[:, -2] / (ny / gy)).astype(int), 0, gy - 1)
+        ix = np.clip((pts[:, -1] / (nx / gx)).astype(int), 0, gx - 1)
+        np.add.at(out, (iy, ix), 1.0)
+    if per_area:
+        out = out / ((ny / gy) * (nx / gx) * pixel_area)
     return out
 
 

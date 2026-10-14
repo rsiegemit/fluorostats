@@ -12,6 +12,7 @@ import numpy as np
 from scipy import ndimage as ndi
 
 from .metrics_3d import density_per_mm3
+from .spatial import tile_point_density
 from .stats import coefficient_of_variation, gini
 
 
@@ -369,13 +370,7 @@ def centroid_homogeneity(
     n_obj = centroids.shape[0]
     if n_obj == 0:
         return {"centroid_gini": float("nan"), "centroid_cv": float("nan"), "n_objects": 0}
-    ny, nx = shape_zyx[-2:]
-    ty = ny / tiles
-    tx = nx / tiles
-    yi = np.clip((centroids[:, -2] / ty).astype(int), 0, tiles - 1)
-    xi = np.clip((centroids[:, -1] / tx).astype(int), 0, tiles - 1)
-    counts = np.zeros(tiles * tiles, dtype=int)
-    np.add.at(counts, yi * tiles + xi, 1)
+    counts = tile_point_density(centroids, tuple(shape_zyx[-2:]), grid=(tiles, tiles)).ravel()
     return {
         "centroid_gini": float(gini(counts)),
         "centroid_cv": float(coefficient_of_variation(counts)),

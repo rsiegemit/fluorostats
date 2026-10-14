@@ -129,3 +129,16 @@ def test_depth_span_no_slice_above_cutoff():
 # ---------------------------------------------------------------------------
 def test_morphometry_gini_all_zero():
     assert stats.gini(np.zeros(5)) == 0.0
+
+
+def test_lateral_homogeneity_uses_every_pixel_on_uneven_fields():
+    """A field that does not divide by `tiles` is tiled like spatial.tile_reduce,
+    so its edge pixels count instead of being cropped away."""
+    from fluorostats import spatial, stats
+    xy = np.zeros((10, 10))
+    xy[:, 9] = 100.0                          # signal only in the last column
+    res = lateral_homogeneity(xy[None], tiles=4)
+    tiles = spatial.tile_reduce(xy, lambda t: float(t.mean()), grid=(4, 4)).ravel()
+    assert res["n_tiles"] == 16
+    assert res["lateral_gini"] == pytest.approx(stats.gini(tiles))
+    assert res["lateral_gini"] > 0            # cropping would have seen a flat field

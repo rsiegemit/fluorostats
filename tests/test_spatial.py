@@ -79,3 +79,17 @@ def test_spatial_heterogeneity_summary():
 def test_morans_i_rejects_unknown_connectivity():
     with pytest.raises(ValueError, match="'rook', 'queen'"):
         spatial.morans_i(np.arange(9.0).reshape(3, 3), connectivity="bishop")
+
+
+def test_tile_point_density_bins_points_on_exact_edges():
+    """Points are binned against the exact edges k·n/grid (500 px / 8 -> 62.5 px),
+    and points on the far border count in the last tile."""
+    pts = np.array([[62.3, 0.0], [62.6, 0.0], [500.0, 500.0]])
+    grid = spatial.tile_point_density(pts, (500, 500), grid=(8, 8))
+    assert grid[0, 0] == 1 and grid[1, 0] == 1 and grid[7, 7] == 1 and grid.sum() == 3
+
+
+def test_tile_point_density_per_area_uses_exact_tile_area():
+    grid = spatial.tile_point_density(np.array([[1.0, 1.0]]), (10, 10), grid=(4, 4),
+                                      per_area=True, pixel_area=2.0)
+    assert grid[0, 0] == pytest.approx(1 / (2.5 * 2.5 * 2.0))
