@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from skimage.filters import (
     threshold_isodata,
@@ -105,11 +107,15 @@ def binarize(
     # Global threshold
     if method == "consensus":
         votes = np.zeros(arr_float.shape, dtype=np.uint8)
-        for fn in THRESHOLD_METHODS.values():
+        for name, fn in THRESHOLD_METHODS.items():
             try:
                 votes += (arr_float > fn(arr_float) * threshold_scale).astype(np.uint8)
-            except Exception:
-                pass
+            except Exception as exc:
+                # A failed method still counts toward the majority, i.e. it votes
+                # background everywhere; say so rather than skipping it silently.
+                warnings.warn(f"consensus threshold: {name} failed ({type(exc).__name__}: "
+                              f"{exc}); it counts as a background vote.",
+                              RuntimeWarning, stacklevel=2)
         mask = votes >= (len(THRESHOLD_METHODS) // 2 + 1)
     else:
         if method == "auto":

@@ -140,3 +140,17 @@ def test_segment_constant_image_paths():
     assert "method" in choice
     out = segment.binarize(flat, method="consensus")
     assert out.shape == flat.shape
+
+
+def test_consensus_announces_a_failed_method(monkeypatch):
+    from fluorostats import segment
+
+    def boom(a):
+        raise RuntimeError("no histogram")
+
+    monkeypatch.setitem(segment.THRESHOLD_METHODS, "yen", boom)
+    img = np.zeros((32, 32))
+    img[8:24, 8:24] = 100.0
+    with pytest.warns(RuntimeWarning, match="yen failed"):
+        mask = segment.binarize(img, method="consensus", min_size=1)
+    assert mask[16, 16] and not mask[0, 0]       # the other five still decide
