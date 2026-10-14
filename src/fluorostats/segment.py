@@ -162,7 +162,7 @@ def binarize(
             # removed only *smaller* ones. min_size - 1 keeps the documented meaning
             # ("smaller objects are removed") identical on every skimage version.
             mask = remove_small_objects(mask, max_size=min_size - 1)  # skimage >= 0.26
-        except TypeError:  # pragma: no cover  # skimage<0.26 signature fallback
+        except TypeError:  # pragma: no cover - environment-gated: runs only on skimage < 0.26
             mask = remove_small_objects(mask, min_size=min_size)  # skimage < 0.26
 
     return mask

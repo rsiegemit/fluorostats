@@ -376,7 +376,7 @@ def effect_size_heatmap(
     vmax: float = 1.0,
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
-):
+) -> plt.Figure:
     """Heatmap of an effect-size column across (metric × stratum).
 
     Cells flagged by `sig_col` (boolean column, e.g. BH-FDR sig) are
@@ -437,7 +437,7 @@ def forest_plot(
     title: str | None = None,
     xlabel: str | None = None,
     figsize: tuple[float, float] | None = None,
-):
+) -> plt.Figure:
     """Forest plot — one row per measurement, center ± [lo, hi]."""
     df = df.copy()
     df = df.sort_values(center_col).reset_index(drop=True)
@@ -473,11 +473,11 @@ def condition_strip(
     *,
     hue_col: str | None = None,
     marker_col: str | None = None,
-    ax=None,
+    ax: plt.Axes | None = None,
     palette: dict | None = None,
     markers: dict | None = None,
     show_median: bool = True,
-):
+) -> plt.Axes:
     """Strip plot with optional hue and per-point marker differentiation.
 
     `marker_col` is handy to distinguish e.g. "original" vs "new" batches
@@ -537,7 +537,7 @@ def modality_panel(
     out_path: Path | None = None,
     figsize: tuple[float, float] | None = None,
     title: str | None = None,
-):
+) -> plt.Figure:
     """Compare a set of metrics across staining modalities.
 
     Produces a grid with rows = modalities, cols = metrics. Each cell is
