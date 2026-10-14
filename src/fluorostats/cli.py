@@ -312,14 +312,16 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
             plots.bar_mean_sem(df, metric, plot_dir / f"{metric}_bar.png")
         plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
 
+    # p-values first, so the summary panel's stars use the same BH q-values as pvalues.csv
+    pvals = plots.compute_pvalues(df, metrics) if has_replicates else None
     plots.summary_panel(
         df, metrics, plot_dir / "summary_panel.png",
         title=summary_title,
         show_pvalues=has_replicates,
+        pvalues=pvals,
     )
 
     if has_replicates:
-        pvals = plots.compute_pvalues(df, metrics)
         if len(pvals) > 0:
             pvals.to_csv(str(plot_dir / "pvalues.csv"), index=False)
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")

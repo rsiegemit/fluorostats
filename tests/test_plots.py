@@ -396,3 +396,39 @@ def test_plots_many_conditions_no_color_collision(tmp_path):
     plots.boxplot_by_condition(df, "volume_fraction", tmp_path / "box.png")
     plots.summary_panel(df, ["volume_fraction"], tmp_path / "panel.png")
     assert (tmp_path / "bar.png").exists() and (tmp_path / "box.png").exists()
+
+
+def test_summary_stars_follow_the_corrected_table(tmp_path):
+    # A vs C: completely separated, n=4 each -> raw MWU p = 2/70 = 0.029 ("*"
+    # uncorrected), but BH across the three pairs gives q = 0.086 ("ns"). The
+    # figure must agree with compute_pvalues, which stars the corrected q.
+    import matplotlib.pyplot as plt
+
+    from fluorostats import plots
+
+    df = pd.DataFrame({"condition": ["A"] * 4 + ["B"] * 4 + ["C"] * 4,
+                       "m": [1, 2, 3, 4, 1, 6, 9, 14, 11, 12, 13, 14]})
+    table = plots.compute_pvalues(df, ["m"])
+    ac = table[(table.condition_a == "A") & (table.condition_b == "C")].iloc[0]
+    assert ac.p_value < 0.05 and ac.significance == "ns"
+
+    drawn = {}
+    real_savefig = plt.Figure.savefig
+
+    def capture(fig, *a, **k):
+        drawn["stars"] = [t.get_text() for ax in fig.axes for t in ax.texts]
+        return real_savefig(fig, *a, **k)
+
+    plt.Figure.savefig = capture
+    try:
+        plots.summary_panel(df, ["m"], tmp_path / "s.png", show_pvalues=True, pvalues=table)
+        assert drawn["stars"] == [s for s in table.significance if s != "ns"] == []
+        plots.summary_panel(df, ["m"], tmp_path / "s2.png", show_pvalues=True)  # per-panel BH
+        assert drawn["stars"] == []
+        # and where the corrected table does call pairs significant, they are drawn
+        sig = df.assign(m=[1, 2, 3, 4, 2, 3, 4, 5, 11, 12, 13, 14])
+        sig_table = plots.compute_pvalues(sig, ["m"])
+        plots.summary_panel(sig, ["m"], tmp_path / "s3.png", show_pvalues=True, pvalues=sig_table)
+        assert drawn["stars"] == [s for s in sig_table.significance if s != "ns"] == ["*", "*"]
+    finally:
+        plt.Figure.savefig = real_savefig

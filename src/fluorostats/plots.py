@@ -82,11 +82,15 @@ def bar_mean_sem(
     out_path: Path,
     ylabel: str | None = None,
     show_pvalues: bool = False,
+    pvalues: pd.DataFrame | None = None,
 ) -> None:
     """Bar chart with mean +/- SEM and individual replicate points.
 
     Publication-standard format for n=3-5 replicates.
     P-value brackets are off by default; set show_pvalues=True to draw them.
+    Their stars use Benjamini-Hochberg q-values: from ``pvalues`` (the table
+    `compute_pvalues` returns, so the figure matches it) when given, else
+    corrected across the pairs drawn in this panel.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,7 +114,7 @@ def bar_mean_sem(
 
     # P-value annotations
     if show_pvalues and len(conditions) > 1:
-        _add_pvalue_annotations(ax, data, x, conditions)
+        _add_pvalue_annotations(ax, data, x, conditions, q_lookup=_q_lookup(pvalues, metric))
 
     ax.set_xticks(x)
     ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0)
@@ -135,11 +139,13 @@ def summary_panel(
     title: str = "Quantification Summary",
     ncols: int = 4,
     show_pvalues: bool = False,
+    pvalues: pd.DataFrame | None = None,
 ) -> None:
     """Multi-panel figure: one bar+SEM subplot per metric.
 
     Generates a publication-ready composite figure with all metrics.
     P-value brackets are off by default; set show_pvalues=True to draw them.
+    Stars use BH q-values, from ``pvalues`` when given (see `bar_mean_sem`).
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,7 +178,8 @@ def summary_panel(
             ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
 
         if show_pvalues and len(conditions) > 1:
-            _add_pvalue_annotations(ax, data, x, conditions)
+            _add_pvalue_annotations(ax, data, x, conditions,
+                                    q_lookup=_q_lookup(pvalues, metric))
 
         ax.set_xticks(x)
         ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0, fontsize=9)
@@ -194,14 +201,25 @@ def summary_panel(
 # Statistical helpers
 # ---------------------------------------------------------------------------
 
-def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6):
-    """Add p-value brackets — only the most meaningful comparisons.
+def _q_lookup(pvalues: pd.DataFrame | None, metric: str) -> dict | None:
+    """``{frozenset({cond_a, cond_b}): q}`` for one metric of a `compute_pvalues` table."""
+    if pvalues is None or pvalues.empty:
+        return None
+    rows = pvalues[pvalues["metric"] == metric]
+    return {frozenset((a, b)): q for a, b, q in
+            zip(rows["condition_a"], rows["condition_b"], rows["q_value"])}
+
+
+def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lookup=None):
+    """Add significance brackets — only the most meaningful comparisons.
 
     For <= 4 conditions: show all significant pairs.
     For > 4 conditions: show only adjacent pairs (dose-response neighbors).
-    Limits total brackets to max_brackets to keep plots clean.
+    Stars come from Benjamini-Hochberg q-values: looked up in ``q_lookup`` when
+    given, else corrected across the pairs tested here. Limits total brackets to
+    max_brackets to keep plots clean.
     """
-    from scipy.stats import mannwhitneyu
+    from .stats import bh_fdr, mann_whitney
 
     n = len(conditions)
 
@@ -212,18 +230,21 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6):
         # Adjacent pairs only (i, i+1) — natural for dose-response
         pairs = [(i, i + 1) for i in range(n - 1)]
 
-    # Compute p-values and filter to significant
-    sig_pairs = []
+    # Test the pairs, correct for multiplicity, keep the significant ones
+    tested = []
     for i, j in pairs:
         if len(data[i]) < 2 or len(data[j]) < 2:
             continue
-        try:
-            _, p = mannwhitneyu(data[i], data[j], alternative="two-sided")
-        except ValueError:
-            continue
-        stars = _pvalue_stars(p)
-        if stars != "ns":
-            sig_pairs.append((i, j, stars, p))
+        p = mann_whitney(data[i], data[j])["p"]
+        if not np.isnan(p):
+            tested.append((i, j, p))
+    if q_lookup is not None:
+        qs = [q_lookup.get(frozenset((conditions[i], conditions[j])), np.nan)
+              for i, j, _ in tested]
+    else:
+        qs = bh_fdr(np.array([p for _, _, p in tested])) if tested else []
+    sig_pairs = [(i, j, _pvalue_stars(q), q) for (i, j, _), q in zip(tested, qs)
+                 if not np.isnan(q) and _pvalue_stars(q) != "ns"]
 
     # Sort by significance (most significant first) and limit
     sig_pairs.sort(key=lambda t: t[3])
