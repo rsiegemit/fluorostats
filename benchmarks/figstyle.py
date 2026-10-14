@@ -7,7 +7,7 @@ specific to this paper: the tool colour identities, the manuscript text width,
 the figure output folders, the raw-data root, and two dataset loaders.
 
     from figstyle import (OKABE, TOOL, apply_style, save, panel, scalebar,
-                          caption, boot_ci, EXT)
+                          caption, boot_ci, SUPP)
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ TOOL = {
 }
 
 MAIN = Path(__file__).resolve().parent / "figures" / "main"
-EXT = Path(__file__).resolve().parent / "figures" / "extended"
+SUPP = Path(__file__).resolve().parent / "figures" / "supplementary"
 
 # Raw-image data root. Portable: override with $FLUOROSTATS_DATA (see
 # DATA_MANIFEST.md), else default to ./data/downloads relative to the repo root.

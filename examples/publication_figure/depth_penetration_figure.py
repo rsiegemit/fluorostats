@@ -1,4 +1,4 @@
-"""Benchmark: fluorostats depth-penetration module vs the field.
+"""Example: validating the fluorostats depth-penetration module against ground truth.
 
 There is no public ground-truth dataset for confocal depth-penetration (unlike
 BBBC039 for nuclei), and the tools people actually use for it (Fiji Plot Z-axis
@@ -25,7 +25,7 @@ ground truth and FAITHFUL reimplementations of the standard algorithms:
      speed is not the differentiator -- reproducibility + the full pipeline is).
 
 Pure numpy/scipy; runs locally. Writes results/b_depth_penetration_*.csv and a
-figure. Comparator capability matrix: methods_paper/data/competitor_depth_penetration.md.
+figure to figures/main/.
 """
 from __future__ import annotations
 

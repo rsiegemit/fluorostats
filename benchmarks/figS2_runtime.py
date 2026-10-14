@@ -1,4 +1,4 @@
-"""Extended Data Figure 2 — Runtime and determinism.
+"""Figure S2 — Runtime and determinism.
 
 (a) Per-operation runtime (log x, horizontal bars) for a curated, category-grouped
     set of ~14 representative operations: the 2D-segmentation head-to-head
@@ -28,7 +28,7 @@ F.apply_style()
 
 HERE = Path(__file__).resolve().parent
 RES = HERE / "results"
-DATA = HERE.parent / "data" / "downloads"
+DATA = F.DATA      # honours $FLUOROSTATS_DATA, like every other figure script
 
 # ----------------------------------------------------------------------------
 # Panel (b) data — computed LIVE: N=20 identical runs on one real BBBC024 volume
@@ -245,10 +245,10 @@ axC.text(1, spreads[1] + 0.12, "seed / GPU\nvariable", ha="center", va="bottom",
          fontsize=F.FS["small"], color=OKABE["orange"])
 F.panel(axC, "c")   # deferred with panel b
 
-F.save(fig, "ed2_runtime", F.EXT, tight=False)
+F.save(fig, "figS2_runtime", F.SUPP, tight=False)
 
 CAPTION = (
-    "Extended Data Figure 2 | Runtime and determinism. "
+    "Figure S2 | Runtime and determinism. "
     "(a) Wall-clock time per operation (log scale) for a curated, category-grouped "
     "set of representative fluorostats operations (blue) and their matched "
     "SciPy / scikit-image reference implementations (grey), timed on identical "
@@ -270,5 +270,5 @@ CAPTION = (
     "deterministic on CPU (0.0), whereas trained deep-learning pipelines vary "
     "run-to-run with random seed and hardware/GPU non-determinism (illustrative)."
 )
-F.caption("ed2_runtime", CAPTION, F.EXT)
+F.caption("figS2_runtime", CAPTION, F.SUPP)
 print("done")

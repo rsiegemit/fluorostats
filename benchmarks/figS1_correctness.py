@@ -1,4 +1,4 @@
-"""Extended Data Figure 1 - Correctness against analytic ground truth.
+"""Figure S1 - Correctness against analytic ground truth.
 
 Three panels:
   (a) Topology phantom battery: analytic vs measured Euler number chi (bars) and
@@ -10,7 +10,7 @@ Three panels:
       schemes; fluorostats per-mm3 is flat (CV<=0.2%), competitors drift. CV per
       scheme annotated.
 
-Run from benchmarks/: python3.13 make_ed1_correctness.py
+Run from benchmarks/: python3.13 figS1_correctness.py
 """
 from __future__ import annotations
 import numpy as np
@@ -18,7 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import figstyle
-from figstyle import OKABE, apply_style, save, panel, caption, EXT
+from figstyle import OKABE, apply_style, save, panel, caption, SUPP
 
 apply_style()
 
@@ -200,11 +200,11 @@ axC.text(0.97, 0.72, "three traces coincide exactly at 1.000",
 panel(axC, "c", xanchor=0.0315)   # row-leader
 
 # ---------------------------------------------------------------- save
-save(fig, "ed1_correctness", EXT, tight=False)
+save(fig, "figS1_correctness", SUPP, tight=False)
 
 caption(
-    "ed1_correctness",
-    "Extended Data Figure 1 | Correctness against analytic ground truth. "
+    "figS1_correctness",
+    "Figure S1 | Correctness against analytic ground truth. "
     "(a) Topology phantom battery. For a solid ball, 2/3/5 disjoint balls, a "
     "solid torus and a hollow spherical shell, the fluorostats Euler number "
     "chi (bars) and connected-component count (diamonds) match the analytic "
@@ -227,7 +227,7 @@ caption(
     "per-mm3, raw-count and per-mm2 traces coincide exactly at 1.000 and are drawn "
     "as nested markers (no data offset). Numerical "
     "expected/measured/error values for every phantom are tabulated in "
-    "Extended Data Table 1. fluorostats is shown in blue throughout.",
-    EXT,
+    "Table S1. fluorostats is shown in blue throughout.",
+    SUPP,
 )
 print("done")

@@ -17,9 +17,9 @@ doubles as a worked example of the library's analysis modules.
 |---|---|---|
 | `fig3_vascular.py` | vessel-network accuracy (REAVER 6-tool, VesselExpress, 3D phantom, Bland–Altman) | `metrics_3d`, `skeleton`, `agreement` |
 | `fig5_homogeneity_stats.py` | spatial homogeneity + end-to-end statistics | `objects.centroid_homogeneity`, `stats`, `power.power_curve` |
-| `make_ed1_correctness.py` | topology / skeleton / density-normalisation correctness | `objects`, `skeleton` |
-| `fig_ed3_robustness.py` | segmentation robustness to noise + denoising | `segment`, `preprocess` |
-| `fig_ed4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D) | `segment`, `validate` |
+| `figS1_correctness.py` | topology / skeleton / density-normalisation correctness | `objects`, `skeleton` |
+| `figS3_robustness.py` | segmentation robustness to noise + denoising | `segment`, `preprocess` |
+| `figS4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D) | `segment`, `validate` |
 
 ```bash
 pip install -r requirements.lock      # from the repo root (pinned env)
@@ -37,7 +37,7 @@ These read raw microscopy rather than a bundled table. Fetch the dataset from
 |---|---|---|
 | `fig2_nuclei.py` | Figure 2 — nucleus segmentation & the deep-learning boundary (a–f) | BBBC039 + BBBC024 |
 | `fig4_viability.py` | depth-resolved Live/Dead viability | S-BIAD2130 |
-| `fig_ed2_runtime.py` | runtime + determinism | BBBC024 |
+| `figS2_runtime.py` | runtime + determinism | BBBC024 |
 
 For Figure 2, the summary panels (b forest, d crowding curve) reproduce from the
 bundled `results/` tables; only the image panels (a/c/e) need the raw BBBC039/BBBC024

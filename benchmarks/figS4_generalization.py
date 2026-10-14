@@ -1,4 +1,4 @@
-"""Extended Data Figure 4 — Generalization across datasets.
+"""Figure S4 — Generalization across datasets.
 
 Two panels showing that fluorostats, being training-free, holds up across
 independent public datasets and imaging modalities it was never tuned on:
@@ -12,8 +12,8 @@ independent public datasets and imaging modalities it was never tuned on:
 (b) Cell Tracking Challenge 3D foreground Dice on two unseen modalities
     (Fluo-C3DH-A549, Fluo-N3DH-CHO), fluorostats vs threshold baselines.
 
-Run:  python3.13 fig_ed4_generalization.py
-Outputs PDF+PNG to figures/extended/ plus a .txt caption.
+Run:  python3.13 figS4_generalization.py
+Outputs PDF+PNG to figures/supplementary/ plus a .txt caption.
 """
 from __future__ import annotations
 
@@ -195,10 +195,10 @@ def main():
     panel_b(axes[1])
     figstyle.panel(axes[0], "a", "DSB2018 — StarDist\u2019s own dataset", xanchor=0.0315)   # row-leader
     figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)", xanchor=0.0315)   # row-leader
-    figstyle.save(fig, "ed4_generalization", figstyle.EXT, tight=False)
+    figstyle.save(fig, "figS4_generalization", figstyle.SUPP, tight=False)
 
     caption = (
-        "Extended Data Figure 4 | Generalization across independent datasets and "
+        "Figure S4 | Generalization across independent datasets and "
         "imaging modalities. Because fluorostats is training-free, it applies the "
         "same estimator to every dataset with no per-dataset fitting, so it does "
         "not collapse on modalities outside a training distribution the way a "
@@ -222,7 +222,7 @@ def main():
         "text rather than overlaid. Grey bars use distinct shades to remain separable "
         "in greyscale; the Okabe-Ito palette is colourblind-safe."
     )
-    figstyle.caption("ed4_generalization", caption, figstyle.EXT)
+    figstyle.caption("figS4_generalization", caption, figstyle.SUPP)
     print("caption written")
 
 

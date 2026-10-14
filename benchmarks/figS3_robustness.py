@@ -1,4 +1,4 @@
-"""Extended Data Figure 3 — Robustness of fluorostats to noise and denoising.
+"""Figure S3 — Robustness of fluorostats to noise and denoising.
 
 (a) Foreground Dice vs added Gaussian-noise sd for classic thresholders + fluorostats.
 (b) Dice recovery under denoising strategies across noise levels.
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from figstyle import OKABE, apply_style, save, panel, caption, EXT, TW
+from figstyle import OKABE, apply_style, save, panel, caption, SUPP, TW
 
 apply_style()
 
@@ -121,10 +121,10 @@ for y, v in zip(ypos, sz["pct_error"]):
     ax_c.text(v + 0.8, y, f"{v:.1f}", va="center", ha="left", fontsize=6)
 panel(ax_c, "c")
 
-save(fig, "ed3_robustness", EXT, tight=False)
+save(fig, "figS3_robustness", SUPP, tight=False)
 
 cap = (
-    "Extended Data Figure 3 | Robustness of fluorostats segmentation to noise. "
+    "Figure S3 | Robustness of fluorostats segmentation to noise. "
     "(a) Foreground Dice versus added zero-mean Gaussian noise (standard deviation "
     "in grey levels; 8-bit images) for classic global thresholders and fluorostats "
     "(Otsu + connected-component post-processing, blue). fluorostats matches the best "
@@ -138,5 +138,5 @@ cap = (
     "(74.5 um), sorted best-to-worst. fluorostats is best-tied at 3.5% error, versus "
     "15.2% (Li) and 39.8% (Triangle). Blue denotes fluorostats throughout."
 )
-caption("ed3_robustness", cap, EXT)
+caption("figS3_robustness", cap, SUPP)
 print("done")
