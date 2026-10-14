@@ -21,9 +21,12 @@ domain-specific column names baked in.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 from scipy import stats as sps
 
 
@@ -51,13 +54,13 @@ def describe(values) -> dict:
 # Effect sizes
 # ---------------------------------------------------------------------------
 
-def gini(values: np.ndarray) -> float:
+def gini(values: ArrayLike) -> float:
     """Gini coefficient of a 1D array (0 = perfectly even, -> 1 = concentrated).
 
     Negative inputs are shifted to be non-negative; an all-zero array is 0.0 and
     an empty one NaN.
     """
-    v = np.asarray(values, dtype=float).ravel()
+    v: np.ndarray = np.asarray(values, dtype=float).ravel()
     if v.size == 0:
         return float("nan")
     v = v - v.min() if v.min() < 0 else v
@@ -102,7 +105,7 @@ def cliffs_delta(x: np.ndarray, y: np.ndarray) -> float:
 # Multiple-testing correction
 # ---------------------------------------------------------------------------
 
-def bh_fdr(p_values: np.ndarray) -> np.ndarray:
+def bh_fdr(p_values: ArrayLike) -> np.ndarray:
     """Benjamini-Hochberg adjusted q-values from a 1D array of p-values.
 
     NaNs are preserved and excluded from the rank denominator.
@@ -130,7 +133,7 @@ def bh_fdr(p_values: np.ndarray) -> np.ndarray:
 # Two-group comparisons
 # ---------------------------------------------------------------------------
 
-def welch_t(x: np.ndarray, y: np.ndarray) -> dict:
+def welch_t(x: Sequence[float] | np.ndarray, y: Sequence[float] | np.ndarray) -> dict:
     """Welch's unequal-variance t-test, two-sided.
 
     Parametric, so not this package's default (see `mann_whitney`); provided for
@@ -141,25 +144,25 @@ def welch_t(x: np.ndarray, y: np.ndarray) -> dict:
     return {"t": float(t), "p": float(p), "n_x": len(x), "n_y": len(y)}
 
 
-def mann_whitney(x: np.ndarray, y: np.ndarray, alternative: str = "two-sided") -> dict:
+def mann_whitney(x: ArrayLike, y: ArrayLike, alternative: str = "two-sided") -> dict:
     """Mann-Whitney U test with effect size and sample sizes."""
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    x = x[~np.isnan(x)]
-    y = y[~np.isnan(y)]
-    if x.size < 1 or y.size < 1:
+    xa: np.ndarray = np.asarray(x, dtype=float)
+    ya: np.ndarray = np.asarray(y, dtype=float)
+    xa = xa[~np.isnan(xa)]
+    ya = ya[~np.isnan(ya)]
+    if xa.size < 1 or ya.size < 1:
         return {"u": float("nan"), "p": float("nan"),
-                "cliffs_delta": float("nan"), "n_x": int(x.size), "n_y": int(y.size)}
+                "cliffs_delta": float("nan"), "n_x": int(xa.size), "n_y": int(ya.size)}
     try:
-        u, p = sps.mannwhitneyu(x, y, alternative=alternative)
+        u, p = sps.mannwhitneyu(xa, ya, alternative=alternative)
     except ValueError:
         u, p = float("nan"), float("nan")
     return {
         "u": float(u),
         "p": float(p),
-        "cliffs_delta": cliffs_delta(x, y),
-        "n_x": int(x.size),
-        "n_y": int(y.size),
+        "cliffs_delta": cliffs_delta(xa, ya),
+        "n_x": int(xa.size),
+        "n_y": int(ya.size),
     }
 
 
@@ -247,7 +250,8 @@ def bootstrap_fold_change_ci(
     if x.size == 0 or y.size == 0:
         return {"fold_change_median": float("nan"), "ci_low": float("nan"),
                 "ci_high": float("nan"), "n_boot": 0}
-    func = {"median": np.median, "mean": np.mean}[agg]
+    funcs: dict[str, Callable[..., Any]] = {"median": np.median, "mean": np.mean}
+    func = funcs[agg]
     rng = np.random.default_rng(seed)
     bx = rng.choice(x, size=(n_boot, x.size), replace=True)
     by = rng.choice(y, size=(n_boot, y.size), replace=True)

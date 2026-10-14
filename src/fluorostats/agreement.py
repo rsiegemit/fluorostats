@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike
 from scipy import stats as _sps
 
 
-def _paired(a, b):
+def _paired(a: ArrayLike, b: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     a = np.asarray(a, float)
     b = np.asarray(b, float)
     m = ~(np.isnan(a) | np.isnan(b))

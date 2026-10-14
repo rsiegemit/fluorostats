@@ -178,6 +178,8 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     raw, vz, vz_source = _load_profile(path, cfg)
     subtracted = depth.subtract_background(raw, blank) if blank is not None else raw
     normalized = depth.normalize_to_surface(subtracted, n_surface=cfg["n_surface"])
+    norm_curve = normalized.normalized
+    assert norm_curve is not None  # normalize_to_surface always sets it
 
     max_depth = float(raw.depth_um[-1])
     auc = {}
@@ -190,7 +192,7 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
                           "is covered (see window_covered_um).", RuntimeWarning, stacklevel=2)
         auc[window_label(w)] = {
             "absolute": depth.auc_depth(raw.depth_um, subtracted.mean, z_min=z0, z_max=z1),
-            "normalized": depth.auc_depth(raw.depth_um, normalized.normalized, z_min=z0, z_max=z1),
+            "normalized": depth.auc_depth(raw.depth_um, norm_curve, z_min=z0, z_max=z1),
             "covered_um": float(covered),
             "width_um": float(z1 - z0),
         }
@@ -461,6 +463,12 @@ def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
           f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
 
 
+def _mann_whitney_pair(by_group: dict[str, list[float]]) -> dict:
+    """Two-sided Mann-Whitney between the two groups of ``by_group``."""
+    va, vb = by_group.values()
+    return stats.mann_whitney(va, vb)
+
+
 def _print_mann_whitney(label: str, by_group: dict[str, list[float]], mw: dict,
                         q: str = "") -> None:
     """Print a two-sided Mann-Whitney contrast with Cliff's δ (and BH q when given)."""
@@ -486,20 +494,20 @@ def _print_summary(rows, windows) -> None:
             if r["role"] == "primary":
                 by_group.setdefault(r["group"], []).append(r["result"]["auc"][lab]["normalized"])
         per_window.append(by_group)
-    mws = [stats.mann_whitney(*bg.values()) if len(bg) == 2 else None for bg in per_window]
+    mws = [_mann_whitney_pair(bg) if len(bg) == 2 else None for bg in per_window]
     tested = [i for i, mw in enumerate(mws) if mw is not None]
-    qs = dict(zip(tested, stats.bh_fdr([mws[i]["p"] for i in tested])))
-    for i, (w, by_group) in enumerate(zip(windows, per_window)):
+    qs = dict(zip(tested, stats.bh_fdr([mw["p"] for mw in mws if mw is not None])))
+    for i, (w, by_group, mw) in enumerate(zip(windows, per_window, mws)):
         print(f"\n=== AUC {window_title(w)} (normalised) ===")
         for g, vals in by_group.items():
             d = stats.describe(vals)
             print(f"  {g:8s} n={d['n']}  mean={d['mean']:8.2f}  sd={d['sd']:6.2f}  "
                   f"values={[round(v, 1) for v in vals]}")
-        if mws[i] is None:
+        if mw is None:
             _print_skipped(len(by_group))
             continue
         _print_welch("Welch t-test", by_group)
-        _print_mann_whitney("Mann-Whitney", by_group, mws[i],
+        _print_mann_whitney("Mann-Whitney", by_group, mw,
                             f", BH q={qs[i]:.4f} across {len(tested)} windows")
 
 
@@ -522,4 +530,4 @@ def _print_lambda_summary(rows) -> None:
         _print_skipped(len(by_group), " with an accepted λ fit")
         return
     _print_welch("Welch t-test on λ,", by_group)
-    _print_mann_whitney("Mann-Whitney on λ,", by_group, stats.mann_whitney(*by_group.values()))
+    _print_mann_whitney("Mann-Whitney on λ,", by_group, _mann_whitney_pair(by_group))

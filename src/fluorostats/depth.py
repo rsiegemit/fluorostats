@@ -27,8 +27,9 @@ The volume may be 3D ``(Z, Y, X)`` or 4D ``(C, Z, Y, X)``; pass
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
+from typing import Any
 
 import numpy as np
 
@@ -78,7 +79,7 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
 
 
 # Per-slice spatial statistics, selectable by name (``reducer=``).
-REDUCERS = {"mean": np.mean, "median": np.median}
+REDUCERS: dict[str, Callable[..., Any]] = {"mean": np.mean, "median": np.median}
 
 
 @renamed_keyword("voxel_size_z_um", "voxel_size_um")
@@ -167,6 +168,7 @@ def subtract_background(
     ``clip_negative`` floors the result at 0 (intensities below the blank
     are noise, not negative fluorescence).
     """
+    bg: np.ndarray | float
     if isinstance(background, DepthProfile):
         bg = resample_to_depth(background, signal.depth_um)
     else:
@@ -436,7 +438,7 @@ def auc_depth(
     interior = depth[(depth > z_min) & (depth < z_max)]
     grid = np.concatenate(([z_min], interior, [z_max]))
     grid_vals = np.interp(grid, depth, vals)
-    trapezoid = getattr(np, "trapezoid", None) or np.trapz  # numpy>=2 rename
+    trapezoid = getattr(np, "trapezoid", None) or getattr(np, "trapz")  # numpy>=2 rename
     return float(trapezoid(grid_vals, grid))
 
 
