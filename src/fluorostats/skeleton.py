@@ -17,6 +17,12 @@ from scipy.ndimage import label, convolve
 from skimage.morphology import skeletonize
 
 
+# The result of `skeleton_metrics` for an empty (or failed) skeleton: the one
+# definition of its keys, also used by the CLI when skeletons are skipped.
+EMPTY_METRICS = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
+                 "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
+
+
 def n_junction_nodes(skel: np.ndarray) -> int:
     """Number of skeleton junction NODES (skeleton voxels with >= 3 skeleton
     neighbours), with adjacent junction voxels merged into a single node.
@@ -114,8 +120,7 @@ def skeleton_metrics(
         branches), n_junction_nodes (degree>=3 nodes; field-standard
         branchpoint count), mean_branch_length_um.
     """
-    empty = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
-             "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
+    empty = dict(EMPTY_METRICS)
     try:
         skel = skeletonize(mask)
 

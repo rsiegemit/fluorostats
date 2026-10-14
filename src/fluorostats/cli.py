@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from . import io as iq_io
-from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, spatial
+from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, skeleton, spatial
 
 
 @click.group()
@@ -161,10 +161,8 @@ def quant3d(
             conn = metrics_3d.connectivity_metrics(mask)
 
             # same keys as skeleton_metrics() so the CSV row shape is identical
-            # whether or not --no-skeleton is set (else n_junction_nodes /
-            # mean_branch_length_um show as blank cells for skipped rows).
-            skel = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
-                    "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
+            # whether or not --no-skeleton is set.
+            skel = dict(skeleton.EMPTY_METRICS)
             if not no_skeleton:
                 skel = metrics_3d.skeleton_metrics(
                     mask, voxel_size_um=voxel_size,
@@ -199,10 +197,8 @@ def quant3d(
     click.echo(summary.to_string(index=False))
 
     # Plots
-    _3d_metrics = ["volume_fraction", "n_components", "euler_number",
-                   "largest_component_fraction", "total_length_um",
-                   "n_junctions", "n_junction_nodes", "mean_branch_length_um",
-                   "coverage_tile_cv", "coverage_morans_i"]
+    # Every reported metric is plotted except n_branches, as in earlier releases.
+    _3d_metrics = [m for m in report.METRICS_3D if m != "n_branches"]
 
     _write_plots_and_pvalues(
         df, _3d_metrics, output_path, no_plots,
@@ -309,9 +305,7 @@ def quant2d(
     click.echo("\n--- Per-condition summary ---")
     click.echo(summary.to_string(index=False))
 
-    _2d_metrics = ["area_fraction", "n_components", "largest_component_fraction",
-                   "mean_cluster_area_px", "median_cluster_area_px",
-                   "coverage_tile_cv", "coverage_morans_i"]
+    _2d_metrics = list(report.METRICS_2D)
 
     _write_plots_and_pvalues(
         df, _2d_metrics, output_path, no_plots,

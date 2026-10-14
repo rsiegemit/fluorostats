@@ -7,13 +7,9 @@ from pathlib import Path
 import pandas as pd
 
 
-# Column order for the per-file CSV
-_COLUMNS_3D = [
-    "file",
-    "condition",
-    "replicate",
-    "shape",
-    "voxel_size_um",
+# The reported metrics, in CSV column order: the one list every consumer (the
+# per-file and per-condition CSVs, the CLI's plots and p-value tables) derives from.
+METRICS_3D = [
     "volume_fraction",
     "n_components",
     "euler_number",
@@ -27,11 +23,7 @@ _COLUMNS_3D = [
     "coverage_morans_i",
 ]
 
-_COLUMNS_2D = [
-    "file",
-    "condition",
-    "replicate",
-    "shape",
+METRICS_2D = [
     "area_fraction",
     "n_components",
     "largest_component_fraction",
@@ -41,29 +33,12 @@ _COLUMNS_2D = [
     "coverage_morans_i",
 ]
 
-_NUMERIC_3D = [
-    "volume_fraction",
-    "n_components",
-    "euler_number",
-    "largest_component_fraction",
-    "total_length_um",
-    "n_branches",
-    "n_junctions",
-    "n_junction_nodes",
-    "mean_branch_length_um",
-    "coverage_tile_cv",
-    "coverage_morans_i",
-]
+# Identifier columns that precede the metrics in the per-file CSV.
+_ID_COLUMNS_3D = ["file", "condition", "replicate", "shape", "voxel_size_um"]
+_ID_COLUMNS_2D = ["file", "condition", "replicate", "shape"]
 
-_NUMERIC_2D = [
-    "area_fraction",
-    "n_components",
-    "largest_component_fraction",
-    "mean_cluster_area_px",
-    "median_cluster_area_px",
-    "coverage_tile_cv",
-    "coverage_morans_i",
-]
+_COLUMNS_3D = _ID_COLUMNS_3D + METRICS_3D
+_COLUMNS_2D = _ID_COLUMNS_2D + METRICS_2D
 
 
 def write_per_file_csv(
@@ -87,7 +62,7 @@ def write_per_condition_csv(
     mode: str = "3d",
 ) -> pd.DataFrame:
     """Write per-condition summary statistics to CSV."""
-    numeric = _NUMERIC_3D if mode == "3d" else _NUMERIC_2D
+    numeric = METRICS_3D if mode == "3d" else METRICS_2D
     available = [c for c in numeric if c in df.columns]
 
     summary = (
