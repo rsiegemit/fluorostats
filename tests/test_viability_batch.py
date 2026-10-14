@@ -141,3 +141,21 @@ def test_manifest_rejects_bad_seg_block(tmp_path, seg, msg):
 def test_manifest_accepts_full_seg_block(tmp_path):
     seg = {"method": "li", "min_size": 0, "threshold_scale": 0.8}
     assert viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))["seg"] == seg
+
+
+def test_per_stack_csv_records_voxel_size_source(tmp_path):
+    import csv
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
+    assert rows[0]["voxel_size_source"] == "z:default,y:default,x:default"
+    summary = (out / "viability_group_summary.csv").read_text()
+    assert "voxel_size_source" not in summary
+
+
+def test_count_segmentation_method_is_recorded_and_warned(tmp_path):
+    mp = _one_stack_manifest(tmp_path, seg={"method": "li", "min_size": 5})
+    with pytest.warns(RuntimeWarning, match="cell counts segment with 'otsu'"):
+        out = viability_batch.run(mp)
+    cfg = json.loads((out / "run_config.json").read_text())
+    assert cfg["count_seg_method"] == "otsu"
+    assert cfg["resolved"]["seg"]["method"] == "li"

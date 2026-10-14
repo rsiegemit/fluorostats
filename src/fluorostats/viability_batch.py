@@ -31,7 +31,9 @@ Manifest schema (all fields except groups/stacks optional)::
       "title": "...",
       "live_channel": 0,          # channel index of the live (e.g. Calcein/AF488) signal
       "dead_channel": 1,          # channel index of the dead (e.g. PI) signal
-      "seg": {"method": "otsu", "min_size": 32},   # segmentation kwargs (segment.binarize)
+      "seg": {"method": "otsu", "min_size": 32},   # segment.binarize kwargs: method,
+                                  # min_size, threshold_scale. Cell counts always
+                                  # threshold with otsu (recorded in run_config.json).
       "count_method": "all",      # live_dead_by_count method: all | cc | watershed | maxima | auto
       "output_dir": "viability_out",
       "groups": [
@@ -45,6 +47,7 @@ from __future__ import annotations
 
 import csv
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -56,7 +59,7 @@ from . import report
 from . import segment
 from . import viability as viab
 
-DEFAULT_SEG = {"method": "otsu", "min_size": viab.AREA_MIN_SIZE}
+DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE}
 # Viability runs analyse every stack; there is no auxiliary stack role.
 _ROLES = ("primary",)
 
@@ -141,7 +144,7 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     bias = viab.viability_2d_vs_3d(live, **seg)                    # MIP vs full 3D
 
     row = {
-        "px_um": px, "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
+        "px_um": px, "voxel_size_source": meta.get("voxel_size_source", ""), "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
         # area / coverage on the surface MIP
         "live_cov_pct": 100.0 * area["live_fraction"],
         "dead_cov_pct": 100.0 * area["dead_fraction"],
@@ -188,7 +191,15 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)
-    report.write_run_config(out, {"manifest": Path(manifest_path)}, nested={"resolved": m})
+    # live_dead_by_count reserves `method` for the count mode, so cell counts
+    # always segment with the library default; record that, and say so if it differs.
+    count_seg = viab.DEFAULT_SEG_METHOD
+    if m["seg"].get("method", count_seg) != count_seg:
+        warnings.warn(f"seg.method={m['seg']['method']!r} applies to area, coverage and "
+                      f"regime; cell counts segment with {count_seg!r}", RuntimeWarning,
+                      stacklevel=2)
+    report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
+                            nested={"resolved": m})
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
@@ -207,7 +218,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         w.writerows(rows)
 
     # group summary CSV (mean +/- SEM for the numeric metrics)
-    metrics = [k for k in fields if k not in ("group", "stack", "regime_method")]
+    metrics = [k for k in fields
+               if k not in ("group", "stack", "voxel_size_source", "regime_method")]
     groups = [g["name"] for g in m["groups"]]
     with open(out / "viability_group_summary.csv", "w", newline="") as f:
         w = csv.writer(f)

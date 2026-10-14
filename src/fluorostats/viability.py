@@ -26,13 +26,16 @@ import numpy as np
 from .objects import count_local_maxima, label_3d, watershed_split
 from .segment import binarize
 
+# Thresholding method used to segment a channel when none is given.
+DEFAULT_SEG_METHOD = "otsu"
 # Smallest object (voxels) kept when segmenting a channel for area/coverage.
 AREA_MIN_SIZE = 32
 # Smallest object (voxels) kept when counting cells: counting keeps small real cells.
 COUNT_MIN_SIZE = 5
 
 
-def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None, method: str = "otsu",
+def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None,
+          method: str = DEFAULT_SEG_METHOD,
           threshold_scale: float = 1.0, min_size: int = AREA_MIN_SIZE) -> np.ndarray:
     if mask is not None:
         return mask > 0
