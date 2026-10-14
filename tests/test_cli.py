@@ -5,6 +5,7 @@ one pass, so they guard the whole command path (previously 0% covered)."""
 import json
 
 import numpy as np
+import pytest
 import tifffile
 from click.testing import CliRunner
 
@@ -396,3 +397,13 @@ def test_cli_quant3d_channel_name(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+
+
+@pytest.mark.parametrize("opt,val", [("--threshold-scale", "0"), ("--min-size", "-1"),
+                                     ("--sigma", "-0.5"), ("--bg-radius", "-3")])
+def test_cli_rejects_out_of_range_options(tmp_path, opt, val):
+    (tmp_path / "in").mkdir()
+    for cmd in ("quant2d", "quant3d"):
+        res = CliRunner().invoke(cli, [cmd, "--input", str(tmp_path / "in"),
+                                       "--output", str(tmp_path / "out"), opt, val])
+        assert res.exit_code == 2 and "Invalid value" in res.output

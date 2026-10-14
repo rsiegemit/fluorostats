@@ -84,17 +84,17 @@ def viability_cmd(manifest, output_dir):
 @click.option("--channel", default=None, help="Force channel by index (int) or name substring")
 @click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu",
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
-@click.option("--threshold-scale", type=float, default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9)")
-@click.option("--min-size", type=int, default=64, help="Min object size in voxels")
-@click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=int, default=0, help="Background subtraction disk radius (0=off; enabling is recommended for confocal)")
+@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9; CAN AFFECT RESULTS)")
+@click.option("--min-size", type=click.IntRange(min=0), default=64, help="Min object size in voxels")
+@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, help="Gaussian blur sigma")
+@click.option("--bg-radius", type=click.IntRange(min=0), default=0, help="Background subtraction disk radius (0=off; enabling is recommended for confocal)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
 @click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster)")
 @click.option("--prune/--no-prune", default=False,
               help="Prune short skeleton spurs before counting (field-standard branch/junction counts, "
                    "matching Fiji AnalyzeSkeleton / AngioTool / REAVER). Default off = raw skeleton.")
-@click.option("--min-branch-length", type=float, default=5.0,
+@click.option("--min-branch-length", type=click.FloatRange(min=0), default=5.0,
               help="Minimum branch length in µm for spur pruning when --prune is set (default 5).")
 def quant3d(
     input_dir,
@@ -156,10 +156,10 @@ def quant3d(
 @click.option("--channel", default=None, help="Force channel by index (int) or name substring")
 @click.option("--threshold", type=click.Choice(segment.METHODS), default="li",
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
-@click.option("--threshold-scale", type=float, default=1.0, help="Scale threshold by this factor (lower=more sensitive)")
-@click.option("--min-size", type=int, default=64, help="Min object size in pixels")
-@click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=int, default=15, help="Background subtraction disk radius")
+@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=1.0, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
+@click.option("--min-size", type=click.IntRange(min=0), default=64, help="Min object size in pixels")
+@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, help="Gaussian blur sigma")
+@click.option("--bg-radius", type=click.IntRange(min=0), default=15, help="Background subtraction disk radius")
 @click.option("--auto-crop/--no-auto-crop", default=True, help="Auto-crop microscope borders (default: on)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
