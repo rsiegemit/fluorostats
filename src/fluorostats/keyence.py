@@ -102,13 +102,17 @@ def _with_channel(meta: dict, idx: str, **fields) -> dict:
 
 
 def _gci_channel_name(name: str, text: str, meta: dict) -> dict:
-    idx = re.search(r"Channel(\d+)", name).group(1)
+    channel = re.search(r"Channel(\d+)", name)
+    assert channel is not None  # _gci_handler only dispatches ChannelN paths here
+    idx = channel.group(1)
     m = re.search(r"<Comment[^>]*>([^<]*)", text)
     return _with_channel(meta, idx, name=m.group(1) if m else f"CH{idx}")
 
 
 def _gci_exposure(name: str, text: str, meta: dict) -> dict:
-    idx = re.search(r"Channel(\d+)", name).group(1)
+    channel = re.search(r"Channel(\d+)", name)
+    assert channel is not None  # _gci_handler only dispatches ChannelN paths here
+    idx = channel.group(1)
     num = re.search(r"Numerator[^>]*>(\d+)", text)
     den = re.search(r"Denominator[^>]*>(\d+)", text)
     if not (num and den and int(den.group(1))):

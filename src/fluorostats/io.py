@@ -114,11 +114,11 @@ def load_volume(path: str | Path) -> tuple[np.ndarray, dict]:
 def _read_volume(path: Path) -> tuple[np.ndarray, dict]:
     """(C, Z, Y, X) array and metadata, before the calibration record is made."""
     if path.is_dir():
-        fmt = next((f for f in DIRECTORY_FORMATS if f.probe(path)), None)
-        if fmt is None:
+        dir_fmt = next((f for f in DIRECTORY_FORMATS if f.probe(path)), None)
+        if dir_fmt is None:
             kinds = " or ".join(f.description for f in DIRECTORY_FORMATS)
             raise ValueError(f"Directory is not a recognised {kinds}: {path}")
-        return fmt.volume(path)
+        return dir_fmt.volume(path)
 
     suffix = path.suffix.lower()
 

@@ -17,6 +17,7 @@ import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 
 import numpy as np
 import tifffile
@@ -27,7 +28,7 @@ from .io_canonical import canonicalize_image, canonicalize_volume, squeeze_singl
 READER_EXTRAS = {"oiffile": "olympus", "czifile": "zeiss", "nd2": "nikon", "readlif": "leica"}
 
 
-def require(package: str, extra: str) -> ModuleType:
+def require(package: str, extra: str | None) -> ModuleType:
     """Import a package or raise an ImportError naming the pip extra that installs it."""
     try:
         return importlib.import_module(package)
@@ -394,7 +395,7 @@ _TIFF_INDEX_AXES = {"T": "time point"}
 
 # Length units as OME (UnitsLength) and ImageJ write them -> µm per unit.
 # ImageJ descriptions are ASCII, so Fiji spells µm "micron" or "\\u00B5m".
-_UM_PER_UNIT = {"pm": 1e-6, "Å": 1e-4, "nm": 1e-3, "µm": 1.0, "μm": 1.0, "um": 1.0,
+_UM_PER_UNIT: dict[str | None, float] = {"pm": 1e-6, "Å": 1e-4, "nm": 1e-3, "µm": 1.0, "μm": 1.0, "um": 1.0,
                 "micron": 1.0, "microns": 1.0, "\\u00B5m": 1.0, "\\u00b5m": 1.0,
                 "mm": 1e3, "cm": 1e4, "m": 1e6}
 
@@ -428,7 +429,7 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
     read = [a for a in "zyx" if _valid_size(pixels.get(f"PhysicalSize{a.upper()}"))]
     for a in read:
         key = f"PhysicalSize{a.upper()}"
-        size[a], source = _length_um(float(pixels.get(key)), pixels.get(f"{key}Unit", "µm"), a)
+        size[a], source = _length_um(float(pixels.attrib[key]), pixels.get(f"{key}Unit", "µm"), a)
         if source != "file":                    # the OME default unit is µm
             noted[a] = source
     names = [ch.get("Name", "") or ch.get("Fluor", "") for ch in pixels.findall("{*}Channel")]
@@ -445,7 +446,7 @@ def _imagej_xy_um(tif: tifffile.TiffFile, ij_meta: dict) -> dict | None:
     unit = ij_meta.get("unit")
     if unit in (None, "", "pixel", "pixels"):
         return None
-    tags = tif.pages[0].tags
+    tags = cast(tifffile.TiffPage, tif.pages[0]).tags  # the first page is never a TiffFrame
     out = {}
     for axis, key in (("y", "YResolution"), ("x", "XResolution")):
         tag = tags.get(key)
