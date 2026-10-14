@@ -5,6 +5,7 @@ A pragmatic non-parametric toolkit:
   - `bh_fdr` — Benjamini-Hochberg q-values from p-values.
   - `cliffs_delta` — non-parametric effect size in [-1, 1].
   - `mann_whitney` — two-group two-sided test with effect size + n.
+  - `welch_t` — Welch's t-test, for contrasts that explicitly ask for it.
   - `stratified_mann_whitney` — per-stratum tests + BH-FDR across strata.
   - `bootstrap_fold_change_ci` — distribution-free fold-change interval.
   - `stouffer_combine` — meta-analytic Z-pooling across independent tests.
@@ -106,6 +107,17 @@ def bh_fdr(p_values: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Two-group comparisons
 # ---------------------------------------------------------------------------
+
+def welch_t(x, y) -> dict:
+    """Welch's unequal-variance t-test, two-sided.
+
+    Parametric, so not this package's default (see `mann_whitney`); provided for
+    descriptive contrasts that name it. Values are passed to scipy unchanged, so
+    NaN propagates into the result.
+    """
+    t, p = sps.ttest_ind(x, y, equal_var=False)
+    return {"t": float(t), "p": float(p), "n_x": len(x), "n_y": len(y)}
+
 
 def mann_whitney(x: np.ndarray, y: np.ndarray, alternative: str = "two-sided") -> dict:
     """Mann-Whitney U test with effect size and sample sizes."""

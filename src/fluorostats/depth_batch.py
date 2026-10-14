@@ -67,7 +67,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from . import depth  # noqa: E402
+from . import depth, stats  # noqa: E402
 from .io import load_volume  # noqa: E402
 from .style import apply_style, PALETTE, material_color, lighten  # noqa: E402
 
@@ -513,6 +513,14 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     return out_dir
 
 
+def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
+    """Print a descriptive two-group Welch contrast (``by_group`` has 2 groups)."""
+    (ga, va), (gb, vb) = list(by_group.items())
+    r = stats.welch_t(va, vb)
+    print(f"  {label} {ga} vs {gb}: t={r['t']:.3f}, p={r['p']:.4f} "
+          f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
+
+
 def _print_summary(rows, windows) -> None:
     for w in windows:
         lab = window_label(w)
@@ -527,14 +535,7 @@ def _print_summary(rows, windows) -> None:
             print(f"  {g:8s} n={len(vals)}  mean={m:8.2f}  sd={sd:6.2f}  "
                   f"values={[round(v, 1) for v in vals]}")
         if len(by_group) == 2:
-            (ga, va), (gb, vb) = list(by_group.items())
-            try:
-                from scipy import stats as ss
-                t, p = ss.ttest_ind(va, vb, equal_var=False)
-                print(f"  Welch t-test {ga} vs {gb}: t={t:.3f}, p={p:.4f} "
-                      f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
-            except Exception:  # pragma: no cover — scipy ttest never raises
-                pass
+            _print_welch("Welch t-test", by_group)
 
 
 def _print_lambda_summary(rows) -> None:
@@ -554,11 +555,4 @@ def _print_lambda_summary(rows) -> None:
         print(f"  {g:8s} n={len(vals)}  λ mean={m:7.2f} µm  SEM={sem:5.2f}  "
               f"values={[round(v, 1) for v in vals]}")
     if len(by_group) == 2:
-        (ga, va), (gb, vb) = list(by_group.items())
-        try:
-            from scipy import stats as ss
-            t, p = ss.ttest_ind(va, vb, equal_var=False)
-            print(f"  Welch t-test on λ, {ga} vs {gb}: t={t:.3f}, p={p:.4f} "
-                  f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
-        except Exception:  # pragma: no cover — scipy ttest never raises
-            pass
+        _print_welch("Welch t-test on λ,", by_group)

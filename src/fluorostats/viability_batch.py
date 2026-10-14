@@ -50,6 +50,7 @@ from pathlib import Path
 import numpy as np
 
 from .io import load_volume
+from . import stats
 from . import viability as viab
 
 DEFAULT_SEG = {"method": "otsu", "min_size": 32}
@@ -180,7 +181,6 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
 
 def _print_summary(rows: list[dict], groups: list[str]) -> None:
-    from scipy import stats
     print("\n=== Group means (mean +/- SEM) ===")
     key_metrics = ["live_cov_pct", "dead_cov_pct", "viability_area",
                    "viability_count_consensus", "live_density_permm2", "overestimate_mip"]
@@ -197,7 +197,8 @@ def _print_summary(rows: list[dict], groups: list[str]) -> None:
             a = [r[mk] for r in rows if r["group"] == groups[0] and r[mk] == r[mk]]
             b = [r[mk] for r in rows if r["group"] == groups[1] and r[mk] == r[mk]]
             if len(a) >= 1 and len(b) >= 1:
-                u, p = stats.mannwhitneyu(a, b, alternative="two-sided")
+                mw = stats.mann_whitney(a, b)
+                u, p = mw["u"], mw["p"]
                 fold = (np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
                 print(f"  {mk:<26} {groups[0]} vs {groups[1]}: U={u:.0f}, p={p:.4g}, "
                       f"fold={fold:.2f}x")
