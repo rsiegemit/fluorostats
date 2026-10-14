@@ -31,6 +31,14 @@ def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     return data, means, sems
 
 
+def _condition_colors(n: int) -> np.ndarray:
+    """``n`` distinct RGBA colours: Set2 for up to its 8 colours, else ``n`` evenly
+    spaced hues (Set2 would repeat colours past 8)."""
+    if n <= 8:
+        return plt.cm.Set2(np.linspace(0, 1, n))
+    return plt.cm.hsv(np.linspace(0, 1, n, endpoint=False))
+
+
 # ---------------------------------------------------------------------------
 # Single-metric plots
 # ---------------------------------------------------------------------------
@@ -54,7 +62,7 @@ def boxplot_by_condition(
     ax.set_xticks(range(1, len(conditions) + 1))
     ax.set_xticklabels(conditions)   # avoids the deprecated boxplot(labels=) kwarg
 
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
     for patch, color in zip(bp["boxes"], colors):
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
@@ -97,7 +105,7 @@ def bar_mean_sem(
     data, means, sems = _group_stats(df, metric, conditions)
 
     x = np.arange(len(conditions))
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
@@ -160,7 +168,7 @@ def summary_panel(
     axes = axes.flat
 
     conditions = sorted(df["condition"].unique())
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
     x = np.arange(len(conditions))
 
     for idx, metric in enumerate(available):
@@ -490,7 +498,7 @@ def condition_strip(
     hue_levels = sorted(df[hue_col].dropna().unique()) if hue_col else [None]
     marker_levels = sorted(df[marker_col].dropna().unique()) if marker_col else [None]
     palette = palette or {h: c for h, c in zip(
-        hue_levels, plt.cm.Set2(np.linspace(0, 1, max(1, len(hue_levels))))
+        hue_levels, _condition_colors(max(1, len(hue_levels)))
     )}
     markers = markers or {m: ("^" if i % 2 else "o") for i, m in enumerate(marker_levels)}
     n_hue = max(1, len(hue_levels))

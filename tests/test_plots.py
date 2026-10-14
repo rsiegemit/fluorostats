@@ -407,16 +407,32 @@ def test_condition_strip_empty_cross_skips_scatter():
     plt.close(fig)
 
 
-# Regression (release hardening): >8 conditions reused Set2 colors.
-def test_plots_many_conditions_no_color_collision(tmp_path):
-    """>8 conditions previously reused Set2 colors; just assert all renderers run."""
+# Regression: >8 conditions reused Set2 colours (Set2 has 8), so two conditions
+# shared a colour in every per-condition plot.
+def test_plots_many_conditions_get_distinct_colors(tmp_path, monkeypatch):
+    from matplotlib.figure import Figure
+
+    saved = []
+    monkeypatch.setattr(Figure, "savefig", lambda fig, *a, **k: saved.append(fig))
     rng = np.random.default_rng(0)
     df = pd.DataFrame([{"condition": f"C{c:02d}", "volume_fraction": float(rng.random())}
                        for c in range(10) for _ in range(3)])
     plots.bar_mean_sem(df, "volume_fraction", tmp_path / "bar.png")
     plots.boxplot_by_condition(df, "volume_fraction", tmp_path / "box.png")
     plots.summary_panel(df, ["volume_fraction"], tmp_path / "panel.png")
-    assert (tmp_path / "bar.png").exists() and (tmp_path / "box.png").exists()
+    for fig in saved:
+        colors = {p.get_facecolor()[:3] for p in fig.axes[0].patches}
+        assert len(colors) == 10
+    ax = condition_strip(df.assign(h=df["condition"]), "condition", "volume_fraction",
+                         hue_col="h", show_median=False)
+    assert len({tuple(c.get_facecolor()[0][:3]) for c in ax.collections}) == 10
+    plt.close(ax.figure)
+
+
+def test_condition_colors_unchanged_up_to_eight():
+    for n in (1, 2, 5, 8):
+        np.testing.assert_array_equal(plots._condition_colors(n),
+                                      plt.cm.Set2(np.linspace(0, 1, n)))
 
 
 def test_summary_stars_follow_the_corrected_table(tmp_path):
