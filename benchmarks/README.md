@@ -42,9 +42,8 @@ These read raw microscopy rather than a bundled table. Fetch the dataset from
 
 For Figure 2, the summary panels (b forest, d crowding curve) reproduce from the
 bundled `results/` tables; only the image panels (a/c/e) need the raw BBBC039/BBBC024
-images. `b2_nuclei_methods.py` writes the method-summary table `b2_nuclei_methods.csv`;
-the per-image table the figure plots, `b2_nuclei_methods_perimage.csv`, is written by
-`producers/b2_nuclei_methods_perimage.py` (see below).
+images. The per-image table the figure plots, `b2_nuclei_methods_perimage.csv`, is
+written by `producers/b2_nuclei_methods_perimage.py` (see below).
 
 The deep-learning baselines (StarDist, Cellpose, Omnipose) were evaluated on a
 GPU/ROCm cluster; their per-image outputs are shipped in `results/`
