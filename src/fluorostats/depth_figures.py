@@ -9,13 +9,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
 
-from .depth import window_label, window_title  # noqa: E402
-from .style import PALETTE, lighten, material_color  # noqa: E402
+from .depth import window_label, window_title
+from .style import PALETTE, lighten, material_color
 
 
 def group_color(name: str, override: str | None) -> str:

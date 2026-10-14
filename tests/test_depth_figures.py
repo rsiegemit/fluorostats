@@ -103,3 +103,13 @@ def test_fractional_window_names_keep_their_suffix(tmp_path):
     names = sorted(p.name for p in tmp_path.iterdir())
     assert names == ["fig_auc_0.25_10um.pdf", "fig_auc_0.25_10um.png",
                      "fig_auc_0.5_10um.pdf", "fig_auc_0.5_10um.png"]
+
+
+def test_import_keeps_the_callers_backend():
+    """(Re)loading the module must not switch the user's matplotlib backend."""
+    import subprocess
+    import sys
+    code = ("import importlib, matplotlib, fluorostats.depth_figures as m; matplotlib.use('svg'); "
+            "importlib.reload(m); print(matplotlib.get_backend())")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "svg"
