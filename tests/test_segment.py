@@ -154,3 +154,19 @@ def test_consensus_announces_a_failed_method(monkeypatch):
     with pytest.warns(RuntimeWarning, match="yen failed"):
         mask = segment.binarize(img, method="consensus", min_size=1)
     assert mask[16, 16] and not mask[0, 0]       # the other five still decide
+
+
+def test_min_size_keeps_objects_of_exactly_that_size():
+    # "Smaller objects are removed": an object of exactly min_size pixels stays, on
+    # every scikit-image version, matching objects.label_3d's min_size. Sizes are
+    # measured after binarize's salt-noise opening, which reshapes small objects.
+    from fluorostats.objects import label_3d
+
+    img = np.zeros((40, 40))
+    img[5:12, 5:12] = 100.0
+    img[20:32, 20:32] = 100.0
+    size = int(binarize(img, method="otsu", min_size=0)[:20, :20].sum())   # small object
+    kept = binarize(img, method="otsu", min_size=size)
+    assert kept[8, 8] and kept[25, 25]
+    assert not binarize(img, method="otsu", min_size=size + 1)[8, 8]
+    assert label_3d(kept[None], min_size=size)[1] == 2

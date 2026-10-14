@@ -136,7 +136,10 @@ def binarize(
     # in 0.26 (same "remove objects <= threshold" semantic); support both versions.
     if min_size > 0:
         try:
-            mask = remove_small_objects(mask, max_size=min_size)  # skimage >= 0.26
+            # max_size removes objects of that size *or fewer*; the old min_size
+            # removed only *smaller* ones. min_size - 1 keeps the documented meaning
+            # ("smaller objects are removed") identical on every skimage version.
+            mask = remove_small_objects(mask, max_size=min_size - 1)  # skimage >= 0.26
         except TypeError:  # pragma: no cover  # skimage<0.26 signature fallback
             mask = remove_small_objects(mask, min_size=min_size)  # skimage < 0.26
 
