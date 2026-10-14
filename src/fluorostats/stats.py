@@ -145,7 +145,12 @@ def welch_t(x: Sequence[float] | np.ndarray, y: Sequence[float] | np.ndarray) ->
 
 
 def mann_whitney(x: ArrayLike, y: ArrayLike, alternative: str = "two-sided") -> dict:
-    """Mann-Whitney U test with effect size and sample sizes."""
+    """Mann-Whitney U test with effect size and sample sizes.
+
+    NaN values are dropped. When every value in both samples is equal the test
+    has no information and ``p`` is NaN, whatever the installed scipy says
+    (scipy < 1.18 returned 1.0 there, later versions NaN).
+    """
     xa: np.ndarray = np.asarray(x, dtype=float)
     ya: np.ndarray = np.asarray(y, dtype=float)
     xa = xa[~np.isnan(xa)]
@@ -157,6 +162,8 @@ def mann_whitney(x: ArrayLike, y: ArrayLike, alternative: str = "two-sided") -> 
         u, p = sps.mannwhitneyu(xa, ya, alternative=alternative)
     except ValueError:
         u, p = float("nan"), float("nan")
+    if np.ptp(np.concatenate([xa, ya])) == 0:   # all tied: no information
+        p = float("nan")
     return {
         "u": float(u),
         "p": float(p),

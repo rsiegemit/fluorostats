@@ -15,13 +15,15 @@ from fluorostats.cli import cli, _get_condition, _parse_channel
 
 def _blob_2d(seed):
     img = np.random.default_rng(seed).integers(0, 40, (64, 64)).astype(np.uint8)
-    img[16:48, 16:48] = 220                     # bright foreground patch
+    side = 26 + 2 * (seed % 5)                  # replicates differ, so tests have data
+    img[16:16 + side, 16:16 + side] = 220       # bright foreground patch
     return img
 
 
 def _blob_3d(seed):
     vol = np.random.default_rng(seed).integers(0, 40, (8, 48, 48)).astype(np.uint16)
-    vol[2:6, 12:36, 12:36] = 900
+    side = 20 + 2 * (seed % 5)
+    vol[2:6, 12:12 + side, 12:12 + side] = 900
     return vol
 
 

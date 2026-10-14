@@ -436,3 +436,12 @@ def test_describe_drops_nan_and_leaves_undefined_spread_nan(values, n, mean, sd)
     assert d["n"] == n
     np.testing.assert_equal([d["mean"], d["sd"]], [mean, sd])
     np.testing.assert_equal(d["sem"], sd / np.sqrt(n) if n > 1 else np.nan)
+
+
+def test_mann_whitney_all_tied_is_undefined_on_every_scipy():
+    """Every value equal: the test has no information. p is NaN (scipy >= 1.18 says
+    NaN, older scipy said 1.0); the library fixes it so results do not depend on
+    the installed scipy. U and Cliff's delta are still reported."""
+    r = stats.mann_whitney([2.0, 2.0, 2.0], [2.0, 2.0])
+    assert np.isnan(r["p"]) and r["u"] == 3.0 and r["cliffs_delta"] == 0.0
+    assert stats.mann_whitney([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])["p"] == 1.0
