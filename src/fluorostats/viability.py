@@ -38,7 +38,7 @@ def _mask(channel, mask=None, method="otsu", threshold_scale=1.0, min_size=32):
 COUNT_METHODS = ("cc", "watershed", "maxima")
 
 
-def _live_ratio(n_live, n_dead) -> float:
+def live_ratio(n_live, n_dead) -> float:
     """Viability ``live / (live + dead)``; NaN when there is nothing to count."""
     total = n_live + n_dead
     return float(n_live / total) if total > 0 else float("nan")
@@ -64,7 +64,7 @@ def live_dead_fractions(
         dm = _mask(dead, dead_mask, **seg)
         df = float(dm.mean())
         out["dead_fraction"] = df
-        out["viability"] = _live_ratio(lm.sum(), dm.sum())
+        out["viability"] = live_ratio(lm.sum(), dm.sum())
     return out
 
 
@@ -192,7 +192,7 @@ def live_dead_by_count(
         for m in modes:
             nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)
             nd = _count_one(dead, m, sig_d if m == "maxima" else 0.0)
-            per[m] = {"n_live": nl, "n_dead": nd, "viability": _live_ratio(nl, nd)}
+            per[m] = {"n_live": nl, "n_dead": nd, "viability": live_ratio(nl, nd)}
         vals = [p["viability"] for p in per.values() if p["viability"] == p["viability"]]
         consensus = float(np.median(vals)) if vals else float("nan")
         spread = float(max(vals) - min(vals)) if vals else float("nan")
@@ -210,7 +210,7 @@ def live_dead_by_count(
 
     n_live, ml, rl = _count(live)
     n_dead, md, rd = _count(dead)
-    out = {"n_live": n_live, "n_dead": n_dead, "viability": _live_ratio(n_live, n_dead)}
+    out = {"n_live": n_live, "n_dead": n_dead, "viability": live_ratio(n_live, n_dead)}
     if method == "auto":
         out.update({"method_live": ml, "method_dead": md,
                     "reason_live": rl, "reason_dead": rd})
@@ -309,6 +309,7 @@ def attenuation_correct(
 
 
 __all__ = [
+    "live_ratio",
     "live_dead_fractions",
     "live_dead_by_count",
     "choose_count_method",

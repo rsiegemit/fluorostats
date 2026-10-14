@@ -197,3 +197,12 @@ def test_choose_count_method_maxima_branch():
     assert out["method"] == "maxima"
     assert out["snr"] >= 8.0
     assert out["crowding"] > 1.5
+
+
+@pytest.mark.parametrize("n_live,n_dead,expected", [(3, 1, 0.75), (0, 4, 0.0), (5, 0, 1.0)])
+def test_live_ratio(n_live, n_dead, expected):
+    assert viability.live_ratio(n_live, n_dead) == expected
+
+
+def test_live_ratio_is_nan_with_nothing_to_count():
+    assert np.isnan(viability.live_ratio(0, 0))
