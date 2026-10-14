@@ -51,7 +51,7 @@ HERE = Path(__file__).resolve().parent
 RES = HERE / "results"
 RES.mkdir(parents=True, exist_ok=True)
 FIGURES = HERE / "figures" / "main"
-FIG_WIDTH = 5.147   # inches: the text width of the paper this figure was made for
+FIG_WIDTH = F.TEXT_WIDTH_IN   # inches; figures are authored at the width they print at
 RNG_SEED = 0
 
 

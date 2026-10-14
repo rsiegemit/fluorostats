@@ -105,7 +105,8 @@ gs_d = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, 1], wspace=0.70
 axd = fig.add_subplot(gs_d[0, :2])
 m = pd.read_csv(R/"b_ve_metrics.csv")
 ve, fs = m.VesselExpress_VF.values, m.fluorostats_VF.values
-offset = fs.mean() / ve.mean()                              # systematic fluorostats/VE ratio
+agree = pd.read_csv(R/"b_ve_agreement.csv", float_precision="round_trip")
+offset = agree.fluorostats_over_ve.iloc[0]                  # systematic fluorostats/VE ratio
 bias, loa = F.bland_altman(axd, fs, ve, label=rf" · ~{offset:.1f}$\times$", annotate=False)
 axd.set_ylim(-0.005, bias+loa+0.010)
 axd.set_xlabel("mean vessel VF")
@@ -117,7 +118,7 @@ panel(axd, "d", "metric agreement")
 
 # rank-agreement gets its own small labelled panel (no longer a cramped inset)
 axr = fig.add_subplot(gs_d[0, 2])
-rho = pd.read_csv(R/"b_ve_agreement.csv", float_precision="round_trip").spearman_rho.iloc[0]
+rho = agree.spearman_rho.iloc[0]
 axr.scatter(sps.rankdata(ve), sps.rankdata(fs), s=13, color=BLUE, edgecolor="none")
 # left-anchored title so the descriptor never overflows the narrow sub-panel edge
 axr.set_title(f"rank agreement\nSpearman ρ = {rho:.2f}", fontsize=5.0, pad=2, loc="right")

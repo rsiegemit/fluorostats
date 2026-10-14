@@ -42,10 +42,9 @@ TOOL = {
 MAIN = Path(__file__).resolve().parent / "figures" / "main"
 SUPP = Path(__file__).resolve().parent / "figures" / "supplementary"
 
-# Manuscript text width for this submission: \textwidth = 372.0 pt = 130.74 mm =
-# 5.147 in. Every figure is authored at this width so \includegraphics[width=
-# \textwidth] is 1:1 (no LaTeX rescale) and 6-7 pt type stays 6-7 pt on the page.
-TW = 5.147
+# Every figure is authored at the text width (pubfig.TEXT_WIDTH_IN) so
+# \includegraphics[width=\textwidth] is 1:1 and 6-7 pt type stays 6-7 pt.
+TW = pubfig.TEXT_WIDTH_IN
 
 
 def save(fig, name, folder=None, tight=True, pad=0.4):

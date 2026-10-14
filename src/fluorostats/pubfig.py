@@ -38,6 +38,10 @@ OKABE = {
 # with 8 pt bold panel letters. Reference these, never hardcode sizes.
 FS = {"title": 7, "label": 7, "tick": 6, "legend": 6, "annot": 6, "small": 5, "panel": 8}
 
+# Full text width in inches (372 pt = 130.74 mm). A figure authored at the width
+# it is placed at is not rescaled, so the FS point sizes print at their size.
+TEXT_WIDTH_IN = 5.147
+
 
 def apply_style() -> None:
     """Set global rcParams for a clean sans-serif journal look on white.

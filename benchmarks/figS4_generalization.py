@@ -203,6 +203,8 @@ def main():
 
     dsb = pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv")).set_index("method")
     best_f1 = float(dsb.loc["fluorostats", "mean_f1@0.5"])
+    ctc_seg = (pd.read_csv(os.path.join(RESULTS, "b2_ctc_multi.csv"))
+               .groupby("dataset")["ctc_top_SEG"].first())
     caption = (
         "Figure S4 | Generalization across independent datasets and "
         "imaging modalities. Because fluorostats is training-free, it applies the "
@@ -222,7 +224,8 @@ def main():
         "global-threshold baselines. fluorostats stays within the baseline band on "
         "both volumes despite the shift from 2D nuclei to 3D fluorescence cells, with "
         "no tuning. For context, the best published CTC leaderboard instance-"
-        "segmentation SEG scores are 0.908 (A549) and 0.925 (CHO); these are instance "
+        f"segmentation SEG scores are {ctc_seg['Fluo-C3DH-A549']:.3f} (A549) and "
+        f"{ctc_seg['Fluo-N3DH-CHO']:.3f} (CHO); these are instance "
         "SEG scores from trained pipelines and are not directly comparable to the "
         "training-free foreground-Dice values plotted here, and so are reported in "
         "text rather than overlaid. Grey bars use distinct shades to remain separable "
