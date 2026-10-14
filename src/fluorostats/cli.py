@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-import math
 from pathlib import Path
 
 import click
@@ -272,16 +271,13 @@ def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, input_root,
     img, mask = _segment(arr[ch], **seg)
     if overlay_dir is not None:
         qc.overlay_2d(img, mask, _overlay_path(fpath, input_root, overlay_dir))
-    py, px = meta["voxel_size_um"]
     return {
         "shape": str(arr.shape),
         "voxel_size_um": str(meta["voxel_size_um"]),
         "voxel_size_source": meta.get("voxel_size_source", ""),
         "auto_crop_box": crop_box,
         "channel_used": _channel_label(ch, meta["channel_names"]),
-        # sqrt(py * px): the side of a square pixel of the same area, so the µm²
-        # cluster areas are right for anisotropic pixels too
-        **metrics_2d.coverage_metrics(mask, pixel_size_um=math.sqrt(py * px)),
+        **metrics_2d.coverage_metrics(mask, voxel_size_um=meta["voxel_size_um"]),
         **spatial.coverage_heterogeneity(mask),
     }
 

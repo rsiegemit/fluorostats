@@ -12,12 +12,14 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
+from .deprecation import renamed_keyword
 from .stats import coefficient_of_variation
 
 
+@renamed_keyword("spacing", "voxel_size_um")
 def ring_morphometry(
     mask: np.ndarray,
-    spacing: tuple[float, float] = (1.0, 1.0),
+    voxel_size_um: tuple[float, float] = (1.0, 1.0),
     min_lumen_frac: float = 0.005,
 ) -> dict:
     """Lumen + wall geometry of an annular (tube cross-section) mask.
@@ -26,7 +28,7 @@ def ring_morphometry(
     ----------
     mask : 2D bool array
         Foreground = wall material.
-    spacing : (dy, dx)
+    voxel_size_um : (dy, dx)
         Physical pixel size. Areas are returned in ``dy*dx`` units and lengths
         in the same linear unit; pass ``(1, 1)`` for pixels.
     min_lumen_frac : float
@@ -46,7 +48,7 @@ def ring_morphometry(
     Geometry keys are NaN when the mask has no foreground.
     """
     m = np.asarray(mask) > 0
-    dy, dx = float(spacing[0]), float(spacing[1])
+    dy, dx = float(voxel_size_um[0]), float(voxel_size_um[1])
     pix_area = dy * dx
     nan = float("nan")
     empty = {

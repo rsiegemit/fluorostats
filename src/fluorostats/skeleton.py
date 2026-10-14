@@ -19,6 +19,8 @@ import skan
 from scipy.ndimage import label, convolve
 from skimage.morphology import skeletonize
 
+from .deprecation import renamed_keyword
+
 
 # The result of `skeleton_metrics` for an empty skeleton: the one definition of
 # its keys, also used by the CLI when skeletons are skipped.
@@ -58,20 +60,22 @@ def n_junction_nodes(skel: np.ndarray) -> int:
     return int(label(junction_vox)[1])
 
 
+@renamed_keyword("spacing", "voxel_size_um")
+@renamed_keyword("min_branch_length_px", "min_branch_length")
 def prune_skeleton(
     skel: np.ndarray,
-    min_branch_length_px: float = 10.0,
+    min_branch_length: float = 10.0,
     max_iter: int = 5,
     *,
-    spacing: tuple[float, ...] | None = None,
+    voxel_size_um: tuple[float, ...] | None = None,
 ) -> np.ndarray:
     """Remove short spur branches from a skeleton.
 
     Iteratively drops junction-to-endpoint branches shorter than
-    ``min_branch_length_px`` and re-thins, until none remain or ``max_iter``
+    ``min_branch_length`` and re-thins, until none remain or ``max_iter``
     is reached. Branch length is measured along the path in voxels, or, when
-    ``spacing`` (per-axis voxel size, one entry per ``skel`` axis) is given, in
-    the units of ``spacing`` (µm), in which case ``min_branch_length_px`` is a
+    ``voxel_size_um`` (per-axis voxel size, one entry per ``skel`` axis) is given, in
+    µm, in which case ``min_branch_length`` is a
     length in those units. This is the standard clean-up step that skeleton
     analysers (AnalyzeSkeleton, AngioTool, REAVER) apply before counting
     branches/junctions; without it a rough segmentation yields many spurious
@@ -85,11 +89,11 @@ def prune_skeleton(
             break
         # Protect junction voxels so removing a spur never severs a through-path.
         junctions = s & (_neighbour_counts(s) >= 3)
-        skeleton_obj = skan.Skeleton(s, spacing=spacing or 1)
+        skeleton_obj = skan.Skeleton(s, spacing=voxel_size_um or 1)
         branch_data = skan.summarize(skeleton_obj, separator="_")
         spurs = branch_data.index[
             (branch_data["branch_type"] == 1)
-            & (branch_data["branch_distance"] < min_branch_length_px)
+            & (branch_data["branch_distance"] < min_branch_length)
         ]
         if len(spurs) == 0:
             break
@@ -143,7 +147,7 @@ def skeleton_metrics(
             if min_branch_length_um is None:
                 skel = prune_skeleton(skel)
             else:
-                skel = prune_skeleton(skel, min_branch_length_um, spacing=spacing)
+                skel = prune_skeleton(skel, min_branch_length_um, voxel_size_um=spacing)
 
         if not _has_branches(skel):      # empty, or isolated points only
             return dict(EMPTY_METRICS)

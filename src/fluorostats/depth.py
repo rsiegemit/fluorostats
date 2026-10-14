@@ -32,6 +32,8 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
+from .deprecation import renamed_keyword
+
 
 @dataclass(frozen=True)
 class DepthProfile:
@@ -79,9 +81,10 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
 REDUCERS = {"mean": np.mean, "median": np.median}
 
 
+@renamed_keyword("voxel_size_z_um", "voxel_size_um")
 def intensity_depth_profile(
     volume: np.ndarray,
-    voxel_size_z_um: float,
+    voxel_size_um: float | Sequence[float],
     *,
     channel: int = 0,
     reducer: str = "mean",
@@ -92,9 +95,10 @@ def intensity_depth_profile(
     ----------
     volume:
         3D ``(Z, Y, X)`` or 4D ``(C, Z, Y, X)`` array.
-    voxel_size_z_um:
-        Physical spacing between slices, in micrometres. Depth of slice
-        ``i`` is ``i * voxel_size_z_um`` (slice 0 = surface).
+    voxel_size_um:
+        Slice spacing in micrometres: a scalar, or the per-axis ``(z, y, x)``
+        voxel size (only z is used). Depth of slice ``i`` is ``i * z``
+        (slice 0 = surface).
     channel:
         Channel index to use when ``volume`` is 4D.
     reducer:
@@ -105,8 +109,9 @@ def intensity_depth_profile(
     -------
     DepthProfile with ``normalized`` unset.
     """
-    if voxel_size_z_um <= 0:
-        raise ValueError(f"voxel_size_z_um must be > 0, got {voxel_size_z_um}")
+    z_um = float(np.ravel(voxel_size_um)[0])
+    if z_um <= 0:
+        raise ValueError(f"the z voxel size must be > 0, got {z_um}")
 
     stack = _select_plane_stack(volume, channel)
     n_slices = stack.shape[0]
@@ -120,7 +125,7 @@ def intensity_depth_profile(
 
     std = flat.std(axis=1, ddof=0)
     sem = std / np.sqrt(n_px)
-    depth = np.arange(n_slices, dtype=np.float64) * float(voxel_size_z_um)
+    depth = np.arange(n_slices, dtype=np.float64) * z_um
 
     return DepthProfile(
         depth_um=depth,

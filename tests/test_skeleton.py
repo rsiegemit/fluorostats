@@ -83,7 +83,7 @@ def test_prune_skeleton_returns_new_array():
     from skimage.morphology import skeletonize
     skel = skeletonize(_spurred_line())
     before = skel.copy()
-    out = prune_skeleton(skel, min_branch_length_px=10)
+    out = prune_skeleton(skel, min_branch_length=10)
     assert np.array_equal(skel, before)   # input not mutated
     assert out.dtype == bool
 
@@ -142,7 +142,7 @@ def test_prune_skeleton_too_few_voxels():
     s = np.zeros((10, 10), dtype=bool)
     s[5, 5] = True
     s[5, 6] = True  # 2 voxels < 3 -> break immediately
-    out = skeleton.prune_skeleton(s, min_branch_length_px=10.0)
+    out = skeleton.prune_skeleton(s, min_branch_length=10.0)
     assert out.sum() == 2
 
 
@@ -152,7 +152,7 @@ def test_prune_skeleton_too_few_voxels():
 def test_prune_skeleton_no_spurs():
     line = np.zeros((3, 20), dtype=bool)
     line[1, :] = True  # a straight line: no type-1 spur branches
-    out = skeleton.prune_skeleton(line, min_branch_length_px=100.0)
+    out = skeleton.prune_skeleton(line, min_branch_length=100.0)
     assert out.sum() == 20
 
 

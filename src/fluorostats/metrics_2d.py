@@ -5,15 +5,18 @@ from __future__ import annotations
 import numpy as np
 from scipy.ndimage import label
 
+from .deprecation import renamed_keyword
+
 
 def area_fraction(mask: np.ndarray) -> float:
     """Fraction of pixels that are foreground (cell-covered), in [0, 1] (not a percent)."""
     return float(mask.sum() / mask.size)
 
 
+@renamed_keyword("pixel_size_um", "voxel_size_um")
 def coverage_metrics(
     mask: np.ndarray,
-    pixel_size_um: float = 1.0,
+    voxel_size_um: float | tuple[float, float] = 1.0,
 ) -> dict:
     """Connectivity and cluster analysis for 2D binary masks.
 
@@ -21,7 +24,7 @@ def coverage_metrics(
     ----------
     mask : ndarray (Y, X), bool
         Binary segmentation mask.
-    pixel_size_um : float
+    voxel_size_um : float or (dy, dx)
         Pixel size in µm (for calibrated area). Default 1.0 (uncalibrated).
 
     Returns
@@ -38,8 +41,8 @@ def coverage_metrics(
         median_cluster_area_px : float
             Median cluster size in pixels (robust to outliers).
         mean_cluster_area_um2, median_cluster_area_um2 : float
-            The same cluster areas calibrated by ``pixel_size_um`` (× pixel_size_um²);
-            equal to the pixel values when ``pixel_size_um`` is 1.0 (uncalibrated).
+            The same cluster areas times the pixel area (``dy * dx``, or the
+            scalar squared); equal to the pixel values when uncalibrated (1.0).
     """
     af = area_fraction(mask)
     labeled, n_comp = label(mask)
@@ -63,7 +66,7 @@ def coverage_metrics(
     largest = int(fg_sizes.max())
     lcf = largest / total_fg
 
-    px2 = float(pixel_size_um) ** 2
+    px2 = float(np.prod(np.broadcast_to(np.asarray(voxel_size_um, float), (2,))))
     return {
         "area_fraction": af,
         "n_components": n_comp,

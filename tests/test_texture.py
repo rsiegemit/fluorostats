@@ -44,8 +44,8 @@ def test_mesh_size_grid_and_scaling():
     m = np.zeros((100, 100), bool)
     m[::10, :] = True
     m[:, ::10] = True                                        # 10-px mesh grid
-    s1 = texture.mesh_size(m, spacing=1.0)
-    s2 = texture.mesh_size(m, spacing=2.0)
+    s1 = texture.mesh_size(m, voxel_size_um=1.0)
+    s2 = texture.mesh_size(m, voxel_size_um=2.0)
     assert s1 > 0
     assert s2 == pytest.approx(2 * s1, rel=1e-6)
 

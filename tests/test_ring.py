@@ -17,7 +17,7 @@ def _annulus(n=200, cy=100, cx=100, r_in=30, r_out=60):
 
 def test_ring_annulus_geometry():
     m = _annulus()
-    r = ring.ring_morphometry(m, spacing=(1.0, 1.0))
+    r = ring.ring_morphometry(m, voxel_size_um=(1.0, 1.0))
     assert r["lumen_present"]
     assert r["outer_diam"] == pytest.approx(120, abs=4)
     assert r["inner_diam"] == pytest.approx(60, abs=4)
@@ -65,6 +65,6 @@ def test_ring_second_object_ignored_and_empty_mask():
 
 def test_ring_spacing_scales_area():
     m = _annulus()
-    a1 = ring.ring_morphometry(m, spacing=(1.0, 1.0))["outer_area"]
-    a2 = ring.ring_morphometry(m, spacing=(2.0, 2.0))["outer_area"]
+    a1 = ring.ring_morphometry(m, voxel_size_um=(1.0, 1.0))["outer_area"]
+    a2 = ring.ring_morphometry(m, voxel_size_um=(2.0, 2.0))["outer_area"]
     assert a2 == pytest.approx(4 * a1, rel=1e-6)

@@ -27,7 +27,7 @@ def _ramp_volume(per_slice, ny=4, nx=5):
 
 def test_profile_mean_and_depth_axis():
     vol = _ramp_volume([10, 8, 6, 4])
-    prof = intensity_depth_profile(vol, voxel_size_z_um=5.0)
+    prof = intensity_depth_profile(vol, voxel_size_um=5.0)
     np.testing.assert_allclose(prof.mean, [10, 8, 6, 4])
     np.testing.assert_allclose(prof.depth_um, [0, 5, 10, 15])
     # uniform slices -> zero spatial spread
@@ -42,7 +42,7 @@ def test_profile_selects_channel_from_4d():
 
 def test_profile_rejects_bad_spacing():
     with pytest.raises(ValueError):
-        intensity_depth_profile(_ramp_volume([1, 2]), voxel_size_z_um=0.0)
+        intensity_depth_profile(_ramp_volume([1, 2]), voxel_size_um=0.0)
 
 
 def test_median_reducer_ignores_outlier():

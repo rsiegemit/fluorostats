@@ -365,11 +365,11 @@ from fluorostats.texture import orientation_anisotropy, mesh_size
 from fluorostats.objects import angular_homogeneity, radial_distribution
 
 # tube / vessel cross-section (2D wall mask): lumen, wall, diameters, concentricity
-r = ring_morphometry(wall_mask, spacing=(dy_um, dx_um))   # off-centre / open-ring safe
+r = ring_morphometry(wall_mask, voxel_size_um=(dy_um, dx_um))   # off-centre / open-ring safe
 
 # fibrous network (e.g. F-actin MIP): alignment + pore scale
 o = orientation_anisotropy(image, mask=net_mask)          # coherence 0=isotropic … 1=aligned
-gap = mesh_size(net_mask, spacing=(dy_um, dx_um))          # typical open-gap size
+gap = mesh_size(net_mask, voxel_size_um=(dy_um, dx_um))       # typical open-gap size
 
 # distribution of points around a centre (last two centroid cols = y, x)
 angular_homogeneity(centroids, center)                    # circumferential evenness

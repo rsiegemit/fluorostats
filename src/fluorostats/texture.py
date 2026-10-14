@@ -17,6 +17,8 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
+from .deprecation import renamed_keyword
+
 
 def orientation_anisotropy(
     image: np.ndarray,
@@ -108,19 +110,20 @@ def orientation_order(
             "alignment": alignment, "n": int(a.size)}
 
 
-def mesh_size(mask: np.ndarray, spacing: float | tuple[float, ...] = 1.0) -> float:
+@renamed_keyword("spacing", "voxel_size_um")
+def mesh_size(mask: np.ndarray, voxel_size_um: float | tuple[float, ...] = 1.0) -> float:
     """Characteristic open-gap (pore / mesh) size of a network mask.
 
     Twice the mean distance from background pixels to the nearest foreground
     strand — the typical gap between strands. Returns physical units when
-    ``spacing`` is given (scalar or per-axis), else pixels. NaN if the mask is
+    ``voxel_size_um`` is given (scalar or per-axis), else pixels. NaN if the mask is
     empty or fully foreground (no gaps to measure).
     """
     m = np.asarray(mask) > 0
     bg = ~m
     if not m.any() or not bg.any():
         return float("nan")
-    dt = ndi.distance_transform_edt(bg, sampling=spacing)
+    dt = ndi.distance_transform_edt(bg, sampling=voxel_size_um)
     return float(2.0 * dt[bg].mean())
 
 
