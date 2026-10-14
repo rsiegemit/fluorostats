@@ -440,7 +440,7 @@ def test_load_auto_falls_back_to_image_on_volume_error(monkeypatch, tmp_path):
     def boom(p):
         raise RuntimeError("forced volume failure")
 
-    monkeypatch.setattr(io, "load_volume", boom)
+    monkeypatch.setattr(io, "_read_volume", boom)
     out, meta = io.load_auto(path)
     assert out.shape == (1, 16, 16)
 
@@ -647,3 +647,15 @@ def test_labelled_axes_with_unknown_name_fall_back_to_shape(monkeypatch, tmp_pat
     with pytest.warns(RuntimeWarning, match="first of 3 entries"):
         out, _ = io.load_volume(path)
     assert out.shape == (2, 5, 8, 8)
+
+
+def test_lif_y_copied_from_x_is_said_and_recorded(monkeypatch, tmp_path):
+    fake = _make_fake_readlif(1, 2, [2.0, None, 0.5])
+    monkeypatch.setitem(sys.modules, "readlif", fake)
+    path = tmp_path / "noy.lif"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="y voxel size copied from x") as rec:
+        _, meta = io.load_volume(path)
+    assert not [w for w in rec if "no y calibration" in str(w.message)]
+    assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:file,y:copied-from-x,x:file"

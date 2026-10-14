@@ -106,18 +106,20 @@ def load_auto(path: Path) -> tuple[np.ndarray, dict]:
         return load_image(path)
 
     try:
-        arr, meta = load_volume(path)
-        # If Z=1, treat as 2D
-        if arr.shape[1] == 1:
-            arr = arr[:, 0, :, :]  # (C, 1, Y, X) -> (C, Y, X)
-            meta["voxel_size_um"] = meta["voxel_size_um"][1:]
-        return arr, meta
+        arr, meta = _read_volume(path)
     except Exception as exc:
         # A genuine volume-read failure (not a format we recognise as 2D) should not
         # be silently retried as a 2D read — surface it so a real error is visible.
         warnings.warn(f"load_volume failed for {path.name} ({type(exc).__name__}: {exc}); "
                       "falling back to a 2D image read.", RuntimeWarning, stacklevel=2)
         return load_image(path)
+    if arr.shape[1] == 1:  # a single plane: (C, 1, Y, X) -> (C, Y, X), no z calibration
+        arr = arr[:, 0, :, :]
+        meta = {**meta, "voxel_size_um": meta["voxel_size_um"][1:]}
+        _record_calibration(meta, "yx", path)
+    else:
+        _record_calibration(meta, "zyx", path)
+    return arr, meta
 
 
 def load_volume(path: Path) -> tuple[np.ndarray, dict]:
@@ -127,7 +129,13 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
     ``*_CHF*`` OME-TIFFs + ``.gci``) and assembled via ``fluorostats.keyence``.
     """
     path = Path(path)
+    arr, meta = _read_volume(path)
+    _record_calibration(meta, "zyx", path)
+    return arr, meta
 
+
+def _read_volume(path: Path) -> tuple[np.ndarray, dict]:
+    """(C, Z, Y, X) array and metadata, before the calibration record is made."""
     if path.is_dir():
         from . import keyence
         if not keyence.is_keyence_folder(path):
@@ -137,7 +145,8 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
         meta["voxel_size_um"] = (zs, px, px)
         meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
             {"z"} if meta.get("z_step_um") else set())
-        _record_calibration(meta, "zyx", path)
+        # keyence.parse_gci warns that the Stack/Pitch unit is assumed.
+        meta["_axis_source"] = {"z": "file-assumed-0.1um"} if meta.get("z_step_um") else {}
         chd = meta.get("channels") or {}
         meta["channel_names"] = [chd.get(str(i), {}).get("name", f"CH{i}") for i in range(arr.shape[0])]
         return arr, meta
@@ -150,9 +159,7 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
             f"Unsupported volume format: {suffix}\n"
             f"Supported: {', '.join(sorted(VOLUME_SUFFIXES))}"
         )
-    arr, meta = fmt.volume(path)
-    _record_calibration(meta, "zyx", path)
-    return arr, meta
+    return fmt.volume(path)
 
 
 def load_image(path: Path) -> tuple[np.ndarray, dict]:
@@ -456,6 +463,10 @@ def _parse_lif_metadata(img) -> dict:
             meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
             meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
                                   if len(scale) > i and scale[i] and scale[i] > 0}
+            if um(1) is None and um(0) is not None:
+                meta["_axis_source"] = {"y": "copied-from-x"}
+                warnings.warn(f"the LIF file gives no y length; y voxel size copied from x "
+                              f"({voxel_x} µm).", RuntimeWarning, stacklevel=3)
     except Exception:
         pass
 

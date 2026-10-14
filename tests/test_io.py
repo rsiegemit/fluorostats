@@ -411,3 +411,17 @@ def test_imagej_spacing_without_known_unit_is_flagged(tmp_path, extra, said):
         _, meta = load_volume(p)
     assert meta["voxel_size_um"][0] == 2.0
     assert meta["voxel_size_source"].startswith("z:file-unit-unknown,")
+
+
+def test_load_auto_single_plane_drops_z_from_calibration_record(tmp_path):
+    import warnings
+
+    p = tmp_path / "c.ome.tif"
+    tifffile.imwrite(p, np.zeros((2, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")        # x/y calibrated, z irrelevant: no warning
+        arr, meta = load_auto(p)
+    assert arr.shape == (2, 8, 8)
+    assert meta["voxel_size_um"] == (0.5, 0.5)
+    assert meta["voxel_size_source"] == "y:file,x:file"
