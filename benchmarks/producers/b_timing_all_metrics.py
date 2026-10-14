@@ -113,7 +113,7 @@ def metric_ops(d):
         ("fluorostats", "objects.centroid_homogeneity", lambda: objects.centroid_homogeneity(d.cent, v.shape)),
         *point_pattern_comparators(d),
         ("fluorostats", "skeleton.skeleton_metrics 2D", lambda: skeleton.skeleton_metrics(d.sk, voxel_size_um=(1., 1.))),
-        ("fluorostats", "skeleton.prune_skeleton 2D", lambda: skeleton.prune_skeleton(d.sk, min_branch_length_px=10)),
+        ("fluorostats", "skeleton.prune_skeleton 2D", lambda: skeleton.prune_skeleton(d.sk, min_branch_length=10)),
         ("fluorostats", "skeleton.n_junction_nodes 2D", lambda: skeleton.n_junction_nodes(d.sk)),
         ("comparator", "skeletonize Lee 2D", lambda: skeletonize(d.sk)),
         ("comparator", "medial_axis 2D", lambda: medial_axis(d.sk)),

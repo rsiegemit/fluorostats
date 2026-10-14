@@ -259,7 +259,7 @@ def analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox):
     vz, vy, vx = vox
     out: dict = {}
     if geometry == "cross_section":
-        rm = ring.ring_morphometry(cmask, spacing=(vy, vx))
+        rm = ring.ring_morphometry(cmask, voxel_size_um=(vy, vx))
         cv = rm["wall_thickness_cv"]
         cov = rm["wall_coverage_frac"]
         out.update({
@@ -284,7 +284,7 @@ def analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox):
     elif geometry == "wall":
         oa = texture.orientation_anisotropy(gmip, mask=gmask)
         out["factin_coherence"] = oa["coherence"]
-        out["factin_mesh_size_um"] = texture.mesh_size(gmask, spacing=(vy, vx))
+        out["factin_mesh_size_um"] = texture.mesh_size(gmask, voxel_size_um=(vy, vx))
         # through-wall depth distribution: shallowest (objective-facing = outer)
         # third of the nucleus z-range vs the rest.
         if len(peaks):
