@@ -12,18 +12,20 @@ independent public datasets and imaging modalities it was never tuned on:
 (b) Cell Tracking Challenge 3D foreground Dice on two unseen modalities
     (Fluo-C3DH-A549, Fluo-N3DH-CHO), fluorostats vs threshold baselines.
 
-Run:  python3.13 figS4_generalization.py
+Run:  python3.13 benchmarks/figS4_generalization.py (from any directory)
 Outputs PDF+PNG to figures/supplementary/ plus a .txt caption.
 """
 from __future__ import annotations
 
 import os
+import sys
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import figstyle
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import figstyle  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "results")

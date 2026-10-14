@@ -5,17 +5,21 @@
 (c) Per-nucleus median-diameter recovery error (%) vs BBBC024 ground truth.
 """
 from __future__ import annotations
+import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from figstyle import OKABE, RAW_OTSU_CC, apply_style, save, panel, caption, SUPP, TW
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from figstyle import OKABE, RAW_OTSU_CC, apply_style, save, panel, caption, SUPP, TW  # noqa: E402
 
 apply_style()
 
-noise = pd.read_csv("results/b_noise_robustness.csv")
-denoise = pd.read_csv("results/b_denoising.csv")
-size = pd.read_csv("results/b_nuclei_size.csv")
+RES = Path(__file__).resolve().parent / "results"
+noise = pd.read_csv(RES / "b_noise_robustness.csv")
+denoise = pd.read_csv(RES / "b_denoising.csv")
+size = pd.read_csv(RES / "b_nuclei_size.csv")
 
 FLU = OKABE["blue"]
 

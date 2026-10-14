@@ -10,19 +10,22 @@ Three panels:
       schemes; fluorostats per-mm3 is flat (CV<=0.2%), competitors drift. CV per
       scheme annotated.
 
-Run from benchmarks/: python3.13 figS1_correctness.py
+Run: python3.13 benchmarks/figS1_correctness.py (from any directory)
 """
 from __future__ import annotations
+import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import figstyle
-from figstyle import OKABE, apply_style, save, panel, caption, SUPP
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import figstyle  # noqa: E402
+from figstyle import OKABE, apply_style, save, panel, caption, SUPP  # noqa: E402
 
 apply_style()
 
-RES = figstyle.Path(__file__).resolve().parent / "results"
+RES = Path(__file__).resolve().parent / "results"
 
 # ---------------------------------------------------------------- load data
 topo = pd.read_csv(RES / "b1_topology_phantoms.csv")

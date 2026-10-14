@@ -11,6 +11,7 @@
     pipeline that varies with seed / GPU.
 """
 import glob
+import sys
 import numpy as np
 import pandas as pd
 import tifffile
@@ -19,10 +20,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-import figstyle as F
-from figstyle import OKABE
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import figstyle as F  # noqa: E402
+from figstyle import OKABE  # noqa: E402
 
-from fluorostats import metrics_3d, morphometry
+from fluorostats import metrics_3d, morphometry  # noqa: E402
 
 F.apply_style()
 
