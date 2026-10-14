@@ -23,8 +23,14 @@ def group_color(name: str, override: str | None) -> str:
 
 def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
                       colors: dict[str, str], ykey: str, ylabel: str, title: str,
-                      out_base: Path, auc_window: tuple[float, float] | None = None) -> None:
-    """One line per group (mean ± SEM band) + faint individual stacks."""
+                      out_base: Path, auc_window: tuple[float, float] | None = None,
+                      n_surface: int = 3, fit_offset: bool = False) -> None:
+    """One line per group (mean ± SEM band) + faint individual stacks.
+
+    On the absolute curves each group's λ model is overlaid, anchored at the mean of
+    its first ``n_surface`` slices; with ``fit_offset`` it is the fitted model with the
+    group's mean floor (from its accepted primary fits).
+    """
     fig, ax = plt.subplots(figsize=(4.6, 3.6))
     if auc_window is not None:
         ax.axvspan(auc_window[0], auc_window[1], color=PALETTE["highlight"],
@@ -47,20 +53,10 @@ def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
         sem = agg["sub_sem"] if ykey == "bg_subtracted" else agg["norm_sem"]
         ax.fill_between(agg["depth_um"], mean - sem, mean + sem,
                         color=lighten(c, 0.25), alpha=0.35, lw=0, zorder=2)
-        lam = agg.get("lambda_mean_um", float("nan"))
         lab = f"{g} (n={agg['n']})"
-        if ykey == "bg_subtracted" and np.isfinite(lam):
-            # Overlay the single-exponential with the group λ (fit on absolute
-            # profile). I0 = near-surface group mean so the curve is anchored.
-            lam_sem = agg.get("lambda_sem_um", 0.0)
-            r2 = agg.get("r_squared_mean", float("nan"))
-            n_ok = agg.get("n_lambda_ok", 0)
-            i0 = float(np.mean(mean[:3]))
-            ax.plot(agg["depth_um"], i0 * np.exp(-agg["depth_um"] / lam),
-                    color=c, lw=1.1, ls=(0, (4, 2)), alpha=0.9, zorder=4)
-            # Show how many stacks yielded an in-range λ, so a single-stack or
-            # partly-degenerate group λ is never read as a confident group value.
-            lab += f"\n  λ={lam:.0f}±{lam_sem:.0f} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
+        if ykey == "bg_subtracted" and np.isfinite(agg.get("lambda_mean_um", float("nan"))):
+            floor = _group_floor(rows, g) if fit_offset else 0.0
+            lab += _plot_lambda_model(ax, agg, mean, c, n_surface, floor)
         ax.plot(agg["depth_um"], mean, color=c, lw=2.2, zorder=3, label=lab)
     ax.set_xlabel("Depth (µm)")
     ax.set_ylabel(ylabel)
@@ -68,6 +64,30 @@ def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
     ax.legend()
     ax.margins(x=0)
     _save(fig, out_base)
+
+
+def _group_floor(rows: list[dict], group: str) -> float:
+    """Mean fitted floor of a group's accepted primary fits (the fits behind its λ)."""
+    offs = [r["result"]["fit"].offset for r in rows
+            if r["group"] == group and r["role"] == "primary" and r["result"]["fit"].fit_ok]
+    return float(np.mean(offs))
+
+
+def _plot_lambda_model(ax, agg: dict, mean: np.ndarray, c: str, n_surface: int,
+                       floor: float) -> str:
+    """Overlay the group-λ single exponential; return the legend suffix."""
+    # Anchored at the near-surface group mean: floor + (surface - floor)·exp(-z/λ).
+    lam = agg["lambda_mean_um"]
+    surface = float(np.mean(mean[:n_surface]))
+    z = agg["depth_um"]
+    ax.plot(z, floor + (surface - floor) * np.exp(-z / lam),
+            color=c, lw=1.1, ls=(0, (4, 2)), alpha=0.9, zorder=4)
+    # Show how many stacks yielded an in-range λ, so a single-stack or
+    # partly-degenerate group λ is never read as a confident group value.
+    lam_sem = agg.get("lambda_sem_um", 0.0)
+    r2 = agg.get("r_squared_mean", float("nan"))
+    n_ok = agg.get("n_lambda_ok", 0)
+    return f"\n  λ={lam:.0f}±{lam_sem:.0f} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
 
 
 def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: Path,

@@ -328,7 +328,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
     write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
     write_group_summary_csv(out_dir / "group_depth_summary.csv", aggregates)
-    _write_figures(rows, aggregates, colors, windows, m["signal_label"], out_dir)
+    _write_figures(rows, aggregates, colors, cfg, m["signal_label"], out_dir)
 
     _print_summary(rows, windows)
     _print_lambda_summary(rows)
@@ -385,19 +385,21 @@ def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
     return blank
 
 
-def _write_figures(rows, aggregates, colors, windows, sig: str, out_dir: Path) -> None:
+def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path) -> None:
     """Depth-vs curves (absolute + normalised), per-window AUC plots, retention summary."""
+    windows = cfg["windows"]
     # The narrowest fixed window is shaded on the depth-vs curves.
     fixed = [w for w in windows if w != ("full",)]
     shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
+    model = {"n_surface": cfg["n_surface"], "fit_offset": cfg["fit_offset"]}
     plot_depth_curves(rows, aggregates, colors, "bg_subtracted",
                       f"Mean {sig} intensity (a.u., blank-subtracted)",
                       f"{sig} intensity vs depth",
-                      out_dir / "fig_depth_absolute", auc_window=shade_window)
+                      out_dir / "fig_depth_absolute", auc_window=shade_window, **model)
     plot_depth_curves(rows, aggregates, colors, "normalized",
                       "Normalised intensity (surface = 1)",
                       f"Normalised {sig} intensity vs depth",
-                      out_dir / "fig_depth_normalized", auc_window=shade_window)
+                      out_dir / "fig_depth_normalized", auc_window=shade_window, **model)
     for w in windows:
         lab = window_label(w)
         plot_auc(rows, colors, w, out_dir / f"fig_auc_normalized_{lab}", use_normalized=True)

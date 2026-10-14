@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
-from fluorostats.depth import parse_window, window_label  # noqa: E402
+from fluorostats.depth import PenetrationFit, parse_window, window_label  # noqa: E402
 from fluorostats.depth_figures import (group_color, plot_auc, plot_depth_curves,  # noqa: E402
                                        plot_retention_multiwindow)
 from fluorostats.style import material_color  # noqa: E402
@@ -113,3 +113,36 @@ def test_import_keeps_the_callers_backend():
             "importlib.reload(m); print(matplotlib.get_backend())")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "svg"
+
+
+def _overlay_case(floor, fit_offset):
+    """One group whose curve is exactly 100·exp(-z/10) + floor, with matching fits."""
+    z = np.arange(0.0, 41.0, 2.0)
+    curve = 100 * np.exp(-z / 10) + floor
+    fit = PenetrationFit(lambda_um=10.0, I0=100.0, offset=floor if fit_offset else None,
+                         r_squared=1.0, rmse=0.0, n_points=z.size, fit_ok=True)
+    rows = [{"group": "A", "stack": f"s{i}", "role": "primary",
+             "result": {"depth_um": z, "bg_subtracted": curve, "fit": fit}} for i in range(2)]
+    agg = {"depth_um": z, "sub_mean": curve, "sub_sem": np.zeros_like(z), "n": 2,
+           "lambda_mean_um": 10.0, "lambda_sem_um": 0.0, "n_lambda_ok": 2,
+           "r_squared_mean": 1.0}
+    return rows, {"A": agg}, curve
+
+
+@pytest.mark.parametrize("floor, fit_offset, n_surface", [(0.0, False, 1), (50.0, True, 1),
+                                                          (50.0, True, 3)])
+def test_lambda_overlay_follows_n_surface_and_fit_offset(tmp_path, last_axes,
+                                                         floor, fit_offset, n_surface):
+    """The λ overlay is anchored on the manifest's n_surface slices and, when the floor
+    was fitted, draws floor + (surface - floor)·exp(-z/λ)."""
+    rows, aggs, curve = _overlay_case(floor, fit_offset)
+    plot_depth_curves(rows, aggs, {"A": "#3F6AB3"}, "bg_subtracted", "y", "t",
+                      tmp_path / "curves", n_surface=n_surface, fit_offset=fit_offset)
+    overlay = [ln for ln in last_axes().get_lines() if ln.get_zorder() == 4]
+    assert len(overlay) == 1
+    z = overlay[0].get_xdata()
+    surface = curve[:n_surface].mean()
+    expected = floor + (surface - floor) * np.exp(-z / 10.0)
+    np.testing.assert_allclose(overlay[0].get_ydata(), expected)
+    if n_surface == 1:
+        np.testing.assert_allclose(overlay[0].get_ydata(), curve)   # exact model, exact anchor
