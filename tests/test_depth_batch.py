@@ -340,3 +340,16 @@ def test_load_manifest_rejects_bad_group_color(tmp_path):
     with pytest.raises(ValueError) as e:
         load_manifest(mpath)
     assert str(e.value).endswith("group 'A': color 'not-a-colour' is not a matplotlib colour")
+
+
+def test_window_covered_um_is_clamped_at_zero(tmp_path):
+    """A window starting past the stack end covers 0 µm, not a negative depth."""
+    s0 = tmp_path / "s0.tif"
+    _decay_stack(s0, n_z=11)                               # 0-10 µm at the 1 µm default
+    cfg = {"channel": 0, "reducer": "mean", "n_surface": 2, "fit_offset": False,
+           "windows": [(5.0, 20.0), (50.0, 60.0)]}
+    with pytest.warns(RuntimeWarning, match="only 0 µm of it"):
+        res = depth_batch.analyse_stack(s0, None, cfg)
+    assert res["auc"]["5_20um"]["covered_um"] == 5.0
+    assert res["auc"]["50_60um"]["covered_um"] == 0.0
+    assert res["auc"]["50_60um"]["normalized"] == 0.0

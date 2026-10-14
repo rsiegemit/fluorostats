@@ -183,14 +183,15 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     auc = {}
     for w in cfg["windows"]:
         z0, z1 = window_bounds(w, max_depth)
+        covered = max(min(z1, max_depth) - z0, 0.0)
         if z1 > max_depth:
             warnings.warn(f"{Path(path).name}: AUC window {window_title(w)} reaches past the "
-                          f"stack's {max_depth:g} µm; only {max(max_depth - z0, 0.0):g} µm of it "
+                          f"stack's {max_depth:g} µm; only {covered:g} µm of it "
                           "is covered (see window_covered_um).", RuntimeWarning, stacklevel=2)
         auc[window_label(w)] = {
             "absolute": depth.auc_depth(raw.depth_um, subtracted.mean, z_min=z0, z_max=z1),
             "normalized": depth.auc_depth(raw.depth_um, normalized.normalized, z_min=z0, z_max=z1),
-            "covered_um": float(min(z1, max_depth) - z0),
+            "covered_um": float(covered),
             "width_um": float(z1 - z0),
         }
 
