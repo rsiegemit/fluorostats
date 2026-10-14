@@ -20,6 +20,8 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from skimage.measure import marching_cubes
 
+from .style import DARK_PALETTE, PALETTE
+
 
 # ---------------------------------------------------------------------------
 # Downsampling
@@ -85,18 +87,7 @@ def render_isosurface(
         fig = plt.figure(figsize=(6, 5))
         ax = fig.add_subplot(111, projection="3d")
     ds = block_reduce_max(mask.astype(np.uint8), downsample)
-
-    if style == "dark":
-        from .style import DARK_PALETTE
-        bg = DARK_PALETTE["background"]
-        grid_color = DARK_PALETTE["grid"]
-        text_color = DARK_PALETTE["ink"]
-        scalebar_color = DARK_PALETTE["scalebar"]
-    else:
-        bg = "white"
-        grid_color = "#cccccc"
-        text_color = "#1F2937"
-        scalebar_color = "#1F2937"
+    bg, grid_color, text_color, scalebar_color = _theme_colors(style)
 
     if ds.sum() < 100:
         ax.set_facecolor(bg)
@@ -106,46 +97,78 @@ def render_isosurface(
         if title:
             ax.set_title(title, color=text_color)
         return ax
-    padded = np.pad(ds, 1, mode="constant", constant_values=0)
     spacing = (
         voxel_size_um[0] * downsample[0],
         voxel_size_um[1] * downsample[1],
         voxel_size_um[2] * downsample[2],
     )
+    ax.add_collection3d(_isosurface_mesh(ds, spacing, smooth_iter, shade, color, alpha))
+    nz, ny, nx = ds.shape
+    box = (nx * spacing[2], ny * spacing[1], nz * spacing[0])
+    _style_mesh_axes(ax, box, style, bg, grid_color, text_color, grid)
+    ax.view_init(elev=elev, azim=azim)
+    if scalebar_um:
+        ax.plot([10, 10 + scalebar_um], [10, 10], [0, 0],
+                color=scalebar_color, linewidth=3.0, zorder=10)
+        ax.text(10 + scalebar_um / 2, 10, -box[2] * 0.05,
+                f"{int(scalebar_um)} µm",
+                color=scalebar_color, ha="center", fontsize=10,
+                fontweight="semibold")
+    if title:
+        ax.set_title(title, color=text_color)
+    return ax
+
+
+def _theme_colors(style: str) -> tuple[str, str, str, str]:
+    """(background, grid, text, scale-bar) colours for the "light"/"dark" style."""
+    if style == "dark":
+        return (DARK_PALETTE["background"], DARK_PALETTE["grid"],
+                DARK_PALETTE["ink"], DARK_PALETTE["scalebar"])
+    return "white", "#cccccc", PALETTE["ink"], PALETTE["ink"]
+
+
+def _isosurface_mesh(ds, spacing, smooth_iter: int, shade: bool, color: str, alpha: float):
+    """Marching-cubes mesh of a binary volume as a Poly3DCollection.
+
+    With ``shade``, each face is lit by a Lambertian dot product with a fixed
+    light; otherwise it is a flat fill.
+    """
+    padded = np.pad(ds, 1, mode="constant", constant_values=0)
     verts, faces, _, _ = marching_cubes(padded.astype(np.float32),
                                          level=0.5, spacing=spacing)
     if smooth_iter > 0:
         verts = _laplacian_smooth(verts, faces, n_iter=smooth_iter)
     verts_xyz = verts[:, [2, 1, 0]]
     polys = verts_xyz[faces]
-    if shade:
-        # Per-face shading via Lambertian dot product with a light source.
-        from matplotlib.colors import to_rgb
-        rgb = np.array(to_rgb(color))
-        e1 = polys[:, 1] - polys[:, 0]
-        e2 = polys[:, 2] - polys[:, 0]
-        normals = np.cross(e1, e2)
-        norm = np.linalg.norm(normals, axis=1, keepdims=True)
-        normals = np.divide(normals, np.where(norm == 0, 1, norm))
-        light = np.array([np.cos(np.radians(45)) * np.cos(np.radians(315)),
-                          np.cos(np.radians(45)) * np.sin(np.radians(315)),
-                          np.sin(np.radians(45))])
-        shading = np.clip(normals @ light, 0.0, 1.0)
-        intensities = 0.55 + 0.45 * shading
-        face_colors = rgb[None, :] * intensities[:, None]
-        face_colors = np.clip(face_colors, 0, 1)
-        face_rgba = np.concatenate([face_colors,
-                                    np.full((face_colors.shape[0], 1), alpha)],
-                                   axis=1)
-        mesh = Poly3DCollection(polys, facecolors=face_rgba,
-                                 edgecolor="none", linewidth=0)
-    else:
+    if not shade:
         mesh = Poly3DCollection(polys, alpha=alpha, facecolor=color,
                                  edgecolor="none", linewidth=0)
         mesh.set_facecolor(color)
-    ax.add_collection3d(mesh)
-    nz, ny, nx = ds.shape
-    box = (nx * spacing[2], ny * spacing[1], nz * spacing[0])
+        return mesh
+    from matplotlib.colors import to_rgb
+    rgb = np.array(to_rgb(color))
+    e1 = polys[:, 1] - polys[:, 0]
+    e2 = polys[:, 2] - polys[:, 0]
+    normals = np.cross(e1, e2)
+    norm = np.linalg.norm(normals, axis=1, keepdims=True)
+    normals = np.divide(normals, np.where(norm == 0, 1, norm))
+    light = np.array([np.cos(np.radians(45)) * np.cos(np.radians(315)),
+                      np.cos(np.radians(45)) * np.sin(np.radians(315)),
+                      np.sin(np.radians(45))])
+    shading = np.clip(normals @ light, 0.0, 1.0)
+    intensities = 0.55 + 0.45 * shading
+    face_colors = rgb[None, :] * intensities[:, None]
+    face_colors = np.clip(face_colors, 0, 1)
+    face_rgba = np.concatenate([face_colors,
+                                np.full((face_colors.shape[0], 1), alpha)],
+                               axis=1)
+    return Poly3DCollection(polys, facecolors=face_rgba,
+                            edgecolor="none", linewidth=0)
+
+
+def _style_mesh_axes(ax, box, style: str, bg: str, grid_color: str,
+                     text_color: str, grid: bool) -> None:
+    """Physical-µm limits, aspect, panes, grid and labels for an isosurface axis."""
     ax.set_xlim(0, box[0])
     ax.set_ylim(0, box[1])
     ax.set_zlim(0, box[2])
@@ -171,17 +194,6 @@ def render_isosurface(
         ax.set_xlabel("µm")
         ax.set_ylabel("µm")
         ax.set_zlabel("µm")
-    ax.view_init(elev=elev, azim=azim)
-    if scalebar_um:
-        ax.plot([10, 10 + scalebar_um], [10, 10], [0, 0],
-                color=scalebar_color, linewidth=3.0, zorder=10)
-        ax.text(10 + scalebar_um / 2, 10, -box[2] * 0.05,
-                f"{int(scalebar_um)} µm",
-                color=scalebar_color, ha="center", fontsize=10,
-                fontweight="semibold")
-    if title:
-        ax.set_title(title, color=text_color)
-    return ax
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +332,7 @@ def live_dead_mip(
     percentile_clip: tuple[float, float] = (1, 99.5),
     gamma: float = 0.75,
     background: tuple[int, int, int] = (0, 0, 0),
-    border: str | None = "#1F2937",
+    border: str | None = PALETTE["ink"],
     border_lw: float = 1.0,
 ):
     """Two-channel maximum-intensity projection (slide-3 style).
@@ -379,7 +391,7 @@ def mip_grid(
     col_labels: list[str] | None = None,
     title: str | None = None,
     cell_kwargs: dict | None = None,
-    label_color: str = "#1F2937",
+    label_color: str = PALETTE["ink"],
     background: str = "white",
 ):
     """Render a (row × col) grid of MIPs.
