@@ -345,7 +345,7 @@ def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
     class Image:
         channels = 2
         dims = Dims()
-        scale = [1e6, 1e6, 1e6]
+        scale = [2.0, 2.0, 0.5]
 
         def get_frame(self, z, t, c):
             return np.full((4, 4), z * 10 + c, dtype=np.uint16)   # encodes (z, c)
@@ -369,20 +369,21 @@ def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
 
 
 def test_load_lif_volume(monkeypatch, tmp_path):
-    fake = _make_fake_readlif(2, 3, [1e6, 2e6, 1e6])
+    # readlif's scale is pixels per µm (x, y, z): 2 px/µm -> 0.5 µm voxels.
+    fake = _make_fake_readlif(2, 3, [2.0, 4.0, 0.5])
     monkeypatch.setitem(sys.modules, "readlif", fake)
     path = tmp_path / "s.lif"
     path.write_bytes(b"")
     arr, meta = io.load_volume(path)
     assert arr.shape == (2, 3, 8, 8)
     assert meta["format"] == "leica_lif"
-    # scale 1e6 -> 1/1e6*1e6 = 1.0 um; y scale 2e6 -> 0.5
-    assert meta["voxel_size_um"] == (1.0, 0.5, 1.0)
+    assert meta["voxel_size_um"] == (2.0, 0.25, 0.5)
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"
     assert meta["channel_names"] == ["Ch1", "Ch2"]
 
 
 def test_load_lif_volume_rgb_frames(monkeypatch, tmp_path):
-    fake = _make_fake_readlif(1, 2, [1e6], frame_ndim=3)
+    fake = _make_fake_readlif(1, 2, [2.0], frame_ndim=3)
     monkeypatch.setitem(sys.modules, "readlif", fake)
     path = tmp_path / "rgb.lif"
     path.write_bytes(b"")
@@ -391,7 +392,7 @@ def test_load_lif_volume_rgb_frames(monkeypatch, tmp_path):
 
 
 def test_load_lif_empty_raises(monkeypatch, tmp_path):
-    fake = _make_fake_readlif(1, 1, [1e6], empty=True)
+    fake = _make_fake_readlif(1, 1, [2.0], empty=True)
     monkeypatch.setitem(sys.modules, "readlif", fake)
     path = tmp_path / "empty.lif"
     path.write_bytes(b"")
@@ -532,7 +533,7 @@ def test_safe_float_paths():
 
 
 def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
-    fake = _make_fake_readlif(1, 2, [1e6, 1e6, 1e6])
+    fake = _make_fake_readlif(1, 2, [2.0, 2.0, 0.5])
     base = fake.LifFile
 
     class TwoImages(base):
@@ -546,3 +547,15 @@ def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
     p.write_bytes(b"")
     with pytest.warns(RuntimeWarning, match="reading image 0 at time point 0 only"):
         io.load_volume(p)
+
+
+def test_lif_missing_z_length_keeps_xy_calibration(monkeypatch, tmp_path):
+    # Regression: a None z scale used to raise inside the parser, and the broad
+    # except then discarded the valid x/y calibration as well.
+    fake = _make_fake_readlif(1, 2, [2.0, 2.0, None, None])
+    monkeypatch.setitem(sys.modules, "readlif", fake)
+    path = tmp_path / "noz.lif"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="no z calibration"):
+        _, meta = io.load_volume(path)
+    assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)

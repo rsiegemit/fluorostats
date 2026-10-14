@@ -419,11 +419,17 @@ def _parse_lif_metadata(img) -> dict:
     }
 
     try:
+        # readlif's scale is (x, y, z, t) in pixels per µm for x, y and z (None when
+        # the file gives no length for an axis), so the voxel size is its reciprocal.
         scale = img.scale
         if scale:
-            voxel_x = 1.0 / scale[0] * 1e6 if scale[0] > 0 else 1.0
-            voxel_y = 1.0 / scale[1] * 1e6 if len(scale) > 1 and scale[1] > 0 else voxel_x
-            voxel_z = 1.0 / scale[2] * 1e6 if len(scale) > 2 and scale[2] > 0 else 1.0
+            def um(i: int):
+                s = scale[i] if len(scale) > i else None
+                return 1.0 / s if s and s > 0 else None
+
+            voxel_x = um(0) or 1.0
+            voxel_y = um(1) or voxel_x
+            voxel_z = um(2) or 1.0
             meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
             meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
                                   if len(scale) > i and scale[i] and scale[i] > 0}
