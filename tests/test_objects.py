@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from fluorostats import stats
 import pytest
 
 from fluorostats import objects
@@ -185,12 +186,12 @@ def test_watershed_split_all_labels_below_min_size():
 
 
 # ---------------------------------------------------------------------------
-# objects.py:248, 251, 261 — local _gini/_cv guards (empty / all-zero)
+# stats.gini / stats.coefficient_of_variation guards (empty / all-zero)
 # ---------------------------------------------------------------------------
 def test_objects_gini_cv_guards():
-    assert np.isnan(objects._gini(np.array([])))       # 248: size == 0
-    assert objects._gini(np.zeros(4)) == 0.0           # 251: sum == 0
-    assert np.isnan(objects._cv(np.zeros(4)))          # 261: mean == 0
+    assert np.isnan(stats.gini(np.array([])))       # 248: size == 0
+    assert stats.gini(np.zeros(4)) == 0.0           # 251: sum == 0
+    assert np.isnan(stats.coefficient_of_variation(np.zeros(4)))          # 261: mean == 0
 
 
 # --------------------------------------------------------------------------- #

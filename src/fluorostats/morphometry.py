@@ -148,8 +148,3 @@ def depth_centroid(
         "z_p50": _percentile(50),
         "z_p75": _percentile(75),
     }
-
-# Transitional aliases for tests that still reach the old private names; removed
-# once those tests call stats.gini / stats.coefficient_of_variation directly.
-_gini = gini
-_cv = coefficient_of_variation

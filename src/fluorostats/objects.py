@@ -457,8 +457,3 @@ def radial_distribution(
         "r_max": rmax,
         "n": int(pts.shape[0]),
     }
-
-# Transitional aliases for tests that still reach the old private names; removed
-# once those tests call stats.gini / stats.coefficient_of_variation directly.
-_gini = gini
-_cv = coefficient_of_variation

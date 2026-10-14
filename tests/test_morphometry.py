@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from fluorostats import stats
 import pytest
 
 from fluorostats import morphometry
@@ -103,9 +104,9 @@ def test_lateral_homogeneity_too_small_for_tiles():
 
 def test_morphometry_degenerate():
     assert morphometry.depth_span(np.zeros((3, 4, 4)))["span_slices"] == 0
-    assert np.isnan(morphometry._gini(np.array([])))
-    assert morphometry._cv(np.array([2.0])) == 0.0        # single value
-    assert np.isnan(morphometry._cv(np.array([])))
+    assert np.isnan(stats.gini(np.array([])))
+    assert stats.coefficient_of_variation(np.array([2.0])) == 0.0        # single value
+    assert np.isnan(stats.coefficient_of_variation(np.array([])))
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +125,7 @@ def test_depth_span_no_slice_above_cutoff():
 
 
 # ---------------------------------------------------------------------------
-# morphometry.py:165 — _gini all-zero (sum==0) guard
+# stats.gini all-zero (sum==0) guard
 # ---------------------------------------------------------------------------
 def test_morphometry_gini_all_zero():
-    assert morphometry._gini(np.zeros(5)) == 0.0
+    assert stats.gini(np.zeros(5)) == 0.0
