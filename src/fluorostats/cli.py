@@ -37,7 +37,7 @@ def formats():
 @cli.command("depth")
 @click.argument("manifest", type=click.Path(exists=True))
 @click.option("--output", "output_dir", default=None, type=click.Path(),
-              help="Override the manifest's output_dir")
+              help="Output folder; default: the manifest's output_dir")
 def depth_cmd(manifest, output_dir):
     """Depth-penetration analysis from a JSON manifest.
 
@@ -59,7 +59,7 @@ def depth_cmd(manifest, output_dir):
 @cli.command("viability")
 @click.argument("manifest", type=click.Path(exists=True))
 @click.option("--output", "output_dir", default=None, type=click.Path(),
-              help="Override the manifest's output_dir")
+              help="Output folder; default: the manifest's output_dir")
 def viability_cmd(manifest, output_dir):
     """Live/Dead viability analysis from a JSON manifest.
 
@@ -80,23 +80,23 @@ def viability_cmd(manifest, output_dir):
 
 @cli.command()
 @click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .oib/.oif/.tif volumes")
-@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
-@click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu",
+@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results (not inside --input)")
+@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", show_default=True, help="How to assign condition labels")
+@click.option("--channel", default=None, help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS")
+@click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu", show_default=True,
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
-@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9; CAN AFFECT RESULTS)")
-@click.option("--min-size", type=click.IntRange(min=0), default=64, help="Min object size in voxels")
-@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=click.IntRange(min=0), default=0, help="Background subtraction disk radius (0=off; enabling is recommended for confocal)")
+@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=0.9, show_default=True, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
+@click.option("--min-size", type=click.IntRange(min=0), default=64, show_default=True, help="Remove objects smaller than this, in voxels (CAN AFFECT RESULTS)")
+@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, show_default=True, help="Gaussian blur sigma in pixels, in-plane per z-slice (CAN AFFECT RESULTS)")
+@click.option("--bg-radius", type=click.IntRange(min=0), default=0, show_default=True, help="Background subtraction disk radius in pixels (0=off; enabling is recommended for confocal; CAN AFFECT RESULTS)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
-@click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster)")
-@click.option("--prune/--no-prune", default=False,
+@click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster); skeleton columns are left blank")
+@click.option("--prune/--no-prune", default=False, show_default=True,
               help="Prune short skeleton spurs before counting (field-standard branch/junction counts, "
-                   "matching Fiji AnalyzeSkeleton / AngioTool / REAVER). Default off = raw skeleton.")
-@click.option("--min-branch-length", type=click.FloatRange(min=0), default=5.0,
-              help="Minimum branch length in µm for spur pruning when --prune is set (default 5).")
+                   "matching Fiji AnalyzeSkeleton / AngioTool / REAVER); off = raw skeleton (CAN AFFECT RESULTS)")
+@click.option("--min-branch-length", type=click.FloatRange(min=0), default=5.0, show_default=True,
+              help="Minimum branch length in µm for spur pruning when --prune is set (CAN AFFECT RESULTS)")
 def quant3d(
     input_dir,
     output_dir,
@@ -152,16 +152,16 @@ def quant3d(
 
 @cli.command()
 @click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .png/.tif images")
-@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
-@click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(segment.METHODS), default="li",
+@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results (not inside --input)")
+@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", show_default=True, help="How to assign condition labels")
+@click.option("--channel", default=None, help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS")
+@click.option("--threshold", type=click.Choice(segment.METHODS), default="li", show_default=True,
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
-@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=1.0, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
-@click.option("--min-size", type=click.IntRange(min=0), default=64, help="Min object size in pixels")
-@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=click.IntRange(min=0), default=15, help="Background subtraction disk radius")
-@click.option("--auto-crop/--no-auto-crop", default=True, help="Auto-crop microscope borders (default: on)")
+@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=1.0, show_default=True, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
+@click.option("--min-size", type=click.IntRange(min=0), default=64, show_default=True, help="Remove objects smaller than this, in pixels (CAN AFFECT RESULTS)")
+@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, show_default=True, help="Gaussian blur sigma in pixels (CAN AFFECT RESULTS)")
+@click.option("--bg-radius", type=click.IntRange(min=0), default=15, show_default=True, help="Background subtraction disk radius in pixels (0=off; CAN AFFECT RESULTS)")
+@click.option("--auto-crop/--no-auto-crop", default=True, show_default=True, help="Auto-crop microscope borders before measuring (CAN AFFECT RESULTS)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
 def quant2d(

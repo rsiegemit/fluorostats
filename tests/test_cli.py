@@ -513,3 +513,12 @@ def test_quant2d_records_calibration_crop_box_and_um2_cluster_areas(tmp_path, mo
     from fluorostats import report
     assert list(cal.columns[:-5]) == ["file", "condition", "replicate", "shape",
                                       "channel_used", *report.METRICS_2D]
+
+
+@pytest.mark.parametrize("cmd,default", [("quant2d", "[default: 15"), ("quant3d", "[default: 0")])
+def test_help_states_defaults_and_result_changing_options(cmd, default):
+    text = " ".join(CliRunner().invoke(cli, [cmd, "--help"]).output.split())
+    assert "Background subtraction disk radius in pixels (0=off" in text and default in text
+    for opt in ("--channel", "--min-size", "--sigma", "--bg-radius", "--threshold-scale"):
+        help_line = text.split(opt, 1)[1].split(" --", 1)[0]
+        assert "CAN AFFECT RESULTS" in help_line, opt
