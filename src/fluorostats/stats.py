@@ -8,6 +8,7 @@ A pragmatic non-parametric toolkit:
   - `welch_t` — Welch's t-test, for contrasts that explicitly ask for it.
   - `stratified_mann_whitney` — per-stratum tests + BH-FDR across strata.
   - `bootstrap_fold_change_ci` — distribution-free fold-change interval.
+  - `bootstrap_mean_ci` — percentile-bootstrap interval for a mean.
   - `stouffer_combine` — meta-analytic Z-pooling across independent tests.
   - `scheirer_ray_hare` — non-parametric 2-way ANOVA on ranks.
   - `gini`, `coefficient_of_variation` — dispersion summaries used by the
@@ -248,6 +249,23 @@ def bootstrap_fold_change_ci(
 # ---------------------------------------------------------------------------
 # Stouffer Z combination
 # ---------------------------------------------------------------------------
+
+def bootstrap_mean_ci(x, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0) -> dict:
+    """Mean with a percentile-bootstrap confidence interval.
+
+    Resamples ``x`` with replacement ``n_boot`` times (all draws in one block from
+    a ``default_rng(seed)`` generator, so a seed fixes the result exactly) and
+    returns ``{"mean", "ci_low", "ci_high"}``.
+    """
+    x = np.asarray(x, float)
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(x), (n_boot, len(x)))
+    means = x[idx].mean(1)
+    lo = (100 - 100 * ci) / 2          # exactly 2.5 for ci=0.95
+    return {"mean": float(x.mean()),
+            "ci_low": float(np.percentile(means, lo)),
+            "ci_high": float(np.percentile(means, 100 - lo))}
+
 
 def stouffer_combine(
     p_values: np.ndarray,

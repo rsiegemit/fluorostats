@@ -29,22 +29,25 @@ figure. Comparator capability matrix: methods_paper/data/competitor_depth_penetr
 """
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import figstyle as F
-from figstyle import OKABE, panel, save, caption
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 
-from fluorostats import depth
+from fluorostats import depth  # noqa: E402
+from fluorostats import pubfig as F  # noqa: E402
+from fluorostats.pubfig import OKABE, panel  # noqa: E402
 
-RES = Path(__file__).resolve().parent / "results"
+HERE = Path(__file__).resolve().parent
+RES = HERE / "results"
 RES.mkdir(parents=True, exist_ok=True)
+FIGURES = HERE / "figures" / "main"
+FIG_WIDTH = 5.147   # inches: the text width of the paper this figure was made for
 RNG_SEED = 0
 
 
@@ -318,7 +321,7 @@ def benchmark_D():
 # --------------------------------------------------------------------------- #
 def make_figure(ctx, lam_ctx):
     F.apply_style()
-    fig = plt.figure(figsize=(F.TW, 2.237))
+    fig = plt.figure(figsize=(FIG_WIDTH, 2.237))
     gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 0.95, 0.95], wspace=0.46,
                           left=0.075, right=0.985, top=0.915, bottom=0.148)
 
@@ -376,8 +379,7 @@ def make_figure(ctx, lam_ctx):
              ("long λ = %g" % ctx["lam_long"], ctx["rf_long"], ctx["rf_gt_long"], OKABE["sky"])]
     for i, (name, vals, gt, c) in enumerate(conds):
         vals = np.asarray(vals)
-        axc.bar(i, vals.mean(), width=0.6, color=F.lighten(c, 0.3) if hasattr(F, "lighten") else c,
-                edgecolor=c, lw=0.8, zorder=1)
+        axc.bar(i, vals.mean(), width=0.6, color=c, edgecolor=c, lw=0.8, zorder=1)
         axc.errorbar(i, vals.mean(), yerr=vals.std(ddof=1), color=c, capsize=3, lw=1.2, zorder=2)
         axc.scatter(np.full(len(vals), i) + np.linspace(-0.1, 0.1, len(vals)), vals,
                     color=c, edgecolor="white", s=22, lw=0.5, zorder=3)
@@ -392,8 +394,8 @@ def make_figure(ctx, lam_ctx):
              transform=axc.transAxes, ha="center", va="top", fontsize=5.0, color="#333")
     panel(axc, "c", "condition discrimination")
 
-    save(fig, "b_depth_penetration", tight=False)
-    caption("b_depth_penetration",
+    F.save(fig, "b_depth_penetration", FIGURES, tight=False)
+    F.caption("b_depth_penetration",
             "Depth-penetration module validation on synthetic Beer-Lambert ground truth. "
             "(a) Surface-normalised intensity vs depth: the known analytic decay e^(-z/lambda) "
             "(black dashed) and fluorostats recovery from noisy z-stacks (blue, mean +/- s.d. over "
@@ -407,7 +409,7 @@ def make_figure(ctx, lam_ctx):
             "(p=4.2e-24). Absolute/normalised AUC are recovered to <0.1%% on noiseless stacks "
             "(exact) and within noise on noisy stacks; fluorostats reproduces the standard "
             "per-slice-mean profile (Fiji Plot Z-axis Profile) bit-for-bit and its trapezoidal AUC "
-            "is ~175x more accurate than a naive rectangular sum.")
+            "is ~175x more accurate than a naive rectangular sum.", FIGURES)
 
 
 def main():

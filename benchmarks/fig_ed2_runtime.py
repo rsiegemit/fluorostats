@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 import figstyle as F
-from figstyle import OKABE, panel, save, caption
+from figstyle import OKABE
 
 from fluorostats import metrics_3d, morphometry
 

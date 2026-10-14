@@ -6,7 +6,7 @@ import figstyle as F
 from figstyle import OKABE, panel, save, caption
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-from scipy import stats as sps
+from fluorostats.agreement import lins_ccc
 from fluorostats.segment import binarize
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
@@ -55,10 +55,7 @@ axb.legend(fontsize=6, loc="lower left"); panel(axb, "b", "depth gradient")
 ext = pd.read_csv(R/"b_viability_external.csv")
 tv = ext.true_viability.values; mac = ext["Kerkhoff_macro_peakcount"].values; fx = ext["fluorostats_maxima(NEW)"].values
 # fluorostats-vs-ground-truth agreement (computed, not hand-typed): Lin's CCC + MAE
-def _ccc(a, b):
-    a = np.asarray(a, float); b = np.asarray(b, float)
-    return 2 * ((a - a.mean()) * (b - b.mean())).mean() / (a.var() + b.var() + (a.mean() - b.mean()) ** 2)
-ccc_v = _ccc(fx, tv); mae_v = float(np.abs(fx - tv).mean())
+ccc_v = lins_ccc(fx, tv); mae_v = float(np.abs(fx - tv).mean())
 axc = fig.add_subplot(gs[1, :2])
 axc.scatter(tv, ext["fluorostats_objcount"].values, s=10, color=GREY, alpha=0.55,
             zorder=1, label="fs alt. modes (count, area)")

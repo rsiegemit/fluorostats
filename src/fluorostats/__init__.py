@@ -79,6 +79,7 @@ from . import (  # noqa: F401
     power,
     render3d,
     plots,
+    pubfig,
     style,
     qc,
     report,

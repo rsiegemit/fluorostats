@@ -8,8 +8,9 @@ normalisation → AUC + single-exponential λ fit), and renders a three-panel
 figure showing (a) ground-truth recovery, (b) λ recovery on the identity line,
 and (c) two-condition discrimination.
 
-`figstyle.py` is the shared publication-styling helper (Okabe–Ito palette,
-panel labels, scale bars, consistent type sizes) used to build the figure.
+The figure is built with `fluorostats.pubfig`, the library's publication-figure
+kit (Okabe–Ito palette, panel labels, scale bars, consistent type sizes) — the
+same kit the methods-paper benchmark figures use.
 
 Run it:
 
