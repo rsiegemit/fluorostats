@@ -36,6 +36,7 @@ import imageio.v3 as iio
 import numpy as np
 import tifffile
 
+from . import keyence
 
 # ---------------------------------------------------------------------------
 # Lazy optional imports with helpful error messages
@@ -93,7 +94,7 @@ def _require(package: str, extra: str):
 # Public API
 # ---------------------------------------------------------------------------
 
-def load_auto(path: Path) -> tuple[np.ndarray, dict]:
+def load_auto(path: str | Path) -> tuple[np.ndarray, dict]:
     """Auto-detect format and load as volume or image.
 
     PNG/JPG/BMP load straight as 2D. Other formats try volume loading
@@ -122,7 +123,7 @@ def load_auto(path: Path) -> tuple[np.ndarray, dict]:
     return arr, meta
 
 
-def load_volume(path: Path) -> tuple[np.ndarray, dict]:
+def load_volume(path: str | Path) -> tuple[np.ndarray, dict]:
     """Load a 3D volume. Returns (array[C,Z,Y,X], metadata).
 
     A directory is auto-detected as a Keyence BZ-X export (folder of per-slice
@@ -137,19 +138,11 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
 def _read_volume(path: Path) -> tuple[np.ndarray, dict]:
     """(C, Z, Y, X) array and metadata, before the calibration record is made."""
     if path.is_dir():
-        from . import keyence
-        if not keyence.is_keyence_folder(path):
-            raise ValueError(f"Directory is not a recognised Keyence BZ-X export: {path}")
-        arr, meta = keyence.load_keyence_stack(path)
-        px, zs = meta.get("px_um") or 1.0, meta.get("z_step_um") or 1.0
-        meta["voxel_size_um"] = (zs, px, px)
-        meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
-            {"z"} if meta.get("z_step_um") else set())
-        # keyence.parse_gci warns that the Stack/Pitch unit is assumed.
-        meta["_axis_source"] = {"z": "file-assumed-0.1um"} if meta.get("z_step_um") else {}
-        chd = meta.get("channels") or {}
-        meta["channel_names"] = [chd.get(str(i), {}).get("name", f"CH{i}") for i in range(arr.shape[0])]
-        return arr, meta
+        fmt = next((f for f in DIRECTORY_FORMATS if f.probe(path)), None)
+        if fmt is None:
+            kinds = " or ".join(f.description for f in DIRECTORY_FORMATS)
+            raise ValueError(f"Directory is not a recognised {kinds}: {path}")
+        return fmt.volume(path)
 
     suffix = path.suffix.lower()
 
@@ -162,7 +155,7 @@ def _read_volume(path: Path) -> tuple[np.ndarray, dict]:
     return fmt.volume(path)
 
 
-def load_image(path: Path) -> tuple[np.ndarray, dict]:
+def load_image(path: str | Path) -> tuple[np.ndarray, dict]:
     """Load a 2D image. Returns (array[C,Y,X], metadata)."""
     path = Path(path)
     suffix = path.suffix.lower()
@@ -187,6 +180,23 @@ def supported_formats() -> dict[str, str]:
         except ImportError:
             formats[ext] = f"{fmt.description} (requires: pip install {fmt.package})"
     return formats
+
+
+# ---------------------------------------------------------------------------
+# Keyence BZ-X export folder
+# ---------------------------------------------------------------------------
+
+def _load_keyence_volume(path: Path) -> tuple[np.ndarray, dict]:
+    arr, meta = keyence.load_keyence_stack(path)
+    px, zs = meta.get("px_um") or 1.0, meta.get("z_step_um") or 1.0
+    meta["voxel_size_um"] = (zs, px, px)
+    meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
+        {"z"} if meta.get("z_step_um") else set())
+    # keyence.parse_gci warns that the Stack/Pitch unit is assumed.
+    meta["_axis_source"] = {"z": "file-assumed-0.1um"} if meta.get("z_step_um") else {}
+    chd = meta.get("channels") or {}
+    meta["channel_names"] = [chd.get(str(i), {}).get("name", f"CH{i}") for i in range(arr.shape[0])]
+    return arr, meta
 
 
 # ---------------------------------------------------------------------------
@@ -761,6 +771,21 @@ FORMATS: dict[str, Format] = {
     ".nd2": Format("Nikon NIS-Elements (ND2)", _load_nd2_volume, None, "nd2", "nikon"),
     ".lif": Format("Leica LAS X (LIF)", _load_lif_volume, None, "readlif", "leica"),
 }
+
+
+
+@dataclass(frozen=True)
+class DirectoryFormat:
+    """How one kind of folder export (read by ``load_volume``) is recognised and read."""
+
+    description: str
+    probe: Callable[[Path], bool]                          # True if the folder is this kind
+    volume: Callable[[Path], tuple[np.ndarray, dict]]      # -> (C, Z, Y, X)
+
+
+DIRECTORY_FORMATS: tuple[DirectoryFormat, ...] = (
+    DirectoryFormat("Keyence BZ-X export", keyence.is_keyence_folder, _load_keyence_volume),
+)
 
 VOLUME_SUFFIXES = {ext for ext, f in FORMATS.items() if f.volume is not None}
 IMAGE_SUFFIXES = {ext for ext, f in FORMATS.items() if f.image is not None}

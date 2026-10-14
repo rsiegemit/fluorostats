@@ -31,7 +31,7 @@ import numpy as np
 __all__ = ["parse_gci", "load_keyence_stack", "is_keyence_folder"]
 
 
-def is_keyence_folder(folder) -> bool:
+def is_keyence_folder(folder: str | Path) -> bool:
     """True if ``folder`` looks like a Keyence BZ-X export (has ``*_CHF*`` slices
     or a ``.gci`` archive). Used by ``fluorostats.io.load_volume`` to auto-detect
     a Keyence folder passed in place of a single file."""
@@ -49,7 +49,7 @@ def _int64_to_double(value) -> float | None:
         return None
 
 
-def parse_gci(gci_path) -> dict:
+def parse_gci(gci_path: str | Path) -> dict:
     """Parse a Keyence ``.gci`` archive into an acquisition-metadata dict.
 
     Returns keys: ``px_um`` (µm/pixel), ``z_step_um``, ``n_slices``,
@@ -149,7 +149,8 @@ def _warn_z_gaps(indices: list[int], folder: Path) -> None:
                       RuntimeWarning, stacklevel=3)
 
 
-def load_keyence_stack(folder, downsample: int = 1, channel: int | None = None):
+def load_keyence_stack(folder: str | Path, downsample: int = 1,
+                       channel: int | None = None) -> tuple[np.ndarray, dict]:
     """Assemble the raw z-stack from a Keyence BZ-X export folder.
 
     Parameters
