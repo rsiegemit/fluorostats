@@ -23,8 +23,9 @@ def group_color(name: str, override: str | None) -> str:
     return override or material_color(name)
 
 
-def plot_depth_curves(rows, aggregates, colors, ykey, ylabel, title, out_base,
-                      auc_window=None):
+def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
+                      colors: dict[str, str], ykey: str, ylabel: str, title: str,
+                      out_base: Path, auc_window: tuple[float, float] | None = None) -> None:
     """One line per group (mean ± SEM band) + faint individual stacks."""
     fig, ax = plt.subplots(figsize=(4.6, 3.6))
     if auc_window is not None:
@@ -71,7 +72,8 @@ def plot_depth_curves(rows, aggregates, colors, ykey, ylabel, title, out_base,
     _save(fig, out_base)
 
 
-def plot_auc(rows, colors, window, out_base, use_normalized=True):
+def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: Path,
+             use_normalized: bool = True) -> None:
     """Dot + mean/SEM bar of AUC per group for one window (primary stacks)."""
     metric = "normalized" if use_normalized else "absolute"
     lab = window_label(window)
@@ -102,8 +104,9 @@ def plot_auc(rows, colors, window, out_base, use_normalized=True):
     _save(fig, out_base)
 
 
-def plot_retention_multiwindow(rows, colors, windows, out_base,
-                               title="Signal retained vs depth window"):
+def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows: list[tuple],
+                               out_base: Path,
+                               title: str = "Signal retained vs depth window") -> None:
     """Grouped bars: mean retained fraction (AUC_norm / window width) per window.
 
     Dividing normalised AUC by window width gives the average fraction of

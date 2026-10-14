@@ -15,7 +15,7 @@ tool serves any probe-penetration / permeability study.
 
 Run it from the command line::
 
-    fluorostats depth <manifest.json> [--output-dir DIR]
+    fluorostats depth <manifest.json> [--output DIR]
 
 or from Python::
 
@@ -108,7 +108,6 @@ def load_manifest(path: Path) -> dict:
 
 
 _ROLES = ("primary", "aux")
-_REDUCERS = ("mean", "median")
 
 
 def _validate(m: dict) -> None:
@@ -116,8 +115,9 @@ def _validate(m: dict) -> None:
     problems = []
     if not isinstance(m["channel"], int) or m["channel"] < 0:
         problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
-    if m["reducer"] not in _REDUCERS:
-        problems.append(f"reducer must be one of {_REDUCERS}, got {m['reducer']!r}")
+    reducers = tuple(depth.REDUCERS)
+    if m["reducer"] not in reducers:
+        problems.append(f"reducer must be one of {reducers}, got {m['reducer']!r}")
     if not isinstance(m["n_surface"], int) or m["n_surface"] < 1:
         problems.append(f"n_surface must be a positive integer, got {m['n_surface']!r}")
     for w in m["auc_windows_um"]:
