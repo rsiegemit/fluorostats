@@ -273,12 +273,31 @@ def _load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
 
     with czifile.CziFile(str(path)) as czi:
         arr = czi.asarray()
+        axes = _czi_axes(czi)
         meta = _parse_czi_metadata(czi)
 
     meta["format"] = "zeiss_czi"
-    arr = _squeeze_singleton_dims(arr)
-    arr = _canonicalize_volume(arr, meta)
+    arr = _canonicalize_volume(arr if axes else _squeeze_singleton_dims(arr), meta,
+                               axes, _CZI_INDEX_AXES)
     return arr, meta
+
+
+# CZI dimensions other than C/Z/Y/X/S that are reduced to their first index.
+_CZI_INDEX_AXES = {"T": "time point", "B": "block", "V": "view", "H": "phase",
+                   "I": "illumination", "R": "rotation", "M": "mosaic tile",
+                   "A": "acquisition", "s": "scene"}
+# czifile < 2026 letters: '0' = colour samples, 'S' = scene (renamed 's').
+_LEGACY_CZI_LETTERS = str.maketrans({"S": "s", "0": "S"})
+
+
+def _czi_axes(czi) -> str | None:
+    """Axis letters of ``czi.asarray()``: czifile >= 2026 reads and labels the
+    first scene; older czifile labels the whole file. None if neither is exposed."""
+    scenes = getattr(czi, "scenes", None)
+    if scenes is not None:
+        return next(iter(scenes.values())).axes
+    axes = getattr(czi, "axes", None)
+    return axes.translate(_LEGACY_CZI_LETTERS) if axes else None
 
 
 def _czi_voxel_um(root):
@@ -334,11 +353,12 @@ def _load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
 
     with nd2.ND2File(str(path)) as f:
         arr = f.asarray()
+        axes = "".join(f.sizes) if hasattr(f, "sizes") else None
         meta = _parse_nd2_metadata(f)
 
     meta["format"] = "nikon_nd2"
-    arr = _squeeze_singleton_dims(arr)
-    arr = _canonicalize_volume(arr, meta)
+    arr = _canonicalize_volume(arr if axes else _squeeze_singleton_dims(arr), meta,
+                               axes, {"T": "time point", "P": "position"})
     return arr, meta
 
 
@@ -450,10 +470,10 @@ def _parse_lif_metadata(img) -> dict:
 # ---------------------------------------------------------------------------
 
 def _load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
-    data = tifffile.imread(str(path))
     meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "tiff"}
 
     with tifffile.TiffFile(str(path)) as tif:
+        data, axes = tif.series[0].asarray(), tif.series[0].axes
         if tif.ome_metadata:
             meta = _parse_ome_metadata(tif.ome_metadata, meta)
             meta["format"] = "ome_tiff"
@@ -461,15 +481,21 @@ def _load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
             meta = _parse_imagej_metadata(tif.imagej_metadata, meta)
             meta["format"] = "imagej_tiff"
 
-    data = _canonicalize_volume(data, meta)
+    data = _canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 
 
 def _load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
-    data = tifffile.imread(str(path))
+    with tifffile.TiffFile(str(path)) as tif:
+        data, axes = tif.series[0].asarray(), tif.series[0].axes
     meta: dict = {"voxel_size_um": (1.0, 1.0), "channel_names": [], "format": "tiff"}
-    data = _canonicalize_image(data, meta)
+    data = _canonicalize_image(data, meta, axes)
     return data, meta
+
+
+# tifffile axis letters reduced to their first index ('Q', 'I' and the like say
+# nothing about what an axis is, so files carrying them fall back to the shape).
+_TIFF_INDEX_AXES = {"T": "time point"}
 
 
 def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
@@ -555,8 +581,50 @@ def _squeeze_singleton_dims(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
-def _canonicalize_volume(arr: np.ndarray, meta: dict) -> np.ndarray:
-    """Ensure array is (C, Z, Y, X)."""
+# Axis letters kept in a canonical array (tifffile convention); S = colour samples,
+# which become extra channels.
+_CANONICAL_AXES = "CSZYX"
+
+
+def _by_axis_names(arr: np.ndarray, axes: str, index_axes: dict[str, str]) -> np.ndarray | None:
+    """(C, Z, Y, X) from the reader's axis letters (C, S, Z, Y, X), or None when
+    the letters do not fit the array or a non-singleton axis is neither one of
+    them nor an ``index_axes`` letter (then only the shape can be used).
+
+    Colour samples become extra channels (channel-major). Each ``index_axes``
+    axis (time point, position, ...) is reduced to its first index, announced.
+    """
+    sizes = dict(zip(axes, arr.shape))
+    if len(axes) != arr.ndim or len(sizes) != arr.ndim or not {"Y", "X"} <= set(axes):
+        return None
+    if any(n > 1 and a not in _CANONICAL_AXES and a not in index_axes for a, n in sizes.items()):
+        return None
+    for a, n in sizes.items():
+        if a in index_axes and n > 1:
+            warnings.warn(f"keeping only {index_axes[a]} 0 of {n} (axis {a!r} of the file).",
+                          RuntimeWarning, stacklevel=4)
+    arr = arr[tuple(slice(None) if a in _CANONICAL_AXES else 0 for a in axes)]
+    order = [a for a in "CSZ" if a not in sizes] + [a for a in axes if a in _CANONICAL_AXES]
+    arr = arr[(np.newaxis,) * (len(order) - arr.ndim)]
+    arr = arr.transpose([order.index(a) for a in _CANONICAL_AXES])
+    return arr.reshape(-1, *arr.shape[2:])
+
+
+def _canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
+                         index_axes: dict[str, str] | None = None) -> np.ndarray:
+    """Ensure array is (C, Z, Y, X): by axis name when the reader labels its axes
+    (``axes``), otherwise by shape."""
+    named = _by_axis_names(arr, axes, index_axes or {}) if axes else None
+    arr = named if named is not None else _volume_by_shape(arr)
+    n_ch = arr.shape[0]
+    if len(meta["channel_names"]) < n_ch:
+        for i in range(len(meta["channel_names"]), n_ch):
+            meta["channel_names"].append(f"Ch{i + 1}")
+    return arr
+
+
+def _volume_by_shape(arr: np.ndarray) -> np.ndarray:
+    """(C, Z, Y, X) guessed from the array shape alone (no axis labels)."""
     ndim = arr.ndim
     if ndim == 3:
         arr = arr[np.newaxis]
@@ -582,21 +650,19 @@ def _canonicalize_volume(arr: np.ndarray, meta: dict) -> np.ndarray:
     elif ndim > 5:
         arr = _squeeze_singleton_dims(arr)
         if arr.ndim != 4:  # pragma: no cover - squeeze always yields 4D
-            return _canonicalize_volume(arr, meta)
+            return _volume_by_shape(arr)
     else:
         raise ValueError(f"Unexpected array shape {arr.shape} with {ndim} dims")
-
-    n_ch = arr.shape[0]
-    if len(meta["channel_names"]) < n_ch:
-        for i in range(len(meta["channel_names"]), n_ch):
-            meta["channel_names"].append(f"Ch{i + 1}")
-
     return arr
 
 
-def _canonicalize_image(arr: np.ndarray, meta: dict) -> np.ndarray:
-    """Ensure 2D image is (C, Y, X)."""
-    if arr.ndim == 2:
+def _canonicalize_image(arr: np.ndarray, meta: dict, axes: str | None = None) -> np.ndarray:
+    """Ensure 2D image is (C, Y, X): by axis name when the reader labels a single
+    plane (``axes``), otherwise by shape (a labelled z-stack keeps the shape rule)."""
+    named = _by_axis_names(arr, axes, _TIFF_INDEX_AXES) if axes else None
+    if named is not None and named.shape[1] == 1:
+        arr = named[:, 0]
+    elif arr.ndim == 2:
         arr = arr[np.newaxis]
     elif arr.ndim == 3:
         if arr.shape[2] <= 4:

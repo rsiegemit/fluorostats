@@ -559,3 +559,90 @@ def test_lif_missing_z_length_keeps_xy_calibration(monkeypatch, tmp_path):
     with pytest.warns(RuntimeWarning, match="no z calibration"):
         _, meta = io.load_volume(path)
     assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# Readers that label their axes are reordered by name, not by shape
+# ---------------------------------------------------------------------------
+
+def _zc_stack(n_z=5, n_c=2):
+    """(Z, C, Y, X) stack whose channel c holds the value c + 1."""
+    return np.stack([np.full((n_z, 8, 8), c + 1, np.uint16) for c in range(n_c)], axis=1)
+
+
+def test_nd2_zcyx_is_reordered_by_axis_name(monkeypatch, tmp_path):
+    fake = _make_fake_nd2(_zc_stack(), (0.3, 0.3, 1.5), ["405", "488"])
+    fake.ND2File.sizes = {"Z": 5, "C": 2, "Y": 8, "X": 8}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "s.nd2"
+    path.write_bytes(b"")
+    out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_nd2_time_and_position_keep_first_index(monkeypatch, tmp_path):
+    arr = np.stack([np.stack([_zc_stack(), _zc_stack() + 10])] * 3, axis=1)   # (T, P, Z, C, Y, X)
+    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
+    fake.ND2File.sizes = {"T": 2, "P": 3, "Z": 5, "C": 2, "Y": 8, "X": 8}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "tp.nd2"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="time point 0 of 2") as rec:
+        out, _ = io.load_volume(path)
+    assert any("position 0 of 3" in str(w.message) for w in rec)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_nd2_rgb_samples_become_channels(monkeypatch, tmp_path):
+    arr = np.stack([np.full((4, 8, 8), v, np.uint8) for v in (10, 20, 30)], -1)   # (Z, Y, X, S)
+    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
+    fake.ND2File.sizes = {"Z": 4, "Y": 8, "X": 8, "S": 3}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "rgb.nd2"
+    path.write_bytes(b"")
+    out, _ = io.load_volume(path)
+    assert out.shape == (3, 4, 8, 8)
+    assert [out[c].mean() for c in range(3)] == [10, 20, 30]
+
+
+def test_czi_scene_axes_reorder_by_name(monkeypatch, tmp_path):
+    # czifile >= 2026 reads the first scene and labels it ('S' = colour samples).
+    fake = _make_fake_czifile("", _zc_stack())
+    scene = types.SimpleNamespace(axes="ZCYX")
+    fake.CziFile.scenes = {0: scene}
+    monkeypatch.setitem(sys.modules, "czifile", fake)
+    path = tmp_path / "s.czi"
+    path.write_bytes(b"")
+    out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
+    # Older czifile labels the whole file: 'S' = scene, '0' = colour samples.
+    t0 = _zc_stack()[None, :, :, :, :, None]                     # (S, Z, C, Y, X, 0)
+    arr = np.stack([np.concatenate([t0, t0 + 10]), np.concatenate([t0, t0 + 10]) + 20], axis=1)
+    fake = _make_fake_czifile("", arr)                            # (S, T, Z, C, Y, X, 0)
+    fake.CziFile.axes = "STZCYX0"
+    monkeypatch.setitem(sys.modules, "czifile", fake)
+    path = tmp_path / "old.czi"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="scene 0 of 2") as rec:
+        out, _ = io.load_volume(path)
+    assert any("time point 0 of 2" in str(w.message) for w in rec)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_labelled_axes_with_unknown_name_fall_back_to_shape(monkeypatch, tmp_path):
+    arr = np.zeros((3, 2, 5, 8, 8), np.uint16)
+    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
+    fake.ND2File.sizes = {"U": 3, "C": 2, "Z": 5, "Y": 8, "X": 8}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "u.nd2"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="first of 3 entries"):
+        out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)

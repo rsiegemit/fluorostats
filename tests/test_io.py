@@ -272,3 +272,76 @@ def test_loaders_announce_discarded_axes(tmp_path):
     with pytest.warns(RuntimeWarning, match="planes are treated as channels"):
         img, _ = load_image(pz)
     assert img.shape == (6, 8, 8)
+
+
+# ---------------------------------------------------------------------------
+# Axis order comes from the file's axis labels, not from the array shape
+# ---------------------------------------------------------------------------
+
+def _two_channel(order: str, n_z: int, value: int = 7) -> np.ndarray:
+    """A (Z, C, Y, X) or (C, Z, Y, X) stack whose channel 0 is 0 and channel 1 is `value`."""
+    czyx = np.stack([np.zeros((n_z, 16, 16)), np.full((n_z, 16, 16), value)]).astype(np.uint16)
+    return czyx if order == "CZYX" else czyx.transpose(1, 0, 2, 3)
+
+
+@pytest.mark.parametrize("n_z", [5, 30])
+def test_imagej_zcyx_hyperstack_channels_by_name(tmp_path, n_z):
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, _two_channel("ZCYX", n_z), imagej=True, metadata={"axes": "ZCYX"})
+    arr, meta = load_volume(p)
+    assert arr.shape == (2, n_z, 16, 16)
+    assert (arr[0].mean(), arr[1].mean()) == (0, 7)
+    assert len(meta["channel_names"]) == 2
+
+
+@pytest.mark.parametrize("order", ["CZYX", "ZCYX"])
+def test_ome_stack_channels_by_name(tmp_path, order):
+    p = tmp_path / "s.ome.tif"
+    tifffile.imwrite(p, _two_channel(order, 5), ome=True, metadata={"axes": order})
+    arr, _ = load_volume(p)
+    assert arr.shape == (2, 5, 16, 16)
+    assert (arr[0].mean(), arr[1].mean()) == (0, 7)
+
+
+def test_ome_time_series_keeps_first_time_point_by_name(tmp_path):
+    p = tmp_path / "t.ome.tif"
+    tzcyx = np.stack([_two_channel("ZCYX", 5), _two_channel("ZCYX", 5, value=9)])
+    tifffile.imwrite(p, tzcyx, ome=True, metadata={"axes": "TZCYX"})
+    with pytest.warns(RuntimeWarning, match="time point 0 of 2"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (2, 5, 16, 16)
+    assert (arr[0].mean(), arr[1].mean()) == (0, 7)
+
+
+def test_ome_single_plane_multichannel_is_channels_not_z(tmp_path):
+    p = tmp_path / "c.ome.tif"
+    tifffile.imwrite(p, np.stack([np.full((16, 16), v, np.uint16) for v in (1, 2, 3)]),
+                     ome=True, metadata={"axes": "CYX"})
+    vol, _ = load_volume(p)
+    assert vol.shape == (3, 1, 16, 16)
+    arr, meta = load_auto(p)
+    assert arr.shape == (3, 16, 16)
+    assert [arr[c].mean() for c in range(3)] == [1, 2, 3]
+    assert len(meta["voxel_size_um"]) == 2
+
+
+def test_rgb_tiff_samples_become_channels(tmp_path):
+    p = tmp_path / "rgb.tif"
+    rgb = np.stack([np.full((64, 48), v, np.uint8) for v in (10, 20, 30)], -1)
+    tifffile.imwrite(p, rgb, photometric="rgb")
+    vol, _ = load_volume(p)
+    assert vol.shape == (3, 1, 64, 48)
+    arr, _ = load_auto(p)
+    assert arr.shape == (3, 64, 48)
+    assert [arr[c].mean() for c in range(3)] == [10, 20, 30]
+    img, _ = load_image(p)
+    np.testing.assert_array_equal(img, arr)
+
+
+def test_unlabelled_tiff_keeps_shape_heuristic(tmp_path):
+    # A plain TIFF has no axis names ('QQYX'), so the shape rule still applies.
+    p = tmp_path / "plain.tif"
+    tifffile.imwrite(p, np.zeros((20, 8, 8, 3), np.uint8))
+    with pytest.warns(RuntimeWarning, match="assuming channel-last"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (3, 20, 8, 8)
