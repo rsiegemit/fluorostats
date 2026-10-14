@@ -55,6 +55,8 @@ Public API surface, grouped by module:
 
 __version__ = "0.8.2"
 
+import importlib
+
 from . import (  # noqa: F401
     io,
     preprocess,
@@ -64,8 +66,6 @@ from . import (  # noqa: F401
     metrics_2d,
     morphometry,
     depth,
-    depth_batch,
-    depth_figures,
     keyence,
     manifest,
     objects,
@@ -73,15 +73,20 @@ from . import (  # noqa: F401
     texture,
     spatial,
     viability,
-    viability_batch,
     stats,
     agreement,
     validate,
     power,
-    render3d,
-    plots,
-    pubfig,
-    style,
     qc,
-    report,
 )
+
+# Figure and orchestration modules load on first use (PEP 562), so importing a
+# measurement module never imports matplotlib.pyplot or changes its backend.
+_LAZY = {"depth_batch", "depth_figures", "viability_batch", "render3d", "plots",
+         "pubfig", "style", "report"}
+
+
+def __getattr__(name: str):
+    if name in _LAZY:
+        return importlib.import_module(f".{name}", __name__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

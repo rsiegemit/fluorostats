@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import functools
+import math
 from pathlib import Path
 
 import click
+import matplotlib
 
 from . import io as iq_io
 from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, skeleton, spatial
@@ -14,12 +16,12 @@ from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, sk
 @click.group()
 def cli():
     """FluoroStats — Universal fluorescence microscopy image quantification."""
+    matplotlib.use("Agg")   # every command writes figures to files; none opens a window
 
 
 @cli.command()
 def formats():
     """List all supported file formats and their availability."""
-    from . import io as iq_io
     click.echo("Supported formats:\n")
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
@@ -35,7 +37,7 @@ def formats():
 @cli.command("depth")
 @click.argument("manifest", type=click.Path(exists=True))
 @click.option("--output", "output_dir", default=None, type=click.Path(),
-              help="Override the manifest's output_dir")
+              help="Output folder; default: the manifest's output_dir")
 def depth_cmd(manifest, output_dir):
     """Depth-penetration analysis from a JSON manifest.
 
@@ -57,7 +59,7 @@ def depth_cmd(manifest, output_dir):
 @cli.command("viability")
 @click.argument("manifest", type=click.Path(exists=True))
 @click.option("--output", "output_dir", default=None, type=click.Path(),
-              help="Override the manifest's output_dir")
+              help="Output folder; default: the manifest's output_dir")
 def viability_cmd(manifest, output_dir):
     """Live/Dead viability analysis from a JSON manifest.
 
@@ -78,23 +80,23 @@ def viability_cmd(manifest, output_dir):
 
 @cli.command()
 @click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .oib/.oif/.tif volumes")
-@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
-@click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu",
+@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results (not inside --input)")
+@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", show_default=True, help="How to assign condition labels")
+@click.option("--channel", default=None, help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS")
+@click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu", show_default=True,
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
-@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9; CAN AFFECT RESULTS)")
-@click.option("--min-size", type=click.IntRange(min=0), default=64, help="Min object size in voxels")
-@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=click.IntRange(min=0), default=0, help="Background subtraction disk radius (0=off; enabling is recommended for confocal)")
+@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=0.9, show_default=True, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
+@click.option("--min-size", type=click.IntRange(min=0), default=64, show_default=True, help="Remove objects smaller than this, in voxels (CAN AFFECT RESULTS)")
+@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, show_default=True, help="Gaussian blur sigma in pixels, in-plane per z-slice (CAN AFFECT RESULTS)")
+@click.option("--bg-radius", type=click.IntRange(min=0), default=0, show_default=True, help="Background subtraction disk radius in pixels (0=off; enabling is recommended for confocal; CAN AFFECT RESULTS)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
-@click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster)")
-@click.option("--prune/--no-prune", default=False,
+@click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster); skeleton columns are left blank")
+@click.option("--prune/--no-prune", default=False, show_default=True,
               help="Prune short skeleton spurs before counting (field-standard branch/junction counts, "
-                   "matching Fiji AnalyzeSkeleton / AngioTool / REAVER). Default off = raw skeleton.")
-@click.option("--min-branch-length", type=click.FloatRange(min=0), default=5.0,
-              help="Minimum branch length in µm for spur pruning when --prune is set (default 5).")
+                   "matching Fiji AnalyzeSkeleton / AngioTool / REAVER); off = raw skeleton (CAN AFFECT RESULTS)")
+@click.option("--min-branch-length", type=click.FloatRange(min=0), default=5.0, show_default=True,
+              help="Minimum branch length in µm for spur pruning when --prune is set (CAN AFFECT RESULTS)")
 def quant3d(
     input_dir,
     output_dir,
@@ -114,7 +116,7 @@ def quant3d(
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
+    output_path = _output_outside_input(input_path, Path(output_dir))
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Resolve channel override
@@ -150,16 +152,16 @@ def quant3d(
 
 @cli.command()
 @click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .png/.tif images")
-@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
-@click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(segment.METHODS), default="li",
+@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results (not inside --input)")
+@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", show_default=True, help="How to assign condition labels")
+@click.option("--channel", default=None, help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS")
+@click.option("--threshold", type=click.Choice(segment.METHODS), default="li", show_default=True,
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
-@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=1.0, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
-@click.option("--min-size", type=click.IntRange(min=0), default=64, help="Min object size in pixels")
-@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=click.IntRange(min=0), default=15, help="Background subtraction disk radius")
-@click.option("--auto-crop/--no-auto-crop", default=True, help="Auto-crop microscope borders (default: on)")
+@click.option("--threshold-scale", type=click.FloatRange(min=0, min_open=True), default=1.0, show_default=True, help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)")
+@click.option("--min-size", type=click.IntRange(min=0), default=64, show_default=True, help="Remove objects smaller than this, in pixels (CAN AFFECT RESULTS)")
+@click.option("--sigma", type=click.FloatRange(min=0), default=1.0, show_default=True, help="Gaussian blur sigma in pixels (CAN AFFECT RESULTS)")
+@click.option("--bg-radius", type=click.IntRange(min=0), default=15, show_default=True, help="Background subtraction disk radius in pixels (0=off; CAN AFFECT RESULTS)")
+@click.option("--auto-crop/--no-auto-crop", default=True, show_default=True, help="Auto-crop microscope borders before measuring (CAN AFFECT RESULTS)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
 def quant2d(
@@ -179,7 +181,7 @@ def quant2d(
     """Quantify 2D fluorescence images: area fraction (cell coverage) and
     spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
+    output_path = _output_outside_input(input_path, Path(output_dir))
     output_path.mkdir(parents=True, exist_ok=True)
 
     ch_override = _parse_channel(channel)
@@ -260,16 +262,24 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
 def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict:
     """quant2d's per-file metrics (area fraction, clusters, coverage uniformity)."""
     arr, meta = iq_io.load_image(fpath)
+    crop_box = ""
     if auto_crop:   # crop microscope borders before channel selection
-        arr, _ = preprocess.auto_crop(arr)
+        arr, (y0, y1, x0, x1) = preprocess.auto_crop(arr)
+        crop_box = f"[{y0}:{y1}, {x0}:{x1}]"
     ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
     img, mask = _segment(arr[ch], **seg)
     if overlay_dir is not None:
         qc.overlay_2d(img, mask, overlay_dir / f"{fpath.stem}_overlay.png")
+    py, px = meta["voxel_size_um"]
     return {
         "shape": str(arr.shape),
+        "voxel_size_um": str(meta["voxel_size_um"]),
+        "voxel_size_source": meta.get("voxel_size_source", ""),
+        "auto_crop_box": crop_box,
         "channel_used": _channel_label(ch, meta["channel_names"]),
-        **metrics_2d.coverage_metrics(mask),
+        # sqrt(py * px): the side of a square pixel of the same area, so the µm²
+        # cluster areas are right for anisotropic pixels too
+        **metrics_2d.coverage_metrics(mask, pixel_size_um=math.sqrt(py * px)),
         **spatial.coverage_heterogeneity(mask),
     }
 
@@ -295,12 +305,20 @@ def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) 
 def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     """Shared quant2d/quant3d tail: per-metric plots, summary panel, p-values.
 
-    No-op unless plots are enabled and there is more than one condition.
+    Draws only when plots are enabled and there is more than one condition; either
+    way, the plot files an earlier run left that this run did not rewrite are removed.
     """
-    if no_plots or len(df["condition"].unique()) <= 1:
-        return
-
     plot_dir = output_path / "plots"
+    previous = _remove_owned_plots(plot_dir)
+    if not no_plots and len(df["condition"].unique()) > 1:
+        _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title)
+    for path in previous:
+        if not path.exists():
+            click.echo(f"Removed stale {path} (not produced by this run)")
+
+
+def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
+    """Draw the per-metric plots, the summary panel and pvalues.csv into ``plot_dir``."""
     has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
 
     for metric in metrics:
@@ -325,6 +343,36 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
+
+
+def _output_outside_input(input_path: Path, output_path: Path) -> Path:
+    """``output_path``, refused when it is (inside) the input folder.
+
+    Inputs are found recursively, so a rerun would read this tool's own overlay and
+    plot images back in as samples.
+    """
+    if output_path.resolve().is_relative_to(input_path.resolve()):
+        raise click.UsageError(
+            f"--output {output_path} is inside the input folder {input_path}; a rerun "
+            "would read its overlay/plot images as samples. Choose an output folder "
+            "outside --input.")
+    return output_path
+
+
+def _remove_owned_plots(plot_dir: Path) -> list[Path]:
+    """Delete the plot files an earlier run wrote; return the paths deleted.
+
+    Only names this tool writes (any reported metric's ``_bar``/``_box`` PNG, the
+    summary panel, ``pvalues.csv``) are touched, so an earlier run's results never
+    sit next to this run's and nothing else in the folder is removed.
+    """
+    owned = [plot_dir / f"{m}_{kind}.png" for m in {*report.METRICS_2D, *report.METRICS_3D}
+             for kind in ("bar", "box")]
+    owned += [plot_dir / "summary_panel.png", plot_dir / "pvalues.csv"]
+    removed = sorted(p for p in owned if p.exists())
+    for path in removed:
+        path.unlink()
+    return removed
 
 
 def _find_files(root: Path, suffixes: set[str]) -> list[Path]:

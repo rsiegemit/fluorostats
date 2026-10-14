@@ -18,10 +18,12 @@ identities) belong to the scripts that use this kit, not here. Usage::
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Sequence
 
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import numpy as np
+from numpy.typing import ArrayLike
 
 from . import agreement
 
@@ -71,7 +73,9 @@ def apply_style() -> None:
     })
 
 
-def panel(ax, label, title=None, dx=None, dy=None, pad=(-16, 5), xanchor=None) -> None:
+def panel(ax: plt.Axes, label: str, title: str | None = None, dx: float | None = None,
+          dy: float | None = None, pad: tuple[float, float] = (-16, 5),
+          xanchor: float | None = None) -> None:
     """Panel label: a bold lowercase letter at a fixed offset (points) from the
     axis top-left, plus an optional short roman descriptor beside it.
 
@@ -107,14 +111,14 @@ def panel(ax, label, title=None, dx=None, dy=None, pad=(-16, 5), xanchor=None) -
 
 # ---- image-panel helpers (shared so every figure renders images identically) ----
 
-def imnorm(a, lo=1, hi=99.5) -> np.ndarray:
+def imnorm(a: ArrayLike, lo: float = 1, hi: float = 99.5) -> np.ndarray:
     """Percentile-normalise an intensity image to [0, 1] for display."""
     a = np.asarray(a, float)
     p0, p1 = np.percentile(a, lo), np.percentile(a, hi)
     return np.clip((a - p0) / (p1 - p0 + 1e-9), 0, 1)
 
 
-def image_axes(ax, spine="#999999", lw=0.5) -> None:
+def image_axes(ax: plt.Axes, spine: str = "#999999", lw: float = 0.5) -> None:
     """Strip ticks and apply the standard light-grey frame to an image axis."""
     ax.set_xticks([])
     ax.set_yticks([])
@@ -124,7 +128,7 @@ def image_axes(ax, spine="#999999", lw=0.5) -> None:
         sp.set_linewidth(lw)
 
 
-def outline(ax, labels, rgb, width=2) -> None:
+def outline(ax: plt.Axes, labels: np.ndarray, rgb: Sequence[float], width: int = 2) -> None:
     """Overlay thick instance/mask outlines (RGBA) on an image axis. rgb in 0-1."""
     from scipy import ndimage as ndi
     from skimage.segmentation import find_boundaries
@@ -137,22 +141,23 @@ def outline(ax, labels, rgb, width=2) -> None:
     ax.imshow(ov, interpolation="nearest")
 
 
-def composite2ch(live, dead, live_gain=1.0, dead_gain=1.0) -> np.ndarray:
+def composite2ch(live: np.ndarray, dead: np.ndarray, live_gain: float = 1.0,
+                 dead_gain: float = 1.0) -> np.ndarray:
     """Green (live) / magenta (dead) two-channel RGB composite, colourblind-safe."""
     g = imnorm(live) * live_gain
     r = imnorm(dead) * dead_gain
     return np.clip(np.dstack([r + 0.1 * g, g, r]), 0, 1)
 
 
-def fill_mask(ax, mask, rgb, alpha=0.85) -> None:
+def fill_mask(ax: plt.Axes, mask: np.ndarray, rgb: Sequence[float], alpha: float = 0.85) -> None:
     """Overlay a flat semi-transparent RGBA fill wherever mask > 0 (rgb in 0-1)."""
     ov = np.zeros((*mask.shape, 4))
     ov[mask > 0] = (*rgb, alpha)
     ax.imshow(ov, interpolation="nearest")
 
 
-def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.07,
-             center_label=False) -> None:
+def scalebar(ax: plt.Axes, length_px: float, label: str, loc: str = "lower right",
+             color: str = "white", pad: float = 0.07, center_label: bool = False) -> None:
     """Draw a scale bar on an image axis; ``length_px`` in data (pixel) units.
 
     The label is anchored to the bar end nearest the image edge (right-aligned for
@@ -178,7 +183,7 @@ def scalebar(ax, length_px, label, loc="lower right", color="white", pad=0.07,
 
 # ---- export ----
 
-def save(fig, name, folder, tight=True, pad=0.4) -> None:
+def save(fig: plt.Figure, name: str, folder: str | Path, tight: bool = True, pad: float = 0.4) -> None:
     """Export an editable vector PDF + 600-dpi PNG at the figure's exact size.
 
     Never crops with ``bbox_inches='tight'``, which silently rescales the physical
@@ -199,7 +204,7 @@ def save(fig, name, folder, tight=True, pad=0.4) -> None:
     print("saved", f"{stem}.pdf / .png (%.2fx%.2f in)" % tuple(fig.get_size_inches()))
 
 
-def caption(name, text, folder) -> None:
+def caption(name: str, text: str, folder: str | Path) -> None:
     """Write a figure's caption next to it as ``<folder>/<name>.txt``."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
@@ -208,8 +213,11 @@ def caption(name, text, folder) -> None:
 
 # ---- data panels ----
 
-def lollipop(ax, labels, values, *, colors=None, floor=None, los=None, his=None,
-             ascending=False, fmt="{:.3f}", label_fs=6, value_fs=5.6, highlight="fluorostats"):
+def lollipop(ax: plt.Axes, labels: Sequence[str], values: Sequence[float], *,
+             colors: Sequence | None = None, floor: float | None = None,
+             los: Sequence[float] | None = None, his: Sequence[float] | None = None,
+             ascending: bool = False, fmt: str = "{:.3f}", label_fs: float = 6,
+             value_fs: float = 5.6, highlight: str | None = "fluorostats") -> list[str]:
     """Horizontal dot/lollipop plot with a zoomed x-axis for near-max values
     (encode magnitude by position, not bar area). Use instead of bars when every
     value hugs the axis maximum (correlation / accuracy panels).
@@ -245,7 +253,8 @@ def lollipop(ax, labels, values, *, colors=None, floor=None, los=None, his=None,
     return order
 
 
-def bland_altman(ax, a, b, *, color=None, loa_k=1.96, label="", annotate=True):
+def bland_altman(ax: plt.Axes, a: ArrayLike, b: ArrayLike, *, color: str | None = None,
+                 loa_k: float = 1.96, label: str = "", annotate: bool = True) -> tuple[float, float]:
     """Bland-Altman agreement panel: points, bias line and +/- limits of agreement.
 
     Numbers come from `fluorostats.agreement.bland_altman` (difference = a - b,
@@ -268,7 +277,7 @@ def bland_altman(ax, a, b, *, color=None, loa_k=1.96, label="", annotate=True):
     return bias, loa
 
 
-def round_sig(x, n=2) -> float:
+def round_sig(x: float, n: int = 2) -> float:
     """Round ``x`` to ``n`` significant figures (382.6 -> 380, 14.8 -> 15), so an
     annotation can be derived from data yet match a manuscript's rounding."""
     from math import floor, log10

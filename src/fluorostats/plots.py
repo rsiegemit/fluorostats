@@ -5,8 +5,6 @@ from __future__ import annotations
 from itertools import combinations
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -33,6 +31,14 @@ def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     return data, means, sems
 
 
+def _condition_colors(n: int) -> np.ndarray:
+    """``n`` distinct RGBA colours: Set2 for up to its 8 colours, else ``n`` evenly
+    spaced hues (Set2 would repeat colours past 8)."""
+    if n <= 8:
+        return plt.cm.Set2(np.linspace(0, 1, n))
+    return plt.cm.hsv(np.linspace(0, 1, n, endpoint=False))
+
+
 # ---------------------------------------------------------------------------
 # Single-metric plots
 # ---------------------------------------------------------------------------
@@ -56,7 +62,7 @@ def boxplot_by_condition(
     ax.set_xticks(range(1, len(conditions) + 1))
     ax.set_xticklabels(conditions)   # avoids the deprecated boxplot(labels=) kwarg
 
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
     for patch, color in zip(bp["boxes"], colors):
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
@@ -99,7 +105,7 @@ def bar_mean_sem(
     data, means, sems = _group_stats(df, metric, conditions)
 
     x = np.arange(len(conditions))
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
@@ -162,7 +168,7 @@ def summary_panel(
     axes = axes.flat
 
     conditions = sorted(df["condition"].unique())
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
     x = np.arange(len(conditions))
 
     for idx, metric in enumerate(available):
@@ -292,9 +298,10 @@ def compute_pvalues(
     (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
 
     Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
-    p_value, q_value, significance (empty if no pair has >=2 samples per group).
+    p_value, q_value, significance, cliffs_delta (``stats.cliffs_delta`` of a vs b),
+    test and correction (naming both), empty if no pair has >=2 samples per group.
     """
-    from scipy.stats import mannwhitneyu
+    from .stats import bh_fdr, mann_whitney
 
     conditions = sorted(df["condition"].unique())
     rows = []
@@ -307,24 +314,28 @@ def compute_pvalues(
             b = df.loc[df["condition"] == conditions[j], metric].dropna().values
             if len(a) < 2 or len(b) < 2:
                 continue
-            try:
-                _, p = mannwhitneyu(a, b, alternative="two-sided")
-                rows.append({
-                    "metric": metric,
-                    "condition_a": conditions[i],
-                    "condition_b": conditions[j],
-                    "n_a": len(a),
-                    "n_b": len(b),
-                    "p_value": p,
-                })
-            except ValueError:
+            res = mann_whitney(a, b)
+            if np.isnan(res["p"]):      # the test could not be computed
                 continue
+            rows.append({
+                "metric": metric,
+                "condition_a": conditions[i],
+                "condition_b": conditions[j],
+                "n_a": len(a),
+                "n_b": len(b),
+                "p_value": res["p"],
+                "cliffs_delta": res["cliffs_delta"],
+            })
 
     out = pd.DataFrame(rows)
     if not out.empty:
-        from .stats import bh_fdr
         out["q_value"] = bh_fdr(out["p_value"].values)
         out["significance"] = out["q_value"].map(_pvalue_stars)   # stars on CORRECTED q
+        out["test"] = "Mann-Whitney U, two-sided"
+        out["correction"] = "Benjamini-Hochberg FDR across all rows"
+        # existing columns first, in their earlier order; the added ones last
+        out = out[["metric", "condition_a", "condition_b", "n_a", "n_b", "p_value",
+                   "q_value", "significance", "cliffs_delta", "test", "correction"]]
     return out
 
 
@@ -373,7 +384,7 @@ def effect_size_heatmap(
     vmax: float = 1.0,
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
-):
+) -> plt.Figure:
     """Heatmap of an effect-size column across (metric × stratum).
 
     Cells flagged by `sig_col` (boolean column, e.g. BH-FDR sig) are
@@ -434,7 +445,7 @@ def forest_plot(
     title: str | None = None,
     xlabel: str | None = None,
     figsize: tuple[float, float] | None = None,
-):
+) -> plt.Figure:
     """Forest plot — one row per measurement, center ± [lo, hi]."""
     df = df.copy()
     df = df.sort_values(center_col).reset_index(drop=True)
@@ -470,11 +481,11 @@ def condition_strip(
     *,
     hue_col: str | None = None,
     marker_col: str | None = None,
-    ax=None,
+    ax: plt.Axes | None = None,
     palette: dict | None = None,
     markers: dict | None = None,
     show_median: bool = True,
-):
+) -> plt.Axes:
     """Strip plot with optional hue and per-point marker differentiation.
 
     `marker_col` is handy to distinguish e.g. "original" vs "new" batches
@@ -487,7 +498,7 @@ def condition_strip(
     hue_levels = sorted(df[hue_col].dropna().unique()) if hue_col else [None]
     marker_levels = sorted(df[marker_col].dropna().unique()) if marker_col else [None]
     palette = palette or {h: c for h, c in zip(
-        hue_levels, plt.cm.Set2(np.linspace(0, 1, max(1, len(hue_levels))))
+        hue_levels, _condition_colors(max(1, len(hue_levels)))
     )}
     markers = markers or {m: ("^" if i % 2 else "o") for i, m in enumerate(marker_levels)}
     n_hue = max(1, len(hue_levels))
@@ -534,7 +545,7 @@ def modality_panel(
     out_path: Path | None = None,
     figsize: tuple[float, float] | None = None,
     title: str | None = None,
-):
+) -> plt.Figure:
     """Compare a set of metrics across staining modalities.
 
     Produces a grid with rows = modalities, cols = metrics. Each cell is

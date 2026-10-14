@@ -37,13 +37,24 @@ METRICS_2D = [
     "coverage_morans_i",
 ]
 
-# Identifier columns that precede the metrics in the per-file CSV.
-_ID_COLUMNS_3D = ["file", "condition", "replicate", "shape", "voxel_size_um",
-                  "voxel_size_source", "channel_used"]
-_ID_COLUMNS_2D = ["file", "condition", "replicate", "shape", "channel_used"]
+# Per report mode: (identifier columns that precede the metrics in the per-file
+# CSV, the reported metrics, record-only columns that follow them). Record-only
+# columns are written per file but not summarised, plotted or tested; the 2D ones
+# were added after the others, so they come last to keep earlier columns in place.
+_MODES = {
+    "3d": (["file", "condition", "replicate", "shape", "voxel_size_um",
+            "voxel_size_source", "channel_used"], METRICS_3D, []),
+    "2d": (["file", "condition", "replicate", "shape", "channel_used"], METRICS_2D,
+           ["voxel_size_um", "voxel_size_source", "auto_crop_box",
+            "mean_cluster_area_um2", "median_cluster_area_um2"]),
+}
 
-_COLUMNS_3D = _ID_COLUMNS_3D + METRICS_3D
-_COLUMNS_2D = _ID_COLUMNS_2D + METRICS_2D
+
+def _mode(mode: str) -> tuple[list[str], list[str], list[str]]:
+    """``(identifier, metric, record-only columns)`` of a report mode; unknown modes are refused."""
+    if mode not in _MODES:
+        raise ValueError(f"Unknown report mode {mode!r}; expected one of {sorted(_MODES)}")
+    return _MODES[mode]
 
 
 def write_per_file_csv(
@@ -52,8 +63,8 @@ def write_per_file_csv(
     mode: str = "3d",
 ) -> pd.DataFrame:
     """Write per-file results to CSV. Returns the DataFrame."""
-    cols = _COLUMNS_3D if mode == "3d" else _COLUMNS_2D
-    df = pd.DataFrame(rows, columns=cols)
+    ids, metrics, records = _mode(mode)
+    df = pd.DataFrame(rows, columns=ids + metrics + records)
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,8 +78,8 @@ def write_per_condition_csv(
     mode: str = "3d",
 ) -> pd.DataFrame:
     """Write per-condition summary statistics to CSV."""
-    numeric = METRICS_3D if mode == "3d" else METRICS_2D
-    available = [c for c in numeric if c in df.columns]
+    _, metrics, _ = _mode(mode)
+    available = [c for c in metrics if c in df.columns]
 
     summary = (
         df.groupby("condition")[available]
@@ -99,7 +110,7 @@ def environment() -> dict:
               "pandas", "matplotlib", "skan"):
         try:
             pkgs[p] = _im.version(p)
-        except Exception:  # pragma: no cover - core deps are always installed
+        except _im.PackageNotFoundError:   # e.g. fluorostats run from source
             pkgs[p] = None
     readers = {r: _iu.find_spec(r) is not None
                for r in OPTIONAL_READERS}

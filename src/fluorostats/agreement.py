@@ -10,6 +10,7 @@ own module (not folded into ``stats``) since it answers a different question —
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy import stats as _sps
 
 
@@ -20,7 +21,7 @@ def _paired(a, b):
     return a[m], b[m]
 
 
-def bland_altman(a, b) -> dict:
+def bland_altman(a: ArrayLike, b: ArrayLike) -> dict:
     """Bland-Altman agreement between two paired measurement vectors.
 
     Returns bias (mean difference), SD of differences, 95% limits of
@@ -41,7 +42,7 @@ def bland_altman(a, b) -> dict:
     }
 
 
-def lins_ccc(a, b) -> float:
+def lins_ccc(a: ArrayLike, b: ArrayLike) -> float:
     """Lin's concordance correlation coefficient (agreement with the identity
     line): combines precision (correlation) and accuracy (bias)."""
     a, b = _paired(a, b)
@@ -54,7 +55,7 @@ def lins_ccc(a, b) -> float:
     return float(2 * cov / denom) if denom > 0 else float("nan")
 
 
-def icc(a, b) -> float:
+def icc(a: ArrayLike, b: ArrayLike) -> float:
     """ICC(A,1), two-way random, absolute agreement, single measure — treats
     the two methods as two raters of the same targets."""
     a, b = _paired(a, b)
@@ -72,7 +73,7 @@ def icc(a, b) -> float:
     return float((ms_rows - ms_err) / denom) if denom > 0 else float("nan")
 
 
-def agreement_report(a, b, name_a: str = "method A", name_b: str = "method B") -> dict:
+def agreement_report(a: ArrayLike, b: ArrayLike, name_a: str = "method A", name_b: str = "method B") -> dict:
     """Full agreement summary between two paired measurement vectors:
     Bland-Altman bias + limits of agreement, Lin's CCC, ICC, Spearman,
     Pearson, MAPE (using ``b`` as reference), and an exact-match flag."""

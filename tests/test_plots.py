@@ -71,6 +71,27 @@ def test_compute_pvalues_flags_significance():
     assert (pvals["significance"] != "ns").all()
 
 
+def test_compute_pvalues_names_test_correction_and_effect_size():
+    # pvalues.csv named neither the test nor the correction and had no effect size.
+    from fluorostats import stats
+
+    df = _replicate_df()
+    df.loc[df.index[:3], "n_components"] = np.nan
+    pvals = compute_pvalues(df, ["volume_fraction", "n_components"])
+    assert list(pvals.columns) == ["metric", "condition_a", "condition_b", "n_a", "n_b",
+                                   "p_value", "q_value", "significance", "cliffs_delta",
+                                   "test", "correction"]
+    assert (pvals["test"] == "Mann-Whitney U, two-sided").all()
+    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all rows").all()
+    for row in pvals.itertuples():
+        a = df.loc[df["condition"] == row.condition_a, row.metric].dropna()
+        b = df.loc[df["condition"] == row.condition_b, row.metric].dropna()
+        ref = stats.mann_whitney(a, b)
+        assert (row.n_a, row.n_b) == (len(a), len(b))
+        assert row.p_value == ref["p"] and row.cliffs_delta == ref["cliffs_delta"] == -1.0
+    assert list(pvals["q_value"]) == list(stats.bh_fdr(pvals["p_value"].to_numpy()))
+
+
 def test_condition_strip_default_axes_and_palette():
     """ax=None + no hue/marker exercises the auto-figure and default palette."""
     df = pd.DataFrame({
@@ -78,7 +99,8 @@ def test_condition_strip_default_axes_and_palette():
         "val": [1.0, 2.0, 3.0, 4.0, 5.0],
     })
     ax = condition_strip(df, "cond", "val")
-    assert ax is not None
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["a", "b"]
+    assert len(ax.collections) == 2 and len(ax.lines) == 2       # points + median per level
     import matplotlib.pyplot as plt
     plt.close(ax.figure)
 
@@ -185,17 +207,21 @@ def test_add_pvalue_annotations_more_than_4_conditions_adjacent_pairs():
     conditions = ["a", "b", "c", "d", "e"]
     fig, ax = _make_ax_with_ylim()
     _add_pvalue_annotations(ax, data, x, conditions)
+    # only the d-e neighbour pair differs; all pairs would also bracket a-e etc.
+    assert [t.get_text() for t in ax.texts] == ["***"] and len(ax.lines) == 1
     plt.close(fig)
 
 
 def test_add_pvalue_annotations_skips_small_groups():
     """Groups with < 2 samples are skipped (line 219)."""
-    # Pair (0,1) has only 1 sample each → skipped
-    data = [np.array([1.0]), np.array([2.0]), np.array([1.0, 2.0, 3.0, 4.0])]
+    # Group a has one sample: its pairs are not tested, so b-c is the only test and
+    # its BH q equals its p (0.0079, "**"); testing a's pairs would make it "*".
+    data = [np.array([1.0]), np.array([1.0, 2, 3, 4, 5]), np.array([10.0, 11, 12, 13, 14])]
     x = np.arange(3)
     conditions = ["a", "b", "c"]
     fig, ax = _make_ax_with_ylim()
     _add_pvalue_annotations(ax, data, x, conditions)
+    assert [t.get_text() for t in ax.texts] == ["**"]
     plt.close(fig)
 
 
@@ -208,19 +234,21 @@ def test_add_pvalue_annotations_all_nonsig_returns_early():
     conditions = ["a", "b", "c"]
     fig, ax = _make_ax_with_ylim()
     _add_pvalue_annotations(ax, data, x, conditions)
+    assert len(ax.texts) == len(ax.lines) == 0 and ax.get_ylim() == (0, 10)
     plt.close(fig)
 
 
 def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
     """Mock mannwhitneyu to raise ValueError → except branch (lines 222-223)."""
-    data = [np.array([1.0, 2.0, 3.0]), np.array([4.0, 5.0, 6.0])]
+    # separated n=10 groups: "***" unless the failed test is skipped
+    data = [np.arange(10.0), np.arange(10.0) + 100]
     x = np.arange(2)
     conditions = ["a", "b"]
     fig, ax = _make_ax_with_ylim()
-    # The function does `from scipy.stats import mannwhitneyu` locally, so
-    # patching scipy.stats.mannwhitneyu is the right target.
+    # stats.mann_whitney calls scipy.stats.mannwhitneyu, so that is the patch target.
     with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
         _add_pvalue_annotations(ax, data, x, conditions)
+    assert len(ax.texts) == 0
     plt.close(fig)
 
 
@@ -258,7 +286,9 @@ def test_effect_size_heatmap_no_col_col_creates_all_stratum():
     ])
     # 'stratum' column absent → line 351 fires
     fig = effect_size_heatmap(df, col_col="stratum")
-    assert fig is not None
+    ax = fig.axes[0]
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["all"]
+    assert [t.get_text() for t in ax.texts] == ["0.30", "0.80*"]   # * marks sig_q05
     plt.close(fig)
 
 
@@ -349,6 +379,8 @@ def test_condition_strip_no_median():
     })
     fig, ax = plt.subplots()
     condition_strip(df, "cond", "val", hue_col="hue", ax=ax, show_median=False)
+    assert len(ax.lines) == 0 and len(ax.collections) == 4
+    assert [t.get_text() for t in ax.get_legend().get_texts()] == ["x", "y"]
     plt.close(fig)
 
 
@@ -383,19 +415,36 @@ def test_condition_strip_empty_cross_skips_scatter():
     })
     fig, ax = plt.subplots()
     condition_strip(df, "cond", "val", hue_col="hue", ax=ax)
+    assert len(ax.collections) == 2                    # (a, y) and (b, x) are not drawn
     plt.close(fig)
 
 
-# Regression (release hardening): >8 conditions reused Set2 colors.
-def test_plots_many_conditions_no_color_collision(tmp_path):
-    """>8 conditions previously reused Set2 colors; just assert all renderers run."""
+# Regression: >8 conditions reused Set2 colours (Set2 has 8), so two conditions
+# shared a colour in every per-condition plot.
+def test_plots_many_conditions_get_distinct_colors(tmp_path, monkeypatch):
+    from matplotlib.figure import Figure
+
+    saved = []
+    monkeypatch.setattr(Figure, "savefig", lambda fig, *a, **k: saved.append(fig))
     rng = np.random.default_rng(0)
     df = pd.DataFrame([{"condition": f"C{c:02d}", "volume_fraction": float(rng.random())}
                        for c in range(10) for _ in range(3)])
     plots.bar_mean_sem(df, "volume_fraction", tmp_path / "bar.png")
     plots.boxplot_by_condition(df, "volume_fraction", tmp_path / "box.png")
     plots.summary_panel(df, ["volume_fraction"], tmp_path / "panel.png")
-    assert (tmp_path / "bar.png").exists() and (tmp_path / "box.png").exists()
+    for fig in saved:
+        colors = {p.get_facecolor()[:3] for p in fig.axes[0].patches}
+        assert len(colors) == 10
+    ax = condition_strip(df.assign(h=df["condition"]), "condition", "volume_fraction",
+                         hue_col="h", show_median=False)
+    assert len({tuple(c.get_facecolor()[0][:3]) for c in ax.collections}) == 10
+    plt.close(ax.figure)
+
+
+def test_condition_colors_unchanged_up_to_eight():
+    for n in (1, 2, 5, 8):
+        np.testing.assert_array_equal(plots._condition_colors(n),
+                                      plt.cm.Set2(np.linspace(0, 1, n)))
 
 
 def test_summary_stars_follow_the_corrected_table(tmp_path):
