@@ -8,20 +8,18 @@ versions follow [semantic versioning](https://semver.org).
 An audit against the new engineering rules (`docs/ENGINEERING.md`). Refactors were
 proven behaviour-identical with a golden-output harness over every public
 function, every CLI command and every figure script; the changes below that DO
-alter outputs are listed first, each with its effect on the manuscript.
+alter outputs are listed first.
 
 ### Fixed (changes outputs)
 - **Leica `.lif` voxel sizes were 10^6 too large.** readlif reports pixels per
   µm; the loader also multiplied by 1e6. A file with no z length also lost its
-  valid x/y calibration. *Paper: no `.lif` data used.*
+  valid x/y calibration.
 - **`segment.binarize(min_size=...)` removed objects of exactly that size** on
   scikit-image >= 0.26 (its `max_size` is inclusive), but kept them on older
   versions and disagreed with `objects.label_3d`. Now "smaller objects are
-  removed" on every version. *Paper: Fig 2 unaffected (uses `label_3d`); Fig 4
-  panel (e) overlay changes by 0.04-0.09% of its pixels, no number moves; Fig 6
-  Live/Dead counts (min_size 5) NOT re-verified — raw data not available here.*
+  removed" on every version.
 - **CLI summary-panel stars used raw p-values** while `pvalues.csv` starred BH
-  q-values; they now use the same q-values. *Paper: CLI plots only.*
+  q-values; they now use the same q-values.
 - **`--no-skeleton` wrote 0 into the skeleton columns**, which were then
   summarised, plotted and tested as measurements; they are now blank (NaN).
 - **An unnamed 4-channel (RGBA) image was measured on red**; it now maps to
@@ -57,7 +55,7 @@ alter outputs are listed first, each with its effect on the manuscript.
   into the library and its example copy deleted.
 - Tests organised one file per module; ruff-clean across src, tests,
   benchmarks and examples.
-- Supplementary figure scripts and outputs use the manuscript's S1-S4 names;
+- Supplementary figure scripts and outputs use S1-S4 names;
   caption numbers are read from the tables they describe.
 
 ## [0.8.2]

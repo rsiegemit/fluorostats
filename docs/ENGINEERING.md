@@ -156,7 +156,7 @@ methods_paper/     # git-ignored: manuscript work and collaborator data (DAT-1)
 Fixes landed one per commit on branch `engineering-audit`. Refactors were proven
 behaviour-identical with a golden harness (every public function and CLI command on
 fixed inputs, plus all nine figure/example scripts, compared byte for byte); changes
-that alter outputs are listed in `CHANGELOG.md` under Unreleased with their paper impact.
+that alter outputs are listed in `CHANGELOG.md` under Unreleased.
 
 Now compliant:
 
@@ -175,9 +175,7 @@ Now compliant:
 
 Open, each needing an owner decision (unifying or fixing changes numbers or API):
 
-- [ ] Manuscript-side discrepancies (figure claims that disagree with their data) are
-  tracked with the manuscript, not in this repository. One repo change waits on them:
-  `benchmarks/figS2_runtime.py` panel (c) plots a typed, unmeasured value.
+- [ ] `benchmarks/figS2_runtime.py` panel (c) plots a typed value, not a measured one.
 - [ ] SIN-1, kept separate because unifying changes numbers: three tile-grid
   remainder conventions (`morphometry` crop, `objects` float bins, `spatial`
   linspace); mean/SEM empty/NaN conventions in `plots`, `depth_batch`,
