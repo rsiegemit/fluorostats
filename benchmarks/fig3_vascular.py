@@ -47,7 +47,7 @@ for i, (t, mae, sd, p) in enumerate(rec):
              error_kw=dict(elinewidth=0.8, capsize=2, ecolor="#444"), zorder=2)
     axa.text(-0.001, i, t, ha="right", va="center", fontsize=6.0,
              fontweight="bold" if t == "fluorostats" else "normal")
-    if unbiased:                                            # only REAVER qualifies
+    if unbiased:
         axa.text(mae + sd + max(mae+sd for _,mae,sd,_ in rec)*0.02, i, "unbiased",
                  ha="left", va="center", fontsize=5.0, style="italic", color="#333")
 axa.set_yticks([])
@@ -114,12 +114,13 @@ gs_d = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, 1], wspace=0.70
 axd = fig.add_subplot(gs_d[0, :2])
 m = pd.read_csv(R/"b_ve_metrics.csv")
 ve, fs = m.VesselExpress_VF.values, m.fluorostats_VF.values
-bias, loa = F.bland_altman(axd, fs, ve, label=r" · ~1.7$\times$", annotate=False)
+offset = fs.mean() / ve.mean()                              # systematic fluorostats/VE ratio
+bias, loa = F.bland_altman(axd, fs, ve, label=rf" · ~{offset:.1f}$\times$", annotate=False)
 axd.set_ylim(-0.005, bias+loa+0.010)
 axd.set_xlabel("mean vessel VF")
 axd.set_ylabel("fluorostats − VesselExpress")
 # bias/LoA annotation placed in clear lower-right white space, clear of the zero line
-axd.text(0.97, 0.16, f"bias {bias:+.3f}\n±{loa:.3f} (95% LoA)\n~1.7$\\times$",
+axd.text(0.97, 0.16, f"bias {bias:+.3f}\n±{loa:.3f} (95% LoA)\n~{offset:.1f}$\\times$",
          transform=axd.transAxes, ha="right", va="bottom", fontsize=5.0, color="#333")
 panel(axd, "d", "metric agreement")
 
@@ -140,17 +141,18 @@ for sp in axr.spines.values():
     sp.set_linewidth(0.5)
     sp.set_color("#999")
 
+qualifying = [t for t, _, _, p in rec if p > ybias]   # tools whose bias test is not significant
 cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool REAVER benchmark "
- "(n=36): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "
+ f"(n={len(pi)}): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "
  "'unbiased' marks tools whose mean error is not significantly different from 0 (one-sample t-test, "
- "Bonferroni across the six tools); only REAVER qualifies. fluorostats (blue) ranks alongside AngioTool "
+ f"Bonferroni across the six tools); only {' and '.join(qualifying)} qualifies. fluorostats (blue) ranks alongside AngioTool "
  "in accuracy but, like every tool except REAVER, carries a small systematic underestimate. (b) Real "
  "light-sheet vessels (VesselExpress, Zenodo 6025935), 3-slice MIP crops: raw, VesselExpress software "
  "segmentation (magenta), fluorostats auto->li (blue); scale bar 100 µm. (c) 3D synthetic phantom vs "
  "exact ground truth: centreline-length error (%) with branch counts recovered exactly; volume-fraction "
  "error is 0.0 (exact) for every phantom. (d) Bland–Altman of vessel volume fraction, fluorostats vs "
- "VesselExpress (n=9): a ~1.7× systematic offset (bias line ± 95% limits) with consistent ranking "
- "(rank-agreement panel, Spearman 0.75) — a software-agreement comparison (VesselExpress GT is "
+ f"VesselExpress (n={len(fs)}): a ~{offset:.1f}× systematic offset (bias line ± 95% limits) with consistent ranking "
+ f"(rank-agreement panel, Spearman {rho:.2f}) — a software-agreement comparison (VesselExpress GT is "
  "pipeline-generated, not manual).")
 save(fig, "fig3_vascular", tight=False)
 caption("fig3_vascular", cap)

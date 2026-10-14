@@ -197,6 +197,7 @@ def main():
     figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)", xanchor=0.0315)   # row-leader
     figstyle.save(fig, "figS4_generalization", figstyle.SUPP, tight=False)
 
+    best_f1 = float(pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv"))["mean_f1@0.5"].max())
     caption = (
         "Figure S4 | Generalization across independent datasets and "
         "imaging modalities. Because fluorostats is training-free, it applies the "
@@ -206,7 +207,7 @@ def main():
         "fluorescence-nuclei test set (50 images) — the exact curated dataset that "
         "the StarDist deep-learning model was trained and evaluated on. fluorostats "
         "(blue) ranks first among all classical threshold heuristics and reaches "
-        f"{100.0 * 0.7886 / STARDIST_AP50:.0f}% of StarDist's published trained-DL "
+        f"{100.0 * best_f1 / STARDIST_AP50:.0f}% of StarDist's published trained-DL "
         f"AP@0.5 ({STARDIST_AP50}, orange dashed reference) on the trained model's "
         "home dataset, without ever seeing the training split. Note AP@0.5 and F1@0.5 "
         "are related but not identical instance metrics; the reference line is a "

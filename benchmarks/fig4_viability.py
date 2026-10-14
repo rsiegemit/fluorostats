@@ -111,7 +111,7 @@ dm_mid = binarize(dead[z], **seg)
 panels_c = [
     (F.composite2ch(live[z], dead[z]), "raw mid-plane\n(green live / magenta dead)"),
     (np.dstack([dm_mid*0.85, lm_mid*0.85, dm_mid*0.85]), "fluorostats\nclassification\n(grey = both, black = neither)"),
-    (F.composite2ch(live.max(0), dead.max(0)), "MIP — 2D collapses\ndepth (+5%)"),
+    (F.composite2ch(live.max(0), dead.max(0)), f"MIP — 2D collapses\ndepth (+{rbias['MIP']:.0f}%)"),
 ]
 for i,(img,ttl) in enumerate(panels_c):
     ax = fig.add_subplot(gs_c[i])

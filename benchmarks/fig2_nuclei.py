@@ -151,7 +151,9 @@ axb.set_yticks(range(len(fo)))
 axb.set_yticklabels(fo, fontsize=6.0)
 axb.set_xlabel("mean F1  (95% CI, n = 200)")
 axb.set_xlim(0.78, 0.955)
-axb.text(0.97, 0.06, "paired Δ excludes 0:\n−StarDist +0.025\n−Cellpose +0.034",
+axb.text(0.97, 0.06, "paired Δ excludes 0:\n"
+         f"−StarDist {ci.loc['fluorostats - StarDist', 'mean_F1']:+.3f}\n"
+         f"−Cellpose {ci.loc['fluorostats - Cellpose', 'mean_F1']:+.3f}",
          transform=axb.transAxes, fontsize=5.0, color="#333", va="bottom", ha="right")
 panel(axb, "b", "vs trained deep learning (n = 200)", xanchor=0.0315)   # row-leader
 
@@ -272,7 +274,7 @@ cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
  f"learning at n=100 values (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
  "purple). (b) Forest plot on the full n=200 test set (Table 1) vs validated DL (StarDist, Cellpose, "
- "Omnipose): fluorostats 0.896 [0.873, 0.916]; paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
+ f"Omnipose): fluorostats {ci.loc['fluorostats', 'mean_F1']:.3f} [{ci.loc['fluorostats', 'CI_low']:.3f}, {ci.loc['fluorostats', 'CI_high']:.3f}]; paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
  "truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~0.31 µm/px). "
  "(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75): all non-DL methods (grey; fluorostats blue) "
  "collapse while DL (dashed) holds ~0.96; red band = DL advantage. (e) fluorostats overlay on a "
