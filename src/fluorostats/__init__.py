@@ -19,7 +19,8 @@ Public API surface, grouped by module:
   - ``depth`` — depth-penetration / permeability profiles (intensity-vs-depth,
     background subtraction, surface normalisation, AUC, single-exponential λ fit).
   - ``depth_batch`` / ``viability_batch`` — manifest-driven batch drivers (many
-    stacks by condition → tidy CSVs + figures).
+    stacks by condition → tidy CSVs + figures); ``depth_figures`` draws the
+    depth driver's figures.
   - ``objects`` — per-object volumes, equivalent diameters, centroids, shape
     descriptors (elongation/orientation/solidity), object density, centroid /
     angular / radial spatial distribution, nearest-neighbour clustering
@@ -64,6 +65,7 @@ from . import (  # noqa: F401
     morphometry,
     depth,
     depth_batch,
+    depth_figures,
     keyence,
     objects,
     ring,

@@ -63,13 +63,21 @@ from pathlib import Path
 
 import numpy as np
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
+from . import depth, stats
+from .depth import parse_window, window_bounds, window_label, window_title
+from .depth_figures import (group_color, plot_auc, plot_depth_curves,
+                            plot_retention_multiwindow)
+from .io import load_volume
+from .style import apply_style
 
-from . import depth, stats  # noqa: E402
-from .io import load_volume  # noqa: E402
-from .style import apply_style, PALETTE, material_color, lighten  # noqa: E402
+# Window helpers and figures live in `depth` / `depth_figures`; re-exported here
+# so ``from fluorostats.depth_batch import plot_auc, parse_window`` keeps working.
+__all__ = [
+    "load_manifest", "analyse_stack", "aggregate_group", "run",
+    "write_profiles_csv", "write_auc_csv", "write_group_summary_csv",
+    "parse_window", "window_label", "window_title", "window_bounds",
+    "plot_depth_curves", "plot_auc", "plot_retention_multiwindow",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -94,44 +102,21 @@ def load_manifest(path: Path) -> dict:
     return m
 
 
-def parse_window(w):
-    """Normalise an AUC window spec to ('full',) or (z0, z1) floats.
-
-    ``"full"`` integrates each stack over its own entire acquired range;
-    a ``[z0, z1]`` pair is a fixed physical window shared by all stacks.
-    """
-    if isinstance(w, str) and w.lower() == "full":
-        return ("full",)
-    return (float(w[0]), float(w[1]))
-
-
-def window_label(w) -> str:
-    return "full" if w == ("full",) else f"{w[0]:g}_{w[1]:g}um"
-
-
-def window_title(w) -> str:
-    return "full depth" if w == ("full",) else f"{w[0]:g}–{w[1]:g} µm"
-
-
-def window_bounds(w, max_depth_um: float):
-    """Resolve a window spec to concrete (z0, z1) for a stack of given depth."""
-    if w == ("full",):
-        return 0.0, float(max_depth_um)
-    return w[0], w[1]
-
-
 # ---------------------------------------------------------------------------
 # Core per-stack computation
 # ---------------------------------------------------------------------------
 
-def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> dict:
-    """Load one stack and compute raw/subtracted/normalised profiles + AUC + penetration (λ) fit."""
+def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float]:
+    """Load a stack and return its raw depth profile and z-step (µm)."""
     vol, meta = load_volume(path)
     vz = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
+    return depth.intensity_depth_profile(vol, vz, channel=cfg["channel"],
+                                         reducer=cfg["reducer"]), vz
 
-    raw = depth.intensity_depth_profile(
-        vol, vz, channel=cfg["channel"], reducer=cfg["reducer"]
-    )
+
+def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> dict:
+    """Load one stack and compute raw/subtracted/normalised profiles + AUC + penetration (λ) fit."""
+    raw, vz = _load_profile(path, cfg)
     subtracted = depth.subtract_background(raw, blank) if blank is not None else raw
     normalized = depth.normalize_to_surface(subtracted, n_surface=cfg["n_surface"])
 
@@ -287,145 +272,11 @@ def write_group_summary_csv(out: Path, aggregates: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Output: figures
-# ---------------------------------------------------------------------------
-
-def _group_color(name: str, override: str | None) -> str:
-    return override or material_color(name)
-
-
-def plot_depth_curves(rows, aggregates, colors, ykey, ylabel, title, out_base,
-                      auc_window=None):
-    """One line per group (mean ± SEM band) + faint individual stacks."""
-    fig, ax = plt.subplots(figsize=(4.6, 3.6))
-    if auc_window is not None:
-        ax.axvspan(auc_window[0], auc_window[1], color=PALETTE["highlight"],
-                   alpha=0.08, lw=0, zorder=0)
-        ax.axvline(auc_window[1], color=PALETTE["muted"], lw=0.8, ls=":", zorder=0)
-    for g, agg in aggregates.items():
-        c = colors[g]
-        # individual stacks
-        for r in rows:
-            if r["group"] != g:
-                continue
-            res = r["result"]
-            faint = r["role"] != "primary"
-            ax.plot(res["depth_um"], res[ykey], color=c,
-                    lw=0.8, alpha=0.35,
-                    ls="--" if faint else "-", zorder=1)
-        if agg is None:
-            continue
-        mean = agg["sub_mean"] if ykey == "bg_subtracted" else agg["norm_mean"]
-        sem = agg["sub_sem"] if ykey == "bg_subtracted" else agg["norm_sem"]
-        ax.fill_between(agg["depth_um"], mean - sem, mean + sem,
-                        color=lighten(c, 0.25), alpha=0.35, lw=0, zorder=2)
-        lam = agg.get("lambda_mean_um", float("nan"))
-        lab = f"{g} (n={agg['n']})"
-        if ykey == "bg_subtracted" and np.isfinite(lam):
-            # Overlay the single-exponential with the group λ (fit on absolute
-            # profile). I0 = near-surface group mean so the curve is anchored.
-            lam_sem = agg.get("lambda_sem_um", 0.0)
-            r2 = agg.get("r_squared_mean", float("nan"))
-            n_ok = agg.get("n_lambda_ok", 0)
-            i0 = float(np.mean(mean[:3]))
-            ax.plot(agg["depth_um"], i0 * np.exp(-agg["depth_um"] / lam),
-                    color=c, lw=1.1, ls=(0, (4, 2)), alpha=0.9, zorder=4)
-            # Show how many stacks yielded an in-range λ, so a single-stack or
-            # partly-degenerate group λ is never read as a confident group value.
-            lab += f"\n  λ={lam:.0f}±{lam_sem:.0f} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
-        ax.plot(agg["depth_um"], mean, color=c, lw=2.2, zorder=3, label=lab)
-    ax.set_xlabel("Depth (µm)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.legend()
-    ax.margins(x=0)
-    _save(fig, out_base)
-
-
-def plot_auc(rows, colors, window, out_base, use_normalized=True):
-    """Dot + mean/SEM bar of AUC per group for one window (primary stacks)."""
-    metric = "normalized" if use_normalized else "absolute"
-    lab = window_label(window)
-    groups = list(colors.keys())
-    fig, ax = plt.subplots(figsize=(3.6, 3.8))
-    xpos = {g: i for i, g in enumerate(groups)}
-    for g in groups:
-        vals = [r["result"]["auc"][lab][metric] for r in rows
-                if r["group"] == g and r["role"] == "primary"]
-        if not vals:
-            continue
-        c = colors[g]
-        x = xpos[g]
-        m = float(np.mean(vals))
-        sem = float(np.std(vals, ddof=1) / np.sqrt(len(vals))) if len(vals) > 1 else 0.0
-        ax.bar(x, m, width=0.55, color=lighten(c, 0.28), edgecolor=c, lw=1.4, zorder=1)
-        if sem:
-            ax.errorbar(x, m, yerr=sem, color=c, capsize=4, lw=1.4, zorder=2)
-        jitter = np.linspace(-0.12, 0.12, len(vals))
-        ax.scatter(np.full(len(vals), x) + jitter, vals, color=c,
-                   edgecolor="white", s=42, lw=0.8, zorder=3)
-    ax.set_xticks(list(xpos.values()))
-    ax.set_xticklabels(groups)
-    unit = "normalised" if use_normalized else "absolute"
-    ax.set_ylabel(f"AUC {window_title(window)} ({unit})")
-    ax.set_title(f"Signal retained over {window_title(window)}")
-    ax.margins(x=0.25)
-    _save(fig, out_base)
-
-
-def plot_retention_multiwindow(rows, colors, windows, out_base,
-                               title="Signal retained vs depth window"):
-    """Grouped bars: mean retained fraction (AUC_norm / window width) per window.
-
-    Dividing normalised AUC by window width gives the average fraction of
-    surface signal retained across that depth window (0-1), so windows of
-    different sizes sit on one comparable axis and the widening GelMA/hybrid
-    gap is visible at a glance.
-    """
-    groups = list(colors.keys())
-    labels = [window_label(w) for w in windows]
-    titles = [window_title(w) for w in windows]
-    nW = len(windows)
-    x = np.arange(nW)
-    width = 0.8 / max(len(groups), 1)
-    fig, ax = plt.subplots(figsize=(1.6 + 1.3 * nW, 3.8))
-    for gi, g in enumerate(groups):
-        c = colors[g]
-        means, sems, ptsx, ptsy = [], [], [], []
-        for wi, lab in enumerate(labels):
-            fr = [r["result"]["auc"][lab]["normalized"] / r["result"]["auc"][lab]["width_um"]
-                  for r in rows if r["group"] == g and r["role"] == "primary"]
-            xc = x[wi] + (gi - (len(groups) - 1) / 2) * width
-            means.append(np.mean(fr))
-            sems.append(np.std(fr, ddof=1) / np.sqrt(len(fr)) if len(fr) > 1 else 0.0)
-            ptsx += list(np.full(len(fr), xc) + np.linspace(-0.06, 0.06, len(fr)))
-            ptsy += list(fr)
-        xcs = x + (gi - (len(groups) - 1) / 2) * width
-        ax.bar(xcs, means, width=width, color=lighten(c, 0.28), edgecolor=c,
-               lw=1.3, label=g, zorder=1)
-        ax.errorbar(xcs, means, yerr=sems, fmt="none", ecolor=c, capsize=3, lw=1.2, zorder=2)
-        ax.scatter(ptsx, ptsy, color=c, edgecolor="white", s=30, lw=0.7, zorder=3)
-    ax.set_xticks(x)
-    ax.set_xticklabels(titles)
-    ax.set_ylabel("Mean retained fraction (surface = 1)")
-    ax.set_title(title)
-    ax.set_ylim(0, 1.05)
-    ax.legend()
-    _save(fig, out_base)
-
-
-def _save(fig, out_base: Path) -> None:
-    fig.tight_layout()
-    fig.savefig(out_base.with_suffix(".png"), dpi=300)
-    fig.savefig(out_base.with_suffix(".pdf"))
-    plt.close(fig)
-
-
-# ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
 def run(manifest_path: Path, output_override: str | None = None) -> Path:
+    """Analyse every stack in a manifest; write CSVs, figures and a console report."""
     m = load_manifest(manifest_path)
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -433,46 +284,30 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
     cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}
     windows = cfg["windows"]
-    sig = m["signal_label"]
-    # The narrowest fixed window is shaded on the depth-vs curves.
-    fixed = [w for w in windows if w != ("full",)]
-    shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
+    rows, colors, per_group_primary = _analyse_groups(m["groups"], cfg)
+    aggregates = {g: aggregate_group(ps) for g, ps in per_group_primary.items()}
 
+    write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
+    write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
+    write_group_summary_csv(out_dir / "group_depth_summary.csv", aggregates)
+    _write_figures(rows, aggregates, colors, windows, m["signal_label"], out_dir)
+
+    _print_summary(rows, windows)
+    _print_lambda_summary(rows)
+    print(f"\nOutputs written to {out_dir}/")
+    return out_dir
+
+
+def _analyse_groups(groups: list[dict], cfg: dict):
+    """Analyse every stack, group by group. Returns rows, colours, primaries."""
     rows: list[dict] = []
     colors: dict[str, str] = {}
     per_group_primary: dict[str, list[dict]] = {}
-
-    for grp in m["groups"]:
+    for grp in groups:
         gname = grp["name"]
-        colors[gname] = _group_color(gname, grp.get("color"))
-        blank = None
+        colors[gname] = group_color(gname, grp.get("color"))
         bg = grp.get("background")
-        if bg:
-            from fluorostats.depth import DepthProfile
-            # accept a single blank path or a list of replicate blanks (averaged)
-            bg_paths = [bg] if isinstance(bg, str) else list(bg)
-            profs = []
-            for bp in bg_paths:
-                bvol, bmeta = load_volume(Path(bp))
-                bvz = float(bmeta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
-                profs.append(depth.intensity_depth_profile(
-                    bvol, bvz, channel=cfg["channel"], reducer=cfg["reducer"]))
-            if len(profs) == 1:
-                blank = profs[0]
-            else:
-                # average replicate blanks over the common depth range; blank SEM
-                # becomes the across-replicate SEM of the mean profile
-                import numpy as _np
-                n = min(len(p.mean) for p in profs)
-                stack = _np.stack([p.mean[:n] for p in profs])
-                blank = DepthProfile(profs[0].depth_um[:n], stack.mean(0),
-                                     stack.std(0, ddof=1) / len(profs) ** 0.5,
-                                     profs[0].n_pixels)
-            # drop empty/truncated trailing slices (mean ~0) from the blank
-            valid = blank.mean > 0
-            if not valid.all():
-                blank = DepthProfile(blank.depth_um[valid], blank.mean[valid],
-                                     blank.sem[valid], blank.n_pixels)
+        blank = _load_blank(bg, cfg) if bg else None
         per_group_primary.setdefault(gname, [])
         for st in grp["stacks"]:
             role = st.get("role", "primary")
@@ -481,15 +316,37 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
             rows.append({"group": gname, "stack": st["label"], "role": role, "result": res})
             if role == "primary":
                 per_group_primary[gname].append(res)
+    return rows, colors, per_group_primary
 
-    aggregates = {g: aggregate_group(ps) for g, ps in per_group_primary.items()}
 
-    # CSVs
-    write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
-    write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
-    write_group_summary_csv(out_dir / "group_depth_summary.csv", aggregates)
+def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
+    """Blank (no-fluorophore) profile from one path or a list of replicate paths.
 
-    # Depth-vs figures (shared across windows)
+    Replicates are averaged over their common depth range, with the
+    across-replicate SEM; empty/truncated trailing slices (mean ~0) are dropped.
+    """
+    bg_paths = [bg] if isinstance(bg, str) else list(bg)
+    profs = [_load_profile(Path(bp), cfg)[0] for bp in bg_paths]
+    if len(profs) == 1:
+        blank = profs[0]
+    else:
+        n = min(len(p.mean) for p in profs)
+        stack = np.stack([p.mean[:n] for p in profs])
+        blank = depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),
+                                   stack.std(0, ddof=1) / len(profs) ** 0.5,
+                                   profs[0].n_pixels)
+    valid = blank.mean > 0
+    if not valid.all():
+        blank = depth.DepthProfile(blank.depth_um[valid], blank.mean[valid],
+                                   blank.sem[valid], blank.n_pixels)
+    return blank
+
+
+def _write_figures(rows, aggregates, colors, windows, sig: str, out_dir: Path) -> None:
+    """Depth-vs curves (absolute + normalised), per-window AUC plots, retention summary."""
+    # The narrowest fixed window is shaded on the depth-vs curves.
+    fixed = [w for w in windows if w != ("full",)]
+    shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
     plot_depth_curves(rows, aggregates, colors, "bg_subtracted",
                       f"Mean {sig} intensity (a.u., blank-subtracted)",
                       f"{sig} intensity vs depth",
@@ -498,22 +355,13 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
                       "Normalised intensity (surface = 1)",
                       f"Normalised {sig} intensity vs depth",
                       out_dir / "fig_depth_normalized", auc_window=shade_window)
-
-    # One AUC dot/bar plot per window (normalised + absolute)
     for w in windows:
         lab = window_label(w)
         plot_auc(rows, colors, w, out_dir / f"fig_auc_normalized_{lab}", use_normalized=True)
         plot_auc(rows, colors, w, out_dir / f"fig_auc_absolute_{lab}", use_normalized=False)
-
-    # Combined multi-window retention summary
     if len(windows) > 1:
         plot_retention_multiwindow(rows, colors, windows, out_dir / "fig_auc_retention_multiwindow",
                                    title=f"{sig} retained vs depth window")
-
-    _print_summary(rows, windows)
-    _print_lambda_summary(rows)
-    print(f"\nOutputs written to {out_dir}/")
-    return out_dir
 
 
 def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:

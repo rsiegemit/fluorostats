@@ -429,3 +429,37 @@ __all__ = [
     "auc_depth",
     "fit_penetration_depth",
 ]
+
+
+# ---------------------------------------------------------------------------
+# AUC depth windows: ``("full",)`` (each stack's own acquired range) or a fixed
+# physical ``(z0, z1)`` shared by every stack. Used by `depth_batch` and
+# `depth_figures`.
+# ---------------------------------------------------------------------------
+
+def parse_window(w):
+    """Normalise an AUC window spec to ('full',) or (z0, z1) floats.
+
+    ``"full"`` integrates each stack over its own entire acquired range;
+    a ``[z0, z1]`` pair is a fixed physical window shared by all stacks.
+    """
+    if isinstance(w, str) and w.lower() == "full":
+        return ("full",)
+    return (float(w[0]), float(w[1]))
+
+
+def window_label(w) -> str:
+    """Column/file-name label for a window: ``"full"`` or ``"0_100um"``."""
+    return "full" if w == ("full",) else f"{w[0]:g}_{w[1]:g}um"
+
+
+def window_title(w) -> str:
+    """Human-readable window title: ``"full depth"`` or ``"0–100 µm"``."""
+    return "full depth" if w == ("full",) else f"{w[0]:g}–{w[1]:g} µm"
+
+
+def window_bounds(w, max_depth_um: float):
+    """Resolve a window spec to concrete (z0, z1) for a stack of given depth."""
+    if w == ("full",):
+        return 0.0, float(max_depth_um)
+    return w[0], w[1]
