@@ -56,7 +56,9 @@ def test_morans_i_clustered_dispersed_uniform():
     assert spatial.morans_i(dispersed) < 0
     assert np.isfinite(spatial.morans_i(dispersed, connectivity="queen"))
     assert np.isnan(spatial.morans_i(np.ones((3, 3))))         # zero variance
-    two = np.full((3, 3), np.nan); two[0, 0] = 1; two[0, 1] = 2
+    two = np.full((3, 3), np.nan)
+    two[0, 0] = 1
+    two[0, 1] = 2
     assert np.isnan(spatial.morans_i(two))                     # <3 valid cells
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import matplotlib as mpl
 
+from fluorostats import style
 from fluorostats.style import (
     apply_style, PALETTE, MATERIAL_COLORS, DARK_PALETTE,
     material_color, darken, lighten,
@@ -45,3 +46,8 @@ def test_darken_lighten_are_inverses_ish():
 def test_dark_palette_has_mesh_and_background():
     assert "mesh" in DARK_PALETTE
     assert "background" in DARK_PALETTE
+
+
+def test_style_material_color_substring_and_fallback():
+    assert style.material_color("my GelMA sample") == style.MATERIAL_COLORS["GelMA"]  # substring
+    assert style.material_color("totally unknown") == style.PALETTE["muted"]          # fallback

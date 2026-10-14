@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import tifffile
 
+from fluorostats import io
 from fluorostats.io import (
     load_volume,
     load_image,
@@ -195,3 +196,20 @@ class TestSupportedFormatsAndDirs:
         (d / "readme.txt").write_text("nothing microscopy here")
         with pytest.raises(ValueError, match="Keyence"):
             load_volume(d)
+
+
+# ---------------------------------------------------------------------------
+# io.py:435 — OME channel-name append (valid Channel with a Name)
+# ---------------------------------------------------------------------------
+def test_ome_metadata_channel_name_append():
+    ome_xml = (
+        '<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06">'
+        '<Image><Pixels PhysicalSizeX="0.5" PhysicalSizeY="0.5" PhysicalSizeZ="2.0">'
+        '<Channel Name="EGFP"/>'
+        '<Channel Fluor="mCherry"/>'
+        '</Pixels></Image></OME>'
+    )
+    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
+    out = io._parse_ome_metadata(ome_xml, meta)
+    assert out["channel_names"] == ["EGFP", "mCherry"]
+    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)

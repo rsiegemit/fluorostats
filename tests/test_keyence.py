@@ -4,10 +4,9 @@ import zipfile
 
 import numpy as np
 import pytest
+import tifffile
 
 from fluorostats import keyence
-
-tifffile = pytest.importorskip("tifffile")
 
 
 def _double_bits(value: float) -> int:
@@ -91,3 +90,21 @@ def test_load_volume_autodetects_folder(keyence_folder):
     assert arr.shape == (2, 3, 24, 32)
     assert meta["voxel_size_um"] == pytest.approx((2.5, 0.4, 0.4))
     assert meta["channel_names"] == ["DAPI", "GFP"]
+
+
+def test_keyence_int64_bad_value():
+    assert keyence._int64_to_double("not-an-int") is None
+
+
+# ---------------------------------------------------------------------------
+# keyence.py:139 — 2D single-channel CHF slice promoted to (1, Y, X)
+# ---------------------------------------------------------------------------
+def test_keyence_2d_single_channel_promotion(tmp_path):
+    rng = np.random.default_rng(0)
+    for zi in range(1, 4):
+        plane = rng.integers(100, 3000, size=(24, 32)).astype(np.uint16)  # 2D
+        tifffile.imwrite(tmp_path / f"Image _Z{zi:03d}_CHF.tif", plane)
+    arr, meta = keyence.load_keyence_stack(tmp_path)
+    # channel is None -> stacked to (C=1, Z, Y, X)
+    assert arr.shape == (1, 3, 24, 32)
+    assert meta["n_slices_loaded"] == 3

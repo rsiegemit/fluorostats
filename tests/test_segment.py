@@ -1,19 +1,23 @@
 """Tests for segmentation: known-geometry synthetic volumes."""
 
 import numpy as np
+import pytest
 
+from fluorostats import segment
 from fluorostats.segment import binarize, choose_threshold_method, THRESHOLD_METHODS
 from fluorostats.metrics_3d import volume_fraction
 
 
 def test_threshold_family_all_run():
-    vol = np.zeros((8, 32, 32), np.float64); vol[2:6, 8:24, 8:24] = 500.0
+    vol = np.zeros((8, 32, 32), np.float64)
+    vol[2:6, 8:24, 8:24] = 500.0
     for m in THRESHOLD_METHODS:
         assert binarize(vol, method=m, min_size=5).sum() > 0
 
 
 def test_auto_selects_and_consensus_runs():
-    vol = np.zeros((8, 32, 32), np.float64); vol[2:6, 8:24, 8:24] = 500.0
+    vol = np.zeros((8, 32, 32), np.float64)
+    vol[2:6, 8:24, 8:24] = 500.0
     info = choose_threshold_method(vol)
     assert info["method"] in THRESHOLD_METHODS
     assert "skew" in info and "fractions" in info
@@ -89,3 +93,50 @@ class TestBinarize2D:
 
         mask = binarize(img, method="li", min_size=16)
         assert mask.sum() > 0
+
+
+def test_choose_threshold_selects_li_for_sparse_signal():
+    """A few saturating pixels drive Otsu's threshold sky-high so it keeps
+    <1% of the image; the dim diffuse block is only recovered by Li."""
+    img = np.zeros((128, 128), dtype=np.float64)
+    img[:2, :2] = 4000.0        # 4 extremely bright px -> Otsu split point
+    img[50:70, 50:70] = 20.0    # dim diffuse foreground Li catches
+    out = segment.choose_threshold_method(img)
+    assert out["method"] == "li"
+    assert "fractions" in out and "otsu" in out["fractions"]
+
+
+def test_binarize_consensus_path():
+    img = np.zeros((32, 32), dtype=np.float64)
+    img[8:24, 8:24] = 200.0
+    mask = segment.binarize(img, method="consensus", min_size=0)
+    assert mask.dtype == bool
+    assert mask[16, 16]
+
+
+def test_binarize_auto_path_runs():
+    img = np.zeros((32, 32), dtype=np.float64)
+    img[8:24, 8:24] = 200.0
+    mask = segment.binarize(img, method="auto", min_size=0)
+    assert mask.any()
+
+
+def test_binarize_flat_image_is_all_false():
+    """A perfectly flat image has no signal above threshold."""
+    flat = np.full((16, 16), 7.0, dtype=np.float64)
+    mask = segment.binarize(flat, method="otsu", min_size=0)
+    assert not mask.any()
+
+
+def test_binarize_unknown_method_raises():
+    with pytest.raises(ValueError, match="Unknown threshold method"):
+        segment.binarize(np.zeros((8, 8)), method="nope")
+
+
+def test_segment_constant_image_paths():
+    flat = np.zeros((16, 16), np.float32)
+    # some threshold algorithms raise on a constant image -> exercised except branches
+    choice = segment.choose_threshold_method(flat)
+    assert "method" in choice
+    out = segment.binarize(flat, method="consensus")
+    assert out.shape == flat.shape

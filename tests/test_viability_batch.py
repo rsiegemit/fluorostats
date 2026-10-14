@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from fluorostats import viability_batch
 
@@ -72,3 +73,19 @@ def test_single_count_method_path(tmp_path):
     import csv
     rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
     assert all("n_live" in r for r in rows)     # single-method path emits n_live
+
+
+def test_viability_batch_manifest_errors(tmp_path):
+    def run_man(man, name):
+        mp = tmp_path / f"{name}.json"
+        mp.write_text(json.dumps(man))
+        return viability_batch.run(mp)
+
+    base = {"live_channel": 0, "dead_channel": 1, "seg": {"method": "otsu", "min_size": 3},
+            "count_method": "cc"}
+    with pytest.raises(ValueError):                      # empty groups (guard)
+        run_man({**base, "groups": []}, "empty")
+
+    with pytest.raises(ValueError):                      # no stacks analysed guard
+        run_man({**base, "output_dir": str(tmp_path / "o2"),
+                 "groups": [{"name": "g", "stacks": []}]}, "nostacks")

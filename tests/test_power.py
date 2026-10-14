@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from fluorostats import power
 from fluorostats.power import bootstrap_power, power_curve, fdr_power_curve
 
 
@@ -47,3 +48,9 @@ def test_fdr_power_curve_returns_per_metric_rows():
     m1_high = df[(df.metric == "m1") & (df.n == 12)].iloc[0]["power"]
     m2_high = df[(df.metric == "m2") & (df.n == 12)].iloc[0]["power"]
     assert m1_high > m2_high
+
+
+def test_power_empty_group():
+    assert np.isnan(power.bootstrap_power(np.array([]), np.array([1.0, 2.0]), n=5, n_sims=10))
+    r = power.fdr_power_curve({"m": []}, {"m": [1.0, 2.0, 3.0]}, ns=[4], n_sims=10)
+    assert r is not None

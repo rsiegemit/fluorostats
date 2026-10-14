@@ -1,9 +1,14 @@
-"""Tests for 3D and 2D metrics on synthetic data."""
+"""Tests for fluorostats.metrics_3d."""
 
 import numpy as np
 
+from fluorostats import metrics_3d
 from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
-from fluorostats.metrics_2d import area_fraction
+
+
+def test_metrics3d_empty_mask():
+    m = metrics_3d.connectivity_metrics(np.zeros((4, 4, 4), bool))
+    assert m["largest_component_fraction"] == 0.0
 
 
 class TestVolumeMetrics:
@@ -49,16 +54,15 @@ class TestVolumeMetrics:
         assert metrics["n_branches"] == 0
 
 
-class TestAreaMetrics:
-    def test_area_fraction_empty(self):
-        mask = np.zeros((64, 64), dtype=bool)
-        assert area_fraction(mask) == 0.0
-
-    def test_area_fraction_full(self):
-        mask = np.ones((64, 64), dtype=bool)
-        assert area_fraction(mask) == 1.0
-
-    def test_area_fraction_quarter(self):
-        mask = np.zeros((64, 64), dtype=bool)
-        mask[:32, :32] = True
-        assert abs(area_fraction(mask) - 0.25) < 1e-10
+# Regression (release hardening): the 6-/26-connectivity pair must not be unified.
+def test_connectivity_dual_convention_pinned():
+    """n_components (6-conn foreground) and euler (26-conn) are the intentional DUAL
+    pair — pin it so a refactor can't silently unify the two connectivities."""
+    from scipy.ndimage import label
+    from skimage.measure import euler_number
+    m = np.zeros((10, 10, 20), bool)
+    m[2:8, 2:8, 2:8] = True          # two disjoint solid blobs (each chi = 1)
+    m[2:8, 2:8, 12:18] = True
+    res = metrics_3d.connectivity_metrics(m)
+    assert res["n_components"] == int(label(m)[1]) == 2
+    assert res["euler_number"] == int(euler_number(m, connectivity=3)) == 2

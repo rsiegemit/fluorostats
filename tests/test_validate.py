@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from fluorostats import validate
 from fluorostats.validate import instance_f1, average_precision
 from fluorostats.objects import watershed_split, clear_border_labels, label_3d
 
@@ -26,7 +27,8 @@ def test_instance_f1_perfect_match():
 
 def test_instance_f1_missing_one_object():
     gt = _two_labeled_blobs()
-    pred = gt.copy(); pred[pred == 2] = 0   # miss object 2
+    pred = gt.copy()
+    pred[pred == 2] = 0   # miss object 2
     r = instance_f1(pred, gt)
     assert r["tp"] == 1 and r["fn"] == 1
     assert r["recall"] == pytest.approx(0.5)
@@ -34,7 +36,8 @@ def test_instance_f1_missing_one_object():
 
 def test_instance_f1_false_positive():
     gt = _two_labeled_blobs()
-    pred = gt.copy(); pred[0:3, 0:3] = 3    # spurious extra object
+    pred = gt.copy()
+    pred[0:3, 0:3] = 3    # spurious extra object
     r = instance_f1(pred, gt)
     assert r["fp"] >= 1
     assert r["precision"] < 1.0
@@ -68,3 +71,17 @@ def test_clear_border_removes_edge_objects():
     lab[12:18, 12:18] = 2   # interior
     _, n = clear_border_labels(lab)
     assert n == 1           # only the interior object survives
+
+
+def test_validate_empty_gt_and_double_claim():
+    pred = np.zeros((10, 10), int)
+    pred[1:4, 1:4] = 1
+    assert validate.match_instances(pred, np.zeros((10, 10), int))["fp"] == 1   # no GT -> all FP
+    # two predictions overlapping ONE gt -> the 2nd hits an already-matched gt (continue branch)
+    gt = np.zeros((10, 10), int)
+    gt[2:8, 2:8] = 1
+    pred2 = np.zeros((10, 10), int)
+    pred2[2:5, 2:8] = 1
+    pred2[5:8, 2:8] = 2
+    r = validate.match_instances(pred2, gt)
+    assert r["tp"] <= 1

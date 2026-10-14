@@ -7,7 +7,7 @@ import numpy as np
 from fluorostats.skeleton import (
     skeleton_metrics, prune_skeleton, n_junction_nodes,
 )
-from fluorostats import metrics_3d
+from fluorostats import metrics_3d, skeleton
 
 
 def _plus(n=64, a=20):
@@ -91,7 +91,8 @@ def test_prune_skeleton_returns_new_array():
 
 def test_n_junction_nodes_straight_line_is_zero():
     from skimage.morphology import skeletonize
-    v = np.zeros((32, 32), bool); v[16, 4:28] = True
+    v = np.zeros((32, 32), bool)
+    v[16, 4:28] = True
     assert n_junction_nodes(skeletonize(v)) == 0
 
 
@@ -104,3 +105,49 @@ def test_empty_mask_returns_zeros():
     m = skeleton_metrics(np.zeros((16, 16), bool))
     assert m["total_length_um"] == 0.0
     assert m["n_junction_nodes"] == 0
+
+
+def test_skeleton_metrics_prune_true_runs():
+    """prune=True path with an explicit micrometre spur threshold."""
+    mask = np.zeros((40, 40), dtype=bool)
+    mask[20, 5:35] = True          # main line
+    mask[15:21, 20] = True         # short spur
+    out = skeleton.skeleton_metrics(mask, voxel_size_um=(1.0, 1.0),
+                                    prune=True, min_branch_length_um=8.0)
+    assert set(out) == {"total_length_um", "n_branches", "n_junctions",
+                        "n_junction_nodes", "mean_branch_length_um"}
+    assert out["total_length_um"] > 0
+
+
+def test_skeleton_metrics_empty_mask_returns_zeros():
+    out = skeleton.skeleton_metrics(np.zeros((10, 10), dtype=bool))
+    assert out["total_length_um"] == 0.0
+    assert out["n_branches"] == 0
+
+
+def test_skeleton_prune_spur_free_and_default_length():
+    line = np.zeros((3, 30, 30), bool)
+    line[1, 15, 5:25] = True                     # a single straight branch, no spurs
+    m = skeleton.skeleton_metrics(line, (1.0, 1.0, 1.0), prune=True)   # default min length
+    assert "total_length_um" in m
+
+
+# ---------------------------------------------------------------------------
+# skeleton.py:65 — prune loop break when skeleton has < 3 voxels
+# ---------------------------------------------------------------------------
+def test_prune_skeleton_too_few_voxels():
+    s = np.zeros((10, 10), dtype=bool)
+    s[5, 5] = True
+    s[5, 6] = True  # 2 voxels < 3 -> break immediately
+    out = skeleton.prune_skeleton(s, min_branch_length_px=10.0)
+    assert out.sum() == 2
+
+
+# ---------------------------------------------------------------------------
+# skeleton.py:78 — prune loop break when a skeleton has no short spurs
+# ---------------------------------------------------------------------------
+def test_prune_skeleton_no_spurs():
+    line = np.zeros((3, 20), dtype=bool)
+    line[1, :] = True  # a straight line: no type-1 spur branches
+    out = skeleton.prune_skeleton(line, min_branch_length_px=100.0)
+    assert out.sum() == 20

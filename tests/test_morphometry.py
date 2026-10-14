@@ -7,6 +7,7 @@ import math
 import numpy as np
 import pytest
 
+from fluorostats import morphometry
 from fluorostats.morphometry import (
     lateral_homogeneity,
     depth_profile,
@@ -76,3 +77,54 @@ def test_depth_centroid_returns_um():
     res = depth_centroid(vol, voxel_size_um=(2.0, 1.0, 1.0))
     assert res["z_centroid"] == pytest.approx(10.0)
     assert res["z_p50"] == pytest.approx(10.0)
+
+
+# ---------------------------------------------------------------------------
+# morphometry — zero-signal guard branches
+# ---------------------------------------------------------------------------
+
+def test_depth_span_zero_volume():
+    out = morphometry.depth_span(np.zeros((5, 8, 8)), voxel_size_um=(2.0, 1.0, 1.0))
+    assert out["span_slices"] == 0
+    assert out["span_um"] == 0.0
+
+
+def test_depth_centroid_zero_volume():
+    out = morphometry.depth_centroid(np.zeros((5, 8, 8)))
+    assert out["z_centroid"] == 0.0 and out["z_p50"] == 0.0
+
+
+def test_lateral_homogeneity_too_small_for_tiles():
+    """Image smaller than the tile grid returns the n_tiles==0 guard."""
+    out = morphometry.lateral_homogeneity(np.ones((2, 4, 4)), tiles=8)
+    assert out["n_tiles"] == 0
+    assert np.isnan(out["lateral_gini"])
+
+
+def test_morphometry_degenerate():
+    assert morphometry.depth_span(np.zeros((3, 4, 4)))["span_slices"] == 0
+    assert np.isnan(morphometry._gini(np.array([])))
+    assert morphometry._cv(np.array([2.0])) == 0.0        # single value
+    assert np.isnan(morphometry._cv(np.array([])))
+
+
+# ---------------------------------------------------------------------------
+# morphometry.py:102 — depth_span early return when no slice qualifies
+# ---------------------------------------------------------------------------
+def test_depth_span_no_slice_above_cutoff():
+    # A single non-zero slice: profile.max() > 0, but with the default
+    # relative_threshold a lone spike still qualifies. Force the "above.size==0"
+    # branch by making every slice's mean fall below the cutoff except via a
+    # threshold that excludes all: use a volume whose profile is all equal but
+    # nonzero and a relative_threshold > 1.0 so nothing meets the cutoff.
+    vol = np.ones((4, 5, 5), dtype=float)
+    out = morphometry.depth_span(vol, relative_threshold=1.5)
+    assert out["span_slices"] == 0
+    assert out["z_lo"] == 0 and out["z_hi"] == 0
+
+
+# ---------------------------------------------------------------------------
+# morphometry.py:165 — _gini all-zero (sum==0) guard
+# ---------------------------------------------------------------------------
+def test_morphometry_gini_all_zero():
+    assert morphometry._gini(np.zeros(5)) == 0.0

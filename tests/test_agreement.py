@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from fluorostats import agreement
 from fluorostats.agreement import bland_altman, lins_ccc, icc, agreement_report
 
 
@@ -47,3 +48,8 @@ def test_report_keys():
     for k in ("ccc", "icc", "spearman", "pearson", "bias",
               "loa_lower", "loa_upper", "mape_pct", "n"):
         assert k in rep
+
+
+def test_agreement_too_few_points():
+    assert np.isnan(agreement.lins_ccc(np.array([1.0]), np.array([1.0])))   # size < 2
+    assert np.isnan(agreement.icc(np.array([1.0]), np.array([1.0])))        # n < 2

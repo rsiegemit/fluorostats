@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from fluorostats import viability
 from fluorostats.viability import (
     live_dead_fractions, viability_depth_profile,
     viability_2d_vs_3d, attenuation_correct, live_dead_by_count,
@@ -51,8 +52,10 @@ def _stack_with_depth_gradient(nz=20, size=32):
 
 
 def test_live_dead_fractions_basic():
-    live = np.zeros((4, 10, 10), np.float32); live[:, :5, :] = 100
-    dead = np.zeros((4, 10, 10), np.float32); dead[:, 5:, :] = 100
+    live = np.zeros((4, 10, 10), np.float32)
+    live[:, :5, :] = 100
+    dead = np.zeros((4, 10, 10), np.float32)
+    dead[:, 5:, :] = 100
     r = live_dead_fractions(live, dead)
     assert r["live_fraction"] == pytest.approx(0.5, abs=0.01)
     assert r["viability"] == pytest.approx(0.5, abs=0.05)
@@ -66,8 +69,10 @@ def test_depth_profile_reveals_gradient():
 
 
 def test_depth_profile_with_dead_channel_returns_viability_by_z():
-    live = np.zeros((4, 10, 10), np.float32); live[:, :5, :] = 100
-    dead = np.zeros((4, 10, 10), np.float32); dead[:, 5:, :] = 100
+    live = np.zeros((4, 10, 10), np.float32)
+    live[:, :5, :] = 100
+    dead = np.zeros((4, 10, 10), np.float32)
+    dead[:, 5:, :] = 100
     out = viability_depth_profile(live, dead)
     assert "dead_by_z" in out and "viability_by_z" in out
     # Equal live/dead area per slice -> viability ~0.5 on every slice
@@ -93,6 +98,102 @@ def test_attenuation_correct_equalises_slice_means():
 
 
 def test_accepts_premasked_input():
-    mask = np.zeros((4, 10, 10), bool); mask[:, :5, :] = True
+    mask = np.zeros((4, 10, 10), bool)
+    mask[:, :5, :] = True
     r = live_dead_fractions(None, live_mask=mask)
     assert r["live_fraction"] == pytest.approx(0.5, abs=0.01)
+
+
+def _two_channel_stack():
+    live = np.zeros((4, 40, 40), np.float32)
+    dead = np.zeros((4, 40, 40), np.float32)
+    # a handful of bright blobs per channel
+    for (y, x) in [(10, 10), (10, 30), (30, 10)]:
+        live[:, y - 3:y + 3, x - 3:x + 3] = 200.0
+    dead[:, 30 - 3:30 + 3, 30 - 3:30 + 3] = 200.0
+    return live, dead
+
+
+def test_choose_count_method_returns_regime():
+    live, _ = _two_channel_stack()
+    out = viability.choose_count_method(live)
+    assert out["method"] in {"cc", "maxima"}
+    assert {"snr", "crowding", "n_cc", "smooth_sigma", "reason"} <= set(out)
+
+
+def test_choose_count_method_no_cells():
+    out = viability.choose_count_method(np.zeros((3, 20, 20), np.float32))
+    assert out["method"] == "cc"
+    assert out["n_cc"] == 0
+
+
+def test_live_dead_by_count_method_all_reports_consensus():
+    live, dead = _two_channel_stack()
+    out = viability.live_dead_by_count(live, dead, method="all")
+    assert set(out["by_method"]) == {"cc", "watershed", "maxima"}
+    assert "consensus" in out and "spread" in out
+    assert out["viability"] == out["consensus"]
+
+
+def test_live_dead_by_count_auto_reports_reasoning():
+    live, dead = _two_channel_stack()
+    out = viability.live_dead_by_count(live, dead, method="auto")
+    assert "method_live" in out and "reason_live" in out
+
+
+def test_attenuation_correct_first_reference():
+    vol = np.ones((4, 8, 8), np.float32)
+    vol[0] *= 4.0  # bright top slice
+    out = viability.attenuation_correct(vol, reference="first")
+    # every slice scaled so its mean matches slice 0's mean
+    means = out.mean(axis=(1, 2))
+    assert np.allclose(means, means[0])
+
+
+def test_attenuation_correct_mean_reference():
+    vol = np.ones((3, 8, 8), np.float32)
+    vol[1] *= 2.0
+    out = viability.attenuation_correct(vol, reference="mean")
+    assert out.shape == vol.shape
+
+
+def test_viability_choose_count_method_regimes():
+    size, z = 96, 3
+    yy, xx = np.mgrid[0:size, 0:size]
+    # clean + crowded -> maxima
+    clean = np.full((z, size, size), 5.0, np.float32)
+    for cy in range(12, size - 12, 8):
+        for cx in range(12, size - 12, 8):
+            clean[z // 2] += 5000 * np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 2.0 ** 2))
+    assert viability.choose_count_method(clean, method="otsu", min_size=3)["method"] in {"maxima", "cc"}
+    # low SNR -> cc
+    noisy = np.random.default_rng(0).normal(100, 90, (z, size, size)).astype(np.float32)
+    noisy[z // 2, 40:56, 40:56] += 120
+    assert viability.choose_count_method(noisy, method="otsu", min_size=3)["method"] == "cc"
+    # no cells -> cc
+    assert viability.choose_count_method(np.zeros((z, size, size), np.float32),
+                                         method="otsu", min_size=3)["method"] == "cc"
+
+
+# ---------------------------------------------------------------------------
+# viability.py:112 — choose_count_method "maxima" branch (clean + crowded)
+# ---------------------------------------------------------------------------
+def test_choose_count_method_maxima_branch():
+    # Bright continuous bars on a near-zero, low-noise background: each bar is a
+    # single connected component (CC merges the ridge) but carries periodic
+    # bright bumps that the peak finder resolves separately -> high SNR and
+    # peaks/CC > 1.5, which selects "maxima".
+    h = w = 160
+    img = np.zeros((h, w), dtype=float)
+    yy, xx = np.mgrid[0:h, 0:w]
+    rng = np.random.default_rng(2)
+    for row in range(20, h - 20, 30):
+        img += 3000.0 * np.exp(-((yy - row) ** 2) / (2 * 2.0 ** 2))  # continuous bar
+        for cx in range(15, w - 15, 12):
+            img += 5000.0 * np.exp(-(((yy - row) ** 2 + (xx - cx) ** 2) / (2 * 1.2 ** 2)))
+    img += rng.normal(0, 0.5, size=img.shape)  # tiny noise -> high SNR
+    img = np.clip(img, 0, None)
+    out = viability.choose_count_method(img)
+    assert out["method"] == "maxima"
+    assert out["snr"] >= 8.0
+    assert out["crowding"] > 1.5

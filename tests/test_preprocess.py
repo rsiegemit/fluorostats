@@ -120,3 +120,41 @@ def test_auto_crop_uniform_image_returns_unchanged():
     out, coords = preprocess.auto_crop(img)
     assert out.shape == img.shape
     assert coords == (0, 20, 0, 20)
+
+
+# ---------------------------------------------------------------------------
+# preprocess.py:169 — auto_crop y1 <= y0 (active band thinner than 2*margin)
+# ---------------------------------------------------------------------------
+def test_auto_crop_active_band_thinner_than_margin():
+    # Mostly-uniform image with a thin active band of two adjacent rows.
+    # margin large enough that active[0]+margin >= active[-1]-margin+1.
+    img = np.zeros((20, 20), dtype=float)
+    img[10, :] = np.arange(20)          # one high-variance row
+    img[11, :] = np.arange(20)[::-1]    # a second adjacent high-variance row
+    out, box = preprocess.auto_crop(img, margin=5)
+    assert box == (0, 20, 0, 20)
+    assert out.shape == img.shape
+
+
+# Regression (release hardening): auto_crop trimmed `margin` off borderless images.
+def test_auto_crop_leaves_borderless_image_untouched():
+    """A full-frame (borderless) image must not be trimmed by `margin`."""
+    img = np.random.default_rng(0).integers(0, 255, (50, 60)).astype(np.uint8)
+    out, coords = preprocess.auto_crop(img, margin=5)
+    assert out.shape == img.shape
+    assert coords == (0, 50, 0, 60)
+
+
+# Regression (release hardening): the borderless fix must still trim a real flat border.
+def test_auto_crop_trims_a_real_border():
+    img = np.zeros((50, 60), np.uint8)
+    img[10:40, 12:48] = 200                             # active interior, flat border
+    out, _ = preprocess.auto_crop(img, margin=0)
+    assert out.shape[0] < 50 and out.shape[1] < 60
+
+
+def test_select_green_channel():
+    arr = np.zeros((2, 8, 8), np.float32)
+    arr[1] = 5.0
+    g = preprocess.select_green_channel(arr, ["Red", "GFP"])
+    assert g.shape == (8, 8) and g.mean() == pytest.approx(5.0)
