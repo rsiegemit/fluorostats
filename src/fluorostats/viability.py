@@ -33,6 +33,11 @@ def _mask(channel, mask=None, method="otsu", threshold_scale=1.0, min_size=32):
                     min_size=min_size)
 
 
+# Object-counting modes of `live_dead_by_count`, in the order ``method="all"``
+# reports them (and `viability_batch` writes their columns).
+COUNT_METHODS = ("cc", "watershed", "maxima")
+
+
 def _live_ratio(n_live, n_dead) -> float:
     """Viability ``live / (live + dead)``; NaN when there is nothing to count."""
     total = n_live + n_dead
@@ -164,19 +169,22 @@ def live_dead_by_count(
     """
     from .objects import count_local_maxima, watershed_split, label_3d
 
+    cseg = {"min_size": 5, **seg}     # counting keeps small real cells
+    counters = {
+        "cc": lambda ch, sig: label_3d(_mask(ch, **cseg), min_size=5)[1],
+        "watershed": lambda ch, sig: watershed_split(_mask(ch, **cseg),
+                                                     min_distance=min_distance)[1],
+        "maxima": lambda ch, sig: count_local_maxima(ch, min_distance, threshold_rel,
+                                                     smooth_sigma=sig)["count"],
+    }
+
     def _count_one(ch, m, sig):
-        cseg = {"min_size": 5, **seg}     # counting keeps small real cells
-        if m == "maxima":
-            return count_local_maxima(ch, min_distance, threshold_rel,
-                                      smooth_sigma=sig)["count"]
-        if m == "watershed":
-            return watershed_split(_mask(ch, **cseg), min_distance=min_distance)[1]
-        if m == "cc":
-            return label_3d(_mask(ch, **cseg), min_size=5)[1]
-        raise ValueError(f"unknown method {method!r} (use auto/all/maxima/watershed/cc)")
+        if m not in counters:
+            raise ValueError(f"unknown method {method!r} (use auto/all/maxima/watershed/cc)")
+        return counters[m](ch, sig)
 
     if method == "all":
-        modes = ["cc", "watershed", "maxima"]
+        modes = COUNT_METHODS
         # auto-smooth the maxima channel from each channel's estimated radius
         sig_l = choose_count_method(live, **seg)["radius"] / 1.5
         sig_d = choose_count_method(dead, **seg)["radius"] / 1.5

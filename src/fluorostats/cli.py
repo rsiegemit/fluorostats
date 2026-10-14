@@ -81,7 +81,8 @@ def viability_cmd(manifest, output_dir):
 @click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
 @click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
 @click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(["otsu", "li"]), default="otsu")
+@click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu",
+              help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
 @click.option("--threshold-scale", type=float, default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9)")
 @click.option("--min-size", type=int, default=64, help="Min object size in voxels")
 @click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")
@@ -218,7 +219,8 @@ def quant3d(
 @click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
 @click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
 @click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(["otsu", "li"]), default="li")
+@click.option("--threshold", type=click.Choice(segment.METHODS), default="li",
+              help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
 @click.option("--threshold-scale", type=float, default=1.0, help="Scale threshold by this factor (lower=more sensitive)")
 @click.option("--min-size", type=int, default=64, help="Min object size in pixels")
 @click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")

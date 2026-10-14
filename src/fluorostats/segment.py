@@ -28,6 +28,10 @@ THRESHOLD_METHODS = {
     "mean": threshold_mean,
 }
 
+# Every accepted ``binarize(method=...)``: the algorithms above plus the two
+# meta-methods that choose among them. The CLI builds its --threshold choices here.
+METHODS = (*THRESHOLD_METHODS, "auto", "consensus")
+
 
 def choose_threshold_method(arr: np.ndarray) -> dict:
     """Pick a thresholding algorithm from the intensity histogram shape.

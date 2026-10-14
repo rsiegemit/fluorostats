@@ -114,7 +114,7 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     }
     if cfg["count_method"] == "all":
         bm = counts["by_method"]
-        for m in ("cc", "watershed", "maxima"):
+        for m in viab.COUNT_METHODS:
             nl, nd, v = _counts(bm, m)
             row[f"n_live_{m}"] = nl
             row[f"n_dead_{m}"] = nd
