@@ -269,7 +269,7 @@ def test_run_blank_trailing_zeros_trimmed(tmp_path):
 # These are hit by a full run with 2 groups where >=2 primary stacks each have fit_ok.
 # ---------------------------------------------------------------------------
 
-def test_run_two_groups_with_fit_ok_hits_ttest_branches(tmp_path):
+def test_run_two_groups_prints_welch_and_mann_whitney_contrasts(tmp_path, capsys):
     """Run with 2 groups, 2 stacks each where both groups have fit_ok=True -> λ t-test branch fires.
 
     λ must be WITHIN the acquired depth range for fit_ok to be True.
@@ -283,9 +283,10 @@ def test_run_two_groups_with_fit_ok_hits_ttest_branches(tmp_path):
     for i in range(2):
         pa = tmp_path / f"a_{i}.tif"
         pb = tmp_path / f"b_{i}.tif"
-        # lam=5 and lam=12 are both well within 39µm depth range
-        _decay_stack(pa, lam=5.0, n_z=40)
-        _decay_stack(pb, lam=12.0, n_z=40)
+        # λ ≈ 5 and ≈ 12 are both well within the 39 µm depth range; replicates differ
+        # slightly so the rank tests see no ties
+        _decay_stack(pa, lam=5.0 + i, n_z=40)
+        _decay_stack(pb, lam=12.0 + i, n_z=40)
         stacks_a.append({"label": f"a{i}", "path": str(pa)})
         stacks_b.append({"label": f"b{i}", "path": str(pb)})
 
@@ -304,6 +305,32 @@ def test_run_two_groups_with_fit_ok_hits_ttest_branches(tmp_path):
     out = depth_batch.run(mpath)
     assert (out / "auc_per_stack.csv").exists()
     assert (out / "group_depth_summary.csv").exists()
+    text = capsys.readouterr().out
+    # The Welch line is kept verbatim; the non-parametric contrast follows it.
+    assert text.count("Welch t-test fast vs slow: t=") == 2
+    assert "(n=2,2 — underpowered, descriptive only)" in text
+    assert "Welch t-test on λ, fast vs slow: t=" in text
+    # n=2 vs 2, complete separation: exact two-sided p = 2/C(4,2) = 1/3, δ = -1
+    assert text.count("Mann-Whitney fast vs slow: U=0.0, p=0.3333, Cliff's δ=-1.00, "
+                      "BH q=0.3333 across 2 windows (n=2,2)") == 2
+    assert "Mann-Whitney on λ, fast vs slow: U=0.0, p=0.3333, Cliff's δ=-1.00 (n=2,2)" in text
+
+
+def test_run_with_three_groups_says_contrasts_were_skipped(tmp_path, capsys):
+    stacks = {}
+    for g, lam in (("a", 5.0), ("b", 8.0), ("c", 12.0)):
+        p = tmp_path / f"{g}.tif"
+        _decay_stack(p, lam=lam, n_z=40)
+        stacks[g] = [{"label": g, "path": str(p)}]
+    m = {"auc_windows_um": [[0, 10]], "output_dir": str(tmp_path / "out"),
+         "groups": [{"name": g, "stacks": st} for g, st in stacks.items()]}
+    mpath = tmp_path / "manifest.json"
+    mpath.write_text(json.dumps(m))
+    depth_batch.run(mpath)
+    text = capsys.readouterr().out
+    assert "Welch" not in text and "Mann-Whitney" not in text
+    assert "contrasts skipped: 3 groups; a two-group contrast needs exactly 2" in text
+    assert "contrasts skipped: 3 groups with an accepted λ fit; a two-group" in text
 
 
 def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):

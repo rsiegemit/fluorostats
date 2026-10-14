@@ -463,25 +463,51 @@ def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
           f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
 
 
+def _print_mann_whitney(label: str, by_group: dict[str, list[float]], mw: dict,
+                        q: str = "") -> None:
+    """Print a two-sided Mann-Whitney contrast with Cliff's δ (and BH q when given)."""
+    ga, gb = list(by_group)
+    print(f"  {label} {ga} vs {gb}: U={mw['u']:.1f}, p={mw['p']:.4f}, "
+          f"Cliff's δ={mw['cliffs_delta']:+.2f}{q} (n={mw['n_x']},{mw['n_y']})")
+
+
+def _print_skipped(n_groups: int, which: str = "") -> None:
+    """Say why no contrast is printed: it needs exactly two groups (``which`` qualifies them)."""
+    print(f"  (contrasts skipped: {n_groups} group{'s' * (n_groups != 1)}{which}; "
+          "a two-group contrast needs exactly 2)")
+
+
 def _print_summary(rows, windows) -> None:
+    """Per-window normalised AUC by group; with two groups, Welch and Mann-Whitney
+    contrasts, the Mann-Whitney p-values BH-corrected across the windows."""
+    per_window = []
     for w in windows:
         lab = window_label(w)
-        print(f"\n=== AUC {window_title(w)} (normalised) ===")
         by_group: dict[str, list[float]] = {}
         for r in rows:
             if r["role"] == "primary":
                 by_group.setdefault(r["group"], []).append(r["result"]["auc"][lab]["normalized"])
+        per_window.append(by_group)
+    mws = [stats.mann_whitney(*bg.values()) if len(bg) == 2 else None for bg in per_window]
+    tested = [i for i, mw in enumerate(mws) if mw is not None]
+    qs = dict(zip(tested, stats.bh_fdr([mws[i]["p"] for i in tested])))
+    for i, (w, by_group) in enumerate(zip(windows, per_window)):
+        print(f"\n=== AUC {window_title(w)} (normalised) ===")
         for g, vals in by_group.items():
             m = np.mean(vals)
             sd = np.std(vals, ddof=1) if len(vals) > 1 else 0.0
             print(f"  {g:8s} n={len(vals)}  mean={m:8.2f}  sd={sd:6.2f}  "
                   f"values={[round(v, 1) for v in vals]}")
-        if len(by_group) == 2:
-            _print_welch("Welch t-test", by_group)
+        if mws[i] is None:
+            _print_skipped(len(by_group))
+            continue
+        _print_welch("Welch t-test", by_group)
+        _print_mann_whitney("Mann-Whitney", by_group, mws[i],
+                            f", BH q={qs[i]:.4f} across {len(tested)} windows")
 
 
 def _print_lambda_summary(rows) -> None:
-    """Per-group penetration constant λ and a descriptive Welch contrast."""
+    """Per-group penetration constant λ and descriptive Welch / Mann-Whitney contrasts."""
     print("\n=== Penetration constant λ (single-exponential fit, absolute profile) ===")
     by_group: dict[str, list[float]] = {}
     for r in rows:
@@ -496,5 +522,8 @@ def _print_lambda_summary(rows) -> None:
         sem = np.std(vals, ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0.0
         print(f"  {g:8s} n={len(vals)}  λ mean={m:7.2f} µm  SEM={sem:5.2f}  "
               f"values={[round(v, 1) for v in vals]}")
-    if len(by_group) == 2:
-        _print_welch("Welch t-test on λ,", by_group)
+    if len(by_group) != 2:
+        _print_skipped(len(by_group), " with an accepted λ fit")
+        return
+    _print_welch("Welch t-test on λ,", by_group)
+    _print_mann_whitney("Mann-Whitney on λ,", by_group, stats.mann_whitney(*by_group.values()))
