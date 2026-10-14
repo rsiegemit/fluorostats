@@ -45,9 +45,6 @@ def ring_morphometry(
         lumen_present       — bool
     Geometry keys are NaN when the mask has no foreground.
     """
-    from skimage.measure import regionprops
-    from skimage.morphology import skeletonize
-
     m = np.asarray(mask) > 0
     dy, dx = float(spacing[0]), float(spacing[1])
     pix_area = dy * dx
@@ -61,26 +58,11 @@ def ring_morphometry(
     if not m.any():
         return empty
 
-    # Outer boundary = largest filled connected component.
-    filled = ndi.binary_fill_holes(m)
-    lab, n = ndi.label(filled)
-    if n > 1:
-        biggest = 1 + int(np.argmax(ndi.sum(np.ones_like(lab), lab, range(1, n + 1))))
-        outer = lab == biggest
-    else:
-        outer = filled
+    outer = _outer_region(m)
     wall = m & outer
     outer_area = float(outer.sum()) * pix_area
 
-    # Lumen = largest enclosed void above the size floor.
-    holes = outer & ~m
-    hlab, hn = ndi.label(holes)
-    lumen = np.zeros_like(m)
-    if hn:
-        sizes = ndi.sum(np.ones_like(hlab), hlab, range(1, hn + 1))
-        idx = 1 + int(np.argmax(sizes))
-        if float(sizes.max()) * pix_area >= min_lumen_frac * outer_area:
-            lumen = hlab == idx
+    lumen = _lumen(m, outer, pix_area, min_lumen_frac * outer_area)
     lumen_area = float(lumen.sum()) * pix_area
     lumen_present = bool(lumen.any())
 
@@ -90,34 +72,11 @@ def ring_morphometry(
     outer_diam = 2.0 * np.sqrt(outer_area / np.pi) if outer_area > 0 else nan
     inner_diam = 2.0 * np.sqrt(lumen_area / np.pi) if lumen_area > 0 else 0.0
 
-    # Local wall thickness: 2× the distance transform of the solid wall band
-    # (outer minus lumen), sampled on its medial axis.
-    band = outer & ~lumen
-    dt = ndi.distance_transform_edt(band, sampling=(dy, dx))
-    skel = skeletonize(band)
-    if skel.any():
-        th = 2.0 * dt[skel]
-        wt_mean = float(th.mean())
-        cv = coefficient_of_variation(th)   # thickness >= 0: NaN only for a zero mean
-        wt_cv = 0.0 if np.isnan(cv) else cv
-    else:  # pragma: no cover - a non-empty wall band always yields a skeleton
-        wt_mean, wt_cv = nan, nan
-
-    # Lumen circularity (pixel-space, spacing-independent for isotropic pixels).
-    lumen_circularity = nan
-    if lumen_present:
-        props = regionprops(lumen.astype(np.uint8))[0]
-        perim = props.perimeter
-        lumen_circularity = float(4.0 * np.pi * props.area / (perim ** 2)) \
-            if perim > 0 else nan
-
-    # Concentricity: lumen centroid offset relative to the outer radius.
+    wt_mean, wt_cv = _wall_thickness(outer & ~lumen, dy, dx)
+    lumen_circularity = _circularity(lumen) if lumen_present else nan
     concentricity = nan
     if lumen_present and outer_diam and outer_diam == outer_diam:
-        cy_o, cx_o = ndi.center_of_mass(outer)
-        cy_l, cx_l = ndi.center_of_mass(lumen)
-        offset = np.hypot((cy_l - cy_o) * dy, (cx_l - cx_o) * dx)
-        concentricity = float(np.clip(1.0 - offset / (outer_diam / 2.0), 0.0, 1.0))
+        concentricity = _concentricity(outer, lumen, outer_diam, dy, dx)
 
     return {
         "outer_area": outer_area, "lumen_area": lumen_area, "wall_area": wall_area,
@@ -128,6 +87,59 @@ def ring_morphometry(
         "lumen_circularity": lumen_circularity, "concentricity": concentricity,
         "lumen_present": lumen_present,
     }
+
+
+def _outer_region(m: np.ndarray) -> np.ndarray:
+    """Outer boundary: the largest filled connected component."""
+    filled = ndi.binary_fill_holes(m)
+    lab, n = ndi.label(filled)
+    if n > 1:
+        biggest = 1 + int(np.argmax(ndi.sum(np.ones_like(lab), lab, range(1, n + 1))))
+        return lab == biggest
+    return filled
+
+
+def _lumen(m: np.ndarray, outer: np.ndarray, pix_area: float, min_area: float) -> np.ndarray:
+    """Lumen: the largest enclosed void, if its area reaches ``min_area``."""
+    hlab, hn = ndi.label(outer & ~m)
+    lumen = np.zeros_like(m)
+    if hn:
+        sizes = ndi.sum(np.ones_like(hlab), hlab, range(1, hn + 1))
+        idx = 1 + int(np.argmax(sizes))
+        if float(sizes.max()) * pix_area >= min_area:
+            lumen = hlab == idx
+    return lumen
+
+
+def _wall_thickness(band: np.ndarray, dy: float, dx: float) -> tuple[float, float]:
+    """Local wall thickness (mean, CV): 2× the distance transform of the solid
+    wall band (outer minus lumen), sampled on its medial axis."""
+    from skimage.morphology import skeletonize
+
+    dt = ndi.distance_transform_edt(band, sampling=(dy, dx))
+    skel = skeletonize(band)
+    if skel.any():
+        th = 2.0 * dt[skel]
+        cv = coefficient_of_variation(th)   # thickness >= 0: NaN only for a zero mean
+        return float(th.mean()), 0.0 if np.isnan(cv) else cv
+    return float("nan"), float("nan")  # pragma: no cover - a non-empty wall band always has a skeleton
+
+
+def _circularity(lumen: np.ndarray) -> float:
+    """Lumen circularity 4πA/P² (pixel space; spacing-independent for isotropic pixels)."""
+    from skimage.measure import regionprops
+
+    props = regionprops(lumen.astype(np.uint8))[0]
+    perim = props.perimeter
+    return float(4.0 * np.pi * props.area / (perim ** 2)) if perim > 0 else float("nan")
+
+
+def _concentricity(outer, lumen, outer_diam: float, dy: float, dx: float) -> float:
+    """1 − (lumen-centroid offset / outer radius), clipped to [0, 1]."""
+    cy_o, cx_o = ndi.center_of_mass(outer)
+    cy_l, cx_l = ndi.center_of_mass(lumen)
+    offset = np.hypot((cy_l - cy_o) * dy, (cx_l - cx_o) * dx)
+    return float(np.clip(1.0 - offset / (outer_diam / 2.0), 0.0, 1.0))
 
 
 __all__ = ["ring_morphometry"]

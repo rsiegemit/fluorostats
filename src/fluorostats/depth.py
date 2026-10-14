@@ -255,6 +255,46 @@ def _exp_decay_offset(z, I0, lam, c):
     return I0 * np.exp(-z / lam) + c
 
 
+def _initial_guess(z: np.ndarray, y: np.ndarray, n: int) -> tuple[float, float]:
+    """Starting (I0, λ): I0 ~ near-surface signal; λ ~ depth where the profile
+    first falls below I0/e (else the full span)."""
+    surface = float(np.mean(y[: min(3, n)]))
+    i0_guess = surface if surface > 0 else float(np.nanmax(y))
+    if not np.isfinite(i0_guess) or i0_guess <= 0:
+        i0_guess = 1.0
+    below = np.where(y < i0_guess / np.e)[0]
+    span = float(z[-1] - z[0]) or 1.0
+    lam_guess = float(z[below[0]] - z[0]) if below.size and z[below[0]] > z[0] else span
+    if lam_guess <= 0:  # pragma: no cover — lam_guess always >0 by construction
+        lam_guess = span
+    return i0_guess, lam_guess
+
+
+def _fit_exponential(z, y, offset: bool, i0_guess: float, lam_guess: float):
+    """Bounded least-squares fit; returns (model, I0, λ, c or None).
+
+    With ``offset`` the tail floor c starts at min(y). Raises scipy's
+    RuntimeError/ValueError on non-convergence.
+    """
+    from scipy.optimize import curve_fit
+
+    if offset:
+        c_guess = float(np.min(y))
+        p0 = [max(i0_guess - c_guess, i0_guess * 0.5), lam_guess, c_guess]
+        bounds = ([0.0, 1e-9, -np.inf], [np.inf, np.inf, np.inf])
+        popt, _ = curve_fit(
+            _exp_decay_offset, z, y, p0=p0, bounds=bounds, maxfev=20000
+        )
+        return (_exp_decay_offset(z, *popt),
+                float(popt[0]), float(popt[1]), float(popt[2]))
+    p0 = [i0_guess, lam_guess]
+    bounds = ([0.0, 1e-9], [np.inf, np.inf])
+    popt, _ = curve_fit(
+        _exp_decay, z, y, p0=p0, bounds=bounds, maxfev=20000
+    )
+    return _exp_decay(z, *popt), float(popt[0]), float(popt[1]), None
+
+
 def fit_penetration_depth(
     depth_um: np.ndarray,
     intensity: np.ndarray,
@@ -294,8 +334,6 @@ def fit_penetration_depth(
     ``False`` and ``lambda_um`` / ``I0`` (and ``offset``, if fitted) are
     ``nan`` — a bad or unmeasurable λ is never silently reported.
     """
-    from scipy.optimize import curve_fit
-
     z = np.asarray(depth_um, dtype=np.float64)
     y = np.asarray(intensity, dtype=np.float64)
     if z.shape != y.shape:
@@ -311,36 +349,9 @@ def fit_penetration_depth(
     order = np.argsort(z)
     z, y = z[order], y[order]
 
-    # Initial guesses. I0 ~ near-surface signal; λ0 ~ depth at which the
-    # profile first falls below I0/e; c ~ the tail floor.
-    surface = float(np.mean(y[: min(3, n)]))
-    i0_guess = surface if surface > 0 else float(np.nanmax(y))
-    if not np.isfinite(i0_guess) or i0_guess <= 0:
-        i0_guess = 1.0
-    below = np.where(y < i0_guess / np.e)[0]
-    span = float(z[-1] - z[0]) or 1.0
-    lam_guess = float(z[below[0]] - z[0]) if below.size and z[below[0]] > z[0] else span
-    if lam_guess <= 0:  # pragma: no cover — lam_guess always >0 by construction
-        lam_guess = span
-
+    i0_guess, lam_guess = _initial_guess(z, y, n)
     try:
-        if offset:
-            c_guess = float(np.min(y))
-            p0 = [max(i0_guess - c_guess, i0_guess * 0.5), lam_guess, c_guess]
-            bounds = ([0.0, 1e-9, -np.inf], [np.inf, np.inf, np.inf])
-            popt, _ = curve_fit(
-                _exp_decay_offset, z, y, p0=p0, bounds=bounds, maxfev=20000
-            )
-            model = _exp_decay_offset(z, *popt)
-            i0_fit, lam_fit, c_fit = float(popt[0]), float(popt[1]), float(popt[2])
-        else:
-            p0 = [i0_guess, lam_guess]
-            bounds = ([0.0, 1e-9], [np.inf, np.inf])
-            popt, _ = curve_fit(
-                _exp_decay, z, y, p0=p0, bounds=bounds, maxfev=20000
-            )
-            model = _exp_decay(z, *popt)
-            i0_fit, lam_fit, c_fit = float(popt[0]), float(popt[1]), None
+        model, i0_fit, lam_fit, c_fit = _fit_exponential(z, y, offset, i0_guess, lam_guess)
     except (RuntimeError, ValueError):
         return PenetrationFit(
             lambda_um=float("nan"), I0=float("nan"), offset=None,
