@@ -6,10 +6,11 @@ import pandas as pd
 import pytest
 import tifffile
 
-from fluorostats import depth_batch
+from fluorostats import depth, depth_batch
 from fluorostats.depth_batch import (
     load_manifest,
     _common_grid,
+    _load_blank,
     write_group_summary_csv,
     aggregate_group,
 )
@@ -196,11 +197,41 @@ def test_run_with_replicate_blanks(tmp_path):
     mpath.write_text(json.dumps(manifest))
 
     out = depth_batch.run(mpath)
-    assert (out / "auc_per_stack.csv").exists()
+    # the decay stack minus the averaged 5.5 blank, normalised to the first 2 slices
+    s0_curve = 150 * np.exp(-np.arange(16) / 20.0) + 5.0 - 5.5
+    expected = depth.auc_depth(np.arange(16.0), s0_curve / s0_curve[:2].mean(), z_max=8.0)
+    ps = pd.read_csv(out / "auc_per_stack.csv")
+    assert ps["auc_normalized_0_8um"].iloc[0] == pytest.approx(expected, rel=1e-5)
 
 
 # ---------------------------------------------------------------------------
-# Full run — blank with trailing zero slices (trim branch)  (line 467)
+# _load_blank — replicate lengths and dropped non-positive slices are announced
+# ---------------------------------------------------------------------------
+
+_CFG = {"channel": 0, "reducer": "mean"}
+
+
+def test_load_blank_announces_replicates_cut_to_the_shortest(tmp_path):
+    _flat_stack(tmp_path / "b1.tif", value=5.0, n_z=16)
+    _flat_stack(tmp_path / "b2.tif", value=7.0, n_z=10)
+    with pytest.warns(RuntimeWarning, match=r"replicate blanks have \[10, 16\] slices.*first 10"):
+        blank = _load_blank([str(tmp_path / "b1.tif"), str(tmp_path / "b2.tif")], _CFG)
+    np.testing.assert_allclose(blank.mean, np.full(10, 6.0))
+
+
+def test_load_blank_announces_dropped_mid_stack_slices(tmp_path):
+    vol = np.full((12, 8, 8), 5.0, dtype=np.float32)
+    vol[4] = 0.0                                          # one empty slice mid-stack
+    vol[9:] = 0.0                                         # three trailing
+    tifffile.imwrite(tmp_path / "b.tif", vol)
+    with pytest.warns(RuntimeWarning, match="dropped 4 of 12 slices with mean <= 0 "
+                                           r"\(1 mid-stack, 3 trailing\)"):
+        blank = _load_blank(str(tmp_path / "b.tif"), _CFG)
+    np.testing.assert_array_equal(blank.depth_um, [0, 1, 2, 3, 5, 6, 7, 8])
+
+
+# ---------------------------------------------------------------------------
+# Full run — blank with trailing zero slices (trim branch)
 # ---------------------------------------------------------------------------
 
 def test_run_blank_trailing_zeros_trimmed(tmp_path):
@@ -224,8 +255,13 @@ def test_run_blank_trailing_zeros_trimmed(tmp_path):
     mpath = tmp_path / "manifest.json"
     mpath.write_text(json.dumps(manifest))
 
-    out = depth_batch.run(mpath)
-    assert (out / "auc_per_stack.csv").exists()
+    with pytest.warns(RuntimeWarning, match=r"dropped 8 of 16 slices.*\(0 mid-stack, 8 trailing\)"):
+        out = depth_batch.run(mpath)
+    # The blank is 5 over 0-7 µm and held at 5 beyond, so the stack is exactly its decay.
+    s0_curve = 150 * np.exp(-np.arange(16) / 20.0)
+    expected = depth.auc_depth(np.arange(16.0), s0_curve / s0_curve[:2].mean(), z_max=8.0)
+    ps = pd.read_csv(out / "auc_per_stack.csv")
+    assert ps["auc_normalized_0_8um"].iloc[0] == pytest.approx(expected, rel=1e-5)
 
 
 # ---------------------------------------------------------------------------

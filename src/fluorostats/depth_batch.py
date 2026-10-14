@@ -393,29 +393,42 @@ def _analyse_groups(groups: list[dict], cfg: dict):
 def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
     """Blank (no-fluorophore) profile from one path or a list of replicate paths.
 
-    Replicates are averaged over their common depth range, with the
-    across-replicate SEM; empty/truncated trailing slices (mean ~0) are dropped.
+    Replicates are averaged slice by slice over the first n slices, n being the
+    shortest replicate, with the across-replicate SEM. Every slice whose mean is
+    <= 0 (empty or truncated; trailing or mid-stack) is then dropped, so the
+    background is interpolated across mid-stack gaps and held at its last value
+    past the end. Both are announced with counts.
     """
     bg_paths = [bg] if isinstance(bg, str) else list(bg)
     profs = [_load_profile(Path(bp), cfg)[0] for bp in bg_paths]
-    if len(profs) == 1:
-        blank = profs[0]
-    else:
-        steps = {float(np.median(np.diff(p.depth_um))) for p in profs if p.depth_um.size > 1}
-        if len(steps) > 1:
-            warnings.warn(f"replicate blanks have different z-steps {sorted(steps)} µm; they are "
-                          "averaged slice by slice on the first blank's depth axis.",
-                          RuntimeWarning, stacklevel=2)
-        n = min(len(p.mean) for p in profs)
-        stack = np.stack([p.mean[:n] for p in profs])
-        blank = depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),
-                                   stack.std(0, ddof=1) / len(profs) ** 0.5,
-                                   profs[0].n_pixels)
+    blank = profs[0] if len(profs) == 1 else _average_blanks(profs)
     valid = blank.mean > 0
     if not valid.all():
+        n_drop = int((~valid).sum())
+        trailing = int(np.argmax(valid[::-1])) if valid.any() else n_drop
+        warnings.warn(f"blank {', '.join(Path(bp).name for bp in bg_paths)}: dropped {n_drop} "
+                      f"of {valid.size} slices with mean <= 0 ({n_drop - trailing} mid-stack, "
+                      f"{trailing} trailing).", RuntimeWarning, stacklevel=2)
         blank = depth.DepthProfile(blank.depth_um[valid], blank.mean[valid],
                                    blank.sem[valid], blank.n_pixels)
     return blank
+
+
+def _average_blanks(profs: list[depth.DepthProfile]) -> depth.DepthProfile:
+    """Slice-by-slice mean (and SEM) of replicate blanks over the shortest one's slices."""
+    steps = {float(np.median(np.diff(p.depth_um))) for p in profs if p.depth_um.size > 1}
+    if len(steps) > 1:
+        warnings.warn(f"replicate blanks have different z-steps {sorted(steps)} µm; they are "
+                      "averaged slice by slice on the first blank's depth axis.",
+                      RuntimeWarning, stacklevel=3)
+    lengths = sorted({len(p.mean) for p in profs})
+    n = lengths[0]
+    if len(lengths) > 1:
+        warnings.warn(f"replicate blanks have {lengths} slices; they are averaged over the "
+                      f"first {n} (the shortest).", RuntimeWarning, stacklevel=3)
+    stack = np.stack([p.mean[:n] for p in profs])
+    return depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),
+                              stack.std(0, ddof=1) / len(profs) ** 0.5, profs[0].n_pixels)
 
 
 def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path) -> None:
