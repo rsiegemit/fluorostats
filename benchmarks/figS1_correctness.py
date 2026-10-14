@@ -202,6 +202,16 @@ panel(axC, "c", xanchor=0.0315)   # row-leader
 # ---------------------------------------------------------------- save
 save(fig, "figS1_correctness", SUPP, tight=False)
 
+# Caption numbers are read from the tables plotted above, never typed.
+_trees = tree.set_index("tree_depth")
+_fs_cv = cv[cv.scheme == "fluorostats_per_mm3"].set_index("regime")["CV_percent_across_zoom"]
+
+
+def _tree(depth):
+    r = _trees.loc[depth]
+    return r.true_branches, r.true_bifurcations, r.fs_n_branches, r.fs_n_junction_nodes
+
+
 caption(
     "figS1_correctness",
     "Figure S1 | Correctness against analytic ground truth. "
@@ -211,17 +221,20 @@ caption(
     "expectation exactly (hatched = expected, filled = measured); error is zero "
     "on all six phantoms. (b) Recursive skeleton trees. Measured branch and "
     "bifurcation counts equal the true values exactly at recursion depth 2 "
-    "(7 branches, 3 bifurcations) and depth 3 (15, 7). At depth 4 the finest "
-    "twigs fall below the raster resolution and are undercounted (27 of 31 "
-    "branches, 13 of 15 bifurcations); this is an honest sampling limit, not a "
+    f"({_tree(2)[0]} branches, {_tree(2)[1]} bifurcations) and depth 3 "
+    f"({_tree(3)[0]}, {_tree(3)[1]}). At depth 4 the finest "
+    f"twigs fall below the raster resolution and are undercounted ({_tree(4)[2]} of "
+    f"{_tree(4)[0]} branches, {_tree(4)[3]} of {_tree(4)[1]} bifurcations); this is an "
+    "honest sampling limit, not a "
     "topological error. (c) Zoom-invariance. Measured density versus digital "
     "zoom at fixed field of view for five normalisation schemes, each expressed "
     "relative to its value at zoom = 1 (log axis). The legend gives the "
     "worst-case coefficient of variation across zoom over both acquisition "
     "regimes tested (fixed field of view and fixed voxel size); a scheme is "
     "only truly zoom-invariant if it stays flat in every regime. The "
-    "fluorostats per-mm3 density is invariant in both (CV <= 0.2%; 0.0% fixed "
-    "field of view, 0.16% fixed voxel), whereas raw count, per-megavoxel and "
+    "fluorostats per-mm3 density is invariant in both (CV <= 0.2%; "
+    f"{_fs_cv['A_fixed_FOV']:.1f}% fixed field of view, {_fs_cv['B_fixed_voxel']:.2f}% "
+    "fixed voxel), whereas raw count, per-megavoxel and "
     "per-z-slice normalisations each drift, by up to two orders of magnitude, in "
     "at least one regime. In the fixed-field-of-view regime shown, the fluorostats "
     "per-mm3, raw-count and per-mm2 traces coincide exactly at 1.000 and are drawn "
