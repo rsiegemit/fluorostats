@@ -227,11 +227,11 @@ def test_mann_whitney_identical_single_values_valueerror_branch():
 
 
 # ---------------------------------------------------------------------------
-# stratified_mann_whitney — line 130 (scalar keys tuple wrap), line 135 (missing metric)
+# stratified_mann_whitney — single stratum column, missing metric
 # ---------------------------------------------------------------------------
 
-def test_stratified_mann_whitney_single_stratum_key_is_wrapped():
-    """A single stratum col produces scalar groupby keys → line 130 wraps to tuple."""
+def test_stratified_mann_whitney_single_stratum_column_keeps_whole_key():
+    """One stratum column: each row carries the full stratum value, not its first character."""
     rng = np.random.default_rng(7)
     df = pd.DataFrame({
         "region": np.repeat(["top", "mid"], 12),
@@ -242,8 +242,8 @@ def test_stratified_mann_whitney_single_stratum_key_is_wrapped():
         df, value_cols=["v"], group_col="condition",
         group_a="A", group_b="B", strata=["region"],
     )
-    # Should have 2 rows (one per region) and not raise
-    assert len(out) == 2
+    assert sorted(out["region"]) == ["mid", "top"]
+    assert (out[["n_a", "n_b"]] == 6).all().all()
 
 
 def test_stratified_mann_whitney_skips_missing_metric():
@@ -377,3 +377,10 @@ def test_bootstrap_mean_ci_shared_rng_continues_one_stream():
         assert got["ci_high"] == float(np.percentile(means, 97.5))
     assert first != second
     assert first == stats.bootstrap_mean_ci(x, n_boot=500, seed=0)
+
+
+def test_all_lists_every_public_function():
+    import inspect
+    public = {n for n, f in inspect.getmembers(stats, inspect.isfunction)
+              if f.__module__ == stats.__name__ and not n.startswith("_")}
+    assert set(stats.__all__) == public

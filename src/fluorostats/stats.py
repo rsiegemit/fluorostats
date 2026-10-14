@@ -109,7 +109,7 @@ def bh_fdr(p_values: np.ndarray) -> np.ndarray:
 # Two-group comparisons
 # ---------------------------------------------------------------------------
 
-def welch_t(x, y) -> dict:
+def welch_t(x: np.ndarray, y: np.ndarray) -> dict:
     """Welch's unequal-variance t-test, two-sided.
 
     Parametric, so not this package's default (see `mann_whitney`); provided for
@@ -173,8 +173,6 @@ def stratified_mann_whitney(
     grouped = df.groupby(strata, dropna=False) if strata else [((), df)]
     rows = []
     for keys, sub in grouped:
-        if not isinstance(keys, tuple):  # pragma: no cover — pandas ≥1.5 always yields tuples
-            keys = (keys,)
         a_df = sub[sub[group_col] == group_a]
         b_df = sub[sub[group_col] == group_b]
         for metric in value_cols:
@@ -203,7 +201,7 @@ def stratified_mann_whitney(
 
 
 # ---------------------------------------------------------------------------
-# Bootstrap fold-change CI
+# Bootstrap confidence intervals
 # ---------------------------------------------------------------------------
 
 def bootstrap_fold_change_ci(
@@ -246,11 +244,7 @@ def bootstrap_fold_change_ci(
     }
 
 
-# ---------------------------------------------------------------------------
-# Stouffer Z combination
-# ---------------------------------------------------------------------------
-
-def bootstrap_mean_ci(x, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0,
+def bootstrap_mean_ci(x: np.ndarray, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0,
                       rng: np.random.Generator | None = None) -> dict:
     """Mean with a percentile-bootstrap confidence interval.
 
@@ -268,6 +262,10 @@ def bootstrap_mean_ci(x, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0,
             "ci_low": float(np.percentile(means, lo)),
             "ci_high": float(np.percentile(means, 100 - lo))}
 
+
+# ---------------------------------------------------------------------------
+# Stouffer Z combination
+# ---------------------------------------------------------------------------
 
 def stouffer_combine(
     p_values: np.ndarray,
@@ -353,11 +351,15 @@ def scheirer_ray_hare(
 
 
 __all__ = [
+    "gini",
+    "coefficient_of_variation",
     "cliffs_delta",
     "bh_fdr",
+    "welch_t",
     "mann_whitney",
     "stratified_mann_whitney",
     "bootstrap_fold_change_ci",
+    "bootstrap_mean_ci",
     "stouffer_combine",
     "scheirer_ray_hare",
 ]
