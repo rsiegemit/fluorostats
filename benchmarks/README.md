@@ -14,13 +14,18 @@ doubles as a worked example of the library's analysis modules.
 
 ## Figures that reproduce offline (from bundled `results/` — no download)
 
-| script | figure | library modules exercised |
+| script | figure | tables read (`results/`) |
 |---|---|---|
-| `fig3_vascular.py` | vessel-network accuracy (REAVER 6-tool, VesselExpress, 3D phantom, Bland–Altman) | `metrics_3d`, `skeleton`, `agreement` |
-| `fig5_homogeneity_stats.py` | spatial homogeneity + end-to-end statistics | `objects.centroid_homogeneity`, `stats`, `power.power_curve` |
-| `figS1_correctness.py` | topology / skeleton / density-normalisation correctness | `objects`, `skeleton` |
-| `figS3_robustness.py` | segmentation robustness to noise + denoising | `segment`, `preprocess` |
-| `figS4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D) | `segment`, `validate` |
+| `fig3_vascular.py` | vessel-network accuracy (REAVER 6-tool, VesselExpress, 3D phantom, Bland–Altman) | `b4_reaver_ranking`, `ve_crops.npz`, `b_vascular_phantom_3d`, `b_ve_metrics`, `b_ve_agreement` |
+| `fig5_homogeneity_stats.py` | spatial homogeneity + end-to-end statistics | `b_homogeneity_examples`, `b_homogeneity_consensus(_corr)`, `b_homogeneity_multi_corr`, `b_vascular_sproutangio_multi`, `b_vascular_sproutangio_stats` |
+| `figS1_correctness.py` | topology / skeleton / density-normalisation correctness | `b1_topology_phantoms`, `b_skeleton_tree`, `b_density_normalization(_cv)` |
+| `figS3_robustness.py` | segmentation robustness to noise + denoising | `b_noise_robustness`, `b_denoising`, `b_nuclei_size` |
+| `figS4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D) | `b_dsb2018`, `b2_ctc_multi` |
+
+These scripts import from `fluorostats` only the figure kit (`pubfig`, through
+`figstyle.py`); the measurements behind the tables (`metrics_3d`, `skeleton`,
+`objects`, `segment`, `preprocess`, `validate`, `stats`, `agreement`, ...) run in
+the producers.
 
 ```bash
 pip install -r requirements.lock      # from the repo root (pinned env)
@@ -36,7 +41,7 @@ These read raw microscopy rather than a bundled table. Fetch the dataset from
 
 | script | figure | dataset |
 |---|---|---|
-| `fig2_nuclei.py` | Figure 2 — nucleus segmentation & the deep-learning boundary (a–f) | BBBC039 + BBBC024 |
+| `fig2_nuclei.py` | Figure 2 — nucleus segmentation & the deep-learning boundary (a–f) | BBBC039 + BBBC024 + BBBC024_c75 |
 | `fig4_viability.py` | depth-resolved Live/Dead viability | S-BIAD2130 |
 | `figS2_runtime.py` | runtime + determinism | BBBC024 |
 
