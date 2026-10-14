@@ -20,6 +20,7 @@ domain-specific column names baked in.
 
 from __future__ import annotations
 
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -233,6 +234,11 @@ def bootstrap_fold_change_ci(
     ax = func(bx, axis=1)
     ay = func(by, axis=1)
     eps = np.finfo(float).tiny
+    n_zero = int((ax == 0).sum())
+    if n_zero:
+        warnings.warn(f"bootstrap_fold_change_ci: agg(x) was 0 in {n_zero} of {n_boot} resamples; "
+                      "those ratios divide by the smallest float, so the interval is not "
+                      "meaningful.", RuntimeWarning, stacklevel=2)
     fc = ay / np.where(ax == 0, eps, ax)
     lo_q = (1 - ci) / 2
     hi_q = 1 - lo_q
@@ -251,9 +257,13 @@ def bootstrap_mean_ci(x: np.ndarray, n_boot: int = 10_000, ci: float = 0.95, see
     Resamples ``x`` with replacement ``n_boot`` times (all draws in one block, so
     the result is fixed by the generator) and returns ``{"mean", "ci_low",
     "ci_high"}``. The generator is ``default_rng(seed)`` unless ``rng`` is given;
-    pass one ``rng`` to draw several intervals from a single stream.
+    pass one ``rng`` to draw several intervals from a single stream. NaNs are
+    dropped first; raises ValueError when no value remains.
     """
     x = np.asarray(x, float)
+    x = x[~np.isnan(x)]
+    if x.size == 0:
+        raise ValueError("bootstrap_mean_ci needs at least one non-NaN value")
     rng = np.random.default_rng(seed) if rng is None else rng
     idx = rng.integers(0, len(x), (n_boot, len(x)))
     means = x[idx].mean(1)
@@ -311,6 +321,10 @@ def scheirer_ray_hare(
 
     Returns one row per source: factor_a, factor_b, interaction.
     Columns: source, df, H (sum-of-squares / MS_total), p (chi² survival).
+
+    The interaction sum of squares is obtained by subtraction, which is exact only
+    for a balanced design (equal observations in every factor_a × factor_b cell);
+    an unbalanced design is warned about. Ranks are not tie-corrected.
     """
     sub = df[[value_col, factor_a, factor_b]].dropna().copy()
     if sub.empty:
@@ -327,6 +341,12 @@ def scheirer_ray_hare(
 
     cell_means = sub.groupby([factor_a, factor_b])["_rank"].mean()
     cell_sizes = sub.groupby([factor_a, factor_b])["_rank"].size()
+    n_cells = sub[factor_a].nunique() * sub[factor_b].nunique()
+    if cell_sizes.nunique() > 1 or len(cell_sizes) < n_cells:
+        warnings.warn(f"scheirer_ray_hare: the {factor_a} x {factor_b} design is unbalanced "
+                      f"({len(cell_sizes)} of {n_cells} cells observed, cell sizes "
+                      f"{cell_sizes.min()}-{cell_sizes.max()}); the interaction term assumes "
+                      "a balanced design.", RuntimeWarning, stacklevel=2)
     grand = sub["_rank"].mean()
     ss_cells = float((cell_sizes * (cell_means - grand) ** 2).sum())
     ss_a = _ss(factor_a)
