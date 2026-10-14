@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import tifffile
 
-from fluorostats import io
+from fluorostats import io, io_vendors
 from fluorostats.io import (
     load_volume,
     load_image,
@@ -201,18 +201,6 @@ class TestSupportedFormatsAndDirs:
 # ---------------------------------------------------------------------------
 # io.py:435 — OME channel-name append (valid Channel with a Name)
 # ---------------------------------------------------------------------------
-def test_ome_metadata_channel_name_append():
-    ome_xml = (
-        '<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06">'
-        '<Image><Pixels PhysicalSizeX="0.5" PhysicalSizeY="0.5" PhysicalSizeZ="2.0">'
-        '<Channel Name="EGFP"/>'
-        '<Channel Fluor="mCherry"/>'
-        '</Pixels></Image></OME>'
-    )
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io._parse_ome_metadata(ome_xml, meta)
-    assert out["channel_names"] == ["EGFP", "mCherry"]
-    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
 
 
 def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
@@ -224,7 +212,7 @@ def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
 
     p = tmp_path / "ij.tif"
     tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
-                     metadata={"spacing": 2.5, "axes": "ZCYX"})
+                     metadata={"spacing": 2.5, "unit": "micron", "axes": "ZCYX"})
     with pytest.warns(RuntimeWarning, match="no y/x calibration"):
         _, meta = load_volume(p)
     assert meta["voxel_size_source"] == "z:file,y:default,x:default"
@@ -272,3 +260,194 @@ def test_loaders_announce_discarded_axes(tmp_path):
     with pytest.warns(RuntimeWarning, match="planes are treated as channels"):
         img, _ = load_image(pz)
     assert img.shape == (6, 8, 8)
+
+
+# ---------------------------------------------------------------------------
+# Axis order comes from the file's axis labels, not from the array shape
+# ---------------------------------------------------------------------------
+
+def _two_channel(order: str, n_z: int, value: int = 7) -> np.ndarray:
+    """A (Z, C, Y, X) or (C, Z, Y, X) stack whose channel 0 is 0 and channel 1 is `value`."""
+    czyx = np.stack([np.zeros((n_z, 16, 16)), np.full((n_z, 16, 16), value)]).astype(np.uint16)
+    return czyx if order == "CZYX" else czyx.transpose(1, 0, 2, 3)
+
+
+@pytest.mark.parametrize("n_z", [5, 30])
+def test_imagej_zcyx_hyperstack_channels_by_name(tmp_path, n_z):
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, _two_channel("ZCYX", n_z), imagej=True, metadata={"axes": "ZCYX"})
+    arr, meta = load_volume(p)
+    assert arr.shape == (2, n_z, 16, 16)
+    assert (arr[0].mean(), arr[1].mean()) == (0, 7)
+    assert len(meta["channel_names"]) == 2
+
+
+@pytest.mark.parametrize("order", ["CZYX", "ZCYX"])
+def test_ome_stack_channels_by_name(tmp_path, order):
+    p = tmp_path / "s.ome.tif"
+    tifffile.imwrite(p, _two_channel(order, 5), ome=True, metadata={"axes": order})
+    arr, _ = load_volume(p)
+    assert arr.shape == (2, 5, 16, 16)
+    assert (arr[0].mean(), arr[1].mean()) == (0, 7)
+
+
+def test_ome_time_series_keeps_first_time_point_by_name(tmp_path):
+    p = tmp_path / "t.ome.tif"
+    tzcyx = np.stack([_two_channel("ZCYX", 5), _two_channel("ZCYX", 5, value=9)])
+    tifffile.imwrite(p, tzcyx, ome=True, metadata={"axes": "TZCYX"})
+    with pytest.warns(RuntimeWarning, match="time point 0 of 2"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (2, 5, 16, 16)
+    assert (arr[0].mean(), arr[1].mean()) == (0, 7)
+
+
+def test_ome_single_plane_multichannel_is_channels_not_z(tmp_path):
+    p = tmp_path / "c.ome.tif"
+    tifffile.imwrite(p, np.stack([np.full((16, 16), v, np.uint16) for v in (1, 2, 3)]),
+                     ome=True, metadata={"axes": "CYX"})
+    vol, _ = load_volume(p)
+    assert vol.shape == (3, 1, 16, 16)
+    arr, meta = load_auto(p)
+    assert arr.shape == (3, 16, 16)
+    assert [arr[c].mean() for c in range(3)] == [1, 2, 3]
+    assert len(meta["voxel_size_um"]) == 2
+
+
+def test_rgb_tiff_samples_become_channels(tmp_path):
+    p = tmp_path / "rgb.tif"
+    rgb = np.stack([np.full((64, 48), v, np.uint8) for v in (10, 20, 30)], -1)
+    tifffile.imwrite(p, rgb, photometric="rgb")
+    vol, _ = load_volume(p)
+    assert vol.shape == (3, 1, 64, 48)
+    arr, _ = load_auto(p)
+    assert arr.shape == (3, 64, 48)
+    assert [arr[c].mean() for c in range(3)] == [10, 20, 30]
+    img, _ = load_image(p)
+    np.testing.assert_array_equal(img, arr)
+
+
+def test_unlabelled_tiff_keeps_shape_heuristic(tmp_path):
+    # A plain TIFF has no axis names ('QQYX'), so the shape rule still applies.
+    p = tmp_path / "plain.tif"
+    tifffile.imwrite(p, np.zeros((20, 8, 8, 3), np.uint8))
+    with pytest.warns(RuntimeWarning, match="assuming channel-last"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (3, 20, 8, 8)
+
+
+# ---------------------------------------------------------------------------
+# Physical-size units are converted to µm; unknown units are kept and flagged
+# ---------------------------------------------------------------------------
+
+def _ome_with_units(tmp_path, **sizes_and_units):
+    p = tmp_path / "u.ome.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "ZYX", **sizes_and_units})
+    return p
+
+
+def test_ome_physical_size_units_converted_to_um(tmp_path):
+    p = _ome_with_units(tmp_path, PhysicalSizeX=500, PhysicalSizeXUnit="nm",
+                        PhysicalSizeY=500, PhysicalSizeYUnit="nm",
+                        PhysicalSizeZ=0.002, PhysicalSizeZUnit="mm")
+    _, meta = load_volume(p)
+    assert meta["voxel_size_um"] == pytest.approx((2.0, 0.5, 0.5))
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"
+
+
+def test_ome_unknown_unit_kept_flagged_and_warned(tmp_path):
+    p = _ome_with_units(tmp_path, PhysicalSizeX=0.5, PhysicalSizeY=0.5,
+                        PhysicalSizeZ=3.0, PhysicalSizeZUnit="pixel")
+    with pytest.warns(RuntimeWarning, match="length unit 'pixel', which is not recognised"):
+        _, meta = load_volume(p)
+    assert meta["voxel_size_um"] == (3.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:file-unit-unknown,y:file,x:file"
+
+
+# ImageJ descriptions are ASCII: Fiji writes µm as the escape "\\u00B5m" or as "micron".
+@pytest.mark.parametrize("unit, z_um", [("nm", 2.0), ("micron", 2000.0), ("\\u00B5m", 2000.0),
+                                        ("mm", 2e6)])
+def test_imagej_spacing_unit_converted_to_um(tmp_path, unit, z_um):
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
+                     metadata={"spacing": 2000.0, "unit": unit, "axes": "ZCYX"})
+    _, meta = load_volume(p)
+    assert meta["voxel_size_um"][0] == pytest.approx(z_um)
+    assert meta["voxel_size_source"].startswith("z:file,")
+
+
+@pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "inch"}, "'inch'")])
+def test_imagej_spacing_without_known_unit_is_flagged(tmp_path, extra, said):
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
+                     metadata={"spacing": 2.0, "axes": "ZCYX", **extra})
+    with pytest.warns(RuntimeWarning, match=said):
+        _, meta = load_volume(p)
+    assert meta["voxel_size_um"][0] == 2.0
+    assert meta["voxel_size_source"].startswith("z:file-unit-unknown,")
+
+
+def test_load_auto_single_plane_drops_z_from_calibration_record(tmp_path):
+    import warnings
+
+    p = tmp_path / "c.ome.tif"
+    tifffile.imwrite(p, np.zeros((2, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")        # x/y calibrated, z irrelevant: no warning
+        arr, meta = load_auto(p)
+    assert arr.shape == (2, 8, 8)
+    assert meta["voxel_size_um"] == (0.5, 0.5)
+    assert meta["voxel_size_source"] == "y:file,x:file"
+
+
+def test_load_auto_falls_back_to_image_on_volume_error(monkeypatch, tmp_path):
+    # A .tif that fails volume loading falls back to load_image.
+    import tifffile
+
+    arr = np.random.default_rng(0).integers(0, 255, (16, 16), dtype=np.uint8)
+    path = tmp_path / "img.tif"
+    tifffile.imwrite(str(path), arr)
+
+    def boom(p):
+        raise RuntimeError("forced volume failure")
+
+    monkeypatch.setattr(io, "_read_volume", boom)
+    out, meta = io.load_auto(path)
+    assert out.shape == (1, 16, 16)
+
+
+def test_supported_formats_missing_optional_branch(monkeypatch):
+    # Force _require to raise so the "requires: pip install" note is emitted.
+    def _boom(pkg, extra):
+        raise ImportError("missing")
+
+    monkeypatch.setattr(io_vendors, "require", _boom)
+    fmts = io.supported_formats()
+    assert "requires" in fmts[".czi"]
+    assert "requires" in fmts[".oib"]
+
+
+def test_labelled_many_channels_one_slice_warns_without_changing_numbers(tmp_path):
+    # tifffile writes a 3D imagej=True array without axes as channels=N; the header is
+    # followed, but a likely mislabelled z-stack is announced.
+    p = tmp_path / "zstack_as_channels.tif"
+    data = np.arange(10 * 16 * 16, dtype=np.uint16).reshape(10, 16, 16)
+    tifffile.imwrite(p, data, imagej=True)
+    with pytest.warns(RuntimeWarning, match="declares 10 channels and one z-slice"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (10, 1, 16, 16)
+    np.testing.assert_array_equal(arr[:, 0], data)
+
+
+def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
+    import warnings
+
+    p = tmp_path / "c3.ome.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5,
+                               "PhysicalSizeZ": 1.0})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        arr, _ = load_volume(p)
+    assert arr.shape == (3, 1, 8, 8)

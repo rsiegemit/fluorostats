@@ -110,3 +110,38 @@ def test_keyence_2d_single_channel_promotion(tmp_path):
     # channel is None -> stacked to (C=1, Z, Y, X)
     assert arr.shape == (1, 3, 24, 32)
     assert meta["n_slices_loaded"] == 3
+
+
+def test_z_step_unit_is_recorded_as_an_assumption_and_warned_once(keyence_folder):
+    import warnings
+
+    from fluorostats.io import load_volume
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _, meta = load_volume(keyence_folder)
+    assumed = [w for w in rec if "0.1-µm units" in str(w.message)]
+    assert len(assumed) == 1
+    assert not [w for w in rec if "no z calibration" in str(w.message)]
+    assert meta["voxel_size_source"] == "z:file-assumed-0.1um,y:file,x:file"
+
+
+@pytest.mark.parametrize("indices, said", [((1, 2, 4), r"missing z slice\(s\): \[3\]"),
+                                           ((1, 2, 2), r"duplicated z slice\(s\): \[2\]")])
+def test_missing_or_duplicate_z_slices_warn(tmp_path, indices, said):
+    for i, zi in enumerate(indices):
+        tifffile.imwrite(tmp_path / f"Image{i} _Z{zi:03d}_CHF.bz.ome.tif", np.zeros((2, 4, 4), np.uint16))
+    with pytest.warns(RuntimeWarning, match=said):
+        arr, _ = keyence.load_keyence_stack(tmp_path)
+    assert arr.shape == (2, 3, 4, 4)
+
+
+def test_gci_handlers_return_new_dicts():
+    meta = {"z_step_um": None, "n_slices": None, "channels": {"0": {"name": "DAPI"}}}
+    stack = keyence._gci_stack("Stack/properties.xml", "<TotalNumber>4</TotalNumber><Pitch>20</Pitch>", meta)
+    exposure = keyence._gci_exposure("Channel0/Shooting/Parameter/ExposureTime/properties.xml",
+                                     "<Numerator>1</Numerator><Denominator>100</Denominator>", meta)
+    assert (stack["n_slices"], stack["z_step_um"]) == (4, 2.0)
+    assert exposure["channels"]["0"] == {"name": "DAPI", "exposure_ms": 10.0}
+    assert meta == {"z_step_um": None, "n_slices": None, "channels": {"0": {"name": "DAPI"}}}
+    zero = "<Numerator>1</Numerator><Denominator>0</Denominator>"
+    assert keyence._gci_exposure("Channel0/x", zero, meta) is meta     # nothing to record

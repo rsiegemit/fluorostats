@@ -12,7 +12,7 @@ import types
 import numpy as np
 import pytest
 
-from fluorostats import io
+from fluorostats import io, io_vendors
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ def test_require_missing_dependency_raises(monkeypatch):
 
     monkeypatch.setattr(importlib, "import_module", _fail)
     with pytest.raises(ImportError, match="requires the 'oiffile' package"):
-        io._require("oiffile", "olympus")
+        io_vendors.require("oiffile", "olympus")
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ def test_olympus_z_ignores_non_z_axis_and_zero_interval():
             "Axis 3 Parameters Common": {"AxisCode": "Z", "Interval": "0", "PixUnit": "um"},
         }
 
-    assert io._parse_olympus_metadata(Oif())["voxel_size_um"][0] == 1.0
+    assert io_vendors._parse_olympus_metadata(Oif())["voxel_size_um"][0] == 1.0
 
 
 def test_olympus_metadata_mainfile_raises(monkeypatch):
@@ -124,7 +124,7 @@ def test_olympus_metadata_mainfile_raises(monkeypatch):
         def mainfile(self):
             raise RuntimeError("no mainfile")
 
-    meta = io._parse_olympus_metadata(BadOif())
+    meta = io_vendors._parse_olympus_metadata(BadOif())
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
     assert meta["channel_names"] == []
 
@@ -134,9 +134,9 @@ def test_section_get_attr_and_error():
     class S:
         DyeName = "Cy5"
 
-    assert io._section_get(S(), "DyeName") == "Cy5"
+    assert io_vendors._section_get(S(), "DyeName") == "Cy5"
     # object where subscript+attr both fail -> None
-    assert io._section_get(object(), "Missing") is None
+    assert io_vendors._section_get(object(), "Missing") is None
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ def test_czi_metadata_exception_path():
         def metadata(self):
             raise RuntimeError("x")
 
-    meta = io._parse_czi_metadata(Bad())
+    meta = io_vendors._parse_czi_metadata(Bad())
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
@@ -213,7 +213,7 @@ def test_czi_metadata_empty_string():
         def metadata(self):
             return ""
 
-    meta = io._parse_czi_metadata(Empty())
+    meta = io_vendors._parse_czi_metadata(Empty())
     assert meta["channel_names"] == []
 
 
@@ -278,7 +278,7 @@ def test_nd2_metadata_exception_paths():
         def voxel_size(self):
             raise RuntimeError("nope")
 
-    meta = io._parse_nd2_metadata(F())
+    meta = io_vendors._parse_nd2_metadata(F())
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
     assert meta["channel_names"] == []
 
@@ -298,7 +298,7 @@ def test_nd2_channel_name_fallback_to_ch():
     class F:
         metadata = Meta()
 
-    meta = io._parse_nd2_metadata(F())
+    meta = io_vendors._parse_nd2_metadata(F())
     assert meta["channel_names"] == ["backup"]
 
 
@@ -411,7 +411,7 @@ def test_lif_metadata_exception_paths():
         def channels(self):
             raise RuntimeError("no channels")
 
-    meta = io._parse_lif_metadata(BadImg())
+    meta = io_vendors._parse_lif_metadata(BadImg())
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
     assert meta["channel_names"] == []
 
@@ -421,7 +421,7 @@ def test_lif_metadata_scale_none():
         scale = None
         channels = 0
 
-    meta = io._parse_lif_metadata(Img())
+    meta = io_vendors._parse_lif_metadata(Img())
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
@@ -429,58 +429,10 @@ def test_lif_metadata_scale_none():
 # supported_formats optional-present branch (already installed) + load_auto
 # ---------------------------------------------------------------------------
 
-def test_load_auto_falls_back_to_image_on_volume_error(monkeypatch, tmp_path):
-    # A .tif that fails volume loading falls back to load_image.
-    import tifffile
-
-    arr = np.random.default_rng(0).integers(0, 255, (16, 16), dtype=np.uint8)
-    path = tmp_path / "img.tif"
-    tifffile.imwrite(str(path), arr)
-
-    def boom(p):
-        raise RuntimeError("forced volume failure")
-
-    monkeypatch.setattr(io, "load_volume", boom)
-    out, meta = io.load_auto(path)
-    assert out.shape == (1, 16, 16)
-
 
 # ---------------------------------------------------------------------------
 # canonicalization edge cases
 # ---------------------------------------------------------------------------
-
-def test_canonicalize_volume_bad_ndim_raises():
-    with pytest.raises(ValueError, match="Unexpected array shape"):
-        io._canonicalize_volume(np.zeros((5,)), {"channel_names": []})
-
-
-def test_canonicalize_volume_high_ndim_recurses():
-    # 6D with leading singletons collapses to 4D via recursion
-    arr = np.zeros((1, 1, 2, 3, 8, 8), dtype=np.uint16)
-    out = io._canonicalize_volume(arr, {"channel_names": []})
-    assert out.shape == (2, 3, 8, 8)
-
-
-def test_canonicalize_image_bad_ndim_raises():
-    with pytest.raises(ValueError, match="Unexpected 2D image shape"):
-        io._canonicalize_image(np.zeros((2, 2, 2, 2)), {"channel_names": []})
-
-
-def test_squeeze_trailing_singleton():
-    arr = np.zeros((2, 3, 8, 8, 1), dtype=np.uint16)
-    out = io._squeeze_singleton_dims(arr)
-    assert out.shape == (2, 3, 8, 8)
-
-
-def test_supported_formats_missing_optional_branch(monkeypatch):
-    # Force _require to raise so the "requires: pip install" note is emitted.
-    def _boom(pkg, extra):
-        raise ImportError("missing")
-
-    monkeypatch.setattr(io, "_require", _boom)
-    fmts = io.supported_formats()
-    assert "requires" in fmts[".czi"]
-    assert "requires" in fmts[".oib"]
 
 
 def test_nd2_channels_iteration_raises():
@@ -495,41 +447,28 @@ def test_nd2_channels_iteration_raises():
     class F:
         metadata = Meta()
 
-    meta = io._parse_nd2_metadata(F())
+    meta = io_vendors._parse_nd2_metadata(F())
     assert meta["channel_names"] == []
 
 
 def test_ome_metadata_parse_error():
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io._parse_ome_metadata("<not valid xml", meta)
+    out = io_vendors._parse_ome_metadata("<not valid xml", meta)
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
-def test_imagej_metadata_exception():
-    # spacing present but non-float -> except: pass leaves defaults
+def test_imagej_metadata_unparseable_spacing_warns():
+    # spacing present but non-float -> announced, defaults kept
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io._parse_imagej_metadata({"spacing": "notanumber"}, meta)
+    with pytest.warns(RuntimeWarning, match="'notanumber' is not a number"):
+        out = io_vendors._parse_imagej_metadata({"spacing": "notanumber"}, meta)
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
-
-
-def test_squeeze_non_singleton_high_ndim():
-    # ndim>4 with no leading/trailing singleton -> final while arr=arr[0]
-    arr = np.zeros((2, 3, 4, 8, 8), dtype=np.uint16)
-    out = io._squeeze_singleton_dims(arr)
-    assert out.ndim == 4
-
-
-def test_canonicalize_volume_high_ndim_squeezes():
-    # 6D non-singleton -> squeeze collapses to 4D
-    arr = np.zeros((2, 2, 3, 4, 8, 8), dtype=np.uint16)
-    out = io._canonicalize_volume(arr, {"channel_names": []})
-    assert out.ndim == 4
 
 
 def test_safe_float_paths():
-    assert io._safe_float("2.5", 1.0) == 2.5
-    assert io._safe_float("-1", 9.0) == 9.0  # non-positive -> default
-    assert io._safe_float("abc", 7.0) == 7.0  # unparseable -> default
+    assert io_vendors._safe_float("2.5", 1.0) == 2.5
+    assert io_vendors._safe_float("-1", 9.0) == 9.0  # non-positive -> default
+    assert io_vendors._safe_float("abc", 7.0) == 7.0  # unparseable -> default
 
 
 def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
@@ -559,3 +498,131 @@ def test_lif_missing_z_length_keeps_xy_calibration(monkeypatch, tmp_path):
     with pytest.warns(RuntimeWarning, match="no z calibration"):
         _, meta = io.load_volume(path)
     assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# Readers that label their axes are reordered by name, not by shape
+# ---------------------------------------------------------------------------
+
+def _zc_stack(n_z=5, n_c=2):
+    """(Z, C, Y, X) stack whose channel c holds the value c + 1."""
+    return np.stack([np.full((n_z, 8, 8), c + 1, np.uint16) for c in range(n_c)], axis=1)
+
+
+def test_nd2_zcyx_is_reordered_by_axis_name(monkeypatch, tmp_path):
+    fake = _make_fake_nd2(_zc_stack(), (0.3, 0.3, 1.5), ["405", "488"])
+    fake.ND2File.sizes = {"Z": 5, "C": 2, "Y": 8, "X": 8}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "s.nd2"
+    path.write_bytes(b"")
+    out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_nd2_time_and_position_keep_first_index(monkeypatch, tmp_path):
+    arr = np.stack([np.stack([_zc_stack(), _zc_stack() + 10])] * 3, axis=1)   # (T, P, Z, C, Y, X)
+    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
+    fake.ND2File.sizes = {"T": 2, "P": 3, "Z": 5, "C": 2, "Y": 8, "X": 8}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "tp.nd2"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="time point 0 of 2") as rec:
+        out, _ = io.load_volume(path)
+    assert any("position 0 of 3" in str(w.message) for w in rec)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_nd2_rgb_samples_become_channels(monkeypatch, tmp_path):
+    arr = np.stack([np.full((4, 8, 8), v, np.uint8) for v in (10, 20, 30)], -1)   # (Z, Y, X, S)
+    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
+    fake.ND2File.sizes = {"Z": 4, "Y": 8, "X": 8, "S": 3}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "rgb.nd2"
+    path.write_bytes(b"")
+    out, _ = io.load_volume(path)
+    assert out.shape == (3, 4, 8, 8)
+    assert [out[c].mean() for c in range(3)] == [10, 20, 30]
+
+
+def test_czi_scene_axes_reorder_by_name(monkeypatch, tmp_path):
+    # czifile >= 2026 reads the first scene and labels it ('S' = colour samples).
+    fake = _make_fake_czifile("", _zc_stack())
+    scene = types.SimpleNamespace(axes="ZCYX")
+    fake.CziFile.scenes = {0: scene}
+    monkeypatch.setitem(sys.modules, "czifile", fake)
+    path = tmp_path / "s.czi"
+    path.write_bytes(b"")
+    out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
+    # Older czifile labels the whole file: 'S' = scene, '0' = colour samples.
+    t0 = _zc_stack()[None, :, :, :, :, None]                     # (S, Z, C, Y, X, 0)
+    arr = np.stack([np.concatenate([t0, t0 + 10]), np.concatenate([t0, t0 + 10]) + 20], axis=1)
+    fake = _make_fake_czifile("", arr)                            # (S, T, Z, C, Y, X, 0)
+    fake.CziFile.axes = "STZCYX0"
+    monkeypatch.setitem(sys.modules, "czifile", fake)
+    path = tmp_path / "old.czi"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="scene 0 of 2") as rec:
+        out, _ = io.load_volume(path)
+    assert any("time point 0 of 2" in str(w.message) for w in rec)
+    assert out.shape == (2, 5, 8, 8)
+    assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+def test_labelled_axes_with_unknown_name_fall_back_to_shape(monkeypatch, tmp_path):
+    arr = np.zeros((3, 2, 5, 8, 8), np.uint16)
+    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
+    fake.ND2File.sizes = {"U": 3, "C": 2, "Z": 5, "Y": 8, "X": 8}
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "u.nd2"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="first of 3 entries"):
+        out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)
+
+
+def test_lif_y_copied_from_x_is_said_and_recorded(monkeypatch, tmp_path):
+    fake = _make_fake_readlif(1, 2, [2.0, None, 0.5])
+    monkeypatch.setitem(sys.modules, "readlif", fake)
+    path = tmp_path / "noy.lif"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="y voxel size copied from x") as rec:
+        _, meta = io.load_volume(path)
+    assert not [w for w in rec if "no y calibration" in str(w.message)]
+    assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:file,y:copied-from-x,x:file"
+
+
+def test_ome_metadata_channel_name_append():
+    ome_xml = (
+        '<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06">'
+        '<Image><Pixels PhysicalSizeX="0.5" PhysicalSizeY="0.5" PhysicalSizeZ="2.0">'
+        '<Channel Name="EGFP"/>'
+        '<Channel Fluor="mCherry"/>'
+        '</Pixels></Image></OME>'
+    )
+    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
+    out = io_vendors._parse_ome_metadata(ome_xml, meta)
+    assert out["channel_names"] == ["EGFP", "mCherry"]
+    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}   # not mutated
+
+
+def test_ome_metadata_without_pixels_returns_meta_unchanged():
+    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
+    assert io_vendors._parse_ome_metadata("<OME><Image/></OME>", meta) == meta
+
+
+def test_imagej_metadata_returns_new_dict():
+    meta = {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
+    out = io_vendors._parse_imagej_metadata({"spacing": 2.0, "unit": "micron"}, meta)
+    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta == {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
+    assert io_vendors._parse_imagej_metadata({}, meta) is meta
+
