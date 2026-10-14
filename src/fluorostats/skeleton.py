@@ -47,12 +47,17 @@ def prune_skeleton(
     skel: np.ndarray,
     min_branch_length_px: float = 10.0,
     max_iter: int = 5,
+    *,
+    spacing: tuple[float, ...] | None = None,
 ) -> np.ndarray:
     """Remove short spur branches from a skeleton.
 
     Iteratively drops junction-to-endpoint branches shorter than
-    ``min_branch_length_px`` (in voxels) and re-thins, until none remain or
-    ``max_iter`` is reached. This is the standard clean-up step that skeleton
+    ``min_branch_length_px`` and re-thins, until none remain or ``max_iter``
+    is reached. Branch length is measured along the path in voxels, or, when
+    ``spacing`` (per-axis voxel size, one entry per ``skel`` axis) is given, in
+    the units of ``spacing`` (µm), in which case ``min_branch_length_px`` is a
+    length in those units. This is the standard clean-up step that skeleton
     analysers (AnalyzeSkeleton, AngioTool, REAVER) apply before counting
     branches/junctions; without it a rough segmentation yields many spurious
     short branches and junction nodes.
@@ -73,7 +78,7 @@ def prune_skeleton(
         neighbours = convolve(s.astype(int), kernel, mode="constant")
         junctions = s & (neighbours >= 3)
         try:
-            skeleton_obj = skan.Skeleton(s)
+            skeleton_obj = skan.Skeleton(s, spacing=spacing or 1)
             branch_data = skan.summarize(skeleton_obj, separator="_")
         except Exception:  # pragma: no cover  # defensive skan summarize failure
             break
@@ -110,8 +115,9 @@ def skeleton_metrics(
         :func:`prune_skeleton`). Default False preserves the original,
         unpruned behaviour so existing results are unchanged.
     min_branch_length_um : float or None
-        Spur-length threshold in micrometres (converted to voxels via the mean
-        voxel size). Ignored unless ``prune=True``; defaults to ~10 voxels.
+        Spur-length threshold in micrometres, compared with each spur's length
+        along its path using the per-axis voxel size. Ignored unless
+        ``prune=True``; when None, the threshold is 10 voxels.
 
     Returns
     -------
@@ -123,23 +129,21 @@ def skeleton_metrics(
     empty = dict(EMPTY_METRICS)
     try:
         skel = skeletonize(mask)
+        # Match spacing length to the mask dimensionality so 2D masks work too
+        # (voxel_size_um is (z, y, x); a 2D image uses the trailing (y, x)).
+        spacing = tuple(voxel_size_um)[-skel.ndim:]
 
         if prune and skel.sum() > 0:
             if min_branch_length_um is None:
-                min_px = 10.0
+                skel = prune_skeleton(skel)
             else:
-                mean_vox = float(np.mean(voxel_size_um)) or 1.0
-                min_px = max(1.0, min_branch_length_um / mean_vox)
-            skel = prune_skeleton(skel, min_branch_length_px=min_px)
+                skel = prune_skeleton(skel, min_branch_length_um, spacing=spacing)
 
         if skel.sum() == 0:
             return dict(empty)
 
         import skan
 
-        # Match spacing length to the mask dimensionality so 2D masks work too
-        # (voxel_size_um is (z, y, x); a 2D image uses the trailing (y, x)).
-        spacing = tuple(voxel_size_um)[-skel.ndim:]
         skeleton_obj = skan.Skeleton(skel, spacing=spacing)
         branch_data = skan.summarize(skeleton_obj, separator="_")
 
