@@ -89,3 +89,17 @@ def test_viability_batch_manifest_errors(tmp_path):
     with pytest.raises(ValueError, match="has no stacks"):   # rejected by load_manifest
         run_man({**base, "output_dir": str(tmp_path / "o2"),
                  "groups": [{"name": "g", "stacks": []}]}, "nostacks")
+
+
+def _cfg(**kw):
+    return {"live_channel": 0, "dead_channel": 1, "seg": {"method": "otsu", "min_size": 5},
+            "count_method": "cc", **kw}
+
+
+def test_fov_area_uses_y_and_x_pixel_sizes(monkeypatch):
+    """Non-square pixels: the field of view is (dx * nx) * (dy * ny)."""
+    vol = _blob_stack(5, 5)[:, :, :, :80]                      # ny = 96, nx = 80
+    meta = {"voxel_size_um": (2.0, 0.5, 1.0), "voxel_size_source": "file"}
+    monkeypatch.setattr(viability_batch, "load_volume", lambda p: (vol, meta))
+    row = viability_batch.analyse_stack(Path("x.npy"), _cfg())
+    assert row["fov_mm2"] == pytest.approx((1.0 * 80) * (0.5 * 96) / 1e6)

@@ -106,8 +106,8 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     # surface culture -> analyse the maximum-intensity projection (quasi-monolayer)
     live_mip, dead_mip = live.max(0), dead.max(0)
     nz, ny, nx = live.shape
-    px = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[-1])   # xy micrometres/pixel
-    fov_mm2 = (px * nx) * (px * ny) / 1e6
+    py, px = (float(v) for v in meta.get("voxel_size_um", (1.0, 1.0, 1.0))[-2:])  # µm/pixel
+    fov_mm2 = (px * nx) * (py * ny) / 1e6
 
     # live_dead_by_count reserves `method` for the COUNT mode, so the segmentation
     # method (e.g. otsu, its default in binarize) is passed via the other seg keys only.
