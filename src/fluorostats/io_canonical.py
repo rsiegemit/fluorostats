@@ -60,12 +60,22 @@ def _by_axis_names(arr: np.ndarray, axes: str, index_axes: dict[str, str]) -> np
     return arr.reshape(-1, *arr.shape[2:])
 
 
+# More channels than any realistic fluorescence acquisition: a labelled file with
+# this many channels and one z-slice is most likely a mislabelled z-stack (e.g.
+# tifffile's imagej=True writes a 3D array without axes as channels=N).
+_MAX_PLAUSIBLE_CHANNELS = 4
+
+
 def canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
                         index_axes: dict[str, str] | None = None) -> np.ndarray:
     """Ensure array is (C, Z, Y, X): by axis name when the reader labels its axes
     (``axes``), otherwise by shape."""
     named = _by_axis_names(arr, axes, index_axes or {}) if axes else None
     arr = named if named is not None else _volume_by_shape(arr)
+    if named is not None and arr.shape[1] == 1 and arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
+        warnings.warn(f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
+                      f"z-stack, re-save it with axes 'ZYX' (or slices={arr.shape[0]}).",
+                      RuntimeWarning, stacklevel=4)
     n_ch = arr.shape[0]
     if len(meta["channel_names"]) < n_ch:
         for i in range(len(meta["channel_names"]), n_ch):

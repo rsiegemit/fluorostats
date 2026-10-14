@@ -426,3 +426,28 @@ def test_supported_formats_missing_optional_branch(monkeypatch):
     fmts = io.supported_formats()
     assert "requires" in fmts[".czi"]
     assert "requires" in fmts[".oib"]
+
+
+def test_labelled_many_channels_one_slice_warns_without_changing_numbers(tmp_path):
+    # tifffile writes a 3D imagej=True array without axes as channels=N; the header is
+    # followed, but a likely mislabelled z-stack is announced.
+    p = tmp_path / "zstack_as_channels.tif"
+    data = np.arange(10 * 16 * 16, dtype=np.uint16).reshape(10, 16, 16)
+    tifffile.imwrite(p, data, imagej=True)
+    with pytest.warns(RuntimeWarning, match="declares 10 channels and one z-slice"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (10, 1, 16, 16)
+    np.testing.assert_array_equal(arr[:, 0], data)
+
+
+def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
+    import warnings
+
+    p = tmp_path / "c3.ome.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5,
+                               "PhysicalSizeZ": 1.0})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        arr, _ = load_volume(p)
+    assert arr.shape == (3, 1, 8, 8)
