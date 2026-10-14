@@ -105,6 +105,18 @@ def test_olympus_z_units_um_and_default(monkeypatch, tmp_path):
     assert meta2["voxel_size_um"][0] == 4.0
 
 
+def test_olympus_z_ignores_non_z_axis_and_zero_interval():
+    # A non-Z axis section, or a Z section with a non-positive interval, leaves z
+    # at its default rather than being misread as the z step.
+    class Oif:
+        mainfile = {
+            "Axis 0 Parameters Common": {"AxisCode": "X", "Interval": "7", "PixUnit": "um"},
+            "Axis 3 Parameters Common": {"AxisCode": "Z", "Interval": "0", "PixUnit": "um"},
+        }
+
+    assert io._parse_olympus_metadata(Oif())["voxel_size_um"][0] == 1.0
+
+
 def test_olympus_metadata_mainfile_raises(monkeypatch):
     # If mainfile access raises, defaults are returned.
     class BadOif:

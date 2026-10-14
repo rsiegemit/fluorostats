@@ -30,6 +30,8 @@ def _write_gci(path, *, calibration_nm=400.0, pitch=25, total=3):
         f"{P}/Channel0/Shooting/Parameter/ExposureTime/properties.xml":
             '<Store><Numerator Type="System.Int32">35000</Numerator>'
             '<Denominator Type="System.Int32">1000000</Denominator></Store>',
+        # entries parse_gci does not read must be skipped, not misparsed
+        f"{P}/Unrelated/properties.xml": '<Store><Pitch Type="System.Int32">99</Pitch></Store>',
     }
     with zipfile.ZipFile(path, "w") as z:
         for name, body in entries.items():
