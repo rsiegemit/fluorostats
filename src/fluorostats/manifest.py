@@ -10,9 +10,14 @@ from pathlib import Path
 
 
 def check_groups(groups: list[dict], roles: tuple[str, ...] | None = None) -> list[str]:
-    """Problems with a manifest's groups: names, stack labels and paths, background
-    paths, and (when ``roles`` is given) each stack's role. Empty when all is well."""
+    """Problems with a manifest's groups: names (present and unique), stacks (at least
+    one; labels and paths), background paths, and (when ``roles`` is given) each
+    stack's role. Empty when all is well."""
     problems = []
+    names = [grp.get("name") for grp in groups]
+    repeated = [n for i, n in enumerate(names) if n and n in names[i + 1:] and n not in names[:i]]
+    for name in repeated:
+        problems.append(f"group name {name!r} is used by more than one group; names must be unique")
     for gi, grp in enumerate(groups):
         name = grp.get("name")
         if not name:

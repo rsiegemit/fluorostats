@@ -15,7 +15,7 @@ tool serves any probe-penetration / permeability study.
 
 Run it from the command line::
 
-    fluorostats depth <manifest.json> [--output-dir DIR]
+    fluorostats depth <manifest.json> [--output DIR]
 
 or from Python::
 
@@ -63,6 +63,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from matplotlib.colors import is_color_like
 
 from . import depth, stats
 from .depth import parse_window, window_bounds, window_label, window_title
@@ -108,27 +109,55 @@ def load_manifest(path: Path) -> dict:
 
 
 _ROLES = ("primary", "aux")
-_REDUCERS = ("mean", "median")
 
 
 def _validate(m: dict) -> None:
     """Check a depth manifest before any image is loaded; raise listing every problem."""
     problems = []
-    if not isinstance(m["channel"], int) or m["channel"] < 0:
+    if not _is_int(m["channel"]) or m["channel"] < 0:
         problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
-    if m["reducer"] not in _REDUCERS:
-        problems.append(f"reducer must be one of {_REDUCERS}, got {m['reducer']!r}")
-    if not isinstance(m["n_surface"], int) or m["n_surface"] < 1:
+    reducers = tuple(depth.REDUCERS)
+    if m["reducer"] not in reducers:
+        problems.append(f"reducer must be one of {reducers}, got {m['reducer']!r}")
+    if not _is_int(m["n_surface"]) or m["n_surface"] < 1:
         problems.append(f"n_surface must be a positive integer, got {m['n_surface']!r}")
-    for w in m["auc_windows_um"]:
-        if isinstance(w, str):
-            if w.lower() != "full":
-                problems.append(f"AUC window {w!r} must be 'full' or [z0, z1]")
-        elif not (len(w) == 2 and 0 <= float(w[0]) < float(w[1])):
-            problems.append(f"AUC window {w!r} must be [z0, z1] with 0 <= z0 < z1 (µm)")
+    problems += _window_problems(m["auc_windows_um"])
+    for grp in m["groups"]:
+        c = grp.get("color")
+        if c is not None and not is_color_like(c):
+            problems.append(f"group {grp.get('name')!r}: color {c!r} is not a matplotlib colour")
     problems += check_groups(m["groups"], roles=_ROLES)
     if problems:
         raise ValueError("invalid depth manifest:\n  - " + "\n  - ".join(problems))
+
+
+def _is_int(v) -> bool:
+    """An integer, not a bool (JSON true/false are ints to Python)."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _is_number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _window_problems(windows) -> list[str]:
+    """Problems with ``auc_windows_um``: a list of [z0, z1] pairs (µm) and/or "full"."""
+    form = "a list of [z0, z1] pairs (µm) and/or 'full', e.g. [[0, 100], 'full']"
+    if not isinstance(windows, list) or not windows:
+        return [f"auc_windows_um must be {form}; got {windows!r}"]
+    if all(_is_number(w) for w in windows):
+        return [f"auc_windows_um must be {form}; a single window is [{windows!r}], "
+                f"not {windows!r}"]
+    problems = []
+    for w in windows:
+        if isinstance(w, str) and w.lower() == "full":
+            continue
+        if not (isinstance(w, list) and len(w) == 2 and all(_is_number(v) for v in w)):
+            problems.append(f"auc_windows_um entry {w!r} must be 'full' or a [z0, z1] pair of "
+                            f"numbers; auc_windows_um is {form}")
+        elif not 0 <= w[0] < w[1]:
+            problems.append(f"AUC window {w!r} must be [z0, z1] with 0 <= z0 < z1 (µm)")
+    return problems
 
 
 
@@ -136,17 +165,17 @@ def _validate(m: dict) -> None:
 # Core per-stack computation
 # ---------------------------------------------------------------------------
 
-def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float]:
-    """Load a stack and return its raw depth profile and z-step (µm)."""
+def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float, str]:
+    """Load a stack: raw depth profile, z-step (µm) and where the calibration came from."""
     vol, meta = load_volume(path)
     vz = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
-    return depth.intensity_depth_profile(vol, vz, channel=cfg["channel"],
-                                         reducer=cfg["reducer"]), vz
+    return (depth.intensity_depth_profile(vol, vz, channel=cfg["channel"], reducer=cfg["reducer"]),
+            vz, meta.get("voxel_size_source", ""))
 
 
 def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> dict:
     """Load one stack and compute raw/subtracted/normalised profiles + AUC + penetration (λ) fit."""
-    raw, vz = _load_profile(path, cfg)
+    raw, vz, vz_source = _load_profile(path, cfg)
     subtracted = depth.subtract_background(raw, blank) if blank is not None else raw
     normalized = depth.normalize_to_surface(subtracted, n_surface=cfg["n_surface"])
 
@@ -154,14 +183,15 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     auc = {}
     for w in cfg["windows"]:
         z0, z1 = window_bounds(w, max_depth)
+        covered = max(min(z1, max_depth) - z0, 0.0)
         if z1 > max_depth:
             warnings.warn(f"{Path(path).name}: AUC window {window_title(w)} reaches past the "
-                          f"stack's {max_depth:g} µm; only {max(max_depth - z0, 0.0):g} µm of it "
+                          f"stack's {max_depth:g} µm; only {covered:g} µm of it "
                           "is covered (see window_covered_um).", RuntimeWarning, stacklevel=2)
         auc[window_label(w)] = {
             "absolute": depth.auc_depth(raw.depth_um, subtracted.mean, z_min=z0, z_max=z1),
             "normalized": depth.auc_depth(raw.depth_um, normalized.normalized, z_min=z0, z_max=z1),
-            "covered_um": float(min(z1, max_depth) - z0),
+            "covered_um": float(covered),
             "width_um": float(z1 - z0),
         }
 
@@ -180,6 +210,7 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
         "normalized": normalized.normalized,
         "surface_reference": normalized.surface_reference,
         "voxel_z_um": vz,
+        "voxel_size_source": vz_source,
         "n_slices": int(raw.depth_um.size),
         "max_depth_um": max_depth,
         "auc": auc,
@@ -257,7 +288,8 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
 
 
 def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
-    """One row per stack: acquisition, λ fit, and absolute/normalised AUC per window."""
+    """One row per stack: acquisition, λ fit, absolute/normalised AUC per window, and
+    ``voxel_size_source`` (which voxel axes were read from the file vs defaulted)."""
     labels = [window_label(w) for w in windows]
     header = ["group", "stack", "role", "voxel_z_um", "n_slices",
               "max_depth_um", "surface_intensity_subtracted",
@@ -266,6 +298,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}",
                    f"window_covered_um_{lab}"]
+    header.append("voxel_size_source")   # appended last so existing column positions hold
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(header)
@@ -282,7 +315,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
                 a = res["auc"][lab]
                 row += [f"{a['absolute']:.6g}", f"{a['normalized']:.6g}",
                         f"{a['covered_um']:.4g}"]
-            w.writerow(row)
+            w.writerow(row + [res["voxel_size_source"]])
 
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:
@@ -328,7 +361,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
     write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
     write_group_summary_csv(out_dir / "group_depth_summary.csv", aggregates)
-    _write_figures(rows, aggregates, colors, windows, m["signal_label"], out_dir)
+    _write_figures(rows, aggregates, colors, cfg, m["signal_label"], out_dir)
 
     _print_summary(rows, windows)
     _print_lambda_summary(rows)
@@ -360,44 +393,59 @@ def _analyse_groups(groups: list[dict], cfg: dict):
 def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
     """Blank (no-fluorophore) profile from one path or a list of replicate paths.
 
-    Replicates are averaged over their common depth range, with the
-    across-replicate SEM; empty/truncated trailing slices (mean ~0) are dropped.
+    Replicates are averaged slice by slice over the first n slices, n being the
+    shortest replicate, with the across-replicate SEM. Every slice whose mean is
+    <= 0 (empty or truncated; trailing or mid-stack) is then dropped, so the
+    background is interpolated across mid-stack gaps and held at its last value
+    past the end. Both are announced with counts.
     """
     bg_paths = [bg] if isinstance(bg, str) else list(bg)
     profs = [_load_profile(Path(bp), cfg)[0] for bp in bg_paths]
-    if len(profs) == 1:
-        blank = profs[0]
-    else:
-        steps = {float(np.median(np.diff(p.depth_um))) for p in profs if p.depth_um.size > 1}
-        if len(steps) > 1:
-            warnings.warn(f"replicate blanks have different z-steps {sorted(steps)} µm; they are "
-                          "averaged slice by slice on the first blank's depth axis.",
-                          RuntimeWarning, stacklevel=2)
-        n = min(len(p.mean) for p in profs)
-        stack = np.stack([p.mean[:n] for p in profs])
-        blank = depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),
-                                   stack.std(0, ddof=1) / len(profs) ** 0.5,
-                                   profs[0].n_pixels)
+    blank = profs[0] if len(profs) == 1 else _average_blanks(profs)
     valid = blank.mean > 0
     if not valid.all():
+        n_drop = int((~valid).sum())
+        trailing = int(np.argmax(valid[::-1])) if valid.any() else n_drop
+        warnings.warn(f"blank {', '.join(Path(bp).name for bp in bg_paths)}: dropped {n_drop} "
+                      f"of {valid.size} slices with mean <= 0 ({n_drop - trailing} mid-stack, "
+                      f"{trailing} trailing).", RuntimeWarning, stacklevel=2)
         blank = depth.DepthProfile(blank.depth_um[valid], blank.mean[valid],
                                    blank.sem[valid], blank.n_pixels)
     return blank
 
 
-def _write_figures(rows, aggregates, colors, windows, sig: str, out_dir: Path) -> None:
+def _average_blanks(profs: list[depth.DepthProfile]) -> depth.DepthProfile:
+    """Slice-by-slice mean (and SEM) of replicate blanks over the shortest one's slices."""
+    steps = {float(np.median(np.diff(p.depth_um))) for p in profs if p.depth_um.size > 1}
+    if len(steps) > 1:
+        warnings.warn(f"replicate blanks have different z-steps {sorted(steps)} µm; they are "
+                      "averaged slice by slice on the first blank's depth axis.",
+                      RuntimeWarning, stacklevel=3)
+    lengths = sorted({len(p.mean) for p in profs})
+    n = lengths[0]
+    if len(lengths) > 1:
+        warnings.warn(f"replicate blanks have {lengths} slices; they are averaged over the "
+                      f"first {n} (the shortest).", RuntimeWarning, stacklevel=3)
+    stack = np.stack([p.mean[:n] for p in profs])
+    return depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),
+                              stack.std(0, ddof=1) / len(profs) ** 0.5, profs[0].n_pixels)
+
+
+def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path) -> None:
     """Depth-vs curves (absolute + normalised), per-window AUC plots, retention summary."""
+    windows = cfg["windows"]
     # The narrowest fixed window is shaded on the depth-vs curves.
     fixed = [w for w in windows if w != ("full",)]
     shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
+    model = {"n_surface": cfg["n_surface"], "fit_offset": cfg["fit_offset"]}
     plot_depth_curves(rows, aggregates, colors, "bg_subtracted",
                       f"Mean {sig} intensity (a.u., blank-subtracted)",
                       f"{sig} intensity vs depth",
-                      out_dir / "fig_depth_absolute", auc_window=shade_window)
+                      out_dir / "fig_depth_absolute", auc_window=shade_window, **model)
     plot_depth_curves(rows, aggregates, colors, "normalized",
                       "Normalised intensity (surface = 1)",
                       f"Normalised {sig} intensity vs depth",
-                      out_dir / "fig_depth_normalized", auc_window=shade_window)
+                      out_dir / "fig_depth_normalized", auc_window=shade_window, **model)
     for w in windows:
         lab = window_label(w)
         plot_auc(rows, colors, w, out_dir / f"fig_auc_normalized_{lab}", use_normalized=True)
@@ -415,25 +463,51 @@ def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
           f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
 
 
+def _print_mann_whitney(label: str, by_group: dict[str, list[float]], mw: dict,
+                        q: str = "") -> None:
+    """Print a two-sided Mann-Whitney contrast with Cliff's δ (and BH q when given)."""
+    ga, gb = list(by_group)
+    print(f"  {label} {ga} vs {gb}: U={mw['u']:.1f}, p={mw['p']:.4f}, "
+          f"Cliff's δ={mw['cliffs_delta']:+.2f}{q} (n={mw['n_x']},{mw['n_y']})")
+
+
+def _print_skipped(n_groups: int, which: str = "") -> None:
+    """Say why no contrast is printed: it needs exactly two groups (``which`` qualifies them)."""
+    print(f"  (contrasts skipped: {n_groups} group{'s' * (n_groups != 1)}{which}; "
+          "a two-group contrast needs exactly 2)")
+
+
 def _print_summary(rows, windows) -> None:
+    """Per-window normalised AUC by group; with two groups, Welch and Mann-Whitney
+    contrasts, the Mann-Whitney p-values BH-corrected across the windows."""
+    per_window = []
     for w in windows:
         lab = window_label(w)
-        print(f"\n=== AUC {window_title(w)} (normalised) ===")
         by_group: dict[str, list[float]] = {}
         for r in rows:
             if r["role"] == "primary":
                 by_group.setdefault(r["group"], []).append(r["result"]["auc"][lab]["normalized"])
+        per_window.append(by_group)
+    mws = [stats.mann_whitney(*bg.values()) if len(bg) == 2 else None for bg in per_window]
+    tested = [i for i, mw in enumerate(mws) if mw is not None]
+    qs = dict(zip(tested, stats.bh_fdr([mws[i]["p"] for i in tested])))
+    for i, (w, by_group) in enumerate(zip(windows, per_window)):
+        print(f"\n=== AUC {window_title(w)} (normalised) ===")
         for g, vals in by_group.items():
             m = np.mean(vals)
             sd = np.std(vals, ddof=1) if len(vals) > 1 else 0.0
             print(f"  {g:8s} n={len(vals)}  mean={m:8.2f}  sd={sd:6.2f}  "
                   f"values={[round(v, 1) for v in vals]}")
-        if len(by_group) == 2:
-            _print_welch("Welch t-test", by_group)
+        if mws[i] is None:
+            _print_skipped(len(by_group))
+            continue
+        _print_welch("Welch t-test", by_group)
+        _print_mann_whitney("Mann-Whitney", by_group, mws[i],
+                            f", BH q={qs[i]:.4f} across {len(tested)} windows")
 
 
 def _print_lambda_summary(rows) -> None:
-    """Per-group penetration constant λ and a descriptive Welch contrast."""
+    """Per-group penetration constant λ and descriptive Welch / Mann-Whitney contrasts."""
     print("\n=== Penetration constant λ (single-exponential fit, absolute profile) ===")
     by_group: dict[str, list[float]] = {}
     for r in rows:
@@ -448,5 +522,8 @@ def _print_lambda_summary(rows) -> None:
         sem = np.std(vals, ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0.0
         print(f"  {g:8s} n={len(vals)}  λ mean={m:7.2f} µm  SEM={sem:5.2f}  "
               f"values={[round(v, 1) for v in vals]}")
-    if len(by_group) == 2:
-        _print_welch("Welch t-test on λ,", by_group)
+    if len(by_group) != 2:
+        _print_skipped(len(by_group), " with an accepted λ fit")
+        return
+    _print_welch("Welch t-test on λ,", by_group)
+    _print_mann_whitney("Mann-Whitney on λ,", by_group, stats.mann_whitney(*by_group.values()))

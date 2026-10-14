@@ -27,6 +27,7 @@ The volume may be 3D ``(Z, Y, X)`` or 4D ``(C, Z, Y, X)``; pass
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -74,6 +75,10 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
     return arr.astype(np.float64, copy=False)
 
 
+# Per-slice spatial statistics, selectable by name (``reducer=``).
+REDUCERS = {"mean": np.mean, "median": np.median}
+
+
 def intensity_depth_profile(
     volume: np.ndarray,
     voxel_size_z_um: float,
@@ -93,8 +98,8 @@ def intensity_depth_profile(
     channel:
         Channel index to use when ``volume`` is 4D.
     reducer:
-        ``"mean"`` (default) or ``"median"`` for the per-slice spatial
-        statistic. ``"median"`` is more robust to bright debris/bubbles.
+        Name in :data:`REDUCERS`: ``"mean"`` (default) or ``"median"`` for
+        the per-slice spatial statistic. ``"median"`` is more robust to bright debris/bubbles.
 
     Returns
     -------
@@ -108,12 +113,10 @@ def intensity_depth_profile(
     flat = stack.reshape(n_slices, -1)
     n_px = flat.shape[1]
 
-    if reducer == "mean":
-        per_slice = flat.mean(axis=1)
-    elif reducer == "median":
-        per_slice = np.median(flat, axis=1)
-    else:
-        raise ValueError(f"reducer must be 'mean' or 'median', got {reducer!r}")
+    if not isinstance(reducer, str) or reducer not in REDUCERS:
+        names = " or ".join(repr(k) for k in REDUCERS)
+        raise ValueError(f"reducer must be {names}, got {reducer!r}")
+    per_slice = REDUCERS[reducer](flat, axis=1)
 
     std = flat.std(axis=1, ddof=0)
     sem = std / np.sqrt(n_px)
@@ -433,6 +436,7 @@ def auc_depth(
 __all__ = [
     "DepthProfile",
     "PenetrationFit",
+    "REDUCERS",
     "intensity_depth_profile",
     "resample_to_depth",
     "subtract_background",
@@ -448,7 +452,7 @@ __all__ = [
 # `depth_figures`.
 # ---------------------------------------------------------------------------
 
-def parse_window(w):
+def parse_window(w: str | Sequence[float]) -> tuple:
     """Normalise an AUC window spec to ('full',) or (z0, z1) floats.
 
     ``"full"`` integrates each stack over its own entire acquired range;
@@ -459,17 +463,17 @@ def parse_window(w):
     return (float(w[0]), float(w[1]))
 
 
-def window_label(w) -> str:
+def window_label(w: tuple) -> str:
     """Column/file-name label for a window: ``"full"`` or ``"0_100um"``."""
     return "full" if w == ("full",) else f"{w[0]:g}_{w[1]:g}um"
 
 
-def window_title(w) -> str:
+def window_title(w: tuple) -> str:
     """Human-readable window title: ``"full depth"`` or ``"0–100 µm"``."""
     return "full depth" if w == ("full",) else f"{w[0]:g}–{w[1]:g} µm"
 
 
-def window_bounds(w, max_depth_um: float):
+def window_bounds(w: tuple, max_depth_um: float) -> tuple[float, float]:
     """Resolve a window spec to concrete (z0, z1) for a stack of given depth."""
     if w == ("full",):
         return 0.0, float(max_depth_um)

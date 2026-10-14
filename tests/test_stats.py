@@ -227,11 +227,11 @@ def test_mann_whitney_identical_single_values_valueerror_branch():
 
 
 # ---------------------------------------------------------------------------
-# stratified_mann_whitney — line 130 (scalar keys tuple wrap), line 135 (missing metric)
+# stratified_mann_whitney — single stratum column, missing metric
 # ---------------------------------------------------------------------------
 
-def test_stratified_mann_whitney_single_stratum_key_is_wrapped():
-    """A single stratum col produces scalar groupby keys → line 130 wraps to tuple."""
+def test_stratified_mann_whitney_single_stratum_column_keeps_whole_key():
+    """One stratum column: each row carries the full stratum value, not its first character."""
     rng = np.random.default_rng(7)
     df = pd.DataFrame({
         "region": np.repeat(["top", "mid"], 12),
@@ -242,8 +242,8 @@ def test_stratified_mann_whitney_single_stratum_key_is_wrapped():
         df, value_cols=["v"], group_col="condition",
         group_a="A", group_b="B", strata=["region"],
     )
-    # Should have 2 rows (one per region) and not raise
-    assert len(out) == 2
+    assert sorted(out["region"]) == ["mid", "top"]
+    assert (out[["n_a", "n_b"]] == 6).all().all()
 
 
 def test_stratified_mann_whitney_skips_missing_metric():
@@ -377,3 +377,48 @@ def test_bootstrap_mean_ci_shared_rng_continues_one_stream():
         assert got["ci_high"] == float(np.percentile(means, 97.5))
     assert first != second
     assert first == stats.bootstrap_mean_ci(x, n_boot=500, seed=0)
+
+
+def test_all_lists_every_public_function():
+    import inspect
+    public = {n for n, f in inspect.getmembers(stats, inspect.isfunction)
+              if f.__module__ == stats.__name__ and not n.startswith("_")}
+    assert set(stats.__all__) == public
+
+
+def test_bootstrap_mean_ci_drops_nan_like_the_fold_change_bootstrap():
+    x = np.random.default_rng(4).normal(1.0, 0.2, 20)
+    with_nan = stats.bootstrap_mean_ci(np.r_[x[:7], np.nan, x[7:], np.nan], n_boot=500, seed=1)
+    assert with_nan == stats.bootstrap_mean_ci(x, n_boot=500, seed=1)
+
+
+@pytest.mark.parametrize("x", [[], [np.nan, np.nan]])
+def test_bootstrap_mean_ci_rejects_empty_input(x):
+    with pytest.raises(ValueError, match="bootstrap_mean_ci needs at least one non-NaN value"):
+        stats.bootstrap_mean_ci(x)
+
+
+def test_bootstrap_fold_change_ci_warns_on_zero_denominator():
+    """A zero agg(x) is divided by the smallest float; the blown-up ratio is announced."""
+    x = np.array([0.0, 0.0, 0.0, 1.0])
+    y = np.array([1.0, 2.0, 3.0])
+    with pytest.warns(RuntimeWarning, match=r"agg\(x\) was 0 in \d+ of 300 resamples"):
+        res = stats.bootstrap_fold_change_ci(x, y, n_boot=300)
+    assert res["ci_high"] > 1e300                          # numbers unchanged: still the tiny-eps ratio
+
+
+def test_scheirer_ray_hare_warns_on_unbalanced_design():
+    df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+                       "A": ["x", "x", "x", "y", "y", "x", "y"],
+                       "B": ["p", "q", "p", "q", "p", "q", "q"]})
+    with pytest.warns(RuntimeWarning, match=r"unbalanced \(4 of 4 cells observed, cell sizes 1-2\)"):
+        unbalanced = scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
+    assert len(unbalanced) == 3
+
+
+def test_scheirer_ray_hare_warns_on_empty_cell():
+    df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                       "A": ["x", "x", "y", "y", "x", "x"],
+                       "B": ["p", "p", "p", "p", "q", "q"]})   # (y, q) has no observations
+    with pytest.warns(RuntimeWarning, match=r"unbalanced \(3 of 4 cells observed, cell sizes 2-2\)"):
+        scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
