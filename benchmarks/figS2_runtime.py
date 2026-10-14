@@ -54,9 +54,9 @@ assert all(s == 0.0 for s in det_spread.values()), "expected bit-identical outpu
 # ----------------------------------------------------------------------------
 df = pd.read_csv(RES / "b_timing_all_metrics.csv")
 # 2D-segmentation head-to-head fluorostats value lives in the segmentation
-# benchmark table (b_timing.csv), row fluorostats(Otsu+CC) -> ms_per_image.
+# benchmark table (b_timing.csv), row F.DENOISED_OTSU_CC -> ms_per_image.
 df_seg = pd.read_csv(RES / "b_timing.csv")
-SEG_FLUORO_MS = float(df_seg[df_seg.method == "fluorostats(Otsu+CC)"].ms_per_image.iloc[0])
+SEG_FLUORO_MS = float(df_seg[df_seg.method == F.DENOISED_OTSU_CC].ms_per_image.iloc[0])
 
 
 # Category label -> list of (display_label, csv_metric, kind)
@@ -66,7 +66,7 @@ ROWS = [
     # --- 2D instance segmentation (head-to-head) ---
     ("2D segmentation",  "Cellpose (per 2D img)",     "comparator,Cellpose (per 2D img, CPU cluster)", "cellpose"),
     ("2D segmentation",  "StarDist (per 2D img)",     "comparator,StarDist (per 2D img, CPU cluster)", "stardist"),
-    ("2D segmentation",  "fluorostats (Otsu + CC)",   "fluorostats(Otsu+CC)",                          "fluorostats"),
+    ("2D segmentation",  "fluorostats (Otsu + CC)",   F.DENOISED_OTSU_CC,                          "fluorostats"),
     # --- 3D metrics ---
     ("3D metrics",       "connectivity (Euler no.)",  "fluorostats,metrics_3d.connectivity_metrics",   "fluorostats"),
     ("3D metrics",       "euler_number (skimage)",    "comparator,euler_number(skimage) 3D",           "scipy"),
@@ -97,7 +97,7 @@ def lookup(metric_key):
     """metric_key is the exact CSV metric string (after the 'group,' prefix we
     stored above for uniqueness). We stored 'group,metric' to disambiguate the
     two DL rows whose metric text contains a comma; strip the group if present."""
-    if metric_key == "fluorostats(Otsu+CC)":
+    if metric_key == F.DENOISED_OTSU_CC:
         return SEG_FLUORO_MS
     if metric_key.startswith("comparator,") or metric_key.startswith("fluorostats,"):
         grp, met = metric_key.split(",", 1)
@@ -197,7 +197,7 @@ axA.legend(handles=legA, loc="center right", bbox_to_anchor=(1.0, 0.30),
 # sit here was removed: it duplicated the caption and, floating over the short
 # 3D-metric/skeleton bars, read as if it belonged to that row group. The three
 # 2D-segmentation bars already show the fluorostats-vs-DL speedup visually.
-seg_f = lookup("fluorostats(Otsu+CC)")
+seg_f = lookup(F.DENOISED_OTSU_CC)
 seg_sd = lookup("comparator,StarDist (per 2D img, CPU cluster)")
 seg_cp = lookup("comparator,Cellpose (per 2D img, CPU cluster)")
 

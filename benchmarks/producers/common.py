@@ -27,7 +27,7 @@ from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
 
 from fluorostats.objects import label_3d
-from fluorostats.segment import THRESHOLD_METHODS
+from fluorostats.segment import THRESHOLD_METHODS, segment_channel
 
 DATA = Path(os.environ.get(
     "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[2] / "data" / "downloads")))
@@ -39,6 +39,11 @@ THRESHOLD_FNS = {**THRESHOLD_METHODS, "minimum": threshold_minimum}
 # Column labels "<Name>_<year of the method's paper>" used by most tables.
 YEAR_LABELS = {"otsu": "Otsu_1979", "li": "Li_1993", "isodata": "Isodata_1978",
                "triangle": "Triangle_1977", "yen": "Yen_1995"}
+
+# The two "fluorostats Otsu + connected components" pipelines the tables score,
+# named by what they run (helpers below); used as column / row labels.
+RAW_OTSU_CC = "fluorostats(raw Otsu+CC)"
+DENOISED_OTSU_CC = "fluorostats(denoised Otsu+CC)"
 
 # CPU inference ms per BBBC039 image of the two DL baselines, measured on the
 # cluster (StarDist 2D_versatile_fluo, Cellpose nuclei; 20 images); carried as constants.
@@ -104,6 +109,19 @@ def thresholds(names, labels: dict[str, str] | None = None) -> dict:
 def threshold_cc(img: np.ndarray, threshold_fn, max_size: int) -> np.ndarray:
     """Global threshold -> drop objects of <= ``max_size`` px -> connected-component labels."""
     return label_3d(remove_small_objects(img > threshold_fn(img), max_size=max_size))[0]
+
+
+def raw_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:
+    """RAW_OTSU_CC: Otsu on the raw image -> drop objects of <= ``min_size`` px -> label."""
+    return label_3d(remove_small_objects(img > THRESHOLD_FNS["otsu"](img), max_size=min_size),
+                    min_size=min_size)[0]
+
+
+def denoised_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:
+    """DENOISED_OTSU_CC: Gaussian denoise (sigma 1) -> ``segment.binarize`` Otsu (objects
+    smaller than ``min_size`` dropped) -> label, keeping components of >= ``min_size``."""
+    return label_3d(segment_channel(img, method="otsu", min_size=min_size, sigma=1.0)[1],
+                    min_size=min_size)[0]
 
 
 def kerkhoff_peak_count(img: np.ndarray) -> int:

@@ -10,9 +10,6 @@ from figstyle import OKABE, TOOL, panel, save, caption, boot_ci
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from PIL import Image
-from skimage import filters
-from skimage.morphology import remove_small_objects
-from fluorostats.objects import label_3d
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 DL = F.DATA
@@ -58,7 +55,7 @@ BLUE = OKABE["blue"]
 # family: (display label, per-image score array, kind) — kind in
 # {"default","envelope","dl"}. Provenance kept in the label.
 fam = [
-    ("fluorostats (default, Otsu+CC)", pi["fluorostats (Otsu+CC)"].values, "default"),
+    ("fluorostats (default, Otsu+CC)", pi[F.RAW_OTSU_CC].values, "default"),
     ("fluorostats · Li (1993)",       pi["Li (1993)"].values,       "envelope"),
     ("fluorostats · Isodata (1978)",  pi["Isodata (1978)"].values,  "envelope"),
     ("fluorostats · Otsu+watershed",  pi["Watershed (1991)"].values,"envelope"),
@@ -137,8 +134,9 @@ ci = pd.read_csv(R/"b_dl_ci.csv").set_index("method")
 dl200 = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values,
          "Cellpose": pd.read_csv(R/"cellpose_eval.csv").cellpose_f1.values,
          "Omnipose": pd.read_csv(R/"omnipose_eval.csv").query("thirddl_f1>=0").thirddl_f1.values}
-fb = {"fluorostats": (float(ci.loc["fluorostats", "mean_F1"]),
-                      float(ci.loc["fluorostats", "CI_low"]), float(ci.loc["fluorostats", "CI_high"]))}
+FS = F.DENOISED_OTSU_CC   # the n=200 fluorostats row, plotted as "fluorostats"
+fb = {"fluorostats": (float(ci.loc[FS, "mean_F1"]),
+                      float(ci.loc[FS, "CI_low"]), float(ci.loc[FS, "CI_high"]))}
 for m, arr in dl200.items():
     fb[m] = boot_ci(arr)
 fo = sorted(fb, key=lambda m: fb[m][0])
@@ -152,8 +150,8 @@ axb.set_yticklabels(fo, fontsize=6.0)
 axb.set_xlabel("mean F1  (95% CI, n = 200)")
 axb.set_xlim(0.78, 0.955)
 axb.text(0.97, 0.06, "paired Δ excludes 0:\n"
-         f"−StarDist {ci.loc['fluorostats - StarDist', 'mean_F1']:+.3f}\n"
-         f"−Cellpose {ci.loc['fluorostats - Cellpose', 'mean_F1']:+.3f}",
+         f"−StarDist {ci.loc[f'{FS} - StarDist', 'mean_F1']:+.3f}\n"
+         f"−Cellpose {ci.loc[f'{FS} - Cellpose', 'mean_F1']:+.3f}",
          transform=axb.transAxes, fontsize=5.0, color="#333", va="bottom", ha="right")
 panel(axb, "b", "vs trained deep learning (n = 200)", xanchor=0.0315)   # row-leader
 
@@ -181,7 +179,7 @@ labs = ["raw", "expert GT", "fluorostats"]
 # 2x3 image grid via nested gridspec
 gs_c = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[2, :], hspace=0.06, wspace=0.06)
 for row, (im, gt, stem) in enumerate(crops):
-    fs = label_3d(remove_small_objects(im > filters.threshold_otsu(im), 20), min_size=20)[0]
+    fs = F.raw_otsu_cc(im, 20)
     p = F.imnorm(im)
     for col, (lab, arr) in enumerate(zip(labs, [None, gt, fs])):
         ax = fig.add_subplot(gs_c[row, col])
@@ -231,7 +229,7 @@ for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separat
     ax = fig.add_subplot(gs_e[i])
     ax.imshow(F.imnorm(sl), cmap="gray")
     F.image_axes(ax)
-    fsm = label_3d(remove_small_objects(sl > filters.threshold_otsu(sl), 15), min_size=15)[0]
+    fsm = F.raw_otsu_cc(sl, 15)
     outline(ax, fsm, (0.0,0.45,0.70), width=2)
     ax.set_title(ttl, fontsize=7)
     if i == 0:
@@ -254,7 +252,7 @@ panel(axf, "f", "when to use which")
 
 # caption numbers derived from the same per-image data the panels plot (never hand-typed)
 sd_m, cp_m, om_m = (float(np.mean(dl_pi[k])) for k in ("StarDist", "Cellpose", "Omnipose"))
-def_m = float(np.mean(pi["fluorostats (Otsu+CC)"].values))
+def_m = float(np.mean(pi[F.RAW_OTSU_CC].values))
 _env = [float(np.mean(pi[c].values)) for c in
         ("Li (1993)", "Isodata (1978)", "Watershed (1991)", "Otsu (1979)", "Mean",
          "Triangle (1977)", "Minimum", "Yen (1995)")]
@@ -268,7 +266,7 @@ cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
  f"learning at n=100 values (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
  "purple). (b) Forest plot on the full n=200 test set (Table 1) vs validated DL (StarDist, Cellpose, "
- f"Omnipose): fluorostats {ci.loc['fluorostats', 'mean_F1']:.3f} [{ci.loc['fluorostats', 'CI_low']:.3f}, {ci.loc['fluorostats', 'CI_high']:.3f}]; paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
+ f"Omnipose): fluorostats {ci.loc[FS, 'mean_F1']:.3f} [{ci.loc[FS, 'CI_low']:.3f}, {ci.loc[FS, 'CI_high']:.3f}]; paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
  "truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~0.31 µm/px). "
  "(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75): all non-DL methods (grey; fluorostats blue) "
  "collapse while DL (dashed) holds ~0.96; red band = DL advantage. (e) fluorostats overlay on a "

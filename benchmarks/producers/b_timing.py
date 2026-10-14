@@ -20,15 +20,14 @@ import tifffile
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import DL_CPU_MS, RESULTS, YEAR_LABELS, bbbc039_pairs, threshold_cc, thresholds
-from fluorostats.objects import label_3d, watershed_split
-from fluorostats.segment import segment_channel
+from common import DENOISED_OTSU_CC, DL_CPU_MS, RESULTS, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc, threshold_cc, thresholds
+from fluorostats.objects import watershed_split
 
 N_IMAGES = 50
 MIN_SIZE = 20
 
 METHODS = {
-    "fluorostats(Otsu+CC)": lambda im: label_3d(segment_channel(im, min_size=MIN_SIZE)[1], min_size=MIN_SIZE),
+    DENOISED_OTSU_CC: lambda im: denoised_otsu_cc(im, MIN_SIZE),
     **{name: (lambda im, fn=fn: threshold_cc(im, fn, max_size=MIN_SIZE))
        for name, fn in thresholds(["otsu", "li", "isodata", "triangle"], YEAR_LABELS).items()},
     "Watershed_1991": lambda im: watershed_split(

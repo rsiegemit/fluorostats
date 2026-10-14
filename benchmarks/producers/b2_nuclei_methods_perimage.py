@@ -1,7 +1,7 @@
 """Produce results/b2_nuclei_methods_perimage.csv — per-image instance F1 on BBBC039.
 
 First 100 BBBC039 images (sorted): seven global thresholds + connected
-components, fluorostats Otsu+CC (``objects.label_3d``) and distance-transform
+components, fluorostats raw Otsu+CC (``common.raw_otsu_cc``) and distance-transform
 watershed (``objects.watershed_split``), each scored by ``validate.instance_f1``
 at IoU 0.5 against the reconstructed instance GT. Figure 2 plots this table.
 Data: ``$FLUOROSTATS_DATA/BBBC039``.
@@ -14,8 +14,8 @@ from PIL import Image
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RESULTS, bbbc039_gt_instances, bbbc039_pairs, threshold_cc, thresholds
-from fluorostats.objects import label_3d, watershed_split
+from common import RAW_OTSU_CC, RESULTS, bbbc039_gt_instances, bbbc039_pairs, raw_otsu_cc, threshold_cc, thresholds
+from fluorostats.objects import watershed_split
 from fluorostats.validate import instance_f1
 
 N_IMAGES = 100
@@ -43,7 +43,7 @@ def main():
         im = np.asarray(Image.open(img_path)).astype(np.float32)
         rec = {"image": stem, **{name: threshold_f1(im, fn, gt) for name, fn in THRESHOLDS.items()}}
         otsu = remove_small_objects(im > filters.threshold_otsu(im), MIN_SIZE)
-        rec["fluorostats (Otsu+CC)"] = instance_f1(label_3d(otsu, min_size=MIN_SIZE)[0], gt)["f1"]
+        rec[RAW_OTSU_CC] = instance_f1(raw_otsu_cc(im, MIN_SIZE), gt)["f1"]
         rec["Watershed (1991)"] = instance_f1(
             watershed_split(otsu, min_size=MIN_SIZE, min_distance=4)[0], gt)["f1"]
         rows.append(rec)
