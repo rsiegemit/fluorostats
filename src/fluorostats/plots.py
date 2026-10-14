@@ -371,8 +371,10 @@ def effect_size_heatmap(
     figsize = figsize or (max(4, ncols * 1.1), max(2, nrows * 0.5))
     fig, ax = plt.subplots(figsize=figsize)
     im = ax.imshow(pivot.values, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
-    ax.set_xticks(range(ncols)); ax.set_xticklabels(pivot.columns, rotation=45, ha="right")
-    ax.set_yticks(range(nrows)); ax.set_yticklabels([_label_for(r) for r in pivot.index])
+    ax.set_xticks(range(ncols))
+    ax.set_xticklabels(pivot.columns, rotation=45, ha="right")
+    ax.set_yticks(range(nrows))
+    ax.set_yticklabels([_label_for(r) for r in pivot.index])
     for i in range(nrows):
         for j in range(ncols):
             v = pivot.values[i, j]
@@ -422,11 +424,13 @@ def forest_plot(
         ax.axvline(reference, color="black", lw=0.7)
     if log_scale:
         ax.set_xscale("log")
-    ax.set_yticks(y); ax.set_yticklabels(df[label_col].tolist(), fontsize=9)
+    ax.set_yticks(y)
+    ax.set_yticklabels(df[label_col].tolist(), fontsize=9)
     ax.set_xlabel(xlabel or f"{center_col} (95% CI)")
     if title:
         ax.set_title(title, fontsize=11)
-    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     fig.tight_layout()
     if out_path is not None:
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
@@ -486,7 +490,8 @@ def condition_strip(
     ax.set_xticks(range(len(x_levels)))
     ax.set_xticklabels(x_levels)
     ax.set_ylabel(_label_for(y_col))
-    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     if hue_col and len(hue_levels) > 1:
         from matplotlib.lines import Line2D
         handles = [Line2D([0], [0], marker="o", color="w",

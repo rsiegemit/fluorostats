@@ -101,7 +101,8 @@ def fdr_power_curve(
             for m in metrics:
                 a = np.asarray(samples_per_metric_a[m], dtype=float)
                 b = np.asarray(samples_per_metric_b[m], dtype=float)
-                a = a[~np.isnan(a)]; b = b[~np.isnan(b)]
+                a = a[~np.isnan(a)]
+                b = b[~np.isnan(b)]
                 if a.size == 0 or b.size == 0:
                     p_vals.append(float("nan"))
                     continue

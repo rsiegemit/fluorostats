@@ -146,7 +146,9 @@ def render_isosurface(
     ax.add_collection3d(mesh)
     nz, ny, nx = ds.shape
     box = (nx * spacing[2], ny * spacing[1], nz * spacing[0])
-    ax.set_xlim(0, box[0]); ax.set_ylim(0, box[1]); ax.set_zlim(0, box[2])
+    ax.set_xlim(0, box[0])
+    ax.set_ylim(0, box[1])
+    ax.set_zlim(0, box[2])
     ax.set_box_aspect(box)
     ax.set_facecolor(bg)
     for pane in (ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane):
@@ -159,12 +161,16 @@ def render_isosurface(
     ax.yaxis.label.set_color(text_color)
     ax.zaxis.label.set_color(text_color)
     if style == "dark":
-        ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_zticks([])
         # Manually draw box edges for the slide-2 grid look
         for edge in _box_edges(box):
             ax.plot(*edge, color=grid_color, linewidth=0.6, alpha=0.7, zorder=0)
     else:
-        ax.set_xlabel("µm"); ax.set_ylabel("µm"); ax.set_zlabel("µm")
+        ax.set_xlabel("µm")
+        ax.set_ylabel("µm")
+        ax.set_zlabel("µm")
     ax.view_init(elev=elev, azim=azim)
     if scalebar_um:
         ax.plot([10, 10 + scalebar_um], [10, 10], [0, 0],
@@ -195,9 +201,12 @@ def _laplacian_smooth(verts: np.ndarray, faces: np.ndarray,
         sums = np.zeros_like(v)
         counts = np.zeros(n_v, dtype=np.int64)
         for col_a, col_b in ((0, 1), (1, 2), (2, 0)):
-            a = faces[:, col_a]; b = faces[:, col_b]
-            np.add.at(sums, a, v[b]); np.add.at(counts, a, 1)
-            np.add.at(sums, b, v[a]); np.add.at(counts, b, 1)
+            a = faces[:, col_a]
+            b = faces[:, col_b]
+            np.add.at(sums, a, v[b])
+            np.add.at(counts, a, 1)
+            np.add.at(sums, b, v[a])
+            np.add.at(counts, b, 1)
         mask = counts > 0
         v_new = v.copy()
         v_new[mask] = 0.5 * v[mask] + 0.5 * (sums[mask] / counts[mask, None])
@@ -258,7 +267,9 @@ def render_voxel_cloud(
     )
     ax.set_box_aspect((nx * spacing[2], ny * spacing[1], nz * spacing[0]))
     ax.view_init(elev=elev, azim=azim)
-    ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
     if title:
         ax.set_title(title, fontsize=11)
     return ax
@@ -293,7 +304,8 @@ def mip_overlay(
             rgb[mip_mask] * (1 - overlay_alpha) + overlay * overlay_alpha
         ).astype(np.uint8)
     ax.imshow(rgb)
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
     return ax
 
 
@@ -347,7 +359,8 @@ def live_dead_mip(
 
     rgb = np.clip(rgb, 0, 1)
     ax.imshow(rgb)
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
     if border:
         for spine in ax.spines.values():
             spine.set_edgecolor(border)
@@ -422,7 +435,8 @@ def mip_grid(
                 ax.text(0.5, 0.5, "—", ha="center", va="center",
                         transform=ax.transAxes, color=label_color,
                         fontsize=14)
-                ax.set_xticks([]); ax.set_yticks([])
+                ax.set_xticks([])
+                ax.set_yticks([])
             else:
                 render_func(ax=ax, **cell, **cell_kwargs)
     if title:
@@ -471,7 +485,8 @@ def depth_coded_mip(
     bg = np.array(background, dtype=float) / 255.0
     rgb = color * mip[..., None] + bg[None, None, :] * (1 - mip[..., None])
     ax.imshow(np.clip(rgb, 0, 1))
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
     return ax
 
 

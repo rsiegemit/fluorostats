@@ -62,7 +62,10 @@ def parse_gci(gci_path) -> dict:
         "z_step_note": "Stack/Pitch read as 0.1-µm units; confirm against the acquisition GUI.",
     }
     with zipfile.ZipFile(gci_path) as z:
-        read = lambda name: z.read(name).decode("utf-8", "ignore")
+
+        def read(name):
+            return z.read(name).decode("utf-8", "ignore")
+
         for name in z.namelist():
             if name.endswith("Image/properties.xml"):
                 m = re.search(r'Calibration Type="System.Double">(-?\d+)', read(name))

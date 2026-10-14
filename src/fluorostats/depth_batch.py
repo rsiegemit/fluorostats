@@ -190,7 +190,10 @@ def aggregate_group(primary: list[dict]) -> dict | None:
     sub = np.vstack([np.interp(grid, p["depth_um"], p["bg_subtracted"]) for p in primary])
     nrm = np.vstack([np.interp(grid, p["depth_um"], p["normalized"]) for p in primary])
     n = len(primary)
-    sem = lambda a: a.std(axis=0, ddof=1) / np.sqrt(n) if n > 1 else np.zeros(a.shape[1])
+
+    def sem(a):
+        return a.std(axis=0, ddof=1) / np.sqrt(n) if n > 1 else np.zeros(a.shape[1])
+
     # Penetration constant λ over primary stacks. Only fits that converged,
     # cleared the R² threshold, AND landed within the acquired depth range
     # (fit_ok) contribute to the group λ AND to the reported mean R², so the two

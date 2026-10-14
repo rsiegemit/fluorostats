@@ -14,7 +14,8 @@ from scipy import stats as _sps
 
 
 def _paired(a, b):
-    a = np.asarray(a, float); b = np.asarray(b, float)
+    a = np.asarray(a, float)
+    b = np.asarray(b, float)
     m = ~(np.isnan(a) | np.isnan(b))
     return a[m], b[m]
 
