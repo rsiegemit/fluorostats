@@ -287,3 +287,56 @@ def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):
     msgs = " | ".join(str(w.message) for w in rec)
     assert "different z-steps" in msgs
     assert "reaches past the stack" in msgs
+
+
+# ---------------------------------------------------------------------------
+# load_manifest — invalid input is rejected before any image loads (ERR-1)
+# ---------------------------------------------------------------------------
+
+def _manifest_errors(tmp_path, **fields):
+    s0 = tmp_path / "s0.tif"
+    s0.write_bytes(b"")                                   # never read: validation comes first
+    m = {"groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}], **fields}
+    mpath = tmp_path / "manifest.json"
+    mpath.write_text(json.dumps(m))
+    with pytest.raises(ValueError, match="invalid depth manifest") as e:
+        load_manifest(mpath)
+    return str(e.value)
+
+
+@pytest.mark.parametrize("field", ["channel", "n_surface"])
+def test_load_manifest_rejects_booleans_as_integers(tmp_path, field):
+    assert f"{field} must be" in _manifest_errors(tmp_path, **{field: True})
+
+
+@pytest.mark.parametrize("windows, expected", [
+    ([0, 100], "a single window is [[0, 100]]"),          # flat pair: used to be a bare TypeError
+    ("full", "auc_windows_um must be a list"),
+    ([], "auc_windows_um must be a list"),
+    ([[0, "a"]], "entry [0, 'a'] must be 'full' or a [z0, z1] pair of numbers"),
+    ([[0, None]], "entry [0, None] must be"),
+    ([[0, 10, 20]], "entry [0, 10, 20] must be"),
+    ([[False, 10]], "entry [False, 10] must be"),
+    ([{"z0": 0}], "entry {'z0': 0} must be"),
+])
+def test_load_manifest_rejects_malformed_windows(tmp_path, windows, expected):
+    msg = _manifest_errors(tmp_path, auc_windows_um=windows)
+    assert expected in msg
+    assert "e.g. [[0, 100], 'full']" in msg                # names the expected form
+
+
+def test_load_manifest_rejects_malformed_singular_window(tmp_path):
+    assert "entry 'deep' must be" in _manifest_errors(tmp_path, auc_window_um="deep")
+
+
+def test_load_manifest_rejects_bad_group_color(tmp_path):
+    s0 = tmp_path / "s0.tif"
+    s0.write_bytes(b"")
+    m = {"groups": [{"name": "A", "color": "not-a-colour", "stacks": [{"label": "s0", "path": str(s0)}]},
+                    {"name": "B", "color": "#3F6AB3", "stacks": [{"label": "s1", "path": str(s0)}]},
+                    {"name": "C", "color": None, "stacks": [{"label": "s2", "path": str(s0)}]}]}
+    mpath = tmp_path / "manifest.json"
+    mpath.write_text(json.dumps(m))
+    with pytest.raises(ValueError) as e:
+        load_manifest(mpath)
+    assert str(e.value).endswith("group 'A': color 'not-a-colour' is not a matplotlib colour")

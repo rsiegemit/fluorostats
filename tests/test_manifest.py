@@ -77,3 +77,13 @@ def test_batch_runs_record_resolved_manifest_and_environment(tmp_path):
     assert cfg["resolved"]["reducer"] == "mean"            # defaults are recorded too
     assert cfg["resolved"]["windows"] == [[0.0, 4.0]]
     assert "numpy" in cfg["_environment"]["packages"]
+
+
+def test_check_groups_rejects_duplicate_group_names(tmp_path):
+    """Two groups with one name used to be merged silently into one group."""
+    ok = tmp_path / "a.tif"
+    ok.write_bytes(b"")
+    st = [{"path": str(ok), "label": "a"}]
+    problems = check_groups([{"name": "g", "stacks": st}, {"name": "h", "stacks": st},
+                             {"name": "g", "stacks": st}])
+    assert problems == ["group name 'g' is used by more than one group; names must be unique"]
