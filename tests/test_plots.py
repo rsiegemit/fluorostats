@@ -71,6 +71,27 @@ def test_compute_pvalues_flags_significance():
     assert (pvals["significance"] != "ns").all()
 
 
+def test_compute_pvalues_names_test_correction_and_effect_size():
+    # pvalues.csv named neither the test nor the correction and had no effect size.
+    from fluorostats import stats
+
+    df = _replicate_df()
+    df.loc[df.index[:3], "n_components"] = np.nan
+    pvals = compute_pvalues(df, ["volume_fraction", "n_components"])
+    assert list(pvals.columns) == ["metric", "condition_a", "condition_b", "n_a", "n_b",
+                                   "p_value", "q_value", "significance", "cliffs_delta",
+                                   "test", "correction"]
+    assert (pvals["test"] == "Mann-Whitney U, two-sided").all()
+    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all rows").all()
+    for row in pvals.itertuples():
+        a = df.loc[df["condition"] == row.condition_a, row.metric].dropna()
+        b = df.loc[df["condition"] == row.condition_b, row.metric].dropna()
+        ref = stats.mann_whitney(a, b)
+        assert (row.n_a, row.n_b) == (len(a), len(b))
+        assert row.p_value == ref["p"] and row.cliffs_delta == ref["cliffs_delta"] == -1.0
+    assert list(pvals["q_value"]) == list(stats.bh_fdr(pvals["p_value"].to_numpy()))
+
+
 def test_condition_strip_default_axes_and_palette():
     """ax=None + no hue/marker exercises the auto-figure and default palette."""
     df = pd.DataFrame({

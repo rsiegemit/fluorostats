@@ -292,9 +292,10 @@ def compute_pvalues(
     (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
 
     Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
-    p_value, q_value, significance (empty if no pair has >=2 samples per group).
+    p_value, q_value, significance, cliffs_delta (``stats.cliffs_delta`` of a vs b),
+    test and correction (naming both), empty if no pair has >=2 samples per group.
     """
-    from scipy.stats import mannwhitneyu
+    from .stats import bh_fdr, mann_whitney
 
     conditions = sorted(df["condition"].unique())
     rows = []
@@ -307,24 +308,28 @@ def compute_pvalues(
             b = df.loc[df["condition"] == conditions[j], metric].dropna().values
             if len(a) < 2 or len(b) < 2:
                 continue
-            try:
-                _, p = mannwhitneyu(a, b, alternative="two-sided")
-                rows.append({
-                    "metric": metric,
-                    "condition_a": conditions[i],
-                    "condition_b": conditions[j],
-                    "n_a": len(a),
-                    "n_b": len(b),
-                    "p_value": p,
-                })
-            except ValueError:
+            res = mann_whitney(a, b)
+            if np.isnan(res["p"]):      # the test could not be computed
                 continue
+            rows.append({
+                "metric": metric,
+                "condition_a": conditions[i],
+                "condition_b": conditions[j],
+                "n_a": len(a),
+                "n_b": len(b),
+                "p_value": res["p"],
+                "cliffs_delta": res["cliffs_delta"],
+            })
 
     out = pd.DataFrame(rows)
     if not out.empty:
-        from .stats import bh_fdr
         out["q_value"] = bh_fdr(out["p_value"].values)
         out["significance"] = out["q_value"].map(_pvalue_stars)   # stars on CORRECTED q
+        out["test"] = "Mann-Whitney U, two-sided"
+        out["correction"] = "Benjamini-Hochberg FDR across all rows"
+        # existing columns first, in their earlier order; the added ones last
+        out = out[["metric", "condition_a", "condition_b", "n_a", "n_b", "p_value",
+                   "q_value", "significance", "cliffs_delta", "test", "correction"]]
     return out
 
 
