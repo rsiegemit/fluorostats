@@ -221,13 +221,10 @@ def _quantify_files(files, condition_from, label, measure) -> list[dict]:
 
 
 def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size):
-    """Denoise, optionally background-subtract, and threshold one channel."""
-    img = preprocess.denoise(img, sigma=sigma)
-    if bg_radius > 0:
-        img = preprocess.background_subtract(img, radius=bg_radius)
-    mask = segment.binarize(img, method=threshold, min_size=min_size,
-                            threshold_scale=threshold_scale)
-    return img, mask
+    """The CLI's options mapped onto `segment.segment_channel`."""
+    return segment.segment_channel(img, method=threshold, min_size=min_size,
+                                   threshold_scale=threshold_scale, sigma=sigma,
+                                   bg_radius=bg_radius)
 
 
 def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length,

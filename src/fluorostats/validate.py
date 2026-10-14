@@ -84,4 +84,15 @@ def average_precision(pred: np.ndarray, gt: np.ndarray,
     return {"mAP": float(np.mean(aps)), "per_threshold": per}
 
 
-__all__ = ["match_instances", "instance_f1", "average_precision"]
+def dice(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Foreground (semantic) Dice of two masks or label images.
+
+    Anything > 0 is foreground. 1.0 when both are empty.
+    """
+    p = np.asarray(pred) > 0
+    g = np.asarray(gt) > 0
+    s = p.sum() + g.sum()
+    return float(2 * (p & g).sum() / s) if s else 1.0
+
+
+__all__ = ["match_instances", "instance_f1", "average_precision", "dice"]

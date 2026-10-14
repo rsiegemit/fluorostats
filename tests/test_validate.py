@@ -85,3 +85,14 @@ def test_validate_empty_gt_and_double_claim():
     pred2[5:8, 2:8] = 2
     r = validate.match_instances(pred2, gt)
     assert r["tp"] <= 1
+
+
+@pytest.mark.parametrize("pred,gt,expected", [
+    ([[1, 1, 0, 0]], [[1, 0, 0, 0]], 2 / 3),
+    ([[3, 0, 0, 0]], [[0, 0, 7, 0]], 0.0),
+    ([[0, 0]], [[0, 0]], 1.0),
+    ([[2, 5]], [[1, 1]], 1.0),
+])
+def test_dice_scores_foreground_overlap(pred, gt, expected):
+    assert validate.dice(np.array(pred), np.array(gt)) == pytest.approx(expected)
+    assert isinstance(validate.dice(np.array(pred), np.array(gt)), float)

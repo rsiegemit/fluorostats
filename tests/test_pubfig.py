@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
-from fluorostats import agreement, pubfig, stats  # noqa: E402
+from fluorostats import agreement, pubfig  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -110,12 +110,3 @@ def test_bland_altman_panel_matches_agreement(annotate):
 def test_round_sig(x, expected):
     assert pubfig.round_sig(x) == expected
 
-
-def test_bootstrap_mean_ci_is_seeded_and_brackets_mean():
-    x = np.random.default_rng(2).normal(0.8, 0.1, 50)
-    r = stats.bootstrap_mean_ci(x, n_boot=2000, seed=0)
-    assert r == stats.bootstrap_mean_ci(x, n_boot=2000, seed=0)
-    assert r["ci_low"] < r["mean"] < r["ci_high"]
-    assert r["mean"] == float(x.mean())
-    wide = stats.bootstrap_mean_ci(x, n_boot=2000, ci=0.99, seed=0)
-    assert wide["ci_low"] <= r["ci_low"] and wide["ci_high"] >= r["ci_high"]

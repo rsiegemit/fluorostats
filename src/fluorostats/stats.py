@@ -250,15 +250,17 @@ def bootstrap_fold_change_ci(
 # Stouffer Z combination
 # ---------------------------------------------------------------------------
 
-def bootstrap_mean_ci(x, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0) -> dict:
+def bootstrap_mean_ci(x, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0,
+                      rng: np.random.Generator | None = None) -> dict:
     """Mean with a percentile-bootstrap confidence interval.
 
-    Resamples ``x`` with replacement ``n_boot`` times (all draws in one block from
-    a ``default_rng(seed)`` generator, so a seed fixes the result exactly) and
-    returns ``{"mean", "ci_low", "ci_high"}``.
+    Resamples ``x`` with replacement ``n_boot`` times (all draws in one block, so
+    the result is fixed by the generator) and returns ``{"mean", "ci_low",
+    "ci_high"}``. The generator is ``default_rng(seed)`` unless ``rng`` is given;
+    pass one ``rng`` to draw several intervals from a single stream.
     """
     x = np.asarray(x, float)
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed) if rng is None else rng
     idx = rng.integers(0, len(x), (n_boot, len(x)))
     means = x[idx].mean(1)
     lo = (100 - 100 * ci) / 2          # exactly 2.5 for ci=0.95

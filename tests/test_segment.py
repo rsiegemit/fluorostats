@@ -170,3 +170,19 @@ def test_min_size_keeps_objects_of_exactly_that_size():
     assert kept[8, 8] and kept[25, 25]
     assert not binarize(img, method="otsu", min_size=size + 1)[8, 8]
     assert label_3d(kept[None], min_size=size)[1] == 2
+
+
+@pytest.mark.parametrize("bg_radius", [0, 3])
+def test_segment_channel_is_denoise_background_binarize(bg_radius):
+    from fluorostats import preprocess
+    rng = np.random.default_rng(4)
+    img = rng.normal(10, 2, (4, 24, 24))
+    img[:, 6:14, 6:14] += 25
+    out, mask = segment.segment_channel(img, method="li", min_size=8, sigma=1.2,
+                                        bg_radius=bg_radius, threshold_scale=0.9)
+    ref = preprocess.denoise(img, sigma=1.2)
+    if bg_radius:
+        ref = preprocess.background_subtract(ref, radius=bg_radius)
+    np.testing.assert_array_equal(out, ref)
+    np.testing.assert_array_equal(
+        mask, binarize(ref, method="li", min_size=8, threshold_scale=0.9))

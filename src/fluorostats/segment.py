@@ -20,6 +20,8 @@ from skimage.morphology import (
     remove_small_objects,
 )
 
+from .preprocess import background_subtract, denoise
+
 # Global thresholding algorithms fluorostats implements (all in-library).
 THRESHOLD_METHODS = {
     "otsu": threshold_otsu,
@@ -33,6 +35,26 @@ THRESHOLD_METHODS = {
 # Every accepted ``binarize(method=...)``: the algorithms above plus the two
 # meta-methods that choose among them. The CLI builds its --threshold choices here.
 METHODS = (*THRESHOLD_METHODS, "auto", "consensus")
+
+
+def segment_channel(
+    img: np.ndarray,
+    *,
+    method: str = "otsu",
+    min_size: int = 64,
+    threshold_scale: float = 1.0,
+    sigma: float = 1.0,
+    bg_radius: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """The full single-channel segmentation the CLI runs: Gaussian denoise,
+    optional white-top-hat background subtraction (``bg_radius > 0``), then
+    `binarize`. Returns ``(preprocessed_image, mask)``.
+    """
+    img = denoise(img, sigma=sigma)
+    if bg_radius > 0:
+        img = background_subtract(img, radius=bg_radius)
+    return img, binarize(img, method=method, min_size=min_size,
+                         threshold_scale=threshold_scale)
 
 
 def choose_threshold_method(arr: np.ndarray) -> dict:

@@ -352,3 +352,28 @@ def test_stouffer_weights_align_after_nan_drop():
     with_nan = stats.stouffer_combine([0.01, np.nan, 0.5], weights=[1.0, 100.0, 1.0])
     assert with_nan["n"] == 2
     assert with_nan["z"] == pytest.approx(full["z"], rel=1e-9)
+
+
+def test_bootstrap_mean_ci_is_seeded_and_brackets_mean():
+    x = np.random.default_rng(2).normal(0.8, 0.1, 50)
+    r = stats.bootstrap_mean_ci(x, n_boot=2000, seed=0)
+    assert r == stats.bootstrap_mean_ci(x, n_boot=2000, seed=0)
+    assert r["ci_low"] < r["mean"] < r["ci_high"]
+    assert r["mean"] == float(x.mean())
+    wide = stats.bootstrap_mean_ci(x, n_boot=2000, ci=0.99, seed=0)
+    assert wide["ci_low"] <= r["ci_low"] and wide["ci_high"] >= r["ci_high"]
+
+
+def test_bootstrap_mean_ci_shared_rng_continues_one_stream():
+    """Several intervals drawn from one generator equal the documented block draw."""
+    x = np.random.default_rng(3).normal(1.0, 0.2, 20)
+    rng = np.random.default_rng(0)
+    first = stats.bootstrap_mean_ci(x, n_boot=500, rng=rng)
+    second = stats.bootstrap_mean_ci(x, n_boot=500, rng=rng)
+    ref = np.random.default_rng(0)
+    for got in (first, second):
+        means = x[ref.integers(0, len(x), (500, len(x)))].mean(1)
+        assert got["ci_low"] == float(np.percentile(means, 2.5))
+        assert got["ci_high"] == float(np.percentile(means, 97.5))
+    assert first != second
+    assert first == stats.bootstrap_mean_ci(x, n_boot=500, seed=0)
