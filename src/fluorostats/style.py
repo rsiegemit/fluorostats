@@ -23,6 +23,7 @@ that other code can override.
 from __future__ import annotations
 
 import matplotlib as mpl
+from matplotlib.rcsetup import cycler
 
 
 PALETTE = {
@@ -85,7 +86,7 @@ def apply_style(font_scale: float = 1.0) -> None:
         "axes.grid": True,
         "axes.grid.axis": "y",
         "axes.axisbelow": True,
-        "axes.prop_cycle": mpl.cycler(color=[
+        "axes.prop_cycle": cycler(color=[
             PALETTE["primary"], PALETTE["accent"], PALETTE["highlight"],
             PALETTE["muted"], "#6BAA75", "#9A6FB0",
         ]),
@@ -143,15 +144,15 @@ def material_color(name: str, fallback: str | None = None) -> str:
 def darken(color: str, amount: float = 0.2) -> str:
     """Return a slightly darker version of a hex color."""
     import matplotlib.colors as mcolors
-    rgb = mcolors.to_rgb(color)
-    return mcolors.to_hex(tuple(max(0, c - amount) for c in rgb))
+    r, g, b = mcolors.to_rgb(color)
+    return mcolors.to_hex((max(0, r - amount), max(0, g - amount), max(0, b - amount)))
 
 
 def lighten(color: str, amount: float = 0.2) -> str:
     """Return a slightly lighter version of a hex color."""
     import matplotlib.colors as mcolors
-    rgb = mcolors.to_rgb(color)
-    return mcolors.to_hex(tuple(min(1, c + amount) for c in rgb))
+    r, g, b = mcolors.to_rgb(color)
+    return mcolors.to_hex((min(1, r + amount), min(1, g + amount), min(1, b + amount)))
 
 
 __all__ = ["apply_style", "PALETTE", "MATERIAL_COLORS", "DARK_PALETTE",

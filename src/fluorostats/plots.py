@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import combinations
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -38,8 +39,8 @@ def _condition_colors(n: int) -> np.ndarray:
     """``n`` distinct RGBA colours: Set2 for up to its 8 colours, else ``n`` evenly
     spaced hues (Set2 would repeat colours past 8)."""
     if n <= 8:
-        return plt.cm.Set2(np.linspace(0, 1, n))
-    return plt.cm.hsv(np.linspace(0, 1, n, endpoint=False))
+        return matplotlib.colormaps["Set2"](np.linspace(0, 1, n))
+    return matplotlib.colormaps["hsv"](np.linspace(0, 1, n, endpoint=False))
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +247,7 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
         p = stats.mann_whitney(data[i], data[j])["p"]
         if not np.isnan(p):
             tested.append((i, j, p))
+    qs: list[float] | np.ndarray
     if q_lookup is not None:
         qs = [q_lookup.get(frozenset((conditions[i], conditions[j])), np.nan)
               for i, j, _ in tested]

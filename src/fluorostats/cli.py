@@ -342,7 +342,7 @@ def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
         pvalues=pvals,
     )
 
-    if has_replicates:
+    if pvals is not None:
         if len(pvals) > 0:
             pvals.to_csv(str(plot_dir / "pvalues.csv"), index=False)
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")

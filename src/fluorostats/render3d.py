@@ -11,7 +11,7 @@ resolution.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -314,8 +314,9 @@ def mip_overlay(
     if ax is None:
         fig, ax = plt.subplots(figsize=(4, 4))
     mip = intensity.max(axis=z_axis)
+    # numpy < 2.3 stubs type any(axis=...) as possibly a scalar; with an axis it is an array.
     mip_mask = (np.zeros(mip.shape, dtype=bool) if mask is None
-                else mask.any(axis=z_axis))
+                else cast(np.ndarray, mask.any(axis=z_axis)))
     ax.imshow(overlay_rgb(mip, mip_mask, overlay_color, overlay_alpha))
     ax.set_xticks([])
     ax.set_yticks([])

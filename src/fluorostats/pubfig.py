@@ -98,6 +98,7 @@ def panel(ax: plt.Axes, label: str, title: str | None = None, dx: float | None =
                         va="baseline", ha="left")
         return
     fig = ax.get_figure()
+    assert fig is not None  # an Axes is always created inside a figure
     trans = mtransforms.blended_transform_factory(fig.transFigure, ax.transAxes)
     ax.annotate(label, xy=(xanchor, 1), xycoords=trans,
                 xytext=(0, pad[1]), textcoords="offset points",
