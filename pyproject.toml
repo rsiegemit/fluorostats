@@ -53,6 +53,7 @@ all = [
 dev = [
     "pytest>=7.0",
     "pytest-cov",
+    "ruff",
     "oiffile>=2023.8",
     "czifile>=2019.7",
     "nd2>=0.7",

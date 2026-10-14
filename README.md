@@ -34,7 +34,7 @@ This produces:
 Well suited for bioprinted constructs, tissue sections, organoids, and spheroids — any volumetric data where cell presence and network structure matter.
 
 **Metrics:**
-- **Volume fraction** — percentage of the volume containing cells
+- **Volume fraction** — fraction (0–1) of the volume containing cells
 - **Euler number** — topological measure of network interconnectedness (more negative = more loops and tunnels)
 - **Largest component fraction** — whether the structure forms one connected network (e.g., 97%) or many scattered clusters (e.g., 19%)
 - **Skeleton length, branches, junctions** — extent and branching complexity of the cell network
@@ -46,7 +46,7 @@ Well suited for bioprinted constructs, tissue sections, organoids, and spheroids
 Well suited for endothelial coverage, monolayer confluence, wound healing assays, and other planar cell coverage measurements.
 
 **Metrics:**
-- **Area fraction** — percentage of the surface covered by cells
+- **Area fraction** — fraction (0–1) of the surface covered by cells
 - **Cluster count and sizes** — whether cells form one confluent sheet or many scattered patches
 - **Largest component fraction** — degree of coverage fragmentation
 
@@ -387,7 +387,7 @@ from fluorostats.objects import (object_shape_metrics, nearest_neighbor_stats,
 from fluorostats.texture import orientation_order
 
 # one big FOV -> a grid of sub-region measurements (any reducer)
-cov_grid = tile_reduce(net_mask, lambda t: 100 * t.mean(), grid=(5, 5))   # per-tile coverage
+cov_grid = tile_reduce(net_mask, lambda t: 100 * t.mean(), grid=(5, 5))   # per-tile coverage, %
 den_grid = tile_point_density(centroids, mask.shape, grid=(5, 5))         # per-tile object counts
 het = spatial_heterogeneity(den_grid)          # {cv, morans_i, n}: uniform vs patchy/clustered
 
@@ -588,6 +588,16 @@ role, an AUC window or a file path is reported at once, all problems together.
 Both commands write `run_config.json` with the fully resolved manifest.
 
 </details>
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest --cov=fluorostats          # the suite runs at 100% line coverage
+ruff check src tests benchmarks examples
+```
+
+Engineering rules for contributions are in [docs/ENGINEERING.md](docs/ENGINEERING.md).
 
 ## Citation
 
