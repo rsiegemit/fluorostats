@@ -28,21 +28,24 @@ from __future__ import annotations
 import re
 import warnings
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import imageio.v3 as iio
 import numpy as np
 import tifffile
 
-# Format groups
-VOLUME_SUFFIXES = {".oib", ".oif", ".czi", ".nd2", ".lif", ".tif", ".tiff", ".npy"}
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".npy"}
-ALL_SUFFIXES = VOLUME_SUFFIXES | IMAGE_SUFFIXES
-
 
 # ---------------------------------------------------------------------------
 # Lazy optional imports with helpful error messages
 # ---------------------------------------------------------------------------
+
+def _reader(package: str):
+    """Import an optional vendor reader, naming the extra that installs it."""
+    extra = next(f.extra for f in FORMATS.values() if f.package == package)
+    return _require(package, extra)
+
 
 def _require(package: str, extra: str):
     """Import a package or raise a helpful install message."""
@@ -70,7 +73,7 @@ def load_auto(path: Path) -> tuple[np.ndarray, dict]:
     path = Path(path)
     suffix = path.suffix.lower()
 
-    if suffix in (".png", ".jpg", ".jpeg", ".bmp"):
+    if suffix in IMAGE_ONLY_SUFFIXES:
         return load_image(path)
 
     try:
@@ -109,24 +112,13 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
 
     suffix = path.suffix.lower()
 
-    loaders = {
-        ".oib": _load_olympus_volume,
-        ".oif": _load_olympus_volume,
-        ".czi": _load_czi_volume,
-        ".nd2": _load_nd2_volume,
-        ".lif": _load_lif_volume,
-        ".tif": _load_tiff_volume,
-        ".tiff": _load_tiff_volume,
-        ".npy": _load_npy_volume,
-    }
-
-    loader = loaders.get(suffix)
-    if loader is None:
+    fmt = FORMATS.get(suffix)
+    if fmt is None or fmt.volume is None:
         raise ValueError(
             f"Unsupported volume format: {suffix}\n"
-            f"Supported: {', '.join(sorted(loaders.keys()))}"
+            f"Supported: {', '.join(sorted(VOLUME_SUFFIXES))}"
         )
-    return loader(path)
+    return fmt.volume(path)
 
 
 def load_image(path: Path) -> tuple[np.ndarray, dict]:
@@ -134,37 +126,23 @@ def load_image(path: Path) -> tuple[np.ndarray, dict]:
     path = Path(path)
     suffix = path.suffix.lower()
 
-    if suffix in (".tif", ".tiff"):
-        return _load_tiff_image(path)
-    if suffix == ".npy":
-        return _load_npy_image(path)
-    return _load_standard_image(path)
+    fmt = FORMATS.get(suffix)
+    loader = fmt.image if fmt is not None and fmt.image is not None else _load_standard_image
+    return loader(path)
 
 
 def supported_formats() -> dict[str, str]:
     """Return dict of extension -> description for all supported formats."""
-    formats = {
-        ".tif": "TIFF / OME-TIFF",
-        ".tiff": "TIFF / OME-TIFF",
-        ".png": "PNG",
-        ".jpg": "JPEG",
-        ".jpeg": "JPEG",
-        ".bmp": "BMP",
-        ".npy": "NumPy array",
-    }
-    optional = [
-        ("oiffile", "olympus", {".oib": "Olympus FluoView (OIB)", ".oif": "Olympus FluoView (OIF)"}),
-        ("czifile", "zeiss", {".czi": "Zeiss ZEN (CZI)"}),
-        ("nd2", "nikon", {".nd2": "Nikon NIS-Elements (ND2)"}),
-        ("readlif", "leica", {".lif": "Leica LAS X (LIF)"}),
-    ]
-    for pkg, extra, ext_map in optional:
+    formats: dict[str, str] = {}
+    for ext, fmt in FORMATS.items():
+        if fmt.package is None:
+            formats[ext] = fmt.description
+            continue
         try:
-            _require(pkg, extra)
-            formats.update(ext_map)
+            _require(fmt.package, fmt.extra)
+            formats[ext] = fmt.description
         except ImportError:
-            for ext, desc in ext_map.items():
-                formats[ext] = f"{desc} (requires: pip install {pkg})"
+            formats[ext] = f"{fmt.description} (requires: pip install {fmt.package})"
     return formats
 
 
@@ -173,7 +151,7 @@ def supported_formats() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 def _load_olympus_volume(path: Path) -> tuple[np.ndarray, dict]:
-    oiffile = _require("oiffile", "olympus")
+    oiffile = _reader("oiffile")
 
     oif = oiffile.OifFile(str(path))
     arr = oif.asarray()
@@ -246,7 +224,7 @@ def _section_get(section, key: str):
 # ---------------------------------------------------------------------------
 
 def _load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
-    czifile = _require("czifile", "zeiss")
+    czifile = _reader("czifile")
 
     with czifile.CziFile(str(path)) as czi:
         arr = czi.asarray()
@@ -302,7 +280,7 @@ def _parse_czi_metadata(czi) -> dict:
 # ---------------------------------------------------------------------------
 
 def _load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
-    nd2 = _require("nd2", "nikon")
+    nd2 = _reader("nd2")
 
     with nd2.ND2File(str(path)) as f:
         arr = f.asarray()
@@ -348,7 +326,7 @@ def _parse_nd2_metadata(f) -> dict:
 # ---------------------------------------------------------------------------
 
 def _load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
-    readlif = _require("readlif", "leica")
+    readlif = _reader("readlif")
 
     reader = readlif.LifFile(str(path))
 
@@ -566,3 +544,43 @@ def _safe_float(val, default: float) -> float:
         return v if v > 0 else default
     except (ValueError, TypeError):
         return default
+
+
+# ---------------------------------------------------------------------------
+# Format registry: the one place each supported format is described (SIN-4).
+# The suffix sets, `load_volume` / `load_image` dispatch, `supported_formats`
+# and the CLI's reader list all derive from it. Insertion order is the order
+# `supported_formats` reports. Defined last so it can name the loaders above.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Format:
+    """How one file suffix is read."""
+
+    description: str
+    volume: Callable[[Path], tuple[np.ndarray, dict]] | None   # -> (C, Z, Y, X)
+    image: Callable[[Path], tuple[np.ndarray, dict]] | None    # -> (C, Y, X)
+    package: str | None = None    # optional vendor reader distribution
+    extra: str | None = None      # pyproject extra that installs it
+
+
+FORMATS: dict[str, Format] = {
+    ".tif": Format("TIFF / OME-TIFF", _load_tiff_volume, _load_tiff_image),
+    ".tiff": Format("TIFF / OME-TIFF", _load_tiff_volume, _load_tiff_image),
+    ".png": Format("PNG", None, _load_standard_image),
+    ".jpg": Format("JPEG", None, _load_standard_image),
+    ".jpeg": Format("JPEG", None, _load_standard_image),
+    ".bmp": Format("BMP", None, _load_standard_image),
+    ".npy": Format("NumPy array", _load_npy_volume, _load_npy_image),
+    ".oib": Format("Olympus FluoView (OIB)", _load_olympus_volume, None, "oiffile", "olympus"),
+    ".oif": Format("Olympus FluoView (OIF)", _load_olympus_volume, None, "oiffile", "olympus"),
+    ".czi": Format("Zeiss ZEN (CZI)", _load_czi_volume, None, "czifile", "zeiss"),
+    ".nd2": Format("Nikon NIS-Elements (ND2)", _load_nd2_volume, None, "nd2", "nikon"),
+    ".lif": Format("Leica LAS X (LIF)", _load_lif_volume, None, "readlif", "leica"),
+}
+
+VOLUME_SUFFIXES = {ext for ext, f in FORMATS.items() if f.volume is not None}
+IMAGE_SUFFIXES = {ext for ext, f in FORMATS.items() if f.image is not None}
+IMAGE_ONLY_SUFFIXES = IMAGE_SUFFIXES - VOLUME_SUFFIXES
+ALL_SUFFIXES = VOLUME_SUFFIXES | IMAGE_SUFFIXES
+OPTIONAL_READERS = tuple(dict.fromkeys(f.package for f in FORMATS.values() if f.package))
