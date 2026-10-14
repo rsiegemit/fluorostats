@@ -89,6 +89,20 @@ byte-identical; NUMERIC = every value equal within 1e-9 relative).
 | `b_ve_metrics.csv` | `b_ve_metrics.py` | VesselExpress Figure 2C–E volumes | not run (data not downloaded locally; produced on the cluster) |
 | `b_viability_external.csv` | `b_viability_external.py` | Kerkhoff synthetic | EXACT |
 
+Derived tables summarise committed tables for the figures, so a figure script only
+reads and plots (no metric is computed in a figure script). Their producers need no
+raw data and are re-run offline:
+
+| table(s) | producer | reads | verified |
+|---|---|---|---|
+| `b2_nuclei_ci.csv` | `b2_nuclei_ci.py` | `b2_nuclei_methods_perimage.csv`, `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv` | EXACT |
+| `b4_reaver_ranking.csv` | `b4_reaver_ranking.py` | `b4_reaver_ranking_perimage.csv` | EXACT |
+| `b_homogeneity_consensus.csv`, `b_homogeneity_consensus_corr.csv` | `b_homogeneity_consensus.py` | `b_homogeneity_multi.csv` | EXACT |
+| `b_homogeneity_examples.csv` | `b_homogeneity_examples.py` | none (synthetic, seed 1) | EXACT |
+| `b_vascular_sproutangio_stats.csv` | `b_vascular_sproutangio_stats.py` | `b_vascular_sproutangio_multi.csv` | EXACT |
+| `b_ve_agreement.csv` | `b_ve_agreement.py` | `b_ve_metrics.csv` | EXACT |
+| `b_viability_external_agreement.csv` | `b_viability_external_agreement.py` | `b_viability_external.csv` | EXACT |
+
 Timing tables are wall-clock measurements: a re-run reproduces the relative cost of
 each operation, not the committed milliseconds. Their two DL rows (StarDist 215.1 ms,
 Cellpose 5547.0 ms per image) are constants measured on the cluster CPU.

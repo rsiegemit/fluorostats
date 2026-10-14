@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import figstyle as F
-from figstyle import OKABE, TOOL, panel, save, caption, boot_ci
+from figstyle import OKABE, TOOL, panel, save, caption
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from PIL import Image
@@ -18,14 +18,16 @@ LGREY = OKABE["lgrey"]
 outline = F.outline
 
 # ---------- data ----------
-pi = pd.read_csv(R / "b2_nuclei_methods_perimage.csv")           # per-image F1, 9 methods
-# n=100 first-100 per-image DL scores (so panel a uses the n=100 values, not the
-# n=200 Table-1 numbers): StarDist 0.861, Cellpose 0.858, Omnipose 0.798.
-dl_pi = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values[:100],
-         "Cellpose": pd.read_csv(R/"cellpose_eval.csv").cellpose_f1.values[:100],
-         "Omnipose": pd.read_csv(R/"omnipose_eval.csv").query("thirddl_f1>=0").thirddl_f1.values[:100]}
-methods = {c: pi[c].values for c in pi.columns if c != "image"}
-methods.update(dl_pi)
+# mean F1 + 95% bootstrap CI per method: subset "first100" (the 9 per-image methods and
+# the DL tools on the same 100 images, so panel a uses the n=100 values, not the n=200
+# Table-1 numbers) and "all200" (DL tools, panel b). Derived tables are read with
+# round_trip so every float is the one the producer wrote.
+nci = pd.read_csv(R / "b2_nuclei_ci.csv", float_precision="round_trip").set_index(["subset", "method"])
+
+
+def ci_of(subset, method):
+    r = nci.loc[(subset, method)]
+    return r.mean_F1, r.CI_low, r.CI_high
 # ---------- layout ----------
 # Authored at the true manuscript text width (F.TW = 5.147 in) so
 # \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt on the
@@ -52,26 +54,26 @@ gs = gridspec.GridSpec(4, 6, figure=fig, height_ratios=[1.72, 0.66, 0.92, 1.02],
 # ~0.8-0.91, so full bars would waste ink.
 axa = fig.add_subplot(gs[0, :])
 BLUE = OKABE["blue"]
-# family: (display label, per-image score array, kind) — kind in
+# family: (display label, method in b2_nuclei_ci.csv, kind) — kind in
 # {"default","envelope","dl"}. Provenance kept in the label.
 fam = [
-    ("fluorostats (default, Otsu+CC)", pi[F.RAW_OTSU_CC].values, "default"),
-    ("fluorostats · Li (1993)",       pi["Li (1993)"].values,       "envelope"),
-    ("fluorostats · Isodata (1978)",  pi["Isodata (1978)"].values,  "envelope"),
-    ("fluorostats · Otsu+watershed",  pi["Watershed (1991)"].values,"envelope"),
-    ("fluorostats · Otsu (1979)",     pi["Otsu (1979)"].values,     "envelope"),
-    ("fluorostats · Mean",            pi["Mean"].values,            "envelope"),
-    ("fluorostats · Triangle (1977)", pi["Triangle (1977)"].values, "envelope"),
-    ("fluorostats · Minimum",         pi["Minimum"].values,         "envelope"),
-    ("fluorostats · Yen (1995)",      pi["Yen (1995)"].values,      "envelope"),
-    ("StarDist (trained DL)", dl_pi["StarDist"], "dl"),
-    ("Cellpose (trained DL)", dl_pi["Cellpose"], "dl"),
-    ("Omnipose (trained DL)", dl_pi["Omnipose"], "dl"),
+    ("fluorostats (default, Otsu+CC)", F.RAW_OTSU_CC,      "default"),
+    ("fluorostats · Li (1993)",       "Li (1993)",        "envelope"),
+    ("fluorostats · Isodata (1978)",  "Isodata (1978)",   "envelope"),
+    ("fluorostats · Otsu+watershed",  "Watershed (1991)", "envelope"),
+    ("fluorostats · Otsu (1979)",     "Otsu (1979)",      "envelope"),
+    ("fluorostats · Mean",            "Mean",             "envelope"),
+    ("fluorostats · Triangle (1977)", "Triangle (1977)",  "envelope"),
+    ("fluorostats · Minimum",         "Minimum",          "envelope"),
+    ("fluorostats · Yen (1995)",      "Yen (1995)",       "envelope"),
+    ("StarDist (trained DL)", "StarDist", "dl"),
+    ("Cellpose (trained DL)", "Cellpose", "dl"),
+    ("Omnipose (trained DL)", "Omnipose", "dl"),
 ]
 DLCOL = {"StarDist": OKABE["orange"], "Cellpose": OKABE["vermillion"], "Omnipose": OKABE["purple"]}
 rows = []
-for lab, arr, kind in fam:
-    mean, lo, hi = boot_ci(arr)
+for lab, key, kind in fam:
+    mean, lo, hi = ci_of("first100", key)
     if kind == "dl":
         c = DLCOL[lab.split()[0]]
     else:
@@ -128,17 +130,14 @@ panel(axa, "a", "one tool, one default knob (n = 100)", xanchor=0.0315)   # row-
 
 # (b) forest vs DL — the n=200 FULL test set (Table 1 / Results), NOT panel (a)'s
 # n=100 envelope split. fluorostats mean+CI from b_dl_ci.csv (0.896 [0.873, 0.916]);
-# the three DL tools from their full 200-image eval arrays. Panel (a) stays at n=100.
+# the three DL tools from b2_nuclei_ci.csv (all 200 images). Panel (a) stays at n=100.
 axb = fig.add_subplot(gs[1, :])
 ci = pd.read_csv(R/"b_dl_ci.csv").set_index("method")
-dl200 = {"StarDist": pd.read_csv(R/"stardist_eval.csv").stardist_f1.values,
-         "Cellpose": pd.read_csv(R/"cellpose_eval.csv").cellpose_f1.values,
-         "Omnipose": pd.read_csv(R/"omnipose_eval.csv").query("thirddl_f1>=0").thirddl_f1.values}
 FS = F.DENOISED_OTSU_CC   # the n=200 fluorostats row, plotted as "fluorostats"
 fb = {"fluorostats": (float(ci.loc[FS, "mean_F1"]),
                       float(ci.loc[FS, "CI_low"]), float(ci.loc[FS, "CI_high"]))}
-for m, arr in dl200.items():
-    fb[m] = boot_ci(arr)
+for m in ("StarDist", "Cellpose", "Omnipose"):
+    fb[m] = ci_of("all200", m)
 fo = sorted(fb, key=lambda m: fb[m][0])
 for i, m in enumerate(fo):
     mean, lo, hi = fb[m]
@@ -251,9 +250,9 @@ axf.set_xlabel("overlap / crowding (%)")
 panel(axf, "f", "when to use which")
 
 # caption numbers derived from the same per-image data the panels plot (never hand-typed)
-sd_m, cp_m, om_m = (float(np.mean(dl_pi[k])) for k in ("StarDist", "Cellpose", "Omnipose"))
-def_m = float(np.mean(pi[F.RAW_OTSU_CC].values))
-_env = [float(np.mean(pi[c].values)) for c in
+sd_m, cp_m, om_m = (ci_of("first100", k)[0] for k in ("StarDist", "Cellpose", "Omnipose"))
+def_m = ci_of("first100", F.RAW_OTSU_CC)[0]
+_env = [ci_of("first100", c)[0] for c in
         ("Li (1993)", "Isodata (1978)", "Watershed (1991)", "Otsu (1979)", "Mean",
          "Triangle (1977)", "Minimum", "Yen (1995)")]
 env_lo, env_hi = min(_env), max(_env)

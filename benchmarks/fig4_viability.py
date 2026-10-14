@@ -8,7 +8,6 @@ import figstyle as F
 from figstyle import OKABE, panel, save, caption
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-from fluorostats.agreement import lins_ccc
 from fluorostats.segment import binarize
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
@@ -68,9 +67,10 @@ ext = pd.read_csv(R/"b_viability_external.csv")
 tv = ext.true_viability.values
 mac = ext["Kerkhoff_macro_peakcount"].values
 fx = ext["fluorostats_maxima(NEW)"].values
-# fluorostats-vs-ground-truth agreement (computed, not hand-typed): Lin's CCC + MAE
-ccc_v = lins_ccc(fx, tv)
-mae_v = float(np.abs(fx - tv).mean())
+# fluorostats-vs-ground-truth agreement (Lin's CCC + MAE), from the producer's table
+agr = pd.read_csv(R/"b_viability_external_agreement.csv", float_precision="round_trip").set_index("estimator")
+ccc_v = agr.loc["fluorostats_maxima(NEW)", "lins_ccc"]
+mae_v = agr.loc["fluorostats_maxima(NEW)", "MAE"]
 axc = fig.add_subplot(gs[1, :2])
 axc.scatter(tv, ext["fluorostats_objcount"].values, s=10, color=GREY, alpha=0.55,
             zorder=1, label="fs alt. modes (count, area)")

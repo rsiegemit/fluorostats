@@ -8,7 +8,7 @@ and the figure output folders. The raw-data root, the missing-data check and the
 dataset loaders are the producers' (``producers/common.py``), re-exported here.
 
     from figstyle import (OKABE, TOOL, apply_style, save, panel, scalebar,
-                          caption, boot_ci, SUPP)
+                          caption, SUPP)
 """
 from __future__ import annotations
 
@@ -18,15 +18,14 @@ import matplotlib
 matplotlib.use("Agg")
 import numpy as np  # noqa: E402
 
-from fluorostats import stats  # noqa: E402
 from fluorostats import pubfig  # noqa: E402
 from fluorostats.pubfig import (  # noqa: E402,F401
     FS, OKABE, apply_style, bland_altman, composite2ch, fill_mask, image_axes, imnorm, lollipop,
     outline, panel, round_sig, scalebar,
 )
 from producers.common import (  # noqa: E402,F401
-    DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, bbbc039_gt_instances, load_sbiad2130_channel, raw_otsu_cc,
-    require,
+    DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel,
+    raw_otsu_cc, require,
 )
 
 # Fixed tool identities (colour + marker + linestyle) so series survive greyscale.
@@ -57,12 +56,6 @@ def save(fig, name, folder=None, tight=True, pad=0.4):
 def caption(name, text, folder=None):
     """`pubfig.caption` into this paper's main-figure folder unless told otherwise."""
     pubfig.caption(name, text, folder or MAIN)
-
-
-def boot_ci(x, reps=10000, seed=0, ci=95):
-    """Bootstrap mean + CI of a 1D array as ``(mean, lo, hi)`` (``ci`` in percent)."""
-    r = stats.bootstrap_mean_ci(x, n_boot=reps, ci=ci / 100, seed=seed)
-    return r["mean"], r["ci_low"], r["ci_high"]
 
 
 # ---- dataset loaders used by the figure scripts ----

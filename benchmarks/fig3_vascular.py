@@ -27,22 +27,12 @@ gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[0.98, 0.86, 1.02],
                        left=0.1268, right=0.9518, top=0.9675, bottom=0.0535)
 
 # (a) REAVER 6-tool: accuracy (MAE) + precision (residual std) + unbiased test  [row 0, full width]
-pi = pd.read_csv(R/"b4_reaver_ranking_perimage.csv")
-tools = ["REAVER","ImageJ","AngioTool","fluorostats","RAVE","AngioQuant"]
-gt = pi["manual_GT"].values
-rec = []
-for t in tools:
-    res = pi[t].values - gt
-    mae = np.abs(res).mean()
-    sd = res.std(ddof=1)
-    p = sps.ttest_1samp(res, 0).pvalue                      # bias test
-    rec.append((t, mae, sd, p))
-rec.sort(key=lambda r: r[1])
+# derived tables are read with round_trip so every float is the one the producer wrote
+rk = pd.read_csv(R/"b4_reaver_ranking.csv", float_precision="round_trip")   # sorted by MAE
+rec = list(zip(rk.tool, rk.MAE, rk.residual_SD, rk.unbiased))
 axa = fig.add_subplot(gs[0, :])
-ybias = 0.05 / len(tools)                                   # Bonferroni
-for i, (t, mae, sd, p) in enumerate(rec):
+for i, (t, mae, sd, unbiased) in enumerate(rec):
     c = BLUE if t == "fluorostats" else GREY
-    unbiased = p > ybias
     axa.barh(i, mae, xerr=sd, color=c, edgecolor="#333333", lw=0.4, height=0.66,
              error_kw=dict(elinewidth=0.8, capsize=2, ecolor="#444"), zorder=2)
     axa.text(-0.001, i, t, ha="right", va="center", fontsize=6.0,
@@ -55,7 +45,7 @@ axa.set_xlabel("area-fraction error vs manual GT  (mean ± residual s.d.)")
 axa.set_xlim(0, max(mae+sd for _,mae,sd,_ in rec)*1.28)
 axa.text(0.98, 0.05, "‘unbiased’ = mean error not\nsignificantly ≠ 0 (t-test, Bonferroni)",
          transform=axa.transAxes, ha="right", va="bottom", fontsize=5.0, color="#333")
-panel(axa, "a", "vessel-tool accuracy   (REAVER, n = 36)", xanchor=0.0315)   # row-leader
+panel(axa, "a", f"vessel-tool accuracy   (REAVER, n = {rk.n_images.iloc[0]})", xanchor=0.0315)   # row-leader
 
 # (b) VE overlay: raw / VesselExpress seg / fluorostats(auto->li), 2 crops  [row 1, full width]
 crops = np.load(R/"ve_crops.npz")
@@ -126,7 +116,7 @@ panel(axd, "d", "metric agreement")
 
 # rank-agreement gets its own small labelled panel (no longer a cramped inset)
 axr = fig.add_subplot(gs_d[0, 2])
-rho = sps.spearmanr(ve, fs).statistic
+rho = pd.read_csv(R/"b_ve_agreement.csv", float_precision="round_trip").spearman_rho.iloc[0]
 axr.scatter(sps.rankdata(ve), sps.rankdata(fs), s=13, color=BLUE, edgecolor="none")
 # left-anchored title so the descriptor never overflows the narrow sub-panel edge
 axr.set_title(f"rank agreement\nSpearman ρ = {rho:.2f}", fontsize=5.0, pad=2, loc="right")
@@ -141,9 +131,9 @@ for sp in axr.spines.values():
     sp.set_linewidth(0.5)
     sp.set_color("#999")
 
-qualifying = [t for t, _, _, p in rec if p > ybias]   # tools whose bias test is not significant
+qualifying = list(rk.tool[rk.unbiased])   # tools whose bias test is not significant
 cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool REAVER benchmark "
- f"(n={len(pi)}): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "
+ f"(n={rk.n_images.iloc[0]}): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "
  "'unbiased' marks tools whose mean error is not significantly different from 0 (one-sample t-test, "
  f"Bonferroni across the six tools); only {' and '.join(qualifying)} qualifies. fluorostats (blue) ranks alongside AngioTool "
  "in accuracy but, like every tool except REAVER, carries a small systematic underestimate. (b) Real "

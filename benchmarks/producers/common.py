@@ -45,6 +45,9 @@ YEAR_LABELS = {"otsu": "Otsu_1979", "li": "Li_1993", "isodata": "Isodata_1978",
 RAW_OTSU_CC = "fluorostats(raw Otsu+CC)"
 DENOISED_OTSU_CC = "fluorostats(denoised Otsu+CC)"
 
+# Side (px) of the square field of the example point patterns.
+EXAMPLE_FIELD = 500
+
 # CPU inference ms per BBBC039 image of the two DL baselines, measured on the
 # cluster (StarDist 2D_versatile_fluo, Cellpose nuclei; 20 images); carried as constants.
 DL_CPU_MS = {"StarDist": 215.1, "Cellpose": 5547.0}
@@ -130,6 +133,19 @@ def kerkhoff_peak_count(img: np.ndarray) -> int:
     A comparator, not library code.
     """
     return len(peak_local_max(img, min_distance=3, threshold_abs=img.max() * 0.15))
+
+
+def example_patterns(rng: np.random.Generator, n: int = 225) -> dict[str, np.ndarray]:
+    """Regular, random (CSR) and clustered sets of ``n`` (y, x) points in the
+    EXAMPLE_FIELD square, drawn from ``rng`` in that order (the regular grid draws nothing)."""
+    g = int(np.sqrt(n))
+    xs = np.linspace(30, EXAMPLE_FIELD - 30, g)
+    regular = np.array([(y, x) for y in xs for x in xs])
+    random = rng.uniform(20, EXAMPLE_FIELD - 20, (n, 2))
+    k = 7
+    cen = rng.uniform(60, EXAMPLE_FIELD - 60, (k, 2))
+    clustered = np.clip(np.array([cen[i % k] + rng.normal(0, 22, 2) for i in range(n)]), 5, EXAMPLE_FIELD - 5)
+    return {"regular": regular, "random": random, "clustered": clustered}
 
 
 # Reference point-pattern statistics: the independent, textbook definitions the
