@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
 
@@ -131,79 +132,17 @@ def quant3d(
     # Save run config
     _save_config(output_path, locals())
 
-    rows: list[dict] = []
-    rep_counter = _ReplicateCounter()
+    measure = functools.partial(
+        _measure_volume, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
+        threshold=threshold, threshold_scale=threshold_scale, min_size=min_size,
+        no_skeleton=no_skeleton, prune=prune, min_branch_length=min_branch_length,
+        overlay_dir=None if no_overlays else output_path / "overlays")
+    rows = _quantify_files(files, condition_from, "Processing volumes", measure)
 
-    with click.progressbar(files, label="Processing volumes") as bar:
-        for fpath in bar:
-            condition = _get_condition(fpath, condition_from)
-            replicate = rep_counter.next(condition)
-
-            # Load
-            arr, meta = iq_io.load_volume(fpath)
-            voxel_size = meta["voxel_size_um"]
-
-            # Channel selection
-            vol = preprocess.select_green_channel(
-                arr, meta["channel_names"], override=ch_override
-            )
-
-            # Preprocess
-            vol = preprocess.denoise(vol, sigma=sigma)
-            if bg_radius > 0:
-                vol = preprocess.background_subtract(vol, radius=bg_radius)
-
-            # Segment
-            mask = segment.binarize(vol, method=threshold, min_size=min_size, threshold_scale=threshold_scale)
-
-            # Metrics
-            vf = metrics_3d.volume_fraction(mask)
-            conn = metrics_3d.connectivity_metrics(mask)
-
-            # same keys as skeleton_metrics() so the CSV row shape is identical
-            # whether or not --no-skeleton is set.
-            skel = dict(skeleton.EMPTY_METRICS)
-            if not no_skeleton:
-                skel = metrics_3d.skeleton_metrics(
-                    mask, voxel_size_um=voxel_size,
-                    prune=prune, min_branch_length_um=min_branch_length)
-
-            row = {
-                "file": fpath.name,
-                "condition": condition,
-                "replicate": replicate,
-                "shape": str(arr.shape),
-                "voxel_size_um": str(voxel_size),
-                "volume_fraction": vf,
-                **conn,
-                **skel,
-                **spatial.coverage_heterogeneity(mask),
-            }
-            rows.append(row)
-
-            # QC overlay
-            if not no_overlays:
-                overlay_path = output_path / "overlays" / f"{fpath.stem}_overlay.png"
-                qc.overlay_3d(vol, mask, overlay_path)
-
-    # Reports
-    df = report.write_per_file_csv(rows, output_path / "per_file.csv", mode="3d")
-    summary = report.write_per_condition_csv(df, output_path / "per_condition.csv", mode="3d")
-
-    click.echo(f"\nPer-file results: {output_path / 'per_file.csv'}")
-    click.echo(f"Per-condition summary: {output_path / 'per_condition.csv'}")
-
-    click.echo("\n--- Per-condition summary ---")
-    click.echo(summary.to_string(index=False))
-
-    # Plots
     # Every reported metric is plotted except n_branches, as in earlier releases.
-    _3d_metrics = [m for m in report.METRICS_3D if m != "n_branches"]
-
-    _write_plots_and_pvalues(
-        df, _3d_metrics, output_path, no_plots,
-        summary_title="3D Confocal Quantification Summary",
-    )
+    plotted = [m for m in report.METRICS_3D if m != "n_branches"]
+    _report_and_plot(rows, output_path, "3d", plotted, no_plots,
+                     "3D Confocal Quantification Summary")
 
 
 # ---------------------------------------------------------------------------
@@ -256,48 +195,89 @@ def quant2d(
     click.echo(f"Found {len(files)} image file(s)")
     _save_config(output_path, locals())
 
+    measure = functools.partial(
+        _measure_image, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
+        threshold=threshold, threshold_scale=threshold_scale, min_size=min_size,
+        auto_crop=auto_crop, overlay_dir=None if no_overlays else output_path / "overlays")
+    rows = _quantify_files(files, condition_from, "Processing images", measure)
+    _report_and_plot(rows, output_path, "2d", list(report.METRICS_2D), no_plots,
+                     "2D Coverage Summary")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _quantify_files(files, condition_from, label, measure) -> list[dict]:
+    """Run ``measure(path) -> dict`` over files, tagging condition + replicate."""
     rows: list[dict] = []
     rep_counter = _ReplicateCounter()
-
-    with click.progressbar(files, label="Processing images") as bar:
+    with click.progressbar(files, label=label) as bar:
         for fpath in bar:
             condition = _get_condition(fpath, condition_from)
             replicate = rep_counter.next(condition)
+            rows.append({"file": fpath.name, "condition": condition,
+                         "replicate": replicate, **measure(fpath)})
+    return rows
 
-            arr, meta = iq_io.load_image(fpath)
 
-            # Auto-crop microscope borders before channel selection
-            if auto_crop:
-                arr, crop_coords = preprocess.auto_crop(arr)
+def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size):
+    """Denoise, optionally background-subtract, and threshold one channel."""
+    img = preprocess.denoise(img, sigma=sigma)
+    if bg_radius > 0:
+        img = preprocess.background_subtract(img, radius=bg_radius)
+    mask = segment.binarize(img, method=threshold, min_size=min_size,
+                            threshold_scale=threshold_scale)
+    return img, mask
 
-            img = preprocess.select_green_channel(
-                arr, meta["channel_names"], override=ch_override
-            )
 
-            img = preprocess.denoise(img, sigma=sigma)
-            if bg_radius > 0:
-                img = preprocess.background_subtract(img, radius=bg_radius)
+def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length,
+                    overlay_dir, **seg) -> dict:
+    """quant3d's per-file metrics (volume fraction, connectivity, skeleton, coverage)."""
+    arr, meta = iq_io.load_volume(fpath)
+    voxel_size = meta["voxel_size_um"]
+    vol = preprocess.select_green_channel(arr, meta["channel_names"], override=ch_override)
+    vol, mask = _segment(vol, **seg)
 
-            mask = segment.binarize(img, method=threshold, min_size=min_size, threshold_scale=threshold_scale)
+    # same keys as skeleton_metrics() so the CSV row shape is identical
+    # whether or not --no-skeleton is set.
+    skel = dict(skeleton.EMPTY_METRICS)
+    if not no_skeleton:
+        skel = metrics_3d.skeleton_metrics(
+            mask, voxel_size_um=voxel_size,
+            prune=prune, min_branch_length_um=min_branch_length)
+    if overlay_dir is not None:
+        qc.overlay_3d(vol, mask, overlay_dir / f"{fpath.stem}_overlay.png")
+    return {
+        "shape": str(arr.shape),
+        "voxel_size_um": str(voxel_size),
+        "volume_fraction": metrics_3d.volume_fraction(mask),
+        **metrics_3d.connectivity_metrics(mask),
+        **skel,
+        **spatial.coverage_heterogeneity(mask),
+    }
 
-            cov = metrics_2d.coverage_metrics(mask)
 
-            row = {
-                "file": fpath.name,
-                "condition": condition,
-                "replicate": replicate,
-                "shape": str(arr.shape),
-                **cov,
-                **spatial.coverage_heterogeneity(mask),
-            }
-            rows.append(row)
+def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict:
+    """quant2d's per-file metrics (area fraction, clusters, coverage uniformity)."""
+    arr, meta = iq_io.load_image(fpath)
+    if auto_crop:   # crop microscope borders before channel selection
+        arr, _ = preprocess.auto_crop(arr)
+    img = preprocess.select_green_channel(arr, meta["channel_names"], override=ch_override)
+    img, mask = _segment(img, **seg)
+    if overlay_dir is not None:
+        qc.overlay_2d(img, mask, overlay_dir / f"{fpath.stem}_overlay.png")
+    return {
+        "shape": str(arr.shape),
+        **metrics_2d.coverage_metrics(mask),
+        **spatial.coverage_heterogeneity(mask),
+    }
 
-            if not no_overlays:
-                overlay_path = output_path / "overlays" / f"{fpath.stem}_overlay.png"
-                qc.overlay_2d(img, mask, overlay_path)
 
-    df = report.write_per_file_csv(rows, output_path / "per_file.csv", mode="2d")
-    summary = report.write_per_condition_csv(df, output_path / "per_condition.csv", mode="2d")
+def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) -> None:
+    """Write per-file + per-condition CSVs, echo the summary, then plots/p-values."""
+    df = report.write_per_file_csv(rows, output_path / "per_file.csv", mode=mode)
+    summary = report.write_per_condition_csv(df, output_path / "per_condition.csv", mode=mode)
 
     click.echo(f"\nPer-file results: {output_path / 'per_file.csv'}")
     click.echo(f"Per-condition summary: {output_path / 'per_condition.csv'}")
@@ -305,17 +285,7 @@ def quant2d(
     click.echo("\n--- Per-condition summary ---")
     click.echo(summary.to_string(index=False))
 
-    _2d_metrics = list(report.METRICS_2D)
-
-    _write_plots_and_pvalues(
-        df, _2d_metrics, output_path, no_plots,
-        summary_title="2D Coverage Summary",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title=summary_title)
 
 def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     """Shared quant2d/quant3d tail: per-metric plots, summary panel, p-values.
