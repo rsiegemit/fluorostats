@@ -179,11 +179,9 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
 
 
 def _mean_sem(vals: list[float]) -> tuple[float, float, int]:
-    a = np.array([v for v in vals if v == v], float)      # drop NaN
-    if a.size == 0:
-        return float("nan"), float("nan"), 0
-    sem = a.std(ddof=1) / a.size ** 0.5 if a.size > 1 else 0.0
-    return float(a.mean()), float(sem), int(a.size)
+    """Mean, SEM and n of the non-NaN values (`stats.describe`: SEM NaN for n < 2)."""
+    d = stats.describe(vals)
+    return d["mean"], d["sem"], d["n"]
 
 
 def run(manifest_path: Path, output_override: str | None = None) -> Path:

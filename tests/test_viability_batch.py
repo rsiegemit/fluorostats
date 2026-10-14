@@ -179,3 +179,13 @@ def test_manifest_rejects_bool_channel(tmp_path):
     mp = _one_stack_manifest(tmp_path, live_channel=False, dead_channel=True)
     with pytest.raises(ValueError, match="live_channel must be a non-negative integer"):
         viability_batch.load_manifest(mp)
+
+
+def test_single_stack_group_has_no_sem(tmp_path, capsys):
+    """One stack has no measured spread: the group SEM is NaN, not 0."""
+    import csv
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    rows = list(csv.DictReader(open(out / "viability_group_summary.csv")))
+    assert rows and all(r["sem"] == "nan" for r in rows)
+    assert {r["n"] for r in rows} <= {"0", "1"} and any(r["n"] == "1" for r in rows)
+    assert "±nan (n=1)" in capsys.readouterr().out
