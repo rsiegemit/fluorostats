@@ -30,9 +30,9 @@ def green_channel_index(
 
     Resolution order: an explicit ``override`` (index or name substring); else the
     first channel whose name matches a green dye; else a positional convention
-    (1 channel -> 0; 2 or 3 channels -> 1, i.e. RGB green / the usual confocal
-    second channel; otherwise 0). The positional fallback is a guess and is
-    announced with a RuntimeWarning.
+    (1 channel -> 0; 2, 3 or 4 channels -> 1, i.e. the green of RGB/RGBA or the
+    usual confocal second channel; otherwise 0). The positional fallback is a
+    guess and is announced with a RuntimeWarning.
     """
     if override is not None:
         return _resolve_override(override, channel_names, n_channels)
@@ -41,7 +41,7 @@ def green_channel_index(
             return i
     if n_channels == 1:
         return 0
-    idx = 1 if n_channels in (2, 3) else 0
+    idx = 1 if n_channels in (2, 3, 4) else 0
     warnings.warn(
         f"no channel name identifies the green channel among {n_channels} channels "
         f"{channel_names}; using channel {idx} by position. Pass an explicit channel "

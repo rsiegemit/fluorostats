@@ -59,7 +59,10 @@ def test_select_green_channel_fallbacks_by_count():
 
     four = np.arange(4 * 4).reshape(4, 4)
     np.testing.assert_array_equal(
-        preprocess.select_green_channel(four, ["a", "b", "c", "d"]), four[0])
+        preprocess.select_green_channel(four, ["a", "b", "c", "d"]), four[1])  # RGBA green
+    five = np.arange(20).reshape(5, 4)
+    np.testing.assert_array_equal(
+        preprocess.select_green_channel(five, list("abcde")), five[0])
 
 
 # ---------------------------------------------------------------------------
@@ -173,4 +176,6 @@ def test_green_channel_index_warns_only_when_guessing_by_position():
     with pytest.warns(RuntimeWarning, match="by position"):
         assert green_channel_index(["Ch1", "Ch2"], 2) == 1
     with pytest.warns(RuntimeWarning, match="by position"):
-        assert green_channel_index([], 4) == 0                       # e.g. RGBA
+        assert green_channel_index([], 4) == 1                       # RGBA -> green
+    with pytest.warns(RuntimeWarning, match="by position"):
+        assert green_channel_index([], 5) == 0
