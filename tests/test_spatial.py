@@ -74,3 +74,8 @@ def test_spatial_heterogeneity_summary():
     h = spatial.spatial_heterogeneity(g)
     assert h["n"] == 4 and h["cv"] > 0 and np.isfinite(h["morans_i"])
     assert spatial.spatial_heterogeneity(np.ones((2, 2)))["cv"] == 0.0       # uniform -> CV 0
+
+
+def test_morans_i_rejects_unknown_connectivity():
+    with pytest.raises(ValueError, match="'rook', 'queen'"):
+        spatial.morans_i(np.arange(9.0).reshape(3, 3), connectivity="bishop")

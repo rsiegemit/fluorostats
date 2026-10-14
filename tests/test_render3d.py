@@ -333,3 +333,11 @@ def test_depth_coded_mip_creates_own_axes_when_none():
     ax = depth_coded_mip(vol)   # no ax passed
     assert ax is not None
     plt.close(ax.figure)
+
+
+
+def test_unknown_style_is_rejected():
+    mask = np.zeros((4, 16, 16), bool)
+    with pytest.raises(ValueError, match="'light', 'dark'"):
+        render_isosurface(mask, style="Dark")
+    plt.close("all")

@@ -40,9 +40,22 @@ def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None, method: st
                     min_size=min_size)
 
 
-# Object-counting modes of `live_dead_by_count`, in the order ``method="all"``
+def _count_cc(ch, sig, cseg, min_distance, threshold_rel) -> int:
+    return label_3d(_mask(ch, **cseg), min_size=COUNT_MIN_SIZE)[1]
+
+
+def _count_watershed(ch, sig, cseg, min_distance, threshold_rel) -> int:
+    return watershed_split(_mask(ch, **cseg), min_distance=min_distance)[1]
+
+
+def _count_maxima(ch, sig, cseg, min_distance, threshold_rel) -> int:
+    return count_local_maxima(ch, min_distance, threshold_rel, smooth_sigma=sig)["count"]
+
+
+# The object-counting modes of `live_dead_by_count`, in the order ``method="all"``
 # reports them (and `viability_batch` writes their columns).
-COUNT_METHODS = ("cc", "watershed", "maxima")
+_COUNTERS = {"cc": _count_cc, "watershed": _count_watershed, "maxima": _count_maxima}
+COUNT_METHODS = tuple(_COUNTERS)
 
 
 def live_ratio(n_live: float, n_dead: float) -> float:
@@ -178,19 +191,13 @@ def live_dead_by_count(
     plus (auto) the chosen method + reasoning, or (all) per-method viabilities,
     consensus, and spread.
     """
+    methods = ("auto", "all", *COUNT_METHODS)
+    if method not in methods:
+        raise ValueError(f"unknown method {method!r}; use one of {methods}")
     cseg = {"min_size": COUNT_MIN_SIZE, **seg}
-    counters = {
-        "cc": lambda ch, sig: label_3d(_mask(ch, **cseg), min_size=COUNT_MIN_SIZE)[1],
-        "watershed": lambda ch, sig: watershed_split(_mask(ch, **cseg),
-                                                     min_distance=min_distance)[1],
-        "maxima": lambda ch, sig: count_local_maxima(ch, min_distance, threshold_rel,
-                                                     smooth_sigma=sig)["count"],
-    }
 
     def _count_one(ch, m, sig):
-        if m not in counters:
-            raise ValueError(f"unknown method {method!r} (use auto/all/maxima/watershed/cc)")
-        return counters[m](ch, sig)
+        return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
 
     if method == "all":
         modes = COUNT_METHODS
@@ -299,8 +306,12 @@ def attenuation_correct(
     low with depth reflects genuine biology, not optical decay — use before
     :func:`viability_depth_profile` to check a death gradient is real.
 
-    Returns a new float array; the input is not modified.
+    ``reference`` is ``"max"``, ``"first"`` (the first slice) or ``"mean"`` (the
+    mean of the slice means). Returns a new float array; the input is not modified.
     """
+    references = ("max", "first", "mean")
+    if reference not in references:
+        raise ValueError(f"reference must be one of {references}, got {reference!r}")
     vol = volume.astype(np.float32)
     axes = tuple(a for a in range(vol.ndim) if a != z_axis)
     slice_means = vol.mean(axis=axes)
@@ -308,7 +319,7 @@ def attenuation_correct(
         ref = slice_means.max()
     elif reference == "first":
         ref = slice_means.flat[0]
-    else:
+    else:                                   # "mean"
         ref = slice_means.mean()
     scale = np.divide(ref, slice_means, out=np.ones_like(slice_means),
                       where=slice_means > 0)

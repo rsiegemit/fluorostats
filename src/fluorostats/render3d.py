@@ -124,6 +124,9 @@ def render_isosurface(
 
 def _theme_colors(style: str) -> tuple[str, str, str, str]:
     """(background, grid, text, scale-bar) colours for the "light"/"dark" style."""
+    styles = ("light", "dark")
+    if style not in styles:
+        raise ValueError(f"style must be one of {styles}, got {style!r}")
     if style == "dark":
         return (DARK_PALETTE["background"], DARK_PALETTE["grid"],
                 DARK_PALETTE["ink"], DARK_PALETTE["scalebar"])

@@ -206,3 +206,15 @@ def test_live_ratio(n_live, n_dead, expected):
 
 def test_live_ratio_is_nan_with_nothing_to_count():
     assert np.isnan(viability.live_ratio(0, 0))
+
+
+def test_attenuation_correct_rejects_unknown_reference():
+    with pytest.raises(ValueError, match="'max', 'first', 'mean'"):
+        attenuation_correct(np.ones((3, 4, 4)), reference="median")
+
+
+def test_count_method_error_lists_the_registry():
+    live = np.zeros((20, 20))
+    with pytest.raises(ValueError, match="'cc', 'watershed', 'maxima'"):
+        live_dead_by_count(live, live, method="bogus")
+    assert viability.COUNT_METHODS == ("cc", "watershed", "maxima")
