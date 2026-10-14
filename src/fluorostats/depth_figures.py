@@ -147,7 +147,8 @@ def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows
 
 
 def _save(fig, out_base: Path) -> None:
+    # Append, not with_suffix: a fractional window label ("0.5_100um") has a dot.
     fig.tight_layout()
-    fig.savefig(out_base.with_suffix(".png"), dpi=300)
-    fig.savefig(out_base.with_suffix(".pdf"))
+    fig.savefig(out_base.parent / f"{out_base.name}.png", dpi=300)
+    fig.savefig(out_base.parent / f"{out_base.name}.pdf")
     plt.close(fig)

@@ -92,3 +92,14 @@ def test_plot_retention_multiwindow_bars_are_mean_retained_fraction(tmp_path, la
     assert [t.get_text() for t in ax.get_xticklabels()] == ["0–10 µm", "0–20 µm", "full depth"]
     assert ax.get_title() == "t"
     assert _saved(out_base) == [True, True]
+
+
+def test_fractional_window_names_keep_their_suffix(tmp_path):
+    """'0.5_10um' and '0.25_10um' used to both save as 'fig_auc_0.png' and overwrite."""
+    windows = [parse_window([0.5, 10]), parse_window([0.25, 10])]
+    rows = [_auc_row("A", 0, windows, 0.5)]
+    for w in windows:
+        plot_auc(rows, {"A": "#3F6AB3"}, w, tmp_path / f"fig_auc_{window_label(w)}")
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == ["fig_auc_0.25_10um.pdf", "fig_auc_0.25_10um.png",
+                     "fig_auc_0.5_10um.pdf", "fig_auc_0.5_10um.png"]
