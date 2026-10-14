@@ -190,24 +190,28 @@ def _parse_olympus_metadata(oif) -> dict:
             voxel_y = _safe_float(_section_get(section, "HeightConvertValue"), voxel_y)
 
         if "Axis" in section_str and "Parameters Common" in section_str:
-            axis_code = _section_get(section, "AxisCode")
-            if axis_code == "Z":
-                interval = _safe_float(_section_get(section, "Interval"), 0.0)
-                pix_unit = _section_get(section, "PixUnit") or ""
-                if interval > 0:
-                    if pix_unit.lower() == "nm":
-                        voxel_z = interval / 1000.0
-                    elif pix_unit.lower() == "um":
-                        voxel_z = interval
-                    else:
-                        warnings.warn(f"Olympus PixUnit {pix_unit!r} not recognised; "
-                                      "assuming nm (interval/1000). Verify the z voxel size.",
-                                      RuntimeWarning, stacklevel=2)
-                        voxel_z = interval / 1000.0
+            voxel_z = _olympus_z_um(section, voxel_z)
 
     meta["channel_names"] = channel_names
     meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
     return meta
+
+
+def _olympus_z_um(section, current: float) -> float:
+    """Z step (µm) from an Olympus axis section, or ``current`` if not a Z axis."""
+    if _section_get(section, "AxisCode") != "Z":
+        return current
+    interval = _safe_float(_section_get(section, "Interval"), 0.0)
+    pix_unit = _section_get(section, "PixUnit") or ""
+    if interval <= 0:
+        return current
+    if pix_unit.lower() == "um":
+        return interval
+    if pix_unit.lower() != "nm":
+        warnings.warn(f"Olympus PixUnit {pix_unit!r} not recognised; "
+                      "assuming nm (interval/1000). Verify the z voxel size.",
+                      RuntimeWarning, stacklevel=3)
+    return interval / 1000.0
 
 
 def _section_get(section, key: str):
@@ -236,6 +240,28 @@ def _load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
     return arr, meta
 
 
+def _czi_voxel_um(root) -> tuple[float, float, float]:
+    """(z, y, x) voxel size in µm from CZI ``Distance`` elements (metres)."""
+    size = {"X": 1.0, "Y": 1.0, "Z": 1.0}
+    for dist in root.iter("Distance"):
+        value_el = dist.find("Value")
+        axis_id = dist.get("Id", "")
+        if value_el is not None and value_el.text:
+            val_um = float(value_el.text) * 1e6
+            if axis_id in size:
+                size[axis_id] = val_um
+    return size["Z"], size["Y"], size["X"]
+
+
+def _czi_channel_names(root) -> list[str]:
+    """Channel names from ``Channel@Name``, falling back to ``DyeName`` text."""
+    names = [ch.get("Name", "") for ch in root.iter("Channel")]
+    names = [n for n in names if n]
+    if not names:
+        names = [dye.text for dye in root.iter("DyeName") if dye.text]
+    return names
+
+
 def _parse_czi_metadata(czi) -> dict:
     meta: dict = {
         "voxel_size_um": (1.0, 1.0, 1.0),
@@ -247,28 +273,8 @@ def _parse_czi_metadata(czi) -> dict:
         if xml_str:
             root = ET.fromstring(xml_str)
 
-            vz, vy, vx = 1.0, 1.0, 1.0
-            for dist in root.iter("Distance"):
-                axis_id = dist.get("Id", "")
-                value_el = dist.find("Value")
-                if value_el is not None and value_el.text:
-                    val_um = float(value_el.text) * 1e6
-                    if axis_id == "X":
-                        vx = val_um
-                    elif axis_id == "Y":
-                        vy = val_um
-                    elif axis_id == "Z":
-                        vz = val_um
-            meta["voxel_size_um"] = (vz, vy, vx)
-
-            for ch in root.iter("Channel"):
-                name = ch.get("Name", "")
-                if name:
-                    meta["channel_names"].append(name)
-            if not meta["channel_names"]:
-                for dye in root.iter("DyeName"):
-                    if dye.text:
-                        meta["channel_names"].append(dye.text)
+            meta["voxel_size_um"] = _czi_voxel_um(root)
+            meta["channel_names"] = _czi_channel_names(root)
     except Exception:
         pass
 

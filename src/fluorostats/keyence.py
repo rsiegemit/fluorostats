@@ -62,41 +62,63 @@ def parse_gci(gci_path) -> dict:
         "z_step_note": "Stack/Pitch read as 0.1-µm units; confirm against the acquisition GUI.",
     }
     with zipfile.ZipFile(gci_path) as z:
-
-        def read(name):
-            return z.read(name).decode("utf-8", "ignore")
-
         for name in z.namelist():
-            if name.endswith("Image/properties.xml"):
-                m = re.search(r'Calibration Type="System.Double">(-?\d+)', read(name))
-                if m:
-                    nm = _int64_to_double(m.group(1))
-                    if nm:
-                        meta["px_um"] = round(nm / 1000.0, 5)      # nm -> µm
-            elif name.endswith("Lens/properties.xml"):
-                m = re.search(r"<LensName[^>]*>([^<]+)", read(name))
-                if m:
-                    meta["objective"] = m.group(1)
-            elif name.endswith("Stack/properties.xml") and "RangeSelection" not in name:
-                x = read(name)
-                tn = re.search(r"TotalNumber[^>]*>(\d+)", x)
-                pitch = re.search(r"Pitch[^>]*>(\d+)", x)
-                if tn:
-                    meta["n_slices"] = int(tn.group(1))
-                if pitch:
-                    meta["z_step_um"] = int(pitch.group(1)) / 10.0
-            elif re.search(r"Channel(\d+)/properties.xml$", name):
-                idx = re.search(r"Channel(\d+)", name).group(1)
-                m = re.search(r"<Comment[^>]*>([^<]*)", read(name))
-                meta["channels"].setdefault(idx, {})["name"] = m.group(1) if m else f"CH{idx}"
-            elif re.search(r"Channel(\d+)/Shooting/Parameter/ExposureTime/properties.xml$", name):
-                idx = re.search(r"Channel(\d+)", name).group(1)
-                num = re.search(r"Numerator[^>]*>(\d+)", read(name))
-                den = re.search(r"Denominator[^>]*>(\d+)", read(name))
-                if num and den and int(den.group(1)):
-                    meta["channels"].setdefault(idx, {})["exposure_ms"] = \
-                        1000.0 * int(num.group(1)) / int(den.group(1))
+            handler = _gci_handler(name)
+            if handler is not None:
+                handler(name, z.read(name).decode("utf-8", "ignore"), meta)
     return meta
+
+
+def _gci_pixel_size(name: str, text: str, meta: dict) -> None:
+    m = re.search(r'Calibration Type="System.Double">(-?\d+)', text)
+    nm = _int64_to_double(m.group(1)) if m else None
+    if nm:
+        meta["px_um"] = round(nm / 1000.0, 5)      # nm -> µm
+
+
+def _gci_objective(name: str, text: str, meta: dict) -> None:
+    m = re.search(r"<LensName[^>]*>([^<]+)", text)
+    if m:
+        meta["objective"] = m.group(1)
+
+
+def _gci_stack(name: str, text: str, meta: dict) -> None:
+    tn = re.search(r"TotalNumber[^>]*>(\d+)", text)
+    pitch = re.search(r"Pitch[^>]*>(\d+)", text)
+    if tn:
+        meta["n_slices"] = int(tn.group(1))
+    if pitch:
+        meta["z_step_um"] = int(pitch.group(1)) / 10.0
+
+
+def _gci_channel_name(name: str, text: str, meta: dict) -> None:
+    idx = re.search(r"Channel(\d+)", name).group(1)
+    m = re.search(r"<Comment[^>]*>([^<]*)", text)
+    meta["channels"].setdefault(idx, {})["name"] = m.group(1) if m else f"CH{idx}"
+
+
+def _gci_exposure(name: str, text: str, meta: dict) -> None:
+    idx = re.search(r"Channel(\d+)", name).group(1)
+    num = re.search(r"Numerator[^>]*>(\d+)", text)
+    den = re.search(r"Denominator[^>]*>(\d+)", text)
+    if num and den and int(den.group(1)):
+        meta["channels"].setdefault(idx, {})["exposure_ms"] = \
+            1000.0 * int(num.group(1)) / int(den.group(1))
+
+
+def _gci_handler(name: str):
+    """The parser for one .gci archive entry, or None (first match wins)."""
+    if name.endswith("Image/properties.xml"):
+        return _gci_pixel_size
+    if name.endswith("Lens/properties.xml"):
+        return _gci_objective
+    if name.endswith("Stack/properties.xml") and "RangeSelection" not in name:
+        return _gci_stack
+    if re.search(r"Channel(\d+)/properties.xml$", name):
+        return _gci_channel_name
+    if re.search(r"Channel(\d+)/Shooting/Parameter/ExposureTime/properties.xml$", name):
+        return _gci_exposure
+    return None
 
 
 def _z_index(path: str) -> int:

@@ -53,6 +53,8 @@ DARK_PALETTE = {
 }
 
 
+# exception MOD-6: the body is one rcParams table (data, not logic); splitting it
+# would scatter related settings without making any of them easier to read.
 def apply_style(font_scale: float = 1.0) -> None:
     """Configure matplotlib for clean, modern publication figures.
 
