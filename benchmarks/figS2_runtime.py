@@ -261,7 +261,7 @@ CAPTION = (
     "validate.average_precision) are computed once per volume during benchmarking "
     "and are not part of per-frame analysis cost. (b) Determinism. Three "
     "representative fluorostats metrics (volume fraction, connectivity/Euler "
-    "number, lateral homogeneity) run N=20 times on the same BBBC024 volume return "
+    f"number, lateral homogeneity) run N={N_RUNS} times on the same BBBC024 volume return "
     "bit-identical values (run-to-run spread = 0; deviations plotted in parts per "
     "million). (c) Reproducibility. Run-to-run spread (CV%): fluorostats is fully "
     "deterministic on CPU (0.0), whereas trained deep-learning pipelines vary "

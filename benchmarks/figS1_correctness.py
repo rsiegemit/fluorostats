@@ -82,8 +82,8 @@ axA.set_xticklabels([labels_a[k] for k in order], fontsize=6.0)
 axA.set_ylabel("Euler number $\\chi$  /  component count")
 axA.set_ylim(-0.6, 7.8)
 axA.axhline(0, color="#333333", lw=0.6)
-n_pass = int(ta.shape[0])
-axA.text(0.98, 0.97, f"0 / {n_pass} phantoms with error", transform=axA.transAxes,
+n_err = int((~ta["PASS"]).sum())
+axA.text(0.98, 0.97, f"{n_err} / {len(ta)} phantoms with error", transform=axA.transAxes,
          ha="right", va="top", fontsize=6.0, color=GREEN, fontweight="bold")
 # the torus has chi = 0, so BOTH bars have zero height and the column reads as
 # missing data unless it is labelled explicitly (y=0.16 clears the two diamonds at y=1).
@@ -134,7 +134,10 @@ axB.set_xticks(xb)
 axB.set_xticklabels([f"depth {int(d)}" for d in depths])
 axB.set_ylabel("count")
 axB.set_ylim(0, 37)
-axB.text(0.40, 0.62, "exact at depth 2–3", transform=axB.transAxes,
+exact = tree[(tree.true_branches == tree.fs_n_branches)
+             & (tree.true_bifurcations == tree.fs_n_junction_nodes)].tree_depth
+assert list(exact) == list(range(exact.min(), exact.max() + 1)), "exact depths must be contiguous"
+axB.text(0.40, 0.62, f"exact at depth {exact.min()}–{exact.max()}", transform=axB.transAxes,
          ha="center", va="top", fontsize=6.0, color=GREEN, fontweight="bold")
 axB.legend(loc="upper left", fontsize=6.0, handlelength=1.4, borderpad=0.2,
            labelspacing=0.28, ncol=2, columnspacing=1.0,
@@ -148,6 +151,8 @@ z = A["zoom"].values
 # worst-case CV across BOTH acquisition regimes: a scheme is only truly
 # zoom-invariant if it stays flat in every regime, not just this one.
 cv_worst = cv.groupby("scheme")["CV_percent_across_zoom"].max()
+# bound stated for the fluorostats scheme: its worst-case CV rounded up to 0.1%
+fs_cv_bound = np.ceil(cv_worst["fluorostats_per_mm3"] * 10) / 10
 
 schemes = [
     ("fluorostats_per_mm3", "fluorostats (per mm$^3$)", BLUE, "o", "-"),
@@ -191,7 +196,7 @@ axC.set_xticklabels([f"{v:g}" for v in z])
 axC.legend(loc="lower left", fontsize=6.0, handlelength=2.0, borderpad=0.25,
            labelspacing=0.3, title="worst-case CV over both regimes",
            title_fontsize=6.0, ncol=2, columnspacing=1.2)
-axC.text(0.97, 0.94, "fluorostats invariant\n(CV ≤ 0.2% in both regimes)",
+axC.text(0.97, 0.94, f"fluorostats invariant\n(CV ≤ {fs_cv_bound:.1f}% in both regimes)",
          transform=axC.transAxes, ha="right", va="top", fontsize=6.0,
          color=BLUE, fontweight="bold")
 axC.text(0.97, 0.72, "three traces coincide exactly at 1.000",
@@ -207,6 +212,15 @@ _trees = tree.set_index("tree_depth")
 _fs_cv = cv[cv.scheme == "fluorostats_per_mm3"].set_index("regime")["CV_percent_across_zoom"]
 
 
+def _topo_result():
+    """'error is zero on all six phantoms', or the failing count, from the PASS column."""
+    words = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+    n, n_fail = len(topo), int((~topo["PASS"]).sum())
+    if n_fail == 0:
+        return f"error is zero on all {words[n] if n < len(words) else n} phantoms"
+    return f"{n_fail} of {n} phantoms fail"
+
+
 def _tree(depth):
     r = _trees.loc[depth]
     return r.true_branches, r.true_bifurcations, r.fs_n_branches, r.fs_n_junction_nodes
@@ -218,8 +232,8 @@ caption(
     "(a) Topology phantom battery. For a solid ball, 2/3/5 disjoint balls, a "
     "solid torus and a hollow spherical shell, the fluorostats Euler number "
     "chi (bars) and connected-component count (diamonds) match the analytic "
-    "expectation exactly (hatched = expected, filled = measured); error is zero "
-    "on all six phantoms. (b) Recursive skeleton trees. Measured branch and "
+    "expectation exactly (hatched = expected, filled = measured); "
+    f"{_topo_result()}. (b) Recursive skeleton trees. Measured branch and "
     "bifurcation counts equal the true values exactly at recursion depth 2 "
     f"({_tree(2)[0]} branches, {_tree(2)[1]} bifurcations) and depth 3 "
     f"({_tree(3)[0]}, {_tree(3)[1]}). At depth 4 the finest "
@@ -232,7 +246,7 @@ caption(
     "worst-case coefficient of variation across zoom over both acquisition "
     "regimes tested (fixed field of view and fixed voxel size); a scheme is "
     "only truly zoom-invariant if it stays flat in every regime. The "
-    "fluorostats per-mm3 density is invariant in both (CV <= 0.2%; "
+    f"fluorostats per-mm3 density is invariant in both (CV <= {fs_cv_bound:.1f}%; "
     f"{_fs_cv['A_fixed_FOV']:.1f}% fixed field of view, {_fs_cv['B_fixed_voxel']:.2f}% "
     "fixed voxel), whereas raw count, per-megavoxel and "
     "per-z-slice normalisations each drift, by up to two orders of magnitude, in "

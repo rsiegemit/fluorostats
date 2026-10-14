@@ -85,12 +85,13 @@ axc.bar(x-w/2, ph.len_err_pct, w, color=BLUE, edgecolor="#333333", lw=0.4, label
 _ytop = max(4.0, ph.len_err_pct.max()*1.6)   # headroom so the above-bar labels fit
 # annotate ON each bar (centred at x-w/2, just above its top), NOT offset to the right —
 # offsetting right pushed the depth-2 label out of panel (c) and onto panel (d)'s y label.
-for xi, h in zip(x, ph.len_err_pct.values):
-    axc.text(xi-w/2, h + _ytop*0.035, "vol. frac.\n0% (exact)", ha="center", va="bottom",
+for xi, h, vf in zip(x, ph.len_err_pct.values, ph.vf_err_pct.values):
+    axc.text(xi-w/2, h + _ytop*0.035, "vol. frac.\n" + ("0% (exact)" if vf == 0 else f"{vf:.1f}%"),
+             ha="center", va="bottom",
              fontsize=4.8, color=OKABE["green"], fontweight="bold", linespacing=1.05)
 axc.set_xticks(x)
 # prose "depth N" labels (tree_d1 -> depth 1), matching Fig S1b's naming
-axc.set_xticklabels([f"{p.replace('tree_d', 'depth ')}\nbranches {b}/{t} exact" for p,b,t in
+axc.set_xticklabels([f"{p.replace('tree_d', 'depth ')}\nbranches {b}/{t}{' exact' if b == t else ''}" for p,b,t in
     zip(ph.phantom, ph.fs_branches, ph.true_segments)], fontsize=5.0)
 axc.set_ylabel("error vs exact GT (%)")
 axc.set_ylim(0, _ytop)
@@ -131,6 +132,9 @@ for sp in axr.spines.values():
     sp.set_linewidth(0.5)
     sp.set_color("#999")
 
+# the caption states exact branch counts and volume fraction; hold it to the table
+assert (ph.fs_branches == ph.true_segments).all() and (ph.vf_err_pct == 0).all(), \
+    "b_vascular_phantom_3d.csv no longer exact: update the panel (c) caption"
 qualifying = list(rk.tool[rk.unbiased])   # tools whose bias test is not significant
 cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool REAVER benchmark "
  f"(n={rk.n_images.iloc[0]}): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "

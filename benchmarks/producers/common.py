@@ -41,6 +41,9 @@ DATA = Path(os.environ.get(
     "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[2] / "data" / "downloads")))
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 
+# Approximate BBBC039 pixel size (µm); the images carry no calibration.
+BBBC039_UM_PER_PX = 0.31
+
 # Global thresholds the comparison tables score: the library's registry plus
 # Minimum (Prewitt 1966), which the library does not offer as a binarize method.
 THRESHOLD_FNS = {**THRESHOLD_METHODS, "minimum": threshold_minimum}

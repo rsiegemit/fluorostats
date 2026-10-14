@@ -91,6 +91,8 @@ axc.set_ylim(0.20, 1.25)
 # real fluorostats.stats output on groups 1 vs 3, from the producer's contrast table
 st = pd.read_csv(R/"b_vascular_sproutangio_stats.csv", float_precision="round_trip")
 c13 = st[(st.group_a == 1) & (st.group_b == 3)].iloc[0]
+assert c13.n_a == c13.n_b, "panel text states one n per group"
+n_grp = int(c13.n_a)
 cd = c13.cliffs_delta
 fc_ratio = c13.fold_change_median
 fc_lo = c13.fc_ci_low
@@ -98,7 +100,7 @@ fc_hi = c13.fc_ci_high
 
 _cds = f"{cd:+.2f}".replace("-", "−")  # real minus, matching tick labels
 axc.text(0.02, 0.985,
-         f"VEGF 1 vs 3:\nMWU p = {c13.mwu_p:.3f}\nCliff’s δ = {_cds}\nFC {fc_ratio:.1f}× [{fc_lo:.1f}, {fc_hi:.1f}]\nBH q = {c13.bh_q:.3f}\n(illustrative, n = 4/group)",
+         f"VEGF 1 vs 3:\nMWU p = {c13.mwu_p:.3f}\nCliff’s δ = {_cds}\nFC {fc_ratio:.1f}× [{fc_lo:.1f}, {fc_hi:.1f}]\nBH q = {c13.bh_q:.3f}\n(illustrative, n = {n_grp}/group)",
          transform=axc.transAxes, va="top", ha="left", fontsize=5.0, color="#333",
          bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none"))
 panel(axc, "c", "statistics layer output")
@@ -109,19 +111,23 @@ panel(axc, "c", "statistics layer output")
 # identically for any perfectly-separated data. It lives in Methods / Limitations
 # and in fluorostats.power instead.
 
+# caption numbers read from the tables (never typed)
+mc = pd.read_csv(R/"b_homogeneity_multi_corr.csv")
+rho_abs = mc["spearman_gini_vs_ref"].abs()
+auc = mc["clustered_vs_uniform_AUC(gini)"].iloc[0]
 cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "(a) Three canonical spatial patterns (regular, random/CSR, clustered) with fluorostats' "
  "tile-based Gini index beneath each — the segmentation-free homogeneity metric increases from "
- "regular to clustered. (b) Across 50 synthetic fields spanning a regular→clustered sweep, the tile "
+ f"regular to clustered. (b) Across {len(cons)} synthetic fields spanning a regular→clustered sweep, the tile "
  "Gini tracks the consensus of five independently-computed spatial statistics (Clark–Evans "
  "nearest-neighbour, Ripley's K/L, Morisita, quadrat variance, gliding-box lacunarity): each point "
  "is one field (coloured regular→clustered), x = mean sign-aligned z-score of the five references, "
- "y = tile Gini; per-statistic |Spearman ρ| = 0.96–0.997, uniform-vs-clustered AUC = 1.0. "
+ f"y = tile Gini; per-statistic |Spearman ρ| = {rho_abs.min():g}–{rho_abs.max():g}, uniform-vs-clustered AUC = {auc:.1f}. "
  "(c) End-to-end statistics on a small VEGF dose experiment (SproutAngio, .czi): vessel "
  "volume fraction by dose (per-stack dots with a group-mean line), with the fluorostats.stats output "
  "computed live for VEGF 1 vs 3 — Mann–Whitney U, Cliff's δ, bootstrap fold-change CI and "
  "BH-FDR across contrasts — showing image→statistic with no manual export. This contrast is an "
- "illustrative toy example (n=4/group; Cliff's δ=−1.00 reflects complete separation), not a headline "
+ f"illustrative toy example (n={n_grp}/group; Cliff's δ={_cds} reflects complete separation), not a headline "
  "result.")
 save(fig, "fig5_homogeneity_stats", tight=False)
 caption("fig5_homogeneity_stats", cap)

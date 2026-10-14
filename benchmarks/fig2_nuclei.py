@@ -148,7 +148,9 @@ axb.set_yticks(range(len(fo)))
 axb.set_yticklabels(fo, fontsize=6.0)
 axb.set_xlabel("mean F1  (95% CI, n = 200)")
 axb.set_xlim(0.78, 0.955)
-axb.text(0.97, 0.06, "paired Δ excludes 0:\n"
+# whether both paired-difference CIs exclude 0, as the producer recorded it
+diffs_sig = all(str(ci.loc[f"{FS} - {t}", "diff_significant"]).startswith("YES") for t in ("StarDist", "Cellpose"))
+axb.text(0.97, 0.06, f"paired Δ {'excludes 0' if diffs_sig else 'CI spans 0'}:\n"
          f"−StarDist {ci.loc[f'{FS} - StarDist', 'mean_F1']:+.3f}\n"
          f"−Cellpose {ci.loc[f'{FS} - Cellpose', 'mean_F1']:+.3f}",
          transform=axb.transAxes, fontsize=5.0, color="#333", va="bottom", ha="right")
@@ -189,7 +191,7 @@ for row, (im, gt, stem) in enumerate(crops):
         if row == 0:
             ax.set_title(lab, fontsize=F.FS["title"])
         if col == 0 and row == 0:
-            F.scalebar(ax, 65, "20 µm")  # BBBC039 ~0.31 µm/px (approx, stated in caption)
+            F.scalebar(ax, round(20 / F.BBBC039_UM_PER_PX), "20 µm")
             panel(ax, "c", xanchor=0.0315)   # row-leader
 # (d) crossover — two directly-labelled line groups: fluorostats (blue) and the
 # classical-threshold envelope (grey), both collapsing under overlap while the DL
@@ -265,8 +267,8 @@ cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
  f"learning at n=100 values (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
  "purple). (b) Forest plot on the full n=200 test set (Table 1) vs validated DL (StarDist, Cellpose, "
- f"Omnipose): fluorostats {ci.loc[FS, 'mean_F1']:.3f} [{ci.loc[FS, 'CI_low']:.3f}, {ci.loc[FS, 'CI_high']:.3f}]; paired differences exclude zero. (c) Representative BBBC039 crops: raw, expert ground "
- "truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~0.31 µm/px). "
+ f"Omnipose): fluorostats {ci.loc[FS, 'mean_F1']:.3f} [{ci.loc[FS, 'CI_low']:.3f}, {ci.loc[FS, 'CI_high']:.3f}]; paired differences {'exclude zero' if diffs_sig else 'do not all exclude zero'}. (c) Representative BBBC039 crops: raw, expert ground "
+ f"truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~{F.BBBC039_UM_PER_PX} µm/px). "
  "(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75): all non-DL methods (grey; fluorostats blue) "
  "collapse while DL (dashed) holds ~0.96; red band = DL advantage. (e) fluorostats overlay on a "
  "well-separated (c00) and a crowded (c75) field, showing connected-component merging under overlap. "

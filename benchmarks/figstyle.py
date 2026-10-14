@@ -24,7 +24,7 @@ from fluorostats.pubfig import (  # noqa: E402,F401
     outline, panel, round_sig, scalebar,
 )
 from producers.common import (  # noqa: E402,F401
-    DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel,
+    BBBC039_UM_PER_PX, DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel,
     raw_otsu_cc, require,
 )
 

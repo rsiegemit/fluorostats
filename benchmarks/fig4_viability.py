@@ -43,7 +43,7 @@ cols = [BLUE if "attenuation" in m else GREY for m in bm.method]
 axa.hlines(y, 0, bm.rel_bias_pct, color=cols, lw=1.3, zorder=1)
 axa.scatter(bm.rel_bias_pct, y, color=cols, s=44, edgecolor="black", lw=0.4, zorder=3)
 for yi, rb in zip(y, bm.rel_bias_pct):
-    axa.text(rb + 0.8, yi, f"+{rb:.1f}%", va="center", fontsize=F.FS["annot"])
+    axa.text(rb + 0.8, yi, f"{rb:+.1f}%", va="center", fontsize=F.FS["annot"])
 axa.axvline(0, color="black", lw=0.6)
 axa.set_xlim(-1, 32)
 axa.set_ylim(-0.6, len(bm)-0.4)
@@ -110,7 +110,7 @@ dm_mid = binarize(dead[z], **seg)
 panels_c = [
     (F.composite2ch(live[z], dead[z]), "raw mid-plane\n(green live / magenta dead)"),
     (np.dstack([dm_mid*0.85, lm_mid*0.85, dm_mid*0.85]), "fluorostats\nclassification\n(grey = both, black = neither)"),
-    (F.composite2ch(live.max(0), dead.max(0)), f"MIP — 2D collapses\ndepth (+{rbias['MIP']:.0f}%)"),
+    (F.composite2ch(live.max(0), dead.max(0)), f"MIP — 2D collapses\ndepth ({rbias['MIP']:+.0f}%)"),
 ]
 for i,(img,ttl) in enumerate(panels_c):
     ax = fig.add_subplot(gs_c[i])
@@ -123,9 +123,9 @@ for i,(img,ttl) in enumerate(panels_c):
 
 cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (BioImage Archive "
  "S-BIAD2130), 2D/heuristic reductions overestimate the live fraction relative to the true voxelwise "
- f"3D value: mid-plane +{rbias['midplane_slice']:.1f}%, brightest-focus +{rbias['brightest_focus_slice']:.1f}%, "
- f"MIP +{rbias['MIP']:.1f}%, naive mean-of-slices +{rbias['mean_of_per_slice']:.1f}%; "
- f"attenuation-corrected 3D stays within +{rbias['attenuation_corrected_3D']:.1f}% (blue). (b) Per-z live fraction shows the depth "
+ f"3D value: mid-plane {rbias['midplane_slice']:+.1f}%, brightest-focus {rbias['brightest_focus_slice']:+.1f}%, "
+ f"MIP {rbias['MIP']:+.1f}%, naive mean-of-slices {rbias['mean_of_per_slice']:+.1f}%; "
+ f"attenuation-corrected 3D stays within {rbias['attenuation_corrected_3D']:+.1f}% (blue). (b) Per-z live fraction shows the depth "
  "gradient (raw) that a single 2D readout misses, and how attenuation correction flattens it. "
  "(c) On the published Kerkhoff Fiji Live/Dead macro's synthetic dataset (Zenodo 10395753, exact "
  "ground-truth viability), fluorostats live_dead_by_count(maxima; blue) reproduces the macro exactly "
