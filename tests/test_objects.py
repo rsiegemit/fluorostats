@@ -136,6 +136,21 @@ def test_watershed_split_min_size_filter():
     assert n == 1
 
 
+def _touching_discs() -> np.ndarray:
+    yy, xx = np.mgrid[:40, :60]
+    return ((yy - 20) ** 2 + (xx - 20) ** 2 < 100) | ((yy - 20) ** 2 + (xx - 37) ** 2 < 100)
+
+
+def test_watershed_split_min_size_keeps_the_split():
+    """Size filtering must not re-merge the touching objects watershed split."""
+    mask = _touching_discs()
+    _, n_all = objects.watershed_split(mask, min_size=0)
+    labels, n = objects.watershed_split(mask, min_size=10)
+    assert n_all == 2
+    assert n == 2
+    assert set(np.unique(labels)) == {0, 1, 2}
+
+
 def test_count_local_maxima_with_mask_and_smoothing():
     img = np.zeros((40, 40), np.float32)
     img[10, 10] = 100.0
