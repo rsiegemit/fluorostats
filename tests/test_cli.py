@@ -477,3 +477,39 @@ def test_rerun_removes_only_stale_outputs_it_owns(tmp_path):
     res = CliRunner().invoke(cli, args + ["--no-plots"])
     assert res.exit_code == 0, res.output
     assert sorted(p.name for p in plot_dir.iterdir()) == ["custom.png", "my_notes.txt"]
+
+
+def test_quant2d_records_calibration_crop_box_and_um2_cluster_areas(tmp_path, monkeypatch):
+    # quant2d dropped the loader's pixel size and the auto-crop box, so the µm² cluster
+    # areas never reached any output.
+    import pandas as pd
+    from fluorostats import io as iq_io
+
+    _make_dataset(tmp_path / "in", _blob_2d)
+    load_image = iq_io.load_image
+
+    def calibrated(path):
+        arr, meta = load_image(path)
+        return arr, {**meta, "voxel_size_um": (0.5, 0.5), "voxel_size_source": "y:file,x:file"}
+
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--no-overlays", "--no-plots"]
+    assert CliRunner().invoke(cli, args + ["--output", str(tmp_path / "raw")]).exit_code == 0
+    raw = pd.read_csv(tmp_path / "raw" / "per_file.csv")
+    assert (raw["voxel_size_um"] == "(1.0, 1.0)").all()
+    assert (raw["voxel_size_source"] == "y:default,x:default").all()
+    assert (raw["mean_cluster_area_um2"] == raw["mean_cluster_area_px"]).all()
+    assert raw["auto_crop_box"].str.fullmatch(r"\[\d+:\d+, \d+:\d+\]").all()
+
+    monkeypatch.setattr(iq_io, "load_image", calibrated)
+    res = CliRunner().invoke(cli, args + ["--output", str(tmp_path / "cal"), "--no-auto-crop"])
+    assert res.exit_code == 0, res.output
+    cal = pd.read_csv(tmp_path / "cal" / "per_file.csv")
+    assert (cal["voxel_size_um"] == "(0.5, 0.5)").all()
+    assert (cal["voxel_size_source"] == "y:file,x:file").all()
+    assert np.allclose(cal["mean_cluster_area_um2"], 0.25 * cal["mean_cluster_area_px"])
+    assert np.allclose(cal["median_cluster_area_um2"], 0.25 * cal["median_cluster_area_px"])
+    assert cal["auto_crop_box"].isna().all()                       # not cropped
+    # the existing columns keep their order; the record columns follow them
+    from fluorostats import report
+    assert list(cal.columns[:-5]) == ["file", "condition", "replicate", "shape",
+                                      "channel_used", *report.METRICS_2D]

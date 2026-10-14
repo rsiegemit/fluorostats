@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import math
 from pathlib import Path
 
 import click
@@ -260,16 +261,24 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
 def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict:
     """quant2d's per-file metrics (area fraction, clusters, coverage uniformity)."""
     arr, meta = iq_io.load_image(fpath)
+    crop_box = ""
     if auto_crop:   # crop microscope borders before channel selection
-        arr, _ = preprocess.auto_crop(arr)
+        arr, (y0, y1, x0, x1) = preprocess.auto_crop(arr)
+        crop_box = f"[{y0}:{y1}, {x0}:{x1}]"
     ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
     img, mask = _segment(arr[ch], **seg)
     if overlay_dir is not None:
         qc.overlay_2d(img, mask, overlay_dir / f"{fpath.stem}_overlay.png")
+    py, px = meta["voxel_size_um"]
     return {
         "shape": str(arr.shape),
+        "voxel_size_um": str(meta["voxel_size_um"]),
+        "voxel_size_source": meta.get("voxel_size_source", ""),
+        "auto_crop_box": crop_box,
         "channel_used": _channel_label(ch, meta["channel_names"]),
-        **metrics_2d.coverage_metrics(mask),
+        # sqrt(py * px): the side of a square pixel of the same area, so the µm²
+        # cluster areas are right for anisotropic pixels too
+        **metrics_2d.coverage_metrics(mask, pixel_size_um=math.sqrt(py * px)),
         **spatial.coverage_heterogeneity(mask),
     }
 
