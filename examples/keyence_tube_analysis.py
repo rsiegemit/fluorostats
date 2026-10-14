@@ -58,11 +58,18 @@ from skimage.measure import regionprops_table
 from skimage.morphology import skeletonize, remove_small_objects, remove_small_holes
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
-warnings.filterwarnings("ignore")
 
-from fluorostats.segment import binarize  # noqa: E402 - after the warnings filter on purpose
-from fluorostats.objects import centroid_homogeneity  # noqa: E402 - after the warnings filter on purpose
-from fluorostats import keyence, ring, texture, objects, spatial  # noqa: E402 - after the warnings filter on purpose
+from fluorostats.segment import binarize
+from fluorostats.metrics_3d import fov_volume_mm3
+from fluorostats.objects import centroid_homogeneity
+from fluorostats.pubfig import imnorm
+from fluorostats.skeleton import n_junction_nodes
+from fluorostats.stats import coefficient_of_variation
+from fluorostats import keyence, ring, texture, objects, spatial
+
+# Calibration assumed when the .gci metadata lacks it (announced with a warning).
+DEFAULT_PX_UM = 0.4
+DEFAULT_Z_STEP_UM = 2.5
 
 
 # --------------------------------------------------------------------------- #
@@ -73,8 +80,12 @@ def load_stack(folder, downsample: int = 3):
     arr, meta = keyence.load_keyence_stack(folder, downsample)
     if arr.shape[0] < 2:
         raise ValueError(f"expected >=2 channels (DAPI, GFP), got {arr.shape[0]}")
-    meta["px_um"] = meta.get("px_um") or 0.4
-    meta["z_step_um"] = meta.get("z_step_um") or 2.5
+    meta = dict(meta)
+    for key, default in (("px_um", DEFAULT_PX_UM), ("z_step_um", DEFAULT_Z_STEP_UM)):
+        if not meta.get(key):
+            warnings.warn(f"{folder}: no {key} in the Keyence metadata; assuming {default} µm, so every "
+                          "calibrated length, area, volume and density uses it.", RuntimeWarning, stacklevel=2)
+            meta[key] = default
     meta["vox_z_um"] = meta.get("vox_z_um") or meta["z_step_um"]
     meta["vox_xy_um"] = meta.get("vox_xy_um") or round(meta["px_um"] * downsample, 4)
     return arr[0], arr[1], meta
@@ -98,8 +109,8 @@ def analyze_nuclei(dapi, vox):
     if n:
         markers[tuple(peaks.T)] = np.arange(1, n + 1)
     lab = watershed(-sm, markers, mask=bw)
-    imaged_mm3 = dapi.size * vx * vy * vz / 1e9
-    out = {"nuclei_count": int(n), "density_per_mm3": round(n / imaged_mm3, 1),
+    imaged_mm3 = fov_volume_mm3(dapi.shape, vox)
+    out = {"nuclei_count": int(n), "density_per_mm3": round(objects.object_density_per_mm3(n, dapi.shape, vox), 1),
            "imaged_volume_mm3": round(imaged_mm3, 4), "dapi_area_fraction_pct": round(100 * bw.mean(), 2)}
     if n:
         props = pd.DataFrame(regionprops_table(lab, properties=["area", "equivalent_diameter"]))
@@ -107,7 +118,7 @@ def analyze_nuclei(dapi, vox):
         diam_um = props["equivalent_diameter"] * (vx * vy * vz) ** (1 / 3)
         out.update({"nucleus_vol_um3_median": round(float(vol_um3.median()), 1),
                     "nucleus_diam_um_median": round(float(diam_um.median()), 1),
-                    "nucleus_size_cv_pct": round(100 * float(vol_um3.std() / max(vol_um3.mean(), 1e-9)), 1)})
+                    "nucleus_size_cv_pct": round(100 * coefficient_of_variation(vol_um3, ddof=1), 1)})
         gini = centroid_homogeneity(peaks.astype(float), dapi.shape).get("centroid_gini")
         out["spatial_gini"] = round(float(gini), 3) if gini is not None else None
     return out, lab, bw, peaks
@@ -142,12 +153,12 @@ def analyze_wall_lumen(dapi, vox, band_slices):
     vz, vy, vx = vox
     mip = dapi[band_slices].max(0)
     mask = mip > np.percentile(mip, 80)
-    mask = remove_small_objects(mask, 64)
+    mask = remove_small_objects(mask, max_size=64)
     mask = ndi.binary_closing(mask, iterations=3)
     coverage = 100 * mask.mean()
     filled = ndi.binary_fill_holes(mask)
     holes = filled & ~mask                                   # enclosed voids
-    holes = remove_small_objects(holes, 64)
+    holes = remove_small_objects(holes, max_size=64)
     lab, n = ndi.label(holes)
     lumen_area = 0.0
     if n:
@@ -167,11 +178,10 @@ def analyze_gfp(gfp, dapi_bw, vox):
     vz, vy, vx = vox
     mip = gfp.max(0)
     mask = mip > np.percentile(mip, 85)
-    mask = remove_small_holes(remove_small_objects(mask, 64), 64)
+    mask = remove_small_holes(remove_small_objects(mask, max_size=64), max_size=64)
     skel = skeletonize(mask)
-    # junctions: skeleton pixels with >=3 neighbours
-    nb = ndi.convolve(skel.astype(np.uint8), np.ones((3, 3)), mode="constant") - 1
-    junctions = int(((skel) & (nb >= 3)).sum())
+    # junction nodes (adjacent junction pixels merged), the AngioTool/REAVER definition
+    junctions = n_junction_nodes(skel)
     area_mm2 = mip.size * vx * vy / 1e6
     dapi_cov = dapi_bw.max(0)
     overlap = 100 * (mask & dapi_cov).sum() / max(mask.sum(), 1)
@@ -288,22 +298,17 @@ def analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox):
 # --------------------------------------------------------------------------- #
 # Figures
 # --------------------------------------------------------------------------- #
-def _norm(m, lo=1, hi=99.7):
-    a, b = np.percentile(m, [lo, hi])
-    return np.clip((m - a) / (b - a + 1e-9), 0, 1)
-
-
 def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
     (_, mip_d, cmask, holes, radial) = wall
     (_, gmip, gmask, skel) = gfp_res
     vx = out["_vox"][2]
     # A. overview
     fig, ax = plt.subplots(1, 4, figsize=(14, 3.4))
-    ax[0].imshow(_norm(dapi.max(0)), cmap="gray")
+    ax[0].imshow(imnorm(dapi.max(0), hi=99.7), cmap="gray")
     ax[0].set_title("DAPI (nuclei) MIP")
-    ax[1].imshow(_norm(gfp.max(0)), cmap="gray")
+    ax[1].imshow(imnorm(gfp.max(0), hi=99.7), cmap="gray")
     ax[1].set_title("GFP MIP")
-    mg = np.dstack([_norm(dapi.max(0)), _norm(gfp.max(0)), _norm(dapi.max(0)) * 0.3])
+    mg = np.dstack([imnorm(dapi.max(0), hi=99.7), imnorm(gfp.max(0), hi=99.7), imnorm(dapi.max(0), hi=99.7) * 0.3])
     ax[2].imshow(np.clip(mg, 0, 1))
     ax[2].set_title("merge (R=DAPI G=GFP)")
     for a in ax[:3]:
@@ -338,9 +343,9 @@ def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
     plt.close(fig)
     # C. wall / lumen
     fig, ax = plt.subplots(1, 3, figsize=(11, 3.4))
-    ax[0].imshow(_norm(mip_d), cmap="gray")
+    ax[0].imshow(imnorm(mip_d, hi=99.7), cmap="gray")
     ax[0].set_title("cellular MIP (wall band)")
-    ov = np.dstack([_norm(mip_d)] * 3)
+    ov = np.dstack([imnorm(mip_d, hi=99.7)] * 3)
     ov[cmask] = [0.1, 0.5, 0.9]
     ov[holes] = [1, 0.3, 0.1]
     ax[1].imshow(ov)
@@ -357,9 +362,9 @@ def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
     plt.close(fig)
     # D. GFP network
     fig, ax = plt.subplots(1, 2, figsize=(8, 3.4))
-    ax[0].imshow(_norm(gmip), cmap="gray")
+    ax[0].imshow(imnorm(gmip, hi=99.7), cmap="gray")
     ax[0].set_title("GFP MIP")
-    ov = np.dstack([_norm(gmip)] * 3)
+    ov = np.dstack([imnorm(gmip, hi=99.7)] * 3)
     ov[skel] = [0.1, 1, 0.3]
     ax[1].imshow(ov)
     ax[1].set_title(f"GFP skeleton\n{out['gfp_coverage_pct']}% cov  {out.get('gfp_skeleton_junctions_per_mm2')}/mm² junctions")
@@ -408,14 +413,20 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
 
 
 def batch(samples: dict, out_dir, downsample: int = 3, geometry: str | None = None):
+    """Analyse every sample folder and write the cross-sample table. A sample that
+    fails is kept as a row whose ``error`` column says why (ERR-3), not dropped."""
     out_dir = Path(out_dir)
     rows = []
     for name, folder in samples.items():
         try:
-            rows.append(analyze_folder(folder, Path(out_dir) / name, downsample,
-                                       name=name, geometry=geometry))
-        except Exception as e:
+            rows.append({**analyze_folder(folder, Path(out_dir) / name, downsample,
+                                          name=name, geometry=geometry), "error": ""})
+        except Exception as e:  # one bad sample must not stop the batch; recorded in its row
             print(f"[{name}] FAILED: {type(e).__name__}: {e}")
+            rows.append({"sample": name, "error": f"{type(e).__name__}: {e}"})
+    n_failed = sum(bool(r["error"]) for r in rows)
+    if n_failed:
+        warnings.warn(f"{n_failed} of {len(rows)} samples failed; see the 'error' column", RuntimeWarning, stacklevel=2)
     if rows:
         df = pd.DataFrame(rows)
         df.to_csv(Path(out_dir) / "ALL_samples_summary.csv", index=False)
