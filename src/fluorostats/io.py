@@ -47,6 +47,32 @@ def _reader(package: str):
     return _require(package, extra)
 
 
+def _valid_size(val) -> bool:
+    """True when ``val`` is a usable (positive, numeric) physical size."""
+    return _safe_float(val, -1.0) > 0
+
+
+def _record_calibration(meta: dict, axes: str, path: Path) -> None:
+    """Record which voxel axes came from the file and warn about defaulted ones.
+
+    Loaders note the axes they read in ``meta["_read_axes"]``; every other axis
+    of ``voxel_size_um`` is the 1.0 µm placeholder. Sets ``voxel_size_source``
+    (e.g. ``"z:file,y:default,x:default"``) and warns when any axis defaulted,
+    because calibrated lengths, areas, volumes and densities along it are then
+    in pixel units. Values in ``voxel_size_um`` are not changed.
+    """
+    read = meta.pop("_read_axes", set())
+    meta["voxel_size_source"] = ",".join(
+        f"{a}:{'file' if a in read else 'default'}" for a in axes)
+    missing = [a for a in axes if a not in read]
+    if missing:
+        warnings.warn(
+            f"{path.name}: no {'/'.join(missing)} calibration found in the file; assuming "
+            "1.0 µm per pixel on that axis, so lengths, areas, volumes and densities along "
+            "it are in pixel units. Check voxel_size_um.",
+            RuntimeWarning, stacklevel=3)
+
+
 def _require(package: str, extra: str):
     """Import a package or raise a helpful install message."""
     import importlib
@@ -106,6 +132,9 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
         arr, meta = keyence.load_keyence_stack(path)
         px, zs = meta.get("px_um") or 1.0, meta.get("z_step_um") or 1.0
         meta["voxel_size_um"] = (zs, px, px)
+        meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
+            {"z"} if meta.get("z_step_um") else set())
+        _record_calibration(meta, "zyx", path)
         chd = meta.get("channels") or {}
         meta["channel_names"] = [chd.get(str(i), {}).get("name", f"CH{i}") for i in range(arr.shape[0])]
         return arr, meta
@@ -118,7 +147,9 @@ def load_volume(path: Path) -> tuple[np.ndarray, dict]:
             f"Unsupported volume format: {suffix}\n"
             f"Supported: {', '.join(sorted(VOLUME_SUFFIXES))}"
         )
-    return fmt.volume(path)
+    arr, meta = fmt.volume(path)
+    _record_calibration(meta, "zyx", path)
+    return arr, meta
 
 
 def load_image(path: Path) -> tuple[np.ndarray, dict]:
@@ -128,7 +159,9 @@ def load_image(path: Path) -> tuple[np.ndarray, dict]:
 
     fmt = FORMATS.get(suffix)
     loader = fmt.image if fmt is not None and fmt.image is not None else _load_standard_image
-    return loader(path)
+    arr, meta = loader(path)
+    _record_calibration(meta, "yx", path)
+    return arr, meta
 
 
 def supported_formats() -> dict[str, str]:
@@ -176,6 +209,7 @@ def _parse_olympus_metadata(oif) -> dict:
 
     voxel_x, voxel_y, voxel_z = 1.0, 1.0, 1.0
     channel_names: list[str] = []
+    read: set[str] = set()
 
     for section_name, section in settings.items():
         section_str = str(section_name)
@@ -186,25 +220,32 @@ def _parse_olympus_metadata(oif) -> dict:
                 channel_names.append(dye)
 
         if section_str == "Reference Image Parameter":
-            voxel_x = _safe_float(_section_get(section, "WidthConvertValue"), voxel_x)
-            voxel_y = _safe_float(_section_get(section, "HeightConvertValue"), voxel_y)
+            wx, hy = _section_get(section, "WidthConvertValue"), _section_get(section, "HeightConvertValue")
+            voxel_x = _safe_float(wx, voxel_x)
+            voxel_y = _safe_float(hy, voxel_y)
+            read |= {a for a, v in (("x", wx), ("y", hy)) if _valid_size(v)}
 
         if "Axis" in section_str and "Parameters Common" in section_str:
-            voxel_z = _olympus_z_um(section, voxel_z)
+            z = _olympus_z_um(section)
+            if z is not None:
+                voxel_z = z
+                read.add("z")
 
     meta["channel_names"] = channel_names
     meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
+    meta["_read_axes"] = read
     return meta
 
 
-def _olympus_z_um(section, current: float) -> float:
-    """Z step (µm) from an Olympus axis section, or ``current`` if not a Z axis."""
+def _olympus_z_um(section) -> float | None:
+    """Z step (µm) from an Olympus axis section; None unless it is a Z axis with
+    a positive interval."""
     if _section_get(section, "AxisCode") != "Z":
-        return current
+        return None
     interval = _safe_float(_section_get(section, "Interval"), 0.0)
     pix_unit = _section_get(section, "PixUnit") or ""
     if interval <= 0:
-        return current
+        return None
     if pix_unit.lower() == "um":
         return interval
     if pix_unit.lower() != "nm":
@@ -240,9 +281,11 @@ def _load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
     return arr, meta
 
 
-def _czi_voxel_um(root) -> tuple[float, float, float]:
-    """(z, y, x) voxel size in µm from CZI ``Distance`` elements (metres)."""
+def _czi_voxel_um(root):
+    """(z, y, x) voxel size in µm from CZI ``Distance`` elements (metres), and the
+    set of axes it found."""
     size = {"X": 1.0, "Y": 1.0, "Z": 1.0}
+    read: set[str] = set()
     for dist in root.iter("Distance"):
         value_el = dist.find("Value")
         axis_id = dist.get("Id", "")
@@ -250,7 +293,8 @@ def _czi_voxel_um(root) -> tuple[float, float, float]:
             val_um = float(value_el.text) * 1e6
             if axis_id in size:
                 size[axis_id] = val_um
-    return size["Z"], size["Y"], size["X"]
+                read.add(axis_id.lower())
+    return (size["Z"], size["Y"], size["X"]), read
 
 
 def _czi_channel_names(root) -> list[str]:
@@ -273,7 +317,7 @@ def _parse_czi_metadata(czi) -> dict:
         if xml_str:
             root = ET.fromstring(xml_str)
 
-            meta["voxel_size_um"] = _czi_voxel_um(root)
+            meta["voxel_size_um"], meta["_read_axes"] = _czi_voxel_um(root)
             meta["channel_names"] = _czi_channel_names(root)
     except Exception:
         pass
@@ -307,6 +351,7 @@ def _parse_nd2_metadata(f) -> dict:
     try:
         if hasattr(f, "voxel_size"):
             vs = f.voxel_size()
+            meta["_read_axes"] = {a for a in "zyx" if _valid_size(getattr(vs, a, None))}
             meta["voxel_size_um"] = (
                 _safe_float(getattr(vs, "z", 1.0), 1.0),
                 _safe_float(getattr(vs, "y", 1.0), 1.0),
@@ -376,6 +421,8 @@ def _parse_lif_metadata(img) -> dict:
             voxel_y = 1.0 / scale[1] * 1e6 if len(scale) > 1 and scale[1] > 0 else voxel_x
             voxel_z = 1.0 / scale[2] * 1e6 if len(scale) > 2 and scale[2] > 0 else 1.0
             meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
+            meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
+                                  if len(scale) > i and scale[i] and scale[i] > 0}
     except Exception:
         pass
 
@@ -424,6 +471,8 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
             y = _safe_float(pixels.get("PhysicalSizeY"), 1.0)
             z = _safe_float(pixels.get("PhysicalSizeZ"), 1.0)
             meta["voxel_size_um"] = (z, y, x)
+            meta["_read_axes"] = {a for a in "xyz"
+                                  if _valid_size(pixels.get(f"PhysicalSize{a.upper()}"))}
 
             for ch in pixels.findall("{*}Channel"):
                 name = ch.get("Name", "") or ch.get("Fluor", "")
@@ -442,6 +491,7 @@ def _parse_imagej_metadata(ij_meta: dict, meta: dict) -> dict:
                 meta["voxel_size_um"][1],
                 meta["voxel_size_um"][2],
             )
+            meta["_read_axes"] = {"z"}   # ImageJ x/y resolution tags are not read
     except Exception:
         pass
     return meta

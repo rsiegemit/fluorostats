@@ -213,3 +213,38 @@ def test_ome_metadata_channel_name_append():
     out = io._parse_ome_metadata(ome_xml, meta)
     assert out["channel_names"] == ["EGFP", "mCherry"]
     assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
+
+
+def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
+    # ImageJ TIFFs carry z spacing but their x/y resolution is not read: the
+    # defaulted axes are recorded and announced, never silently taken as microns.
+    import warnings
+
+    import tifffile
+
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
+                     metadata={"spacing": 2.5, "axes": "ZCYX"})
+    with pytest.warns(RuntimeWarning, match="no y/x calibration"):
+        _, meta = load_volume(p)
+    assert meta["voxel_size_source"] == "z:file,y:default,x:default"
+    assert meta["voxel_size_um"] == (2.5, 1.0, 1.0)
+
+    ome = tmp_path / "ome.tif"
+    tifffile.imwrite(ome, np.zeros((3, 8, 8), np.uint16), ome=True,
+                     metadata={"axes": "ZYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5,
+                               "PhysicalSizeZ": 2.0})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")          # fully calibrated: no warning
+        _, meta2 = load_volume(ome)
+    assert meta2["voxel_size_source"] == "z:file,y:file,x:file"
+
+
+def test_image_without_calibration_warns_for_both_axes(tmp_path):
+    import imageio.v3 as iio
+
+    p = tmp_path / "a.png"
+    iio.imwrite(p, np.zeros((8, 8), np.uint8))
+    with pytest.warns(RuntimeWarning, match="no y/x calibration"):
+        _, meta = load_image(p)
+    assert meta["voxel_size_source"] == "y:default,x:default"
