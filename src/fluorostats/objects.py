@@ -370,7 +370,7 @@ def centroid_homogeneity(
     n_obj = centroids.shape[0]
     if n_obj == 0:
         return {"centroid_gini": float("nan"), "centroid_cv": float("nan"), "n_objects": 0}
-    counts = tile_point_density(centroids, tuple(shape_zyx[-2:]), grid=(tiles, tiles)).ravel()
+    counts = tile_point_density(centroids, (shape_zyx[-2], shape_zyx[-1]), grid=(tiles, tiles)).ravel()
     return {
         "centroid_gini": float(gini(counts)),
         "centroid_cv": float(coefficient_of_variation(counts)),

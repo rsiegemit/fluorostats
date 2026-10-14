@@ -39,6 +39,7 @@ def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None,
           threshold_scale: float = 1.0, min_size: int = AREA_MIN_SIZE) -> np.ndarray:
     if mask is not None:
         return mask > 0
+    assert channel is not None  # callers pass a channel whenever they pass no mask
     return binarize(channel, method=method, threshold_scale=threshold_scale,
                     min_size=min_size)
 
@@ -61,7 +62,7 @@ _COUNTERS = {"cc": _count_cc, "watershed": _count_watershed, "maxima": _count_ma
 COUNT_METHODS = tuple(_COUNTERS)
 
 
-def live_ratio(n_live: float, n_dead: float) -> float:
+def live_ratio(n_live: float | np.integer, n_dead: float | np.integer) -> float:
     """Viability ``live / (live + dead)``; NaN when there is nothing to count."""
     total = n_live + n_dead
     return float(n_live / total) if total > 0 else float("nan")
@@ -325,7 +326,7 @@ def attenuation_correct(
         raise ValueError(f"reference must be one of {references}, got {reference!r}")
     vol = volume.astype(np.float32)
     axes = tuple(a for a in range(vol.ndim) if a != z_axis)
-    slice_means = vol.mean(axis=axes)
+    slice_means: np.ndarray = vol.mean(axis=axes)
     if reference == "max":
         ref = slice_means.max()
     elif reference == "first":

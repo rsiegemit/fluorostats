@@ -77,7 +77,7 @@ def tile_point_density(
     """
     gy, gx = grid
     ny, nx = shape
-    out = np.zeros((gy, gx), dtype=float)
+    out: np.ndarray = np.zeros((gy, gx), dtype=float)
     pts = np.asarray(points_yx, dtype=float)
     if pts.shape[0]:
         iy = np.clip((pts[:, -2] / (ny / gy)).astype(int), 0, gy - 1)

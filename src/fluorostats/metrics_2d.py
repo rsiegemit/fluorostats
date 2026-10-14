@@ -60,7 +60,7 @@ def coverage_metrics(
             "median_cluster_area_um2": 0.0,
         }
 
-    component_sizes = np.bincount(labeled.ravel())
+    component_sizes: np.ndarray = np.bincount(labeled.ravel())
     # Index 0 is background, skip it
     fg_sizes = component_sizes[1:]
     largest = int(fg_sizes.max())

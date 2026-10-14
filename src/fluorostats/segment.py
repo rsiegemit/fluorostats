@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from skimage.filters import (
@@ -23,7 +25,7 @@ from skimage.morphology import (
 from .preprocess import background_subtract, denoise
 
 # Global thresholding algorithms fluorostats implements (all in-library).
-THRESHOLD_METHODS = {
+THRESHOLD_METHODS: dict[str, Callable[..., Any]] = {
     "otsu": threshold_otsu,
     "li": threshold_li,
     "isodata": threshold_isodata,
@@ -161,7 +163,8 @@ def binarize(
             # max_size removes objects of that size *or fewer*; the old min_size
             # removed only *smaller* ones. min_size - 1 keeps the documented meaning
             # ("smaller objects are removed") identical on every skimage version.
-            mask = remove_small_objects(mask, max_size=min_size - 1)  # skimage >= 0.26
+            # skimage >= 0.26 (its < 0.26 annotations lack max_size: mypy flags it there only)
+            mask = remove_small_objects(mask, max_size=min_size - 1)  # type: ignore[call-arg, unused-ignore]
         except TypeError:  # pragma: no cover - environment-gated: runs only on skimage < 0.26
             mask = remove_small_objects(mask, min_size=min_size)  # skimage < 0.26
 

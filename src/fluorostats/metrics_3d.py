@@ -53,10 +53,10 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
     if total_fg == 0 or n_comp == 0:
         lcf = 0.0
     else:
-        component_sizes = np.bincount(labeled.ravel())
+        component_sizes: np.ndarray = np.bincount(labeled.ravel())
         # Index 0 is background, skip it
         largest = int(component_sizes[1:].max()) if len(component_sizes) > 1 else 0
-        lcf = largest / total_fg
+        lcf = float(largest / total_fg)
 
     return {
         "n_components": n_comp,

@@ -214,13 +214,13 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
                if k not in ("group", "stack", "voxel_size_source", "regime_method")]
     groups = [g["name"] for g in m["groups"]]
     with open(out / "viability_group_summary.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["group", "n", "metric", "mean", "sem"])
+        sw = csv.writer(f)
+        sw.writerow(["group", "n", "metric", "mean", "sem"])
         for g in groups:
             gr = [r for r in rows if r["group"] == g]
             for mk in metrics:
                 mean, sem, n = _mean_sem([r[mk] for r in gr])
-                w.writerow([g, n, mk, f"{mean:.5g}", f"{sem:.5g}"])
+                sw.writerow([g, n, mk, f"{mean:.5g}", f"{sem:.5g}"])
 
     _print_summary(rows, groups)
     print(f"\nOutputs written to {out}/")
