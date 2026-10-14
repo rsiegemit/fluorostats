@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import tifffile
 
-from common import RESULTS, bbbc024_volumes
+from common import bbbc024_volumes, write_table
 from fluorostats.metrics_3d import fov_volume_mm3
 from fluorostats.objects import object_density_per_mm3
 from fluorostats.stats import coefficient_of_variation
@@ -24,6 +24,7 @@ from fluorostats.stats import coefficient_of_variation
 NATIVE_VOXEL_UM = (1.0, 0.5, 0.5)  # (z, y, x) µm per voxel assigned at zoom 1.0
 ZOOM_FACTORS = (0.5, 0.75, 1.0, 1.5, 2.0, 3.0)
 FOV_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
+PARAMS = {"native_voxel_um": NATIVE_VOXEL_UM, "zoom_factors": ZOOM_FACTORS, "fov_fractions": FOV_FRACTIONS}
 SCHEMES = ["fluorostats_per_mm3", "raw_count", "per_megavoxel", "per_mm2_area", "per_z_slice"]
 
 
@@ -67,12 +68,12 @@ def main():
     native_shape = tuple(int(s) for s in gt.shape)
     count = int(len(np.unique(gt)) - 1)
     df = pd.DataFrame(regime_a(native_shape, count) + regime_b(native_shape, count))
-    df.to_csv(RESULTS / "b_density_normalization.csv", index=False)
+    write_table(df, "b_density_normalization", PARAMS)
     summ = pd.DataFrame([{"regime": regime, "scheme": col,
                           "CV_percent_across_zoom": round(coefficient_of_variation(sub[col].values, ddof=0) * 100, 3),
                           "mean_value": round(float(sub[col].mean()), 4)}
                          for regime, sub in df.groupby("regime") for col in SCHEMES])
-    summ.to_csv(RESULTS / "b_density_normalization_cv.csv", index=False)
+    write_table(summ, "b_density_normalization_cv", PARAMS)
     print(summ.to_string(index=False))
 
 

@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile
-from common import DATA, RESULTS, require, threshold_cc, thresholds
+from common import DATA, require, threshold_cc, thresholds, write_table
 from fluorostats.agreement import lins_ccc
 from fluorostats.objects import label_3d
 from fluorostats.segment import binarize
@@ -61,7 +61,8 @@ def load_pairs():
 
 def main():
     acc = {m: {"f1": [], "prec": [], "rec": [], "pred": [], "gt": []} for m in METHODS}
-    for img, gt in load_pairs():
+    pairs = load_pairs()
+    for img, gt in pairs:
         for mname, fn in METHODS.items():
             pred = fn(img)
             res = instance_f1(pred, gt, iou_threshold=0.5)
@@ -83,7 +84,8 @@ def main():
     rows.sort(key=lambda r: r["mean_f1@0.5"], reverse=True)
     df = pd.DataFrame(rows)
     df.insert(0, "rank", range(1, len(df) + 1))
-    df.to_csv(RESULTS / "b_dsb2018.csv", index=False, lineterminator="\r\n")  # csv-module line endings of the committed table
+    write_table(df, "b_dsb2018", {"min_size": MIN_SIZE, "iou_threshold": 0.5, "n_images": len(pairs)},
+                lineterminator="\r\n")  # csv-module line endings of the committed table
     print(df.to_string(index=False))
 
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import RESULTS
+from common import write_table
 from fluorostats.skeleton import skeleton_metrics
 
 
@@ -53,7 +53,7 @@ def main():
                      "branch_match": abs(m["n_branches"] - nb) <= 1,
                      "bifurcation_match": abs(m["n_junction_nodes"] - nbif) <= 1})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_skeleton_tree.csv", index=False)
+    write_table(df, "b_skeleton_tree", {"depths": [2, 3, 4], "min_branch_length_um": 4})
     print(df.to_string(index=False))
 
 

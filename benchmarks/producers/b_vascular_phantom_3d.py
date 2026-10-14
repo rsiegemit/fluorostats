@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import RESULTS
+from common import write_table
 from fluorostats.metrics_3d import volume_fraction
 from fluorostats.skeleton import skeleton_metrics
 
@@ -65,7 +65,7 @@ def main():
                      "true_vf": round(true_vf, 4), "fs_vf": round(float(vf), 4),
                      "vf_err_pct": round(abs(vf - true_vf) / true_vf * 100, 1)})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_vascular_phantom_3d.csv", index=False)
+    write_table(df, "b_vascular_phantom_3d", {"depths": [1, 2], "radius_vox": 3})
     print(df.to_string(index=False))
 
 

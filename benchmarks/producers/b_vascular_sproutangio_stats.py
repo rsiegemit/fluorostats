@@ -12,7 +12,7 @@ from itertools import combinations
 
 import pandas as pd
 
-from common import RESULTS
+from common import RESULTS, write_table
 from fluorostats.stats import bh_fdr, bootstrap_fold_change_ci, cliffs_delta, mann_whitney
 
 N_BOOT = 5000
@@ -31,7 +31,7 @@ def main():
                      "fc_ci_low": fc["ci_low"], "fc_ci_high": fc["ci_high"]})
     df = pd.DataFrame(rows)
     df.insert(5, "bh_q", bh_fdr(df["mwu_p"].values))
-    df.to_csv(RESULTS / "b_vascular_sproutangio_stats.csv", index=False)
+    write_table(df, "b_vascular_sproutangio_stats", {"n_boot": N_BOOT, "fold_change_seed": 0})
     print(df.to_string(index=False))
 
 

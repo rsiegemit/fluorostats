@@ -9,14 +9,14 @@ from __future__ import annotations
 import pandas as pd
 from scipy import stats as sps
 
-from common import RESULTS
+from common import RESULTS, write_table
 
 
 def main():
     m = pd.read_csv(RESULTS / "b_ve_metrics.csv")
     rho = sps.spearmanr(m.VesselExpress_VF.values, m.fluorostats_VF.values).statistic
     df = pd.DataFrame([{"n_volumes": len(m), "spearman_rho": rho}])
-    df.to_csv(RESULTS / "b_ve_agreement.csv", index=False)
+    write_table(df, "b_ve_agreement", {})
     print(df.to_string(index=False))
 
 

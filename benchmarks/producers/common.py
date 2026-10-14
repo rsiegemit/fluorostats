@@ -8,15 +8,22 @@ Each producer in this folder regenerates one committed table in
     PYTHONPATH=src python benchmarks/producers/<table_stem>.py
 
 Producers are deterministic: no randomness in the measurement path, and every
-synthetic generator or noise model takes an explicit seed.
+synthetic generator or noise model takes an explicit seed. Each table is written
+by ``write_table`` together with ``<table_stem>.run.json``, the record of the
+producer's parameters and package versions.
 """
 from __future__ import annotations
 
 import glob
+import json
 import os
+import platform
+import sys
 from pathlib import Path
 
 import numpy as np
+import scipy
+import skimage
 import tifffile
 from PIL import Image
 from scipy import ndimage as ndi
@@ -26,6 +33,7 @@ from skimage.filters import threshold_minimum
 from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
 
+import fluorostats
 from fluorostats.objects import label_3d
 from fluorostats.segment import THRESHOLD_METHODS, segment_channel
 
@@ -51,6 +59,26 @@ EXAMPLE_FIELD = 500
 # CPU inference ms per BBBC039 image of the two DL baselines, measured on the
 # cluster (StarDist 2D_versatile_fluo, Cellpose nuclei; 20 images); carried as constants.
 DL_CPU_MS = {"StarDist": 215.1, "Cellpose": 5547.0}
+
+
+def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) -> None:
+    """Write ``results/<stem>.csv`` and its provenance record ``results/<stem>.run.json``.
+
+    The record names the producer, its ``params`` and the python / numpy /
+    scipy / scikit-image / fluorostats versions; a ``timing`` table also records
+    the CPU (``platform.machine()``, ``platform.processor()``). No host name,
+    user or absolute path is written. ``csv_kw`` goes to ``DataFrame.to_csv``
+    (``index`` defaults to False).
+    """
+    df.to_csv(RESULTS / f"{stem}.csv", **{"index": False, **csv_kw})
+    record = {"table": f"{stem}.csv", "producer": f"benchmarks/producers/{Path(sys.argv[0]).name}",
+              "params": params,
+              "versions": {"python": platform.python_version(), "numpy": np.__version__,
+                           "scipy": scipy.__version__, "scikit-image": skimage.__version__,
+                           "fluorostats": fluorostats.__version__}}
+    if timing:
+        record["platform"] = {"machine": platform.machine(), "processor": platform.processor()}
+    (RESULTS / f"{stem}.run.json").write_text(json.dumps(record, indent=2) + "\n")
 
 
 def require(path: Path) -> Path:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import RESULTS
+from common import RESULTS, write_table
 from fluorostats.agreement import lins_ccc
 
 
@@ -20,7 +20,7 @@ def main():
              "MAE": float(np.abs(ext[c].values - tv).mean())}
             for c in ext.columns if c not in ("file", "true_viability")]
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_viability_external_agreement.csv", index=False)
+    write_table(df, "b_viability_external_agreement", {})
     print(df.to_string(index=False))
 
 

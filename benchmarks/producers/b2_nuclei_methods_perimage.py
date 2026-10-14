@@ -14,7 +14,8 @@ from PIL import Image
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RAW_OTSU_CC, RESULTS, bbbc039_gt_instances, bbbc039_pairs, raw_otsu_cc, threshold_cc, thresholds
+from common import (RAW_OTSU_CC, bbbc039_gt_instances, bbbc039_pairs, raw_otsu_cc, threshold_cc, thresholds,
+                    write_table)
 from fluorostats.objects import watershed_split
 from fluorostats.validate import instance_f1
 
@@ -48,7 +49,7 @@ def main():
             watershed_split(otsu, min_size=MIN_SIZE, min_distance=4)[0], gt)["f1"]
         rows.append(rec)
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b2_nuclei_methods_perimage.csv", index=False)
+    write_table(df, "b2_nuclei_methods_perimage", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "iou_threshold": 0.5, "watershed_min_distance": 4})
     print(df.drop(columns=["image"]).mean().round(3).sort_values(ascending=False).to_string())
 
 

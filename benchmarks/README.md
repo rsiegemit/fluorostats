@@ -55,6 +55,10 @@ the networks (see `VALIDATION.md`).
 Every table in `results/` that the public data can regenerate has a producer in
 `producers/` named after it; it reads `$FLUOROSTATS_DATA`, measures with the
 `fluorostats` library, uses explicit seeds, and overwrites `results/<same name>`.
+Next to each table it writes `results/<same name>.run.json`: the producer, its
+parameters and the python / numpy / scipy / scikit-image / fluorostats versions
+(timing tables also record the CPU). A committed `.run.json` marks a table that was
+re-run with those versions and reproduced byte for byte.
 
 ```bash
 # from the repo root

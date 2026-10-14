@@ -20,7 +20,7 @@ import tifffile
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import DATA, RESULTS, kerkhoff_peak_count, require, threshold_cc
+from common import DATA, kerkhoff_peak_count, require, threshold_cc, write_table
 from fluorostats.objects import watershed_split
 from fluorostats.viability import live_dead_by_count, live_dead_fractions, live_ratio
 
@@ -54,7 +54,7 @@ def main():
         n_live, n_dead = int(m.group(1)), int(m.group(2))
         rows.append({"file": Path(f).name, "true_viability": n_live / (n_live + n_dead), **score(f)})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_viability_external.csv", index=False)
+    write_table(df, "b_viability_external", {"min_size": MIN_SIZE, "n_images": len(df)})
     print(f"n = {len(df)} images")
     print(df.drop(columns=["file"]).describe().to_string())
 

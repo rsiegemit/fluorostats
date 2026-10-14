@@ -13,7 +13,7 @@ import pandas as pd
 from scipy import ndimage as ndi
 from scipy import stats as sps
 
-from common import RESULTS, clark_evans, lacunarity, morisita, quadrat_var, ripley_L_dev
+from common import clark_evans, lacunarity, morisita, quadrat_var, ripley_L_dev, write_table
 from fluorostats.morphometry import lateral_homogeneity
 from fluorostats.stats import mann_whitney
 
@@ -21,6 +21,7 @@ FIELD = 512          # image size (px)
 N_PTS = 400          # points per pattern
 BLOB_SIGMA = 3.0     # gaussian blob radius per point (px)
 REPS = 10
+PARAMS = {"field_px": FIELD, "n_points": N_PTS, "blob_sigma_px": BLOB_SIGMA, "replicates": REPS, "tiles": 8}
 
 
 def gen_regular(rng, jitter=0.15):
@@ -69,7 +70,7 @@ def main():
                          "ripley_L_dev": ripley_L_dev(pts, area), "morisita": morisita(pts, FIELD),
                          "lacunarity": lacunarity(pts, FIELD), "quadrat_var": quadrat_var(pts, FIELD)})
     df = pd.DataFrame(recs)
-    df.to_csv(RESULTS / "b_homogeneity_multi.csv", index=False)
+    write_table(df, "b_homogeneity_multi", PARAMS)
 
     uni = df[df.level <= 1]["gini"]
     clu = df[df.level >= 2]["gini"]
@@ -78,7 +79,7 @@ def main():
              "spearman_gini_vs_ref": round(float(sps.spearmanr(df["gini"], df[ref]).statistic), 3),
              "clustered_vs_uniform_AUC(gini)": round(float(auc), 3)} for ref in REFS]
     out = pd.DataFrame(rows)
-    out.to_csv(RESULTS / "b_homogeneity_multi_corr.csv", index=False)
+    write_table(out, "b_homogeneity_multi_corr", PARAMS)
     print(out.to_string(index=False))
 
 

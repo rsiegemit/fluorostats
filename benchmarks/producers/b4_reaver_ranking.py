@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 from scipy import stats as sps
 
-from common import RESULTS
+from common import RESULTS, write_table
 
 ALPHA = 0.05
 
@@ -28,7 +28,7 @@ def main():
         rows.append({"tool": t, "n_images": len(res), "MAE": abs(res).mean(), "residual_SD": res.std(ddof=1),
                      "bias_ttest_p": p, "bonferroni_alpha": alpha, "unbiased": bool(p > alpha)})
     df = pd.DataFrame(rows).sort_values("MAE", kind="stable")
-    df.to_csv(RESULTS / "b4_reaver_ranking.csv", index=False)
+    write_table(df, "b4_reaver_ranking", {"alpha": ALPHA, "correction": "Bonferroni"})
     print(df.to_string(index=False))
 
 

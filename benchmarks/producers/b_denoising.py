@@ -13,7 +13,7 @@ from scipy import ndimage as ndi
 from skimage import filters, restoration
 from skimage.filters import median
 
-from common import RESULTS, bbbc024_volumes
+from common import bbbc024_volumes, write_table
 from fluorostats.preprocess import denoise
 from fluorostats.validate import dice
 
@@ -43,7 +43,7 @@ def main():
                 acc[name].append(dice(d > filters.threshold_otsu(d), gt))
         rows.append({"noise_sd": sd, **{m: round(float(np.mean(v)), 3) for m, v in acc.items()}})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_denoising.csv", index=False)
+    write_table(df, "b_denoising", {"seed": SEED, "noise_sd": NOISE_SD, "n_volumes": 5, "denoisers": list(DENOISERS)})
     print(df.to_string(index=False))
 
 

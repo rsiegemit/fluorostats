@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from common import RESULTS
+from common import RESULTS, write_table
 from fluorostats.stats import bootstrap_mean_ci
 
 SEED = 0
@@ -42,7 +42,7 @@ def main():
     rows += [ci_row("first100", t, pi[["image"]].merge(d, on="image")[t].values) for t, d in dl.items()]
     rows += [ci_row("all200", t, d[t].values) for t, d in dl.items()]
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b2_nuclei_ci.csv", index=False)
+    write_table(df, "b2_nuclei_ci", {"seed": SEED, "n_boot": N_BOOT, "ci": 0.95})
     print(df.to_string(index=False))
 
 

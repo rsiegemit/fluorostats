@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 import tifffile
 
-from common import RAW_OTSU_CC, RESULTS, YEAR_LABELS, bbbc024_volumes, raw_otsu_cc, threshold_cc, thresholds
+from common import (RAW_OTSU_CC, YEAR_LABELS, bbbc024_volumes, raw_otsu_cc, threshold_cc, thresholds,
+                    write_table)
 from fluorostats.objects import equivalent_diameters_um
 
 VOX = (1.0, 1.0, 1.0)
@@ -35,7 +36,7 @@ def main():
         rows.append({"method": m, "median_diam_um": round(med, 2), "GT_median": round(gt_med, 2),
                      "pct_error": round(abs(med - gt_med) / gt_med * 100, 1)})
     df = pd.DataFrame(rows).sort_values("pct_error")
-    df.to_csv(RESULTS / "b_nuclei_size.csv", index=False)
+    write_table(df, "b_nuclei_size", {"voxel_um": VOX, "min_size": MIN_SIZE, "n_volumes": 6})
     print(df.to_string(index=False))
 
 

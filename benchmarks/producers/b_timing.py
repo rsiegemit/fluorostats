@@ -20,7 +20,8 @@ import tifffile
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import DENOISED_OTSU_CC, DL_CPU_MS, RESULTS, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc, threshold_cc, thresholds
+from common import (DENOISED_OTSU_CC, DL_CPU_MS, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc, threshold_cc,
+                    thresholds, write_table)
 from fluorostats.objects import watershed_split
 
 N_IMAGES = 50
@@ -57,7 +58,7 @@ def main():
                  "ms_per_image": DL_CPU_MS["Cellpose"],
                  "images_per_sec": round(1000 / DL_CPU_MS["Cellpose"], 2)})
     df = pd.DataFrame(rows).sort_values("ms_per_image")
-    df.to_csv(RESULTS / "b_timing.csv", index=False)
+    write_table(df, "b_timing", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "dl_cpu_ms": DL_CPU_MS}, timing=True)
     print(df.to_string(index=False))
 
 

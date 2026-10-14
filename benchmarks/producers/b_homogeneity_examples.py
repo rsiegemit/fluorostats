@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import EXAMPLE_FIELD, RESULTS, example_patterns
+from common import EXAMPLE_FIELD, example_patterns, write_table
 from fluorostats.objects import centroid_homogeneity
 
 SEED = 1
@@ -22,7 +22,7 @@ def main():
         rows.append({"pattern": kind, "n_points": len(p), "field_px": EXAMPLE_FIELD,
                      "tile_gini": centroid_homogeneity(p3, (1, EXAMPLE_FIELD, EXAMPLE_FIELD))["centroid_gini"]})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_homogeneity_examples.csv", index=False)
+    write_table(df, "b_homogeneity_examples", {"seed": SEED, "tiles": 8})
     print(df.to_string(index=False))
 
 

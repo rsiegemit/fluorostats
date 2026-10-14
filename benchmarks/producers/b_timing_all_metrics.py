@@ -30,8 +30,8 @@ from skimage.measure import euler_number
 from skimage.morphology import medial_axis, remove_small_objects, skeletonize, thin
 from skimage.segmentation import watershed
 
-from common import (DATA, DL_CPU_MS, RESULTS, bbbc024_volumes, bbbc039_pairs, clark_evans, kerkhoff_peak_count,
-                    lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds)
+from common import (DATA, DL_CPU_MS, bbbc024_volumes, bbbc039_pairs, clark_evans, kerkhoff_peak_count,
+                    lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds, write_table)
 from fluorostats import (agreement, metrics_2d, metrics_3d, morphometry, objects, preprocess, segment,
                          skeleton, stats, validate, viability)
 
@@ -167,7 +167,7 @@ def main():
         rows.append({"group": grp, "metric": name, "ms": round(mean_ms(fn, reps), 3)})
     rows += [{"group": "comparator", "metric": f"{k} (per 2D img, CPU cluster)", "ms": v} for k, v in DL_CPU_MS.items()]
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_timing_all_metrics.csv", index=False)
+    write_table(df, "b_timing_all_metrics", {"dl_cpu_ms": DL_CPU_MS}, timing=True)
     print(df.to_string(index=False))
 
 

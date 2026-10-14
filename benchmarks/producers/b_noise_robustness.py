@@ -13,7 +13,7 @@ import pandas as pd
 import tifffile
 from skimage.morphology import remove_small_objects
 
-from common import RAW_OTSU_CC, RESULTS, bbbc024_volumes, raw_otsu_cc, thresholds
+from common import RAW_OTSU_CC, bbbc024_volumes, raw_otsu_cc, thresholds, write_table
 from fluorostats.validate import dice
 
 SEED = 0
@@ -38,7 +38,7 @@ def main():
             acc[RAW_OTSU_CC].append(dice(raw_otsu_cc(noisy, MIN_SIZE), gt))
         rows.append({"noise_sd": sd, **{m: round(float(np.mean(v)), 3) for m, v in acc.items()}})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_noise_robustness.csv", index=False)
+    write_table(df, "b_noise_robustness", {"seed": SEED, "noise_sd": NOISE_SD, "min_size": MIN_SIZE, "n_volumes": 5})
     print(df.to_string(index=False))
 
 

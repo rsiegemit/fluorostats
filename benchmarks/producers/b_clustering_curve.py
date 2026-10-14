@@ -13,7 +13,8 @@ import tifffile
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RAW_OTSU_CC, RESULTS, YEAR_LABELS, bbbc024_volumes, raw_otsu_cc, threshold_cc, thresholds
+from common import (RAW_OTSU_CC, YEAR_LABELS, bbbc024_volumes, raw_otsu_cc, threshold_cc, thresholds,
+                    write_table)
 from fluorostats.objects import watershed_split
 from fluorostats.validate import instance_f1
 
@@ -40,7 +41,7 @@ def main():
                  for m, v in acc.items()]
         print(f"done {lvl}", flush=True)
     piv = pd.DataFrame(rows).pivot(index="method", columns="clustering", values="mean_F1")
-    piv.to_csv(RESULTS / "b_clustering_curve.csv")
+    write_table(piv, "b_clustering_curve", {"levels": LEVELS, "n_volumes": N_VOL, "min_size": MIN_SIZE, "watershed_min_distance": 6}, index=True)
     print(piv.to_string())
 
 

@@ -16,17 +16,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile
-from common import DATA, RESULTS, YEAR_LABELS, require, thresholds
+from common import DATA, YEAR_LABELS, require, thresholds, write_table
 from fluorostats.segment import segment_channel
 from fluorostats.validate import dice
 
 DATASETS = [("Fluo-C3DH-A549", 0.908), ("Fluo-N3DH-CHO", 0.925)]  # (name, CTC top SEG)
+SEG = dict(method="otsu", threshold_scale=0.9, min_size=50, sigma=1.0, bg_radius=25)
 THRESHOLDS = thresholds(["otsu", "li", "isodata", "triangle", "yen"], YEAR_LABELS)
 
 
 def fluorostats_seg(v):
-    return segment_channel(v.astype(np.float32), method="otsu", threshold_scale=0.9, min_size=50,
-                           sigma=1.0, bg_radius=25)[1]
+    return segment_channel(v.astype(np.float32), **SEG)[1]
 
 
 def gt_pairs(ds_root):
@@ -62,7 +62,7 @@ def main():
         rows += [{"dataset": ds, "method": m, "mean_dice": round(float(np.mean(v)), 3), "ctc_top_SEG": top}
                  for m, v in scores.items()]
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b2_ctc_multi.csv", index=False)
+    write_table(df, "b2_ctc_multi", {"datasets": [d for d, _ in DATASETS], "thresholds": list(THRESHOLDS), "fluorostats": SEG})
     print(df.to_string(index=False))
 
 
