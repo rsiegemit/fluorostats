@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import numpy as np
 from scipy import ndimage as ndi
+from skimage.morphology import local_maxima, reconstruction
+from skimage.segmentation import watershed
 
 from .metrics_3d import density_per_mm3
 from .stats import coefficient_of_variation, gini
@@ -54,40 +56,52 @@ def watershed_split(
     mask: np.ndarray,
     min_size: int = 0,
     min_distance: int = 5,
-    footprint_size: int = 3,
 ) -> tuple[np.ndarray, int]:
     """Split touching convex objects via a distance-transform watershed.
 
     Connected-component labeling merges touching nuclei/cells into one object
     (fluorostats' main under-count failure mode in crowded fields). This seeds
-    a watershed at local maxima of the distance transform to separate them —
-    the classical fix, no training required.
+    a watershed at the h-maxima of the Euclidean distance transform (EDT), with
+    ``h = min_distance / 2``: a seed is a distance peak that rises at least
+    ``min_distance / 2`` above the saddle joining it to any higher peak. Bumps
+    of an irregular outline and the ridge of an elongated object are shallower
+    than that, so they do not split one object.
+
+    Geometrically, two touching objects whose inscribed radius is ``r`` and
+    whose neck has half-width ``w`` (both in pixels/voxels) are split when
+    ``2r - 2w >= min_distance``: the constriction is at least ``min_distance``
+    narrower than the objects' inscribed diameter. Every connected component
+    keeps at least one seed, so objects too small to seed stay single objects.
 
     Parameters
     ----------
     mask : np.ndarray of bool
+        2D or 3D foreground. The EDT is in voxel units on every axis, so
+        isotropic voxels are assumed.
     min_size : int
         Drop objects below this voxel count after splitting.
     min_distance : int
-        Distance-transform value floor for seeds: only voxels with
-        ``dist > min_distance`` can seed (≈ min object radius, voxels);
-        larger → fewer seeds.
-    footprint_size : int
-        Size of the local-maximum neighbourhood.
+        About the smallest object radius, in pixels/voxels: the neck-depth
+        criterion above (seed dynamics >= ``min_distance / 2``). Larger means
+        fewer splits.
 
     Returns (labels, n).
     """
-    from scipy.ndimage import distance_transform_edt, maximum_filter
-    from skimage.segmentation import watershed as _watershed
-
     m = mask > 0
     if not m.any():
         return np.zeros(m.shape, int), 0
-    dist = distance_transform_edt(m)
-    fp = np.ones((footprint_size,) * m.ndim, dtype=bool)
-    local_max = (maximum_filter(dist, footprint=fp) == dist) & (dist > min_distance)
-    markers, _ = ndi.label(local_max)
-    labels = _watershed(-dist, markers, mask=m)
+    dist = ndi.distance_transform_edt(m)
+    # h-maxima as regional maxima of the reconstruction of (EDT - h) under the EDT;
+    # peaks joined above their saddle by less than h merge into one plateau, one seed.
+    rec = reconstruction(dist - min_distance / 2, dist, method="dilation")
+    peaks = local_maxima(rec, connectivity=m.ndim) & m
+    markers, n_seeds = ndi.label(peaks, structure=np.ones((3,) * m.ndim))
+    components, n_comp = ndi.label(m)
+    unseeded = np.setdiff1d(np.arange(1, n_comp + 1), components[markers > 0])
+    if unseeded.size:            # components too small to seed: one marker each
+        pos = ndi.maximum_position(dist, components, unseeded)
+        markers[tuple(np.array(pos).T)] = np.arange(n_seeds + 1, n_seeds + unseeded.size + 1)
+    labels = watershed(-dist, markers, mask=m)
     if min_size > 0:
         return _drop_small(labels, min_size)
     return labels, int(labels.max())

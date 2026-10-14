@@ -151,6 +151,40 @@ def test_watershed_split_min_size_keeps_the_split():
     assert set(np.unique(labels)) == {0, 1, 2}
 
 
+@pytest.mark.parametrize("shape", ["irregular", "ellipse"])
+def test_watershed_split_does_not_oversplit_one_object(shape):
+    """A single irregular blob or an elongated ellipse is one object: shallow
+    distance-transform bumps from its outline or its ridge must not seed splits."""
+    yy, xx = np.mgrid[:80, :80]
+    if shape == "irregular":
+        th = np.arctan2(yy - 40, xx - 40)
+        mask = np.hypot(yy - 40, xx - 40) <= 12 + 2 * np.sin(3 * th) + 1.5 * np.sin(5 * th + 1)
+    else:
+        mask = ((yy - 40) / 8) ** 2 + ((xx - 40) / 22) ** 2 <= 1
+    _, n = objects.watershed_split(mask, min_distance=4)
+    assert n == 1
+
+
+def test_watershed_split_keeps_objects_smaller_than_min_distance():
+    """An object too small to seed is still one object, not dropped."""
+    yy, xx = np.mgrid[:40, :40]
+    mask = np.hypot(yy - 20, xx - 20) <= 3
+    labels, n = objects.watershed_split(mask, min_distance=5)
+    assert n == 1
+    assert (labels > 0).sum() == mask.sum()
+
+
+def test_watershed_split_neck_criterion():
+    """Two r = 10 discs split when the neck is at least min_distance narrower than
+    their inscribed diameter (2r - 2w >= min_distance), and stay one otherwise."""
+    yy, xx = np.mgrid[:40, :80]
+
+    def pair(d):
+        return (np.hypot(yy - 20, xx - 30) <= 10) | (np.hypot(yy - 20, xx - 30 - d) <= 10)
+    assert objects.watershed_split(pair(18), min_distance=8)[1] == 2   # neck w ~ 4.4 px
+    assert objects.watershed_split(pair(8), min_distance=8)[1] == 1    # neck w ~ 9.2 px
+
+
 def test_count_local_maxima_with_mask_and_smoothing():
     img = np.zeros((40, 40), np.float32)
     img[10, 10] = 100.0
