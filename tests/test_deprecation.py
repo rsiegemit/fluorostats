@@ -34,3 +34,14 @@ def test_renamed_spacing_arguments_still_work(func, args, old):
     """MOD-5: the old names keep working, with a DeprecationWarning, for one cycle."""
     with pytest.warns(DeprecationWarning, match="is deprecated; use"):
         func(*args, **old)
+
+
+def test_watershed_footprint_size_is_accepted_and_ignored():
+    """The seeding no longer uses a footprint; old calls warn instead of failing."""
+    from fluorostats.objects import watershed_split
+    m = np.zeros((20, 20), bool)
+    m[5:15, 5:15] = True
+    with pytest.warns(DeprecationWarning, match="'footprint_size' no longer has an effect"):
+        old = watershed_split(m, min_distance=3, footprint_size=7)
+    new = watershed_split(m, min_distance=3)
+    assert old[1] == new[1] and (old[0] == new[0]).all()

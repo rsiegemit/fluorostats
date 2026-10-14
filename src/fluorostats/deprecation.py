@@ -27,4 +27,19 @@ def renamed_keyword(old: str, new: str) -> Callable:
     return wrap
 
 
-__all__ = ["renamed_keyword"]
+def ignored_keyword(old: str) -> Callable:
+    """Decorator: accept and drop keyword ``old``, which no longer has an effect,
+    with a DeprecationWarning (instead of breaking the call with a TypeError)."""
+    def wrap(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def inner(*args, **kwargs):
+            if old in kwargs:
+                warnings.warn(f"{func.__name__}(): {old!r} no longer has an effect and "
+                              "is ignored", DeprecationWarning, stacklevel=2)
+                del kwargs[old]
+            return func(*args, **kwargs)
+        return inner
+    return wrap
+
+
+__all__ = ["renamed_keyword", "ignored_keyword"]

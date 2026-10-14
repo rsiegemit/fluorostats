@@ -13,6 +13,7 @@ from scipy import ndimage as ndi
 from skimage.morphology import local_maxima, reconstruction
 from skimage.segmentation import watershed
 
+from .deprecation import ignored_keyword
 from .metrics_3d import density_per_mm3
 from .spatial import tile_point_density
 from .stats import coefficient_of_variation, gini
@@ -53,6 +54,7 @@ def _drop_small(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
     return remap[labels], int(keep.sum())
 
 
+@ignored_keyword("footprint_size")
 def watershed_split(
     mask: np.ndarray,
     min_size: int = 0,
