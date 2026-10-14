@@ -165,17 +165,17 @@ def _window_problems(windows) -> list[str]:
 # Core per-stack computation
 # ---------------------------------------------------------------------------
 
-def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float]:
-    """Load a stack and return its raw depth profile and z-step (µm)."""
+def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float, str]:
+    """Load a stack: raw depth profile, z-step (µm) and where the calibration came from."""
     vol, meta = load_volume(path)
     vz = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
-    return depth.intensity_depth_profile(vol, vz, channel=cfg["channel"],
-                                         reducer=cfg["reducer"]), vz
+    return (depth.intensity_depth_profile(vol, vz, channel=cfg["channel"], reducer=cfg["reducer"]),
+            vz, meta.get("voxel_size_source", ""))
 
 
 def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> dict:
     """Load one stack and compute raw/subtracted/normalised profiles + AUC + penetration (λ) fit."""
-    raw, vz = _load_profile(path, cfg)
+    raw, vz, vz_source = _load_profile(path, cfg)
     subtracted = depth.subtract_background(raw, blank) if blank is not None else raw
     normalized = depth.normalize_to_surface(subtracted, n_surface=cfg["n_surface"])
 
@@ -210,6 +210,7 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
         "normalized": normalized.normalized,
         "surface_reference": normalized.surface_reference,
         "voxel_z_um": vz,
+        "voxel_size_source": vz_source,
         "n_slices": int(raw.depth_um.size),
         "max_depth_um": max_depth,
         "auc": auc,
@@ -287,7 +288,8 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
 
 
 def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
-    """One row per stack: acquisition, λ fit, and absolute/normalised AUC per window."""
+    """One row per stack: acquisition, λ fit, absolute/normalised AUC per window, and
+    ``voxel_size_source`` (which voxel axes were read from the file vs defaulted)."""
     labels = [window_label(w) for w in windows]
     header = ["group", "stack", "role", "voxel_z_um", "n_slices",
               "max_depth_um", "surface_intensity_subtracted",
@@ -296,6 +298,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}",
                    f"window_covered_um_{lab}"]
+    header.append("voxel_size_source")   # appended last so existing column positions hold
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(header)
@@ -312,7 +315,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
                 a = res["auc"][lab]
                 row += [f"{a['absolute']:.6g}", f"{a['normalized']:.6g}",
                         f"{a['covered_um']:.4g}"]
-            w.writerow(row)
+            w.writerow(row + [res["voxel_size_source"]])
 
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:

@@ -41,7 +41,8 @@ def test_depth_batch_run(tmp_path):
     mpath = tmp_path / "manifest.json"
     mpath.write_text(json.dumps(manifest))
 
-    depth_batch.run(mpath)
+    with pytest.warns(RuntimeWarning, match="no z/y/x calibration"):
+        depth_batch.run(mpath)
 
     out = tmp_path / "out"
     assert (out / "auc_per_stack.csv").exists()
@@ -49,6 +50,9 @@ def test_depth_batch_run(tmp_path):
 
     ps = pd.read_csv(out / "auc_per_stack.csv")
     assert len(ps) == 4                                        # 2 groups x 2 stacks
+    # plain TIFFs carry no calibration: the table records that the 1 µm z-step is a default
+    assert list(ps.columns[-1:]) == ["voxel_size_source"]
+    assert (ps["voxel_size_source"] == "z:default,y:default,x:default").all()
     assert set(ps["group"]) == {"fast", "slow"}
     # slower decay retains signal deeper -> larger surface-normalised full-depth AUC
     assert ps[ps.group == "slow"].auc_normalized_full.mean() > \
@@ -287,6 +291,8 @@ def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):
     msgs = " | ".join(str(w.message) for w in rec)
     assert "different z-steps" in msgs
     assert "reaches past the stack" in msgs
+    ps = pd.read_csv(tmp_path / "out" / "auc_per_stack.csv")
+    assert ps["voxel_size_source"].tolist() == ["z:file,y:default,x:default"]
 
 
 # ---------------------------------------------------------------------------
