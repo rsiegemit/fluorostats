@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 import click
+import matplotlib
 
 from . import io as iq_io
 from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, skeleton, spatial
@@ -15,12 +16,12 @@ from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, sk
 @click.group()
 def cli():
     """FluoroStats — Universal fluorescence microscopy image quantification."""
+    matplotlib.use("Agg")   # every command writes figures to files; none opens a window
 
 
 @cli.command()
 def formats():
     """List all supported file formats and their availability."""
-    from . import io as iq_io
     click.echo("Supported formats:\n")
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
