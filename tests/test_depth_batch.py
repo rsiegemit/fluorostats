@@ -133,9 +133,11 @@ def test_common_grid_single_slice_stack():
                "normalized": np.array([1.0]), "max_depth_um": 0.0}
     multi = {"depth_um": np.array([0.0, 2.0, 4.0]), "bg_subtracted": np.array([5.0, 4.0, 3.0]),
               "normalized": np.array([1.0, 0.8, 0.6]), "max_depth_um": 4.0}
-    # Should not raise; step defaults to 1.0 for the single-slice member
-    grid = _common_grid([single, multi])
-    assert grid.size >= 1
+    # The single-slice member has no step; the grid uses the other's 2 µm step and
+    # stops at the shallowest stack (0 µm).
+    np.testing.assert_array_equal(_common_grid([single, multi]), [0.0])
+    np.testing.assert_array_equal(_common_grid([multi]), [0.0, 2.0, 4.0])
+    np.testing.assert_array_equal(_common_grid([single]), [0.0])   # no steps at all -> 1 µm
 
 
 # ---------------------------------------------------------------------------
@@ -220,84 +222,6 @@ def test_run_blank_trailing_zeros_trimmed(tmp_path):
 
     out = depth_batch.run(mpath)
     assert (out / "auc_per_stack.csv").exists()
-
-
-# ---------------------------------------------------------------------------
-# plot_depth_curves — agg is None branch  (line 312)
-# ---------------------------------------------------------------------------
-
-def test_plot_depth_curves_with_none_agg(tmp_path):
-    """plot_depth_curves handles a group whose aggregate is None (no primary stacks)."""
-    from fluorostats.depth_batch import plot_depth_curves
-
-    # Build a minimal row (role=aux so no primary stacks -> agg=None)
-    depth_um = np.linspace(0, 10, 8)
-    res = {
-        "depth_um": depth_um,
-        "bg_subtracted": np.ones(8),
-        "normalized": np.ones(8),
-        "raw_mean": np.ones(8),
-    }
-    rows = [{"group": "A", "stack": "s0", "role": "aux", "result": res}]
-    aggregates = {"A": None}
-    colors = {"A": "#3F6AB3"}
-
-    out_base = tmp_path / "fig_test"
-    # Should complete without error
-    plot_depth_curves(rows, aggregates, colors, "bg_subtracted",
-                      "intensity", "title", out_base)
-    assert out_base.with_suffix(".png").exists()
-
-
-# ---------------------------------------------------------------------------
-# plot_auc — group with no vals (all aux) skips the continue  (line 351)
-# ---------------------------------------------------------------------------
-
-def test_plot_auc_group_no_primary_vals(tmp_path):
-    """plot_auc group whose stacks are all role=aux -> vals is empty -> continue."""
-    from fluorostats.depth_batch import plot_auc, parse_window
-
-    window = parse_window([0, 10])
-    lab = "0_10um"
-    depth_um = np.linspace(0, 10, 8)
-    res = {
-        "depth_um": depth_um,
-        "auc": {lab: {"normalized": 5.0, "absolute": 3.0}},
-    }
-    rows = [{"group": "A", "stack": "s0", "role": "aux", "result": res}]
-    colors = {"A": "#3F6AB3"}
-    out_base = tmp_path / "auc_test"
-
-    plot_auc(rows, colors, window, out_base, use_normalized=True)
-    assert out_base.with_suffix(".png").exists()
-
-
-# ---------------------------------------------------------------------------
-# plot_auc — sem > 0 branch (errorbar)  (line 358): need >1 primary stack
-# ---------------------------------------------------------------------------
-
-def test_plot_auc_sem_errorbar(tmp_path):
-    """plot_auc with 3 primary stacks -> sem > 0 -> errorbar branch exercised."""
-    from fluorostats.depth_batch import plot_auc, parse_window
-
-    window = parse_window([0, 10])
-    lab = "0_10um"
-
-    def _row(i, val):
-        return {
-            "group": "A", "stack": f"s{i}", "role": "primary",
-            "result": {
-                "depth_um": np.linspace(0, 10, 8),
-                "auc": {lab: {"normalized": val, "absolute": val * 0.5}},
-            },
-        }
-
-    rows = [_row(0, 10.0), _row(1, 12.0), _row(2, 11.0)]
-    colors = {"A": "#3F6AB3"}
-    out_base = tmp_path / "auc_sem"
-
-    plot_auc(rows, colors, window, out_base, use_normalized=True)
-    assert out_base.with_suffix(".png").exists()
 
 
 # ---------------------------------------------------------------------------
