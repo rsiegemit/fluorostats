@@ -34,10 +34,7 @@ DATA = F.DATA      # honours $FLUOROSTATS_DATA, like every other figure script
 # Panel (b) data — computed LIVE: N=20 identical runs on one real BBBC024 volume
 # ----------------------------------------------------------------------------
 N_RUNS = 20
-_b24 = sorted(glob.glob(str(DATA / "BBBC024/image-final_*.tif")))
-if not _b24:
-    raise SystemExit("BBBC024 not found under $FLUOROSTATS_DATA "
-                     f"({DATA}/BBBC024) — download per benchmarks/DATA_MANIFEST.md")
+_b24 = sorted(glob.glob(str(F.require(DATA / "BBBC024") / "image-final_*.tif")))
 vol = tifffile.imread(_b24[0]).astype(np.float32)
 mask = vol > filters.threshold_otsu(vol)
 

@@ -12,7 +12,6 @@ from fluorostats.agreement import lins_ccc
 from fluorostats.segment import binarize
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
-STACK = F.DATA / "viability" / "zccs1035_Day14_LiveDead.tif"
 BLUE = OKABE["blue"]
 GREEN = OKABE["green"]
 MAG = OKABE["purple"]
@@ -100,8 +99,8 @@ axd.text(0.5, 0.08, f"vs ground truth: CCC {ccc_v:.3f}, MAE {mae_v:.3f}", transf
 panel(axd, "d", "fluorostats $-$ macro = 0")
 
 # (e) Live/Dead qualitative overlay
-live = F.load_channels(STACK, 2, down=8)
-dead = F.load_channels(STACK, 1, down=8)
+live = F.load_sbiad2130_channel(2)
+dead = F.load_sbiad2130_channel(1)
 z = live.shape[0]//2
 gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.10)
 seg = dict(method="otsu", min_size=8)

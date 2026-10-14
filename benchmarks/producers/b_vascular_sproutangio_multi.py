@@ -14,16 +14,13 @@ from pathlib import Path
 import czifile
 import numpy as np
 import pandas as pd
-from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import DATA, RESULTS, require
-from fluorostats.preprocess import background_subtract, denoise
-from fluorostats.segment import binarize
+from common import DATA, RESULTS, YEAR_LABELS, require, thresholds
+from fluorostats.segment import segment_channel
 
 MIN_SIZE = 100
-THRESHOLDS = {"Otsu_1979": filters.threshold_otsu, "Li_1993": filters.threshold_li,
-              "Isodata_1978": filters.threshold_isodata, "Triangle_1977": filters.threshold_triangle}
+THRESHOLDS = thresholds(["otsu", "li", "isodata", "triangle"], YEAR_LABELS)
 
 
 def main():
@@ -31,10 +28,11 @@ def main():
     for fp in sorted(glob.glob(str(require(DATA / "sproutangio") / "*.czi"))):
         fa = np.squeeze(czifile.imread(fp)).astype(np.float32)[0]
         row = {"group": int(re.search(r"group(\d)", Path(fp).name).group(1))}
-        row.update({name: float(remove_small_objects(fa > fn(fa), MIN_SIZE).mean())
+        row.update({name: float(remove_small_objects(fa > fn(fa), max_size=MIN_SIZE).mean())
                     for name, fn in THRESHOLDS.items()})
-        sm = background_subtract(denoise(fa, sigma=1.0), radius=15)
-        row["fluorostats"] = float(binarize(sm, method="otsu", threshold_scale=0.9, min_size=MIN_SIZE).mean())
+        _, mask = segment_channel(fa, method="otsu", threshold_scale=0.9, min_size=MIN_SIZE,
+                                  sigma=1.0, bg_radius=15)
+        row["fluorostats"] = float(mask.mean())
         recs.append(row)
     df = pd.DataFrame(recs)
     df.to_csv(RESULTS / "b_vascular_sproutangio_multi.csv", index=False)

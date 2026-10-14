@@ -9,17 +9,15 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import tifffile
-from scipy import ndimage as ndi
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RESULTS, bbbc024_volumes
+from common import RESULTS, YEAR_LABELS, bbbc024_volumes, threshold_cc, thresholds
 from fluorostats.objects import equivalent_diameters_um, label_3d
 
 VOX = (1.0, 1.0, 1.0)
 MIN_SIZE = 30
-THRESHOLDS = {"Otsu_1979": filters.threshold_otsu, "Li_1993": filters.threshold_li,
-              "Isodata_1978": filters.threshold_isodata, "Triangle_1977": filters.threshold_triangle}
+THRESHOLDS = thresholds(["otsu", "li", "isodata", "triangle"], YEAR_LABELS)
 
 
 def main():
@@ -30,8 +28,7 @@ def main():
         gt = tifffile.imread(gp).astype(np.int32)
         gt_all.extend(equivalent_diameters_um(gt, VOX).tolist())
         for name, fn in THRESHOLDS.items():
-            lab = ndi.label(remove_small_objects(vol > fn(vol), MIN_SIZE))[0]
-            per_method[name].extend(equivalent_diameters_um(lab, VOX).tolist())
+            per_method[name].extend(equivalent_diameters_um(threshold_cc(vol, fn, max_size=MIN_SIZE), VOX).tolist())
         mask = remove_small_objects(vol > filters.threshold_otsu(vol), MIN_SIZE)
         per_method["fluorostats(Otsu+CC)"].extend(
             equivalent_diameters_um(label_3d(mask, min_size=MIN_SIZE)[0], VOX).tolist())

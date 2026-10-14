@@ -16,8 +16,8 @@ import tifffile
 
 from common import RESULTS, bbbc039_gt_instances, bbbc039_pairs
 from fluorostats.objects import label_3d
-from fluorostats.preprocess import denoise
-from fluorostats.segment import binarize
+from fluorostats.segment import segment_channel
+from fluorostats.stats import bootstrap_mean_ci
 from fluorostats.validate import instance_f1
 
 SEED = 0
@@ -28,9 +28,7 @@ SEG = dict(method="otsu", threshold_scale=1.0, sigma=1.0, min_size=20)
 def fluorostats_f1() -> pd.DataFrame:
     rows = []
     for stem, img_path, mask_path in bbbc039_pairs():
-        sm = denoise(tifffile.imread(img_path).astype(np.float32), sigma=SEG["sigma"])
-        mask = binarize(sm, method=SEG["method"], threshold_scale=SEG["threshold_scale"],
-                        min_size=SEG["min_size"])
+        _, mask = segment_channel(tifffile.imread(img_path).astype(np.float32), **SEG)
         pred = label_3d(mask, min_size=SEG["min_size"])[0]
         f1 = instance_f1(pred, bbbc039_gt_instances(mask_path))["f1"]
         rows.append({"image": stem, "fs_f1": round(f1, 4)})
@@ -38,11 +36,9 @@ def fluorostats_f1() -> pd.DataFrame:
 
 
 def boot_mean_ci(x, rng):
-    # exception REU-3: the library bootstraps fold changes (stats.bootstrap_fold_change_ci),
-    # not a plain mean; this percentile bootstrap of a mean has no library equivalent.
-    idx = rng.integers(0, len(x), (N_BOOT, len(x)))
-    means = x[idx].mean(1)
-    return float(x.mean()), float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))
+    # one shared generator: the five intervals are successive draws from one seeded stream
+    r = bootstrap_mean_ci(x, n_boot=N_BOOT, ci=0.95, rng=rng)
+    return r["mean"], r["ci_low"], r["ci_high"]
 
 
 def main():

@@ -10,16 +10,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import tifffile
-from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RESULTS, bbbc024_volumes, foreground_dice
+from common import RESULTS, bbbc024_volumes, thresholds
+from fluorostats.validate import dice
 
 SEED = 0
 NOISE_SD = [0, 20, 40, 80, 160]
 MIN_SIZE = 30
-THRESHOLDS = {"Otsu": filters.threshold_otsu, "Li": filters.threshold_li,
-              "Isodata": filters.threshold_isodata, "Triangle": filters.threshold_triangle}
+THRESHOLDS = thresholds(["otsu", "li", "isodata", "triangle"],
+                        {"otsu": "Otsu", "li": "Li", "isodata": "Isodata", "triangle": "Triangle"})
 
 
 def main():
@@ -32,8 +32,8 @@ def main():
         for vol, gt in vols:
             noisy = vol + rng.normal(0, sd, vol.shape)
             for name, fn in THRESHOLDS.items():
-                acc[name].append(float(foreground_dice(
-                    remove_small_objects(noisy > fn(noisy), MIN_SIZE), gt)))
+                acc[name].append(float(dice(
+                    remove_small_objects(noisy > fn(noisy), max_size=MIN_SIZE), gt)))
         acc["fluorostats(Otsu+CC)"] = acc["Otsu"]
         rows.append({"noise_sd": sd, **{m: round(float(np.mean(v)), 3) for m, v in acc.items()}})
     df = pd.DataFrame(rows)

@@ -1,4 +1,4 @@
-"""Shared paths and loaders for the results-table producers.
+"""Shared paths, loaders and method definitions for the results-table producers.
 
 Each producer in this folder regenerates one committed table in
 ``benchmarks/results/`` (same file name) from raw public data under
@@ -20,11 +20,29 @@ import numpy as np
 import tifffile
 from PIL import Image
 from scipy import ndimage as ndi
+from scipy.spatial import cKDTree
+from skimage.feature import peak_local_max
+from skimage.filters import threshold_minimum
+from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
+
+from fluorostats.objects import label_3d
+from fluorostats.segment import THRESHOLD_METHODS
 
 DATA = Path(os.environ.get(
     "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[2] / "data" / "downloads")))
 RESULTS = Path(__file__).resolve().parents[1] / "results"
+
+# Global thresholds the comparison tables score: the library's registry plus
+# Minimum (Prewitt 1966), which the library does not offer as a binarize method.
+THRESHOLD_FNS = {**THRESHOLD_METHODS, "minimum": threshold_minimum}
+# Column labels "<Name>_<year of the method's paper>" used by most tables.
+YEAR_LABELS = {"otsu": "Otsu_1979", "li": "Li_1993", "isodata": "Isodata_1978",
+               "triangle": "Triangle_1977", "yen": "Yen_1995"}
+
+# CPU inference ms per BBBC039 image of the two DL baselines, measured on the
+# cluster (StarDist 2D_versatile_fluo, Cellpose nuclei; 20 images); carried as constants.
+DL_CPU_MS = {"StarDist": 215.1, "Cellpose": 5547.0}
 
 
 def require(path: Path) -> Path:
@@ -64,16 +82,6 @@ def bbbc024_volumes(subdir: str = "BBBC024", n: int | None = None) -> list[tuple
     return [(f, f.replace("image-final_", "image-labels_")) for f in finals]
 
 
-def foreground_dice(pred: np.ndarray, gt: np.ndarray) -> float:
-    """Foreground (semantic) Dice of two masks or label images; 1.0 if both empty."""
-    # exception REU-3: fluorostats.validate scores instances (F1/AP) but has no
-    # foreground Dice yet; move this into validate (with a test) when it gains one.
-    p = pred > 0
-    g = gt > 0
-    s = p.sum() + g.sum()
-    return 2 * (p & g).sum() / s if s else 1.0
-
-
 def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = 8) -> np.ndarray:
     """One channel of the S-BIAD2130 Day-14 Live/Dead ZCYX stack, XY-downsampled on read."""
     stack = require(DATA / "viability" / "zccs1035_Day14_LiveDead.tif")
@@ -81,3 +89,66 @@ def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = 8) -> np.ndarray:
         nz = len(t.pages) // n_ch
         return np.stack([t.pages[z * n_ch + ch].asarray()[::down, ::down].astype(np.float32)
                          for z in range(nz)])
+
+
+def thresholds(names, labels: dict[str, str] | None = None) -> dict:
+    """``{column label: threshold function}`` for the registry ``names``, in order.
+
+    ``labels`` maps a registry name to the column label its table uses; names
+    without an entry keep the registry name.
+    """
+    labels = labels or {}
+    return {labels.get(n, n): THRESHOLD_FNS[n] for n in names}
+
+
+def threshold_cc(img: np.ndarray, threshold_fn, max_size: int) -> np.ndarray:
+    """Global threshold -> drop objects of <= ``max_size`` px -> connected-component labels."""
+    return label_3d(remove_small_objects(img > threshold_fn(img), max_size=max_size))[0]
+
+
+def kerkhoff_peak_count(img: np.ndarray) -> int:
+    """Cell count of the published Kerkhoff Fiji Live/Dead macro (its Find Maxima step).
+
+    A comparator, not library code.
+    """
+    return len(peak_local_max(img, min_distance=3, threshold_abs=img.max() * 0.15))
+
+
+# Reference point-pattern statistics: the independent, textbook definitions the
+# tile Gini is validated against (field-area normalised), not library code.
+# Points are (x, y) in a square field of side ``field`` px. Clark-Evans here uses
+# the known field area, unlike objects.nearest_neighbor_stats (point bounding box).
+def ripley_L_dev(pts, area, r=40):
+    n = len(pts)
+    pairs = cKDTree(pts).query_pairs(r)
+    K = area * 2 * len(pairs) / (n * (n - 1)) if n > 1 else 0
+    return np.sqrt(K / np.pi) - r
+
+
+def clark_evans(pts, area, n):
+    d, _ = cKDTree(pts).query(pts, k=2)
+    return d[:, 1].mean() / (0.5 / np.sqrt(n / area))
+
+
+def quadrat_counts(pts, field, q=8):
+    return np.histogram2d(pts[:, 1], pts[:, 0], bins=[np.linspace(0, field, q + 1)] * 2)[0]
+
+
+def morisita(pts, field, q=8):
+    H = quadrat_counts(pts, field, q)
+    n = H.sum()
+    return q * q * (np.sum(H * (H - 1))) / (n * (n - 1)) if n > 1 else 1.0
+
+
+def lacunarity(pts, field, box=64):
+    img = np.zeros((field, field))
+    idx = np.clip(pts.astype(int), 0, field - 1)
+    img[idx[:, 1], idx[:, 0]] = 1
+    s = ndi.uniform_filter(img, box) * box * box
+    m = s.mean()
+    return 1 + s.var() / m ** 2 if m > 0 else 1.0
+
+
+def quadrat_var(pts, field, q=8):
+    H = quadrat_counts(pts, field, q)
+    return H.var() / H.mean() if H.mean() > 0 else 0

@@ -11,30 +11,29 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from PIL import Image
-from scipy import ndimage as ndi
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RESULTS, bbbc039_gt_instances, bbbc039_pairs
+from common import RESULTS, bbbc039_gt_instances, bbbc039_pairs, threshold_cc, thresholds
 from fluorostats.objects import label_3d, watershed_split
 from fluorostats.validate import instance_f1
 
 N_IMAGES = 100
 MIN_SIZE = 20
-THRESHOLDS = {"Otsu (1979)": filters.threshold_otsu, "Li (1993)": filters.threshold_li,
-              "Isodata (1978)": filters.threshold_isodata, "Triangle (1977)": filters.threshold_triangle,
-              "Yen (1995)": filters.threshold_yen, "Mean": filters.threshold_mean,
-              "Minimum": filters.threshold_minimum}
+THRESHOLDS = thresholds(
+    ["otsu", "li", "isodata", "triangle", "yen", "mean", "minimum"],
+    {"otsu": "Otsu (1979)", "li": "Li (1993)", "isodata": "Isodata (1978)", "triangle": "Triangle (1977)",
+     "yen": "Yen (1995)", "mean": "Mean", "minimum": "Minimum"})
 
 
 def threshold_f1(im, fn, gt):
     try:
-        t = fn(im)
+        lab = threshold_cc(im, fn, max_size=MIN_SIZE)
     except RuntimeError:
         # threshold_minimum cannot find two histogram peaks on some images:
         # the method produces no segmentation, scored as F1 = 0 (ERR-2: recorded).
         return 0.0
-    return instance_f1(ndi.label(remove_small_objects(im > t, MIN_SIZE))[0], gt)["f1"]
+    return instance_f1(lab, gt)["f1"]
 
 
 def main():

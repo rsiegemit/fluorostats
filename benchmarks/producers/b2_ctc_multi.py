@@ -16,21 +16,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile
-from skimage import filters
-
-from common import DATA, RESULTS, foreground_dice, require
-from fluorostats.preprocess import background_subtract, denoise
-from fluorostats.segment import binarize
+from common import DATA, RESULTS, YEAR_LABELS, require, thresholds
+from fluorostats.segment import segment_channel
+from fluorostats.validate import dice
 
 DATASETS = [("Fluo-C3DH-A549", 0.908), ("Fluo-N3DH-CHO", 0.925)]  # (name, CTC top SEG)
-THRESHOLDS = {"Otsu_1979": filters.threshold_otsu, "Li_1993": filters.threshold_li,
-              "Isodata_1978": filters.threshold_isodata, "Triangle_1977": filters.threshold_triangle,
-              "Yen_1995": filters.threshold_yen}
+THRESHOLDS = thresholds(["otsu", "li", "isodata", "triangle", "yen"], YEAR_LABELS)
 
 
 def fluorostats_seg(v):
-    s = background_subtract(denoise(v.astype(np.float32), sigma=1.0), radius=25)
-    return binarize(s, method="otsu", threshold_scale=0.9, min_size=50)
+    return segment_channel(v.astype(np.float32), method="otsu", threshold_scale=0.9, min_size=50,
+                           sigma=1.0, bg_radius=25)[1]
 
 
 def gt_pairs(ds_root):
@@ -61,8 +57,8 @@ def main():
         scores = {m: [] for m in list(THRESHOLDS) + ["fluorostats"]}
         for img, gt in gt_pairs(require(DATA / "CTC" / ds)):
             for name, fn in THRESHOLDS.items():
-                scores[name].append(foreground_dice(img > fn(img.astype(np.float32)), gt))
-            scores["fluorostats"].append(foreground_dice(fluorostats_seg(img), gt))
+                scores[name].append(dice(img > fn(img.astype(np.float32)), gt))
+            scores["fluorostats"].append(dice(fluorostats_seg(img), gt))
         rows += [{"dataset": ds, "method": m, "mean_dice": round(float(np.mean(v)), 3), "ctc_top_SEG": top}
                  for m, v in scores.items()]
     df = pd.DataFrame(rows)

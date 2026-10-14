@@ -10,19 +10,17 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import tifffile
-from scipy import ndimage as ndi
 from skimage import filters
 from skimage.morphology import remove_small_objects
 
-from common import RESULTS, bbbc024_volumes
+from common import RESULTS, YEAR_LABELS, bbbc024_volumes, threshold_cc, thresholds
 from fluorostats.objects import label_3d, watershed_split
 from fluorostats.validate import instance_f1
 
 LEVELS = {"c00": "BBBC024", "c25": "BBBC024_c25", "c50": "BBBC024_c50", "c75": "BBBC024_c75"}
 MIN_SIZE = 30
 N_VOL = 5
-THRESHOLDS = {"Otsu_1979": filters.threshold_otsu, "Li_1993": filters.threshold_li,
-              "Isodata_1978": filters.threshold_isodata, "Triangle_1977": filters.threshold_triangle}
+THRESHOLDS = thresholds(["otsu", "li", "isodata", "triangle"], YEAR_LABELS)
 
 
 def main():
@@ -33,8 +31,7 @@ def main():
             vol = tifffile.imread(fp).astype(np.float32)
             gt = tifffile.imread(gp).astype(np.int32)
             for name, fn in THRESHOLDS.items():
-                lab = ndi.label(remove_small_objects(vol > fn(vol), MIN_SIZE))[0]
-                acc[name].append(instance_f1(lab, gt)["f1"])
+                acc[name].append(instance_f1(threshold_cc(vol, fn, max_size=MIN_SIZE), gt)["f1"])
             otsu = remove_small_objects(vol > filters.threshold_otsu(vol), MIN_SIZE)
             acc["fluorostats_CC"].append(instance_f1(label_3d(otsu, min_size=MIN_SIZE)[0], gt)["f1"])
             ws = watershed_split(otsu, min_size=MIN_SIZE, min_distance=6)[0]

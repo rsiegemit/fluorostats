@@ -17,8 +17,7 @@ import pandas as pd
 import tifffile
 
 from common import DATA, RESULTS, require
-from fluorostats.preprocess import background_subtract, denoise
-from fluorostats.segment import binarize
+from fluorostats.segment import segment_channel
 
 TOOLS = ["REAVER_Auto", "AngioTool_Auto", "AngioQuant_Auto", "ImageJ_Auto", "RAVE_Auto"]
 SEG = dict(method="otsu", threshold_scale=0.85, sigma=2.0, bg_radius=75, min_size=100)
@@ -34,9 +33,7 @@ def fluorostats_area_fraction(path: Path) -> float:
     gray = tifffile.imread(path)
     if gray.ndim == 3:
         gray = gray[..., 0]
-    sm = background_subtract(denoise(gray.astype(np.float32), sigma=SEG["sigma"]), radius=SEG["bg_radius"])
-    mask = binarize(sm, method=SEG["method"], threshold_scale=SEG["threshold_scale"],
-                    min_size=SEG["min_size"])
+    _, mask = segment_channel(gray.astype(np.float32), **SEG)
     return float(mask.mean())
 
 
