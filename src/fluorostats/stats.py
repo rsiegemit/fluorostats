@@ -9,6 +9,8 @@ A pragmatic non-parametric toolkit:
   - `bootstrap_fold_change_ci` — distribution-free fold-change interval.
   - `stouffer_combine` — meta-analytic Z-pooling across independent tests.
   - `scheirer_ray_hare` — non-parametric 2-way ANOVA on ranks.
+  - `gini`, `coefficient_of_variation` — dispersion summaries used by the
+    homogeneity metrics (`morphometry`, `objects`, `spatial`, `ring`).
 
 All functions return plain dicts or :class:`pandas.DataFrame` — no
 domain-specific column names baked in.
@@ -25,6 +27,38 @@ from scipy import stats as sps
 # ---------------------------------------------------------------------------
 # Effect sizes
 # ---------------------------------------------------------------------------
+
+def gini(values: np.ndarray) -> float:
+    """Gini coefficient of a 1D array (0 = perfectly even, -> 1 = concentrated).
+
+    Negative inputs are shifted to be non-negative; an all-zero array is 0.0 and
+    an empty one NaN.
+    """
+    v = np.asarray(values, dtype=float).ravel()
+    if v.size == 0:
+        return float("nan")
+    v = v - v.min() if v.min() < 0 else v
+    if v.sum() == 0:
+        return 0.0
+    v = np.sort(v)
+    n = v.size
+    cum = np.cumsum(v)
+    return float((n + 1 - 2 * cum.sum() / cum[-1]) / n)
+
+
+def coefficient_of_variation(values: np.ndarray, ddof: int = 0) -> float:
+    """Coefficient of variation ``std(ddof) / mean``.
+
+    ``ddof`` is the caller's convention and is part of the result: the
+    homogeneity metrics in `morphometry`, `objects` and `ring` use the population
+    form (``ddof=0``), `spatial.spatial_heterogeneity` the sample form
+    (``ddof=1``). NaN when there are ``<= ddof`` values or the mean is 0.
+    """
+    v = np.asarray(values, dtype=float).ravel()
+    if v.size <= ddof or v.mean() == 0:
+        return float("nan")
+    return float(v.std(ddof=ddof) / v.mean())
+
 
 def cliffs_delta(x: np.ndarray, y: np.ndarray) -> float:
     """Cliff's delta = P(X > Y) - P(X < Y), in [-1, 1].

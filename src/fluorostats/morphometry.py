@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .stats import coefficient_of_variation, gini
+
 
 def lateral_homogeneity(
     volume: np.ndarray,
@@ -53,8 +55,8 @@ def lateral_homogeneity(
     cropped = xy[: ty * tiles, : tx * tiles]
     tile_means = cropped.reshape(tiles, ty, tiles, tx).mean(axis=(1, 3)).ravel()
     return {
-        "lateral_gini": float(_gini(tile_means)),
-        "lateral_cv": float(_cv(tile_means)),
+        "lateral_gini": float(gini(tile_means)),
+        "lateral_cv": float(coefficient_of_variation(tile_means)),
         "n_tiles": int(tile_means.size),
     }
 
@@ -147,31 +149,7 @@ def depth_centroid(
         "z_p75": _percentile(75),
     }
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _gini(values: np.ndarray) -> float:
-    """Gini coefficient of a non-negative 1D array.
-
-    0 = perfect uniformity, approaching 1 = perfect concentration.
-    """
-    v = np.asarray(values, dtype=float).ravel()
-    if v.size == 0:
-        return float("nan")
-    v = v - v.min() if v.min() < 0 else v  # shift to non-negative
-    if v.sum() == 0:
-        return 0.0
-    v = np.sort(v)
-    n = v.size
-    cum = np.cumsum(v)
-    return float((n + 1 - 2 * cum.sum() / cum[-1]) / n)
-
-
-def _cv(values: np.ndarray) -> float:
-    """Coefficient of variation = std / mean."""
-    v = np.asarray(values, dtype=float).ravel()
-    if v.size == 0 or v.mean() == 0:
-        return float("nan")
-    return float(v.std(ddof=0) / v.mean())
+# Transitional aliases for tests that still reach the old private names; removed
+# once those tests call stats.gini / stats.coefficient_of_variation directly.
+_gini = gini
+_cv = coefficient_of_variation

@@ -11,6 +11,8 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
+from .stats import coefficient_of_variation, gini
+
 
 def label_3d(mask: np.ndarray, min_size: int = 0) -> tuple[np.ndarray, int]:
     """Connected-component label with optional size filtering.
@@ -377,8 +379,8 @@ def centroid_homogeneity(
     counts = np.zeros(tiles * tiles, dtype=int)
     np.add.at(counts, yi * tiles + xi, 1)
     return {
-        "centroid_gini": float(_gini(counts)),
-        "centroid_cv": float(_cv(counts)),
+        "centroid_gini": float(gini(counts)),
+        "centroid_cv": float(coefficient_of_variation(counts)),
         "n_objects": int(n_obj),
     }
 
@@ -412,7 +414,7 @@ def angular_homogeneity(
     counts, _ = np.histogram(ang, bins=bins, range=(-np.pi, np.pi))
     resultant = np.mean(np.exp(1j * ang))
     return {
-        "angular_gini": float(_gini(counts)),
+        "angular_gini": float(gini(counts)),
         "resultant_length": float(np.abs(resultant)),
         "dominant_angle_deg": float(np.degrees(np.angle(resultant)) % 360.0),
         "n": int(pts.shape[0]),
@@ -455,26 +457,7 @@ def radial_distribution(
         "n": int(pts.shape[0]),
     }
 
-
-# ---------------------------------------------------------------------------
-# Local helpers (duplicated from morphometry to keep modules independent)
-# ---------------------------------------------------------------------------
-
-def _gini(values: np.ndarray) -> float:
-    v = np.asarray(values, dtype=float).ravel()
-    if v.size == 0:
-        return float("nan")
-    v = v - v.min() if v.min() < 0 else v
-    if v.sum() == 0:
-        return 0.0
-    v = np.sort(v)
-    n = v.size
-    cum = np.cumsum(v)
-    return float((n + 1 - 2 * cum.sum() / cum[-1]) / n)
-
-
-def _cv(values: np.ndarray) -> float:
-    v = np.asarray(values, dtype=float).ravel()
-    if v.size == 0 or v.mean() == 0:
-        return float("nan")
-    return float(v.std(ddof=0) / v.mean())
+# Transitional aliases for tests that still reach the old private names; removed
+# once those tests call stats.gini / stats.coefficient_of_variation directly.
+_gini = gini
+_cv = coefficient_of_variation

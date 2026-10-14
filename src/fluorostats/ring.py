@@ -12,6 +12,8 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
+from .stats import coefficient_of_variation
+
 
 def ring_morphometry(
     mask: np.ndarray,
@@ -96,7 +98,8 @@ def ring_morphometry(
     if skel.any():
         th = 2.0 * dt[skel]
         wt_mean = float(th.mean())
-        wt_cv = float(th.std(ddof=0) / th.mean()) if th.mean() > 0 else 0.0
+        cv = coefficient_of_variation(th)   # thickness >= 0: NaN only for a zero mean
+        wt_cv = 0.0 if np.isnan(cv) else cv
     else:  # pragma: no cover - a non-empty wall band always yields a skeleton
         wt_mean, wt_cv = nan, nan
 

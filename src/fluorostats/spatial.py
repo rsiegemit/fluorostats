@@ -19,6 +19,8 @@ from typing import Callable
 
 import numpy as np
 
+from .stats import coefficient_of_variation
+
 
 def tile_bounds(shape: tuple[int, int], grid: tuple[int, int] = (5, 5)):
     """Yield ``(y0, y1, x0, x1)`` pixel bounds for each cell of a ``grid`` partition.
@@ -162,7 +164,7 @@ def spatial_heterogeneity(grid: np.ndarray, connectivity: str = "rook") -> dict:
     """
     g = np.asarray(grid, dtype=float)
     v = g[~np.isnan(g)]
-    cv = float(v.std(ddof=1) / v.mean()) if v.size > 1 and v.mean() != 0 else float("nan")
+    cv = coefficient_of_variation(v, ddof=1)
     return {"cv": cv, "morans_i": morans_i(g, connectivity), "n": int(v.size)}
 
 
