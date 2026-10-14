@@ -13,8 +13,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-import matplotlib as mpl
-mpl.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes

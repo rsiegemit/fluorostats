@@ -341,3 +341,14 @@ def test_unknown_style_is_rejected():
     with pytest.raises(ValueError, match="'light', 'dark'"):
         render_isosurface(mask, style="Dark")
     plt.close("all")
+
+
+def test_import_does_not_switch_the_matplotlib_backend(monkeypatch):
+    """A library module must leave the user's backend alone."""
+    import importlib
+
+    from fluorostats import render3d
+    calls = []
+    monkeypatch.setattr(matplotlib, "use", lambda *a, **k: calls.append(a))
+    importlib.reload(render3d)
+    assert calls == []
