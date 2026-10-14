@@ -6,9 +6,11 @@ mean wall-clock ms over 3-5 repeats after one warm-up. Times depend on the
 machine, so a re-run reproduces relative cost, not the committed digits.
 
 The two DL rows are CPU inference times measured on the cluster (cluster script,
-not included), carried as constants in ``common.DL_CPU_MS``. Comparator implementations (point-pattern statistics,
-lacunarity, Kerkhoff peak count) are the independent references being timed,
-not library code. Data: ``$FLUOROSTATS_DATA/{BBBC024,BBBC039,kerkhoff_lda}``.
+not included), carried as constants in ``common.DL_CPU_MS``. Comparator
+implementations (the point-pattern statistics and lacunarity that
+b_homogeneity_multi validates the tile Gini against, the Kerkhoff peak count) are
+the independent references in ``common.py``, not library code.
+Data: ``$FLUOROSTATS_DATA/{BBBC024,BBBC039,kerkhoff_lda}``.
 """
 from __future__ import annotations
 
@@ -21,7 +23,6 @@ import pandas as pd
 import tifffile
 from scipy import ndimage as ndi
 from scipy import stats as sps
-from scipy.spatial import cKDTree
 from skimage import filters, restoration
 from skimage.feature import peak_local_max
 from skimage.filters import median
@@ -29,7 +30,8 @@ from skimage.measure import euler_number
 from skimage.morphology import medial_axis, remove_small_objects, skeletonize, thin
 from skimage.segmentation import watershed
 
-from common import DATA, DL_CPU_MS, RESULTS, bbbc024_volumes, bbbc039_pairs, kerkhoff_peak_count, require, thresholds
+from common import (DATA, DL_CPU_MS, RESULTS, bbbc024_volumes, bbbc039_pairs, clark_evans, kerkhoff_peak_count,
+                    lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds)
 from fluorostats import (agreement, metrics_2d, metrics_3d, morphometry, objects, preprocess, segment,
                          skeleton, stats, validate, viability)
 
@@ -57,35 +59,15 @@ def load_inputs():
 
 
 def point_pattern_comparators(d):
-    H = W = d.vol.shape[1]
-
-    def clark_evans(p):
-        dist = cKDTree(p).query(p, k=2)[0]
-        return dist[:, 1].mean() / (0.5 / np.sqrt(len(p) / (H * W)))
-
-    def quadrat_counts(p, g=8):
-        return np.histogram2d(p[:, 0], p[:, 1], bins=g)[0].ravel()
-
-    def morisita(p):
-        h = quadrat_counts(p)
-        n = h.sum()
-        return len(h) * (h * (h - 1)).sum() / (n * (n - 1))
-
-    def quadrat_vmr(p):
-        h = quadrat_counts(p)
-        return h.var() / h.mean()
-
-    def lacunarity(m, box=16):
-        s = np.add.reduceat(np.add.reduceat(m.astype(float), np.arange(0, m.shape[0], box), 0),
-                            np.arange(0, m.shape[1], box), 1)
-        return 1 + s.var() / (s.mean() ** 2 + 1e-9)
-
+    """The reference statistics b_homogeneity_multi validates the tile Gini against."""
+    field = d.vol.shape[1]
+    area = field * field
     return [
-        ("comparator", "clark_evans NN", lambda: clark_evans(d.pts)),
-        ("comparator", "morisita index", lambda: morisita(d.pts)),
-        ("comparator", "quadrat_variance", lambda: quadrat_vmr(d.pts)),
-        ("comparator", "ripleys_K", lambda: len(cKDTree(d.pts).query_pairs(40))),
-        ("comparator", "lacunarity", lambda: lacunarity(d.mask[d.mask.shape[0] // 2])),
+        ("comparator", "clark_evans NN", lambda: clark_evans(d.pts, area, len(d.pts))),
+        ("comparator", "morisita index", lambda: morisita(d.pts, field)),
+        ("comparator", "quadrat_variance", lambda: quadrat_var(d.pts, field)),
+        ("comparator", "ripleys_K", lambda: ripley_L_dev(d.pts, area)),
+        ("comparator", "lacunarity", lambda: lacunarity(d.pts, field)),
     ]
 
 
