@@ -92,7 +92,7 @@ yf = float(denoise[strat[-1]].iloc[i_hi])
 ax_b.annotate("", xy=(xf, yf), xytext=(xn, yn),
               arrowprops=dict(arrowstyle="->", color=OKABE["black"], lw=0.8,
                               connectionstyle="arc3,rad=-0.25"))
-ax_b.annotate(r"0.41 $\rightarrow$ 0.91", xy=((xn + xf) / 2, 0.985), ha="center", va="top",
+ax_b.annotate(rf"{yn:.2f} $\rightarrow$ {yf:.2f}", xy=((xn + xf) / 2, 0.985), ha="center", va="top",
               fontsize=6, color=OKABE["black"])
 # legend outside the axes (below), off every bar
 ax_b.legend(loc="upper center", bbox_to_anchor=(0.5, -0.30), ncol=3,
@@ -123,20 +123,30 @@ panel(ax_c, "c")
 
 save(fig, "figS3_robustness", SUPP, tight=False)
 
+# Caption numbers are read from the tables plotted above, never typed.
+hi_noise = noise.iloc[-1]
+size_by = size.set_index("method")
 cap = (
     "Figure S3 | Robustness of fluorostats segmentation to noise. "
     "(a) Foreground Dice versus added zero-mean Gaussian noise (standard deviation "
     "in grey levels; 8-bit images) for classic global thresholders and fluorostats "
     "(Otsu + connected-component post-processing, blue). fluorostats matches the best "
     "classic method (Otsu/Isodata) at every noise level and degrades gracefully, "
-    "retaining Dice 0.74 at s.d.=160 where naive Triangle and Li fail. "
+    f"retaining Dice {hi_noise[flu_col]:.2f} at s.d.={hi_noise['noise_sd']:.0f}, where Li "
+    f"collapses to {hi_noise['Li']:.2f}. Triangle is the exception: worst at low noise "
+    f"({noise['Triangle'].iloc[0]:.2f} at s.d.=0) but best at the highest "
+    f"({hi_noise['Triangle']:.2f}). "
     "(b) Foreground Dice under denoising strategies (none, 3×3 median, Gaussian sigma=2, "
     "total-variation Chambolle, and the fluorostats built-in Gaussian sigma=1 pre-filter) "
-    "across increasing noise. Without denoising, Dice collapses to 0.41 at s.d.=160; the "
-    "fluorostats pre-filter recovers it to 0.91, matching dedicated denoisers. "
+    f"across increasing noise. Without denoising, Dice collapses to {yn:.2f} at "
+    f"s.d.={levels[-1]:.0f}; the fluorostats pre-filter recovers it to {yf:.2f}, matching "
+    "dedicated denoisers. "
     "(c) Per-nucleus median-diameter recovery error relative to BBBC024 ground truth "
-    "(74.5 um), sorted best-to-worst. fluorostats is best-tied at 3.5% error, versus "
-    "15.2% (Li) and 39.8% (Triangle). Blue denotes fluorostats throughout."
+    f"({size_by['GT_median'].iloc[0]:.1f} um), sorted best-to-worst. fluorostats is "
+    f"best-tied at {size_by.loc['fluorostats(Otsu+CC)', 'pct_error']:.1f}% error, versus "
+    f"{size_by.loc['Li_1993', 'pct_error']:.1f}% (Li) and "
+    f"{size_by.loc['Triangle_1977', 'pct_error']:.1f}% (Triangle). Blue denotes fluorostats "
+    "throughout."
 )
 caption("figS3_robustness", cap, SUPP)
 print("done")
