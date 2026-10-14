@@ -377,13 +377,13 @@ def test_auc_zmax_le_zmin_raises():
 # auc_depth — window exceeds range AND z_max <= z_min after clamp  (lines 409-412)
 # ---------------------------------------------------------------------------
 
-def test_auc_window_entirely_outside_acquired_range_returns_zero():
-    """z_min > max acquired depth -> after clamp z_max <= z_min -> return 0.0."""
+def test_auc_window_entirely_outside_acquired_range_is_nan():
+    """z_min > max acquired depth: nothing was measured there, so NaN, not 0.0."""
     depth = np.array([0.0, 5.0, 10.0])
     vals = np.array([1.0, 0.8, 0.5])
     # Request window [20, 30] when stack only goes to 10
     result = auc_depth(depth, vals, z_min=20.0, z_max=30.0)
-    assert result == 0.0
+    assert np.isnan(result)
 
 
 def test_auc_window_lower_edge_below_start_returns_nonzero():

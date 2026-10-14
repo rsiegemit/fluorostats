@@ -421,4 +421,15 @@ def test_window_covered_um_is_clamped_at_zero(tmp_path):
         res = depth_batch.analyse_stack(s0, None, cfg)
     assert res["auc"]["5_20um"]["covered_um"] == 5.0
     assert res["auc"]["50_60um"]["covered_um"] == 0.0
-    assert res["auc"]["50_60um"]["normalized"] == 0.0
+    assert np.isnan(res["auc"]["50_60um"]["normalized"])
+
+
+def test_aggregate_group_single_stack_has_no_spread():
+    """One primary stack has no measured spread: curve SEMs and λ SEM are NaN, not 0."""
+    z = np.arange(0.0, 10.0)
+    fit = depth.PenetrationFit(lambda_um=5.0, I0=1.0, offset=None, r_squared=0.99,
+                               rmse=0.0, n_points=z.size, fit_ok=True)
+    agg = aggregate_group([{"depth_um": z, "max_depth_um": 9.0, "bg_subtracted": np.exp(-z / 5),
+                            "normalized": np.exp(-z / 5), "fit": fit}])
+    assert np.isnan(agg["sub_sem"]).all() and np.isnan(agg["norm_sem"]).all()
+    assert agg["lambda_mean_um"] == 5.0 and np.isnan(agg["lambda_sem_um"])

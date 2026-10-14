@@ -241,8 +241,8 @@ def aggregate_group(primary: list[dict]) -> dict | None:
     nrm = np.vstack([np.interp(grid, p["depth_um"], p["normalized"]) for p in primary])
     n = len(primary)
 
-    def sem(a):
-        return a.std(axis=0, ddof=1) / np.sqrt(n) if n > 1 else np.zeros(a.shape[1])
+    def sem(a):   # NaN for one stack: no measured spread (stats.describe convention)
+        return a.std(axis=0, ddof=1) / np.sqrt(n) if n > 1 else np.full(a.shape[1], np.nan)
 
     # Penetration constant λ over primary stacks. Only fits that converged,
     # cleared the R² threshold, AND landed within the acquired depth range
@@ -252,18 +252,15 @@ def aggregate_group(primary: list[dict]) -> dict | None:
     ok_fits = [p["fit"] for p in primary if p["fit"].fit_ok]
     ok_lams = [f.lambda_um for f in ok_fits]
     ok_r2 = [f.r_squared for f in ok_fits]
-    lam_arr = np.asarray(ok_lams, dtype=np.float64)
-    lam_mean = float(lam_arr.mean()) if lam_arr.size else float("nan")
-    lam_sem = (float(lam_arr.std(ddof=1) / np.sqrt(lam_arr.size))
-               if lam_arr.size > 1 else 0.0)
+    lam = stats.describe(ok_lams)
     return {
         "depth_um": grid,
         "sub_mean": sub.mean(axis=0), "sub_sem": sem(sub),
         "norm_mean": nrm.mean(axis=0), "norm_sem": sem(nrm),
         "n": n,
-        "lambda_mean_um": lam_mean,
-        "lambda_sem_um": lam_sem,
-        "n_lambda_ok": int(lam_arr.size),
+        "lambda_mean_um": lam["mean"],
+        "lambda_sem_um": lam["sem"],
+        "n_lambda_ok": lam["n"],
         "r_squared_mean": float(np.mean(ok_r2)) if ok_r2 else float("nan"),
     }
 
@@ -457,7 +454,8 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
 
 def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
     """Print a descriptive two-group Welch contrast (``by_group`` has 2 groups)."""
-    (ga, va), (gb, vb) = list(by_group.items())
+    (ga, va), (gb, vb) = [(g, [v for v in vals if not np.isnan(v)])
+                          for g, vals in by_group.items()]
     r = stats.welch_t(va, vb)
     print(f"  {label} {ga} vs {gb}: t={r['t']:.3f}, p={r['p']:.4f} "
           f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
@@ -494,9 +492,8 @@ def _print_summary(rows, windows) -> None:
     for i, (w, by_group) in enumerate(zip(windows, per_window)):
         print(f"\n=== AUC {window_title(w)} (normalised) ===")
         for g, vals in by_group.items():
-            m = np.mean(vals)
-            sd = np.std(vals, ddof=1) if len(vals) > 1 else 0.0
-            print(f"  {g:8s} n={len(vals)}  mean={m:8.2f}  sd={sd:6.2f}  "
+            d = stats.describe(vals)
+            print(f"  {g:8s} n={d['n']}  mean={d['mean']:8.2f}  sd={d['sd']:6.2f}  "
                   f"values={[round(v, 1) for v in vals]}")
         if mws[i] is None:
             _print_skipped(len(by_group))
@@ -518,9 +515,8 @@ def _print_lambda_summary(rows) -> None:
         if r["role"] == "primary" and fit.fit_ok:
             by_group.setdefault(r["group"], []).append(fit.lambda_um)
     for g, vals in by_group.items():
-        m = np.mean(vals)
-        sem = np.std(vals, ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0.0
-        print(f"  {g:8s} n={len(vals)}  λ mean={m:7.2f} µm  SEM={sem:5.2f}  "
+        d = stats.describe(vals)
+        print(f"  {g:8s} n={d['n']}  λ mean={d['mean']:7.2f} µm  SEM={d['sem']:5.2f}  "
               f"values={[round(v, 1) for v in vals]}")
     if len(by_group) != 2:
         _print_skipped(len(by_group), " with an accepted λ fit")

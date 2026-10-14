@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -481,3 +482,11 @@ def test_summary_stars_follow_the_corrected_table(tmp_path):
         assert drawn["stars"] == [s for s in sig_table.significance if s != "ns"] == ["*", "*"]
     finally:
         plt.Figure.savefig = real_savefig
+
+
+def test_group_stats_leave_undefined_mean_and_sem_nan():
+    """An empty condition has no mean and a single replicate no SEM: NaN, not 0."""
+    df = pd.DataFrame({"condition": ["A", "A", "B"], "m": [1.0, 3.0, 5.0]})
+    data, means, sems = plots._group_stats(df, "m", ["A", "B", "C"])
+    assert means[:2] == [2.0, 5.0] and np.isnan(means[2])
+    assert sems[0] == pytest.approx(1.0) and np.isnan(sems[1]) and np.isnan(sems[2])

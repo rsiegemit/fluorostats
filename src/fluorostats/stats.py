@@ -28,6 +28,26 @@ from scipy import stats as sps
 
 
 # ---------------------------------------------------------------------------
+# Descriptive summaries
+# ---------------------------------------------------------------------------
+
+def describe(values) -> dict:
+    """``{"n", "mean", "sd", "sem"}`` of the non-NaN values; NaN where undefined.
+
+    NaN entries are dropped and ``n`` counts what remains. The mean is NaN for
+    n = 0; the sample SD (ddof=1) and SEM are NaN for n < 2, because a single value
+    has no measured spread (0.0 would claim a precision nobody measured).
+    """
+    a = np.asarray(values, dtype=float).ravel()
+    a = a[~np.isnan(a)]
+    n = int(a.size)
+    nan = float("nan")
+    sd = float(a.std(ddof=1)) if n > 1 else nan
+    return {"n": n, "mean": float(a.mean()) if n else nan, "sd": sd,
+            "sem": sd / float(np.sqrt(n)) if n > 1 else nan}
+
+
+# ---------------------------------------------------------------------------
 # Effect sizes
 # ---------------------------------------------------------------------------
 
@@ -371,6 +391,7 @@ def scheirer_ray_hare(
 
 
 __all__ = [
+    "describe",
     "gini",
     "coefficient_of_variation",
     "cliffs_delta",

@@ -84,10 +84,11 @@ def _plot_lambda_model(ax, agg: dict, mean: np.ndarray, c: str, n_surface: int,
             color=c, lw=1.1, ls=(0, (4, 2)), alpha=0.9, zorder=4)
     # Show how many stacks yielded an in-range λ, so a single-stack or
     # partly-degenerate group λ is never read as a confident group value.
-    lam_sem = agg.get("lambda_sem_um", 0.0)
+    lam_sem = agg.get("lambda_sem_um", float("nan"))
     r2 = agg.get("r_squared_mean", float("nan"))
     n_ok = agg.get("n_lambda_ok", 0)
-    return f"\n  λ={lam:.0f}±{lam_sem:.0f} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
+    spread = "" if np.isnan(lam_sem) else f"±{lam_sem:.0f}"   # no SEM from one fit
+    return f"\n  λ={lam:.0f}{spread} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
 
 
 def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: Path,

@@ -422,3 +422,17 @@ def test_scheirer_ray_hare_warns_on_empty_cell():
                        "B": ["p", "p", "p", "p", "q", "q"]})   # (y, q) has no observations
     with pytest.warns(RuntimeWarning, match=r"unbalanced \(3 of 4 cells observed, cell sizes 2-2\)"):
         scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
+
+
+@pytest.mark.parametrize("values,n,mean,sd", [
+    ([2.0, 4.0, 6.0], 3, 4.0, 2.0),
+    ([2.0, np.nan, 6.0], 2, 4.0, np.sqrt(8.0)),
+    ([5.0], 1, 5.0, np.nan),
+    ([], 0, np.nan, np.nan),
+    ([np.nan], 0, np.nan, np.nan),
+])
+def test_describe_drops_nan_and_leaves_undefined_spread_nan(values, n, mean, sd):
+    d = stats.describe(values)
+    assert d["n"] == n
+    np.testing.assert_equal([d["mean"], d["sd"]], [mean, sd])
+    np.testing.assert_equal(d["sem"], sd / np.sqrt(n) if n > 1 else np.nan)

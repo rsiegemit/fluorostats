@@ -405,7 +405,8 @@ def auc_depth(
     Endpoints falling between slices are linearly interpolated so the
     window is exactly ``[z_min, z_max]`` regardless of slice spacing.
     Units are ``value * micrometre`` (e.g. for a surface-normalised
-    curve, a perfectly non-decaying signal over 0-100 um gives 100).
+    curve, a perfectly non-decaying signal over 0-100 um gives 100). NaN when
+    the window lies entirely outside the acquired depths.
     """
     depth = np.asarray(depth_um, dtype=np.float64)
     vals = np.asarray(values, dtype=np.float64)
@@ -419,11 +420,12 @@ def auc_depth(
 
     if z_min < depth[0] or z_max > depth[-1]:
         # Window exceeds the acquired range; clamp and let the caller
-        # decide via coverage (reported separately by the driver).
+        # decide via coverage (reported separately by the driver). A window
+        # entirely outside the stack measured nothing: NaN, not an area of 0.
         z_min = max(z_min, float(depth[0]))
         z_max = min(z_max, float(depth[-1]))
         if z_max <= z_min:
-            return 0.0
+            return float("nan")
 
     # Build a grid that includes the interpolated window endpoints.
     interior = depth[(depth > z_min) & (depth < z_max)]

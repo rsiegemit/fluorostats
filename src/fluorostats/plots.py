@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from . import stats
+
 
 # ---------------------------------------------------------------------------
 # Shared per-condition statistics
@@ -18,16 +20,17 @@ def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     """Per-condition (data, means, sems) for *metric*.
 
     Returns three parallel lists aligned to *conditions*: the raw dropped-NA
-    value arrays, the means (0 when empty), and the SEMs (0 when n<=1).
+    value arrays, the means and the SEMs, NaN where undefined (`stats.describe`).
     """
     data = []
     means = []
     sems = []
     for c in conditions:
         vals = df.loc[df["condition"] == c, metric].dropna().values
+        d = stats.describe(vals)
         data.append(vals)
-        means.append(vals.mean() if len(vals) > 0 else 0)
-        sems.append(vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+        means.append(d["mean"])
+        sems.append(d["sem"])
     return data, means, sems
 
 
@@ -225,7 +228,6 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
     given, else corrected across the pairs tested here. Limits total brackets to
     max_brackets to keep plots clean.
     """
-    from .stats import bh_fdr, mann_whitney
 
     n = len(conditions)
 
@@ -241,14 +243,14 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
     for i, j in pairs:
         if len(data[i]) < 2 or len(data[j]) < 2:
             continue
-        p = mann_whitney(data[i], data[j])["p"]
+        p = stats.mann_whitney(data[i], data[j])["p"]
         if not np.isnan(p):
             tested.append((i, j, p))
     if q_lookup is not None:
         qs = [q_lookup.get(frozenset((conditions[i], conditions[j])), np.nan)
               for i, j, _ in tested]
     else:
-        qs = bh_fdr(np.array([p for _, _, p in tested])) if tested else []
+        qs = stats.bh_fdr(np.array([p for _, _, p in tested])) if tested else []
     sig_pairs = [(i, j, _pvalue_stars(q), q) for (i, j, _), q in zip(tested, qs)
                  if not np.isnan(q) and _pvalue_stars(q) != "ns"]
 
@@ -301,7 +303,6 @@ def compute_pvalues(
     p_value, q_value, significance, cliffs_delta (``stats.cliffs_delta`` of a vs b),
     test and correction (naming both), empty if no pair has >=2 samples per group.
     """
-    from .stats import bh_fdr, mann_whitney
 
     conditions = sorted(df["condition"].unique())
     rows = []
@@ -314,7 +315,7 @@ def compute_pvalues(
             b = df.loc[df["condition"] == conditions[j], metric].dropna().values
             if len(a) < 2 or len(b) < 2:
                 continue
-            res = mann_whitney(a, b)
+            res = stats.mann_whitney(a, b)
             if np.isnan(res["p"]):      # the test could not be computed
                 continue
             rows.append({
@@ -329,7 +330,7 @@ def compute_pvalues(
 
     out = pd.DataFrame(rows)
     if not out.empty:
-        out["q_value"] = bh_fdr(out["p_value"].values)
+        out["q_value"] = stats.bh_fdr(out["p_value"].values)
         out["significance"] = out["q_value"].map(_pvalue_stars)   # stars on CORRECTED q
         out["test"] = "Mann-Whitney U, two-sided"
         out["correction"] = "Benjamini-Hochberg FDR across all rows"

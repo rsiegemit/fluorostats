@@ -146,3 +146,13 @@ def test_lambda_overlay_follows_n_surface_and_fit_offset(tmp_path, last_axes,
     np.testing.assert_allclose(overlay[0].get_ydata(), expected)
     if n_surface == 1:
         np.testing.assert_allclose(overlay[0].get_ydata(), curve)   # exact model, exact anchor
+
+
+@pytest.mark.parametrize("sem, expected", [(1.6, "λ=10±2 µm"), (float("nan"), "λ=10 µm")])
+def test_lambda_label_omits_the_sem_when_it_is_undefined(sem, expected):
+    from fluorostats.depth_figures import _plot_lambda_model
+    z = np.arange(0.0, 41.0, 2.0)
+    agg = {"depth_um": z, "lambda_mean_um": 10.0, "lambda_sem_um": sem, "n_lambda_ok": 1,
+           "n": 1, "r_squared_mean": 0.9}
+    fig, ax = plt.subplots()
+    assert expected in _plot_lambda_model(ax, agg, 100 * np.exp(-z / 10), "#000", 1, 0.0)
