@@ -56,28 +56,36 @@ def overlay_2d(
     _save_overlay(img.astype(np.float64), mask, out_path, alpha)
 
 
+def overlay_rgb(
+    intensity: np.ndarray,
+    mask: np.ndarray,
+    color: tuple[int, int, int] = (255, 0, 255),
+    alpha: float = 0.5,
+) -> np.ndarray:
+    """A 2D image stretched min-max to grey, with ``mask`` blended in ``color``.
+
+    Returns a ``uint8`` (Y, X, 3) image; a flat image is black. The one overlay
+    rule shared by the QC PNGs and `render3d.mip_overlay`.
+    """
+    intensity = np.asarray(intensity, dtype=np.float64)
+    vmin, vmax = intensity.min(), intensity.max()
+    if vmax > vmin:
+        gray = ((intensity - vmin) / (vmax - vmin) * 255).astype(np.uint8)
+    else:
+        gray = np.zeros_like(intensity, dtype=np.uint8)
+    rgb = np.stack([gray, gray, gray], axis=-1).astype(np.float64)
+    sel = np.asarray(mask, dtype=bool)
+    rgb[sel] = rgb[sel] * (1 - alpha) + np.asarray(color, dtype=float) * alpha
+    return rgb.astype(np.uint8)
+
+
 def _save_overlay(
     intensity: np.ndarray,
     mask: np.ndarray,
     out_path: Path,
     alpha: float,
 ) -> None:
-    """Composite a grayscale image with a magenta binary mask overlay."""
-    # Normalize intensity to 0–255
-    vmin, vmax = intensity.min(), intensity.max()
-    if vmax > vmin:
-        gray = ((intensity - vmin) / (vmax - vmin) * 255).astype(np.uint8)
-    else:
-        gray = np.zeros_like(intensity, dtype=np.uint8)
-
-    # Build RGB from grayscale
-    rgb = np.stack([gray, gray, gray], axis=-1).astype(np.float64)
-
-    # Magenta overlay where mask is True
-    magenta = np.array([255.0, 0.0, 255.0])
-    mask_3d = mask.astype(bool)
-    rgb[mask_3d] = rgb[mask_3d] * (1 - alpha) + magenta * alpha
-
+    """Write `overlay_rgb` (magenta mask) to ``out_path``."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    iio.imwrite(str(out_path), rgb.astype(np.uint8))
+    iio.imwrite(str(out_path), overlay_rgb(intensity, mask, (255, 0, 255), alpha))

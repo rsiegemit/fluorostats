@@ -352,3 +352,15 @@ def test_import_does_not_switch_the_matplotlib_backend(monkeypatch):
     monkeypatch.setattr(matplotlib, "use", lambda *a, **k: calls.append(a))
     importlib.reload(render3d)
     assert calls == []
+
+
+def test_mip_overlay_composites_with_the_qc_rule():
+    """One overlay rule: mip_overlay shows qc.overlay_rgb of the MIP (min-max stretch)."""
+    from fluorostats import qc
+    intensity = np.random.RandomState(1).rand(4, 16, 16) * 100 + 50     # min well above 0
+    mask = intensity > 120
+    fig, ax = plt.subplots()
+    mip_overlay(intensity, mask=mask, ax=ax)
+    expected = qc.overlay_rgb(intensity.max(0), mask.any(0), (220, 60, 220), 0.6)
+    np.testing.assert_array_equal(ax.images[0].get_array(), expected)
+    plt.close(fig)

@@ -21,6 +21,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import marching_cubes
 
+from .qc import overlay_rgb
 from .style import DARK_PALETTE, PALETTE
 
 
@@ -305,21 +306,17 @@ def mip_overlay(
 ) -> Axes:
     """Grey-scale maximum-intensity projection with optional magenta mask.
 
-    Returns the axis. Convenient cell renderer for a condition × time grid
-    of representative stacks (one cell per condition × region × day).
+    Composited with `qc.overlay_rgb` (min-max grey stretch), the same rule as
+    the CLI's QC overlays. Returns the axis. Convenient cell renderer for a
+    condition × time grid of representative stacks (one cell per condition ×
+    region × day).
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(4, 4))
     mip = intensity.max(axis=z_axis)
-    mip_norm = mip / max(1, mip.max()) * 255
-    rgb = np.stack([mip_norm, mip_norm, mip_norm], axis=-1).astype(np.uint8)
-    if mask is not None:
-        mip_mask = mask.any(axis=z_axis)
-        overlay = np.array(overlay_color, dtype=float)
-        rgb[mip_mask] = (
-            rgb[mip_mask] * (1 - overlay_alpha) + overlay * overlay_alpha
-        ).astype(np.uint8)
-    ax.imshow(rgb)
+    mip_mask = (np.zeros(mip.shape, dtype=bool) if mask is None
+                else mask.any(axis=z_axis))
+    ax.imshow(overlay_rgb(mip, mip_mask, overlay_color, overlay_alpha))
     ax.set_xticks([])
     ax.set_yticks([])
     return ax
