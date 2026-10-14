@@ -362,8 +362,10 @@ def centroid_homogeneity(
 ) -> dict:
     """Spatial uniformity of object centroids over an XY tile grid.
 
-    Expects centroids as (N, 3) in (z, y, x) voxel order (as from
-    ``object_centroids``). Same Gini/CV summary as
+    Accepts centroids as (N, 3) in (z, y, x) voxel order (as from
+    ``object_centroids``) or (N, 2) in (y, x), with ``shape_zyx`` the matching
+    (Z, Y, X) or (Y, X) shape; only the last two axes are tiled. Same Gini/CV
+    summary as
     `morphometry.lateral_homogeneity`, but computed on object *counts per
     tile* rather than intensity per tile.
 
@@ -372,11 +374,11 @@ def centroid_homogeneity(
     n_obj = centroids.shape[0]
     if n_obj == 0:
         return {"centroid_gini": float("nan"), "centroid_cv": float("nan"), "n_objects": 0}
-    _, ny, nx = shape_zyx
+    ny, nx = shape_zyx[-2:]
     ty = ny / tiles
     tx = nx / tiles
-    yi = np.clip((centroids[:, 1] / ty).astype(int), 0, tiles - 1)
-    xi = np.clip((centroids[:, 2] / tx).astype(int), 0, tiles - 1)
+    yi = np.clip((centroids[:, -2] / ty).astype(int), 0, tiles - 1)
+    xi = np.clip((centroids[:, -1] / tx).astype(int), 0, tiles - 1)
     counts = np.zeros(tiles * tiles, dtype=int)
     np.add.at(counts, yi * tiles + xi, 1)
     return {

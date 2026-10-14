@@ -319,3 +319,13 @@ def test_equivalent_diameters_no_zero_from_gaps():
     labels = np.array([[[0, 1, 1], [0, 3, 3]]])
     d = objects.equivalent_diameters_um(labels, (1.0, 1.0, 1.0))
     assert len(d) == 2 and (d > 0).all()
+
+
+def test_centroid_homogeneity_accepts_2d_centroids():
+    # Regression: (N, 2) centroids raised IndexError (columns 1/2 hard-coded); a 2D
+    # call must equal the 3D call on the same y/x positions.
+    from fluorostats.objects import centroid_homogeneity
+
+    yx = np.array([[3.0, 4.0], [20.0, 30.0], [40.0, 10.0], [60.0, 60.0]])
+    zyx = np.column_stack([np.zeros(4), yx])
+    assert centroid_homogeneity(yx, (64, 64)) == centroid_homogeneity(zyx, (5, 64, 64))
