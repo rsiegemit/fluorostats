@@ -240,7 +240,7 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
     # --no-skeleton: same keys as skeleton_metrics() so the CSV keeps its shape, but
     # NaN (not measured) rather than 0 (measured, nothing there), so skipped
     # metrics are left out of plots and statistics instead of entering as zeros.
-    skel = {k: float("nan") for k in skeleton.EMPTY_METRICS}
+    skel = dict(skeleton.UNMEASURED_METRICS)
     if not no_skeleton:
         skel = metrics_3d.skeleton_metrics(
             mask, voxel_size_um=voxel_size,
