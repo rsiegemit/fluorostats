@@ -355,7 +355,7 @@ def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):
     assert "different z-steps" in msgs
     assert "reaches past the stack" in msgs
     ps = pd.read_csv(tmp_path / "out" / "auc_per_stack.csv")
-    assert ps["voxel_size_source"].tolist() == ["z:file,y:default,x:default"]
+    assert ps["voxel_size_source"].tolist() == ["z:file-unit-unknown,y:default,x:default"]
 
 
 # ---------------------------------------------------------------------------
