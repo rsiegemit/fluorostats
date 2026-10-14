@@ -1,5 +1,7 @@
 """Figure 5 — Spatial homogeneity and the integrated statistics layer (a-c)."""
-import sys, numpy as np, pandas as pd
+import sys
+import numpy as np
+import pandas as pd
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import figstyle as F
@@ -19,14 +21,17 @@ gs = gridspec.GridSpec(2, 2, figure=fig, height_ratios=[0.72, 1.30],
                        width_ratios=[0.55, 1.45], hspace=0.05, wspace=0.30)
 
 # (a) three canonical point patterns with tile Gini
-rng = np.random.default_rng(1); N, S = 225, 500
+rng = np.random.default_rng(1)
+N, S = 225, 500
 def pattern(kind):
     if kind == "regular":
-        g = int(np.sqrt(N)); xs = np.linspace(30, S-30, g)
+        g = int(np.sqrt(N))
+        xs = np.linspace(30, S-30, g)
         return np.array([(y, x) for y in xs for x in xs])
     if kind == "random":
         return rng.uniform(20, S-20, (N, 2))
-    k = 7; cen = rng.uniform(60, S-60, (k, 2))
+    k = 7
+    cen = rng.uniform(60, S-60, (k, 2))
     return np.clip(np.array([cen[i % k] + rng.normal(0, 22, 2) for i in range(N)]), 5, S-5)
 titles = {"regular": "regular", "random": "random (CSR)", "clustered": "clustered"}
 gs_a = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[0, :], wspace=0.14)
@@ -34,13 +39,21 @@ for i, kind in enumerate(["regular", "random", "clustered"]):
     p = pattern(kind)
     p3 = np.column_stack([np.zeros(len(p)), p[:, 0], p[:, 1]])
     gini = centroid_homogeneity(p3, (1, S, S))["centroid_gini"]
-    ax = fig.add_subplot(gs_a[i]); ax.scatter(p[:, 1], p[:, 0], s=8, color=BLUE, edgecolor="none")
-    ax.set_xlim(0, S); ax.set_ylim(0, S); ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
-    for sp in ax.spines.values(): sp.set_color("#999"); sp.set_linewidth(0.5)
+    ax = fig.add_subplot(gs_a[i])
+    ax.scatter(p[:, 1], p[:, 0], s=8, color=BLUE, edgecolor="none")
+    ax.set_xlim(0, S)
+    ax.set_ylim(0, S)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for sp in ax.spines.values():
+        sp.set_color("#999")
+        sp.set_linewidth(0.5)
     ax.set_title(titles[kind], fontsize=7.0)
     ax.text(0.5, -0.09, f"tile Gini = {gini:.3f}", transform=ax.transAxes, ha="center", fontsize=6.0,
             fontweight="bold", color=BLUE)
-    if i == 0: panel(ax, "a", xanchor=0.0315)   # row-leader -> common page anchor
+    if i == 0:
+        panel(ax, "a", xanchor=0.0315)  # row-leader -> common page anchor
 
 # (b) tracking scatter across the full regular→clustered sweep (50 synthetic
 # fields), NOT a zoomed correlation dot-plot: x = mean sign-aligned z-score of the
@@ -55,7 +68,8 @@ for r, s in REFSIGN.items():
     v = raw[r].to_numpy(float) * s
     Z += (v - v.mean()) / (v.std() + 1e-9)
 consensus = Z / len(REFSIGN)
-gini = raw["gini"].to_numpy(float); lvl = raw["level"].to_numpy(int)
+gini = raw["gini"].to_numpy(float)
+lvl = raw["level"].to_numpy(int)
 ramp = ["#BFBFBF", "#8C8C8C", "#6FA8CF", "#2E7BB5", "#0A4C8A"]   # regular(grey)→clustered(blue)
 for L in range(5):
     m = lvl == L
@@ -80,7 +94,8 @@ for j, (g, v) in enumerate(groups.items()):
     x = np.full(len(v), j) + rng.normal(0, 0.05, len(v))
     axc.scatter(x, v, s=26, color=gcol[g], edgecolor="black", lw=0.4, zorder=3)
     axc.plot([j-0.22, j+0.22], [v.mean(), v.mean()], color="black", lw=1.3, zorder=2)
-axc.set_xticks([0,1,2]); axc.set_xticklabels(["V1","V3","V5"], fontsize=6.0)
+axc.set_xticks([0,1,2])
+axc.set_xticklabels(["V1","V3","V5"], fontsize=6.0)
 axc.set_xlabel("VEGF dose", fontsize=6.0)
 axc.set_ylabel("vessel volume fraction (%)")
 # headroom so the stats readout sits ABOVE every data point (it was opaque-white over
@@ -88,10 +103,13 @@ axc.set_ylabel("vessel volume fraction (%)")
 axc.set_ylim(0.20, 1.25)
 # real fluorostats.stats output on groups 1 vs 3
 a, b = groups[1], groups[3]
-mw = mann_whitney(a, b); cd = cliffs_delta(a, b)
+mw = mann_whitney(a, b)
+cd = cliffs_delta(a, b)
 fc = bootstrap_fold_change_ci(a, b, n_boot=5000)
 qs = bh_fdr([mann_whitney(groups[i], groups[j])["p"] for i,j in [(1,3),(1,5),(3,5)]])
-fc_ratio = fc["fold_change_median"]; fc_lo = fc["ci_low"]; fc_hi = fc["ci_high"]
+fc_ratio = fc["fold_change_median"]
+fc_lo = fc["ci_low"]
+fc_hi = fc["ci_high"]
 
 _cds = f"{cd:+.2f}".replace("-", "−")  # real minus, matching tick labels
 axc.text(0.02, 0.985,
@@ -120,5 +138,6 @@ cap = ("Figure 5 | Spatial homogeneity and the integrated statistics layer. "
  "BH-FDR across contrasts — showing image→statistic with no manual export. This contrast is an "
  "illustrative toy example (n=4/group; Cliff's δ=−1.00 reflects complete separation), not a headline "
  "result.")
-save(fig, "fig5_homogeneity_stats", tight=False); caption("fig5_homogeneity_stats", cap)
+save(fig, "fig5_homogeneity_stats", tight=False)
+caption("fig5_homogeneity_stats", cap)
 print("Figure 5 done")

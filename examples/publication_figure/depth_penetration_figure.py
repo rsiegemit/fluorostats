@@ -216,7 +216,8 @@ def benchmark_A_lambda():
         sub = depth.subtract_background(prof, float(bg))
         fit = depth.fit_penetration_depth(sub.depth_um, sub.mean)
         err = abs(fit.lambda_um - lam) / lam * 100
-        known.append(lam); recovered.append(fit.lambda_um)
+        known.append(lam)
+        recovered.append(fit.lambda_um)
         rows.append(dict(test="Alam_exact_noiseless", gt_lambda=lam,
                          fs_lambda=fit.lambda_um, lambda_err_pct=err,
                          r_squared=fit.r_squared))
@@ -236,7 +237,8 @@ def benchmark_A_lambda():
         prof = depth.intensity_depth_profile(vol, dz)
         sub = depth.subtract_background(prof, blank)
         fit = depth.fit_penetration_depth(sub.depth_um, sub.mean)
-        noisy_lams.append(fit.lambda_um); noisy_r2.append(fit.r_squared)
+        noisy_lams.append(fit.lambda_um)
+        noisy_r2.append(fit.r_squared)
     noisy_lams = np.array(noisy_lams)
     err = abs(noisy_lams.mean() - lam) / lam * 100
     print(f"  noisy (sigma={sigma:.0f}, {n_rep} reps): recovered lambda "
@@ -327,7 +329,8 @@ def make_figure(ctx, lam_ctx):
 
     # (a) GT recovery: analytic normalized decay vs fluorostats recovered (noisy, mean±band)
     p = ctx["noisy_curve"]
-    z = np.arange(p["n_z"]) * p["dz"]; z1 = z[-1]
+    z = np.arange(p["n_z"]) * p["dz"]
+    z1 = z[-1]
     analytic = np.exp(-z / p["lam"])
     curves = []
     for r in range(8):
@@ -340,13 +343,17 @@ def make_figure(ctx, lam_ctx):
         sub = depth.subtract_background(prof, blank)
         nrm = depth.normalize_to_surface(sub, n_surface=1)  # ref = surface slice -> matches e^{-z/λ}
         curves.append(nrm.normalized)
-    curves = np.vstack(curves); m = curves.mean(0); sd = curves.std(0, ddof=1)
+    curves = np.vstack(curves)
+    m = curves.mean(0)
+    sd = curves.std(0, ddof=1)
     axa = fig.add_subplot(gs[0, 0])
     axa.plot(z, analytic, color="black", lw=1.3, ls="--", label="analytic exp(−z/λ)", zorder=3)
     axa.fill_between(z, m - sd, m + sd, color=OKABE["blue"], alpha=0.25, lw=0, zorder=1)
     axa.plot(z, m, color=OKABE["blue"], lw=1.8, label="fluorostats (mean±s.d.)", zorder=2)
-    axa.set_xlabel("depth (µm)"); axa.set_ylabel("normalized intensity")
-    axa.set_xlim(0, z1); axa.set_ylim(0, 1.05)
+    axa.set_xlabel("depth (µm)")
+    axa.set_ylabel("normalized intensity")
+    axa.set_xlim(0, z1)
+    axa.set_ylim(0, 1.05)
     # shortened labels keep the legend in the clear upper-right corner (the curve decays
     # to the lower-right there), off the steep first ~12 µm it used to overprint
     axa.legend(fontsize=5.0, loc="upper right", frameon=False, handlelength=1.6, borderaxespad=0.2)
@@ -355,14 +362,17 @@ def make_figure(ctx, lam_ctx):
     # (b) penetration-constant recovery: recovered λ vs known λ on the identity line,
     #     with one example profile + fitted exponential inset (annotated R²).
     axb = fig.add_subplot(gs[0, 1])
-    known = np.asarray(lam_ctx["known"]); rec = np.asarray(lam_ctx["recovered"])
+    known = np.asarray(lam_ctx["known"])
+    rec = np.asarray(lam_ctx["recovered"])
     lo, hi = 0, known.max() * 1.12
     axb.plot([lo, hi], [lo, hi], color=OKABE["grey"], lw=1.0, ls="--", zorder=1,
              label="identity")
     axb.scatter(known, rec, color=OKABE["blue"], edgecolor="white", s=34, lw=0.7,
                 zorder=3, label="recovered")
-    axb.set_xlim(lo, hi); axb.set_ylim(lo, hi)
-    axb.set_xlabel("known λ (µm)"); axb.set_ylabel("recovered λ (µm)")
+    axb.set_xlim(lo, hi)
+    axb.set_ylim(lo, hi)
+    axb.set_xlabel("known λ (µm)")
+    axb.set_ylabel("recovered λ (µm)")
     axb.set_aspect("equal", adjustable="box")
     axb.legend(fontsize=5.0, loc="upper left")
     ex = lam_ctx["example"]
@@ -384,9 +394,12 @@ def make_figure(ctx, lam_ctx):
         axc.scatter(np.full(len(vals), i) + np.linspace(-0.1, 0.1, len(vals)), vals,
                     color=c, edgecolor="white", s=22, lw=0.5, zorder=3)
         axc.plot([i - 0.34, i + 0.34], [gt, gt], color="black", lw=1.2, ls="--", zorder=4)
-    axc.set_xticks([0, 1]); axc.set_xticklabels([c[0] for c in conds], fontsize=6)
-    axc.set_ylabel("retained fraction (0–%g µm)" % ctx["z_win"]); axc.set_ylim(0, 1.0)
-    _wexp = int(np.floor(np.log10(ctx['welch_p']))); _wman = ctx['welch_p'] / 10 ** _wexp
+    axc.set_xticks([0, 1])
+    axc.set_xticklabels([c[0] for c in conds], fontsize=6)
+    axc.set_ylabel("retained fraction (0–%g µm)" % ctx["z_win"])
+    axc.set_ylim(0, 1.0)
+    _wexp = int(np.floor(np.log10(ctx['welch_p'])))
+    _wman = ctx['welch_p'] / 10 ** _wexp
     # literal Unicode superscripts (not mathtext) so every glyph renders at the full
     # 5.4 pt parent — mathtext sub/superscripts are 0.7x = 3.78 pt, below the 5 pt floor
     _sup = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")

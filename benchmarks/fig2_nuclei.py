@@ -1,5 +1,8 @@
 """Figure 2 — Nucleus segmentation and the deep-learning boundary (a-f)."""
-import sys, glob, numpy as np, pandas as pd
+import sys
+import glob
+import numpy as np
+import pandas as pd
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import figstyle as F
@@ -13,7 +16,8 @@ from fluorostats.objects import label_3d
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
 DL = F.DATA
-GREY = OKABE["grey"]; LGREY = OKABE["lgrey"]
+GREY = OKABE["grey"]
+LGREY = OKABE["lgrey"]
 outline = F.outline
 
 # ---------- data ----------
@@ -107,7 +111,8 @@ axa.set_yticklabels([r["lab"] for r in rows], fontsize=5.0)
 for tick, lc, r in zip(axa.get_yticklabels(), labcols, rows):
     tick.set_color(lc)
     tick.set_fontweight("bold" if r["kind"] == "default" else "normal")
-axa.set_xlim(lo_x, hi_x); axa.set_ylim(-0.6, len(rows) - 0.4)
+axa.set_xlim(lo_x, hi_x)
+axa.set_ylim(-0.6, len(rows) - 0.4)
 axa.set_xticks([0.2, 0.4, 0.6, 0.8, 1.0])
 axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
 # legend explaining the family
@@ -138,11 +143,14 @@ for m, arr in dl200.items():
     fb[m] = boot_ci(arr)
 fo = sorted(fb, key=lambda m: fb[m][0])
 for i, m in enumerate(fo):
-    mean, lo, hi = fb[m]; c = OKABE["blue"] if m=="fluorostats" else TOOL[m]["c"]
+    mean, lo, hi = fb[m]
+    c = OKABE["blue"] if m=="fluorostats" else TOOL[m]["c"]
     axb.errorbar(mean, i, xerr=[[mean-lo],[hi-mean]], fmt=TOOL.get(m,{}).get("m","o"),
                  color=c, ecolor="black", capsize=2.5, ms=6, mec="black", mew=0.5, elinewidth=0.9)
-axb.set_yticks(range(len(fo))); axb.set_yticklabels(fo, fontsize=6.0)
-axb.set_xlabel("mean F1  (95% CI, n = 200)"); axb.set_xlim(0.78, 0.955)
+axb.set_yticks(range(len(fo)))
+axb.set_yticklabels(fo, fontsize=6.0)
+axb.set_xlabel("mean F1  (95% CI, n = 200)")
+axb.set_xlim(0.78, 0.955)
 axb.text(0.97, 0.06, "paired Δ excludes 0:\n−StarDist +0.025\n−Cellpose +0.034",
          transform=axb.transAxes, fontsize=5.0, color="#333", va="bottom", ha="right")
 panel(axb, "b", "vs trained deep learning (n = 200)", xanchor=0.0315)   # row-leader
@@ -157,14 +165,19 @@ if not imgs:
 crops = []
 hh, ww = 150, 250   # landscape crops (aspect ~1.67) so the 2x3 band stays short
 for f in imgs:
-    im = np.asarray(Image.open(f)).astype(np.float32); stem = Path(f).stem
+    im = np.asarray(Image.open(f)).astype(np.float32)
+    stem = Path(f).stem
     gt = gt_inst(stem)
-    if gt.max() < 8: continue
-    ys, xs = np.where(gt > 0); cy, cx = int(ys.mean()), int(xs.mean())
-    y0 = min(max(0, cy-hh), im.shape[0]-2*hh); x0 = min(max(0, cx-ww), im.shape[1]-2*ww)
+    if gt.max() < 8:
+        continue
+    ys, xs = np.where(gt > 0)
+    cy, cx = int(ys.mean()), int(xs.mean())
+    y0 = min(max(0, cy-hh), im.shape[0]-2*hh)
+    x0 = min(max(0, cx-ww), im.shape[1]-2*ww)
     sl = (slice(y0, y0+2*hh), slice(x0, x0+2*ww))
     crops.append((im[sl], gt[sl], stem))
-    if len(crops) == 2: break
+    if len(crops) == 2:
+        break
 labs = ["raw", "expert GT", "fluorostats"]
 # 2x3 image grid via nested gridspec
 gs_c = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[2, :], hspace=0.06, wspace=0.06)
@@ -172,10 +185,13 @@ for row, (im, gt, stem) in enumerate(crops):
     fs = label_3d(remove_small_objects(im > filters.threshold_otsu(im), 20), min_size=20)[0]
     p = F.imnorm(im)
     for col, (lab, arr) in enumerate(zip(labs, [None, gt, fs])):
-        ax = fig.add_subplot(gs_c[row, col]); ax.imshow(p, cmap="gray"); F.image_axes(ax)
+        ax = fig.add_subplot(gs_c[row, col])
+        ax.imshow(p, cmap="gray")
+        F.image_axes(ax)
         if arr is not None:
             outline(ax, arr, (0.0,0.62,0.45) if col==1 else (0.0,0.45,0.70), width=2)
-        if row == 0: ax.set_title(lab, fontsize=F.FS["title"])
+        if row == 0:
+            ax.set_title(lab, fontsize=F.FS["title"])
         if col == 0 and row == 0:
             F.scalebar(ax, 65, "20 µm")  # BBBC039 ~0.31 µm/px (approx, stated in caption)
             panel(ax, "c", xanchor=0.0315)   # row-leader
@@ -183,7 +199,8 @@ for row, (im, gt, stem) in enumerate(crops):
 # classical-threshold envelope (grey), both collapsing under overlap while the DL
 # reference (dashed) holds ~0.96.
 axd = fig.add_subplot(gs[3, :2])
-cc = pd.read_csv(R/"b_clustering_curve.csv"); x = [0,25,50,75]
+cc = pd.read_csv(R/"b_clustering_curve.csv")
+x = [0,25,50,75]
 for _, r in cc.iterrows():
     isf = "fluorostats" in r["method"]
     if not isf and r[["c00","c25","c50","c75"]].sum() == 0:   # skip empty Triangle row
@@ -201,7 +218,9 @@ axd.text(2, 0.735, "fluorostats", fontsize=6.0, color=OKABE["blue"], fontweight=
          ha="left", va="bottom",
          bbox=dict(facecolor="white", edgecolor="none", pad=0.5, alpha=0.85))
 axd.text(2, 0.14, "classical envelope", fontsize=5.0, color=GREY, ha="left", va="center")
-axd.set_xlabel("nuclear overlap (%)"); axd.set_ylabel("instance F1"); axd.set_ylim(0,1.02)
+axd.set_xlabel("nuclear overlap (%)")
+axd.set_ylabel("instance F1")
+axd.set_ylim(0,1.02)
 panel(axd, "d", "crowding crossover", xanchor=0.0315)   # row-leader
 
 # (e) separated vs crowded fields
@@ -213,20 +232,27 @@ if not _c75:
 for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separated"),
                                (_c75[0], "crowded")]):
     sl = F.mid_slice(fp)
-    ax = fig.add_subplot(gs_e[i]); ax.imshow(F.imnorm(sl), cmap="gray"); F.image_axes(ax)
+    ax = fig.add_subplot(gs_e[i])
+    ax.imshow(F.imnorm(sl), cmap="gray")
+    F.image_axes(ax)
     fsm = label_3d(remove_small_objects(sl > filters.threshold_otsu(sl), 15), min_size=15)[0]
-    outline(ax, fsm, (0.0,0.45,0.70), width=2); ax.set_title(ttl, fontsize=7)
-    if i == 0: panel(ax, "e")
+    outline(ax, fsm, (0.0,0.45,0.70), width=2)
+    ax.set_title(ttl, fontsize=7)
+    if i == 0:
+        panel(ax, "e")
 
 # (f) scope decision map
 axf = fig.add_subplot(gs[3, 4:])
-axf.axvspan(0, 30, color=OKABE["green"], alpha=0.14); axf.axvspan(30, 50, color=OKABE["yellow"], alpha=0.16)
+axf.axvspan(0, 30, color=OKABE["green"], alpha=0.14)
+axf.axvspan(30, 50, color=OKABE["yellow"], alpha=0.16)
 axf.axvspan(50, 100, color=OKABE["vermillion"], alpha=0.14)
 axf.axvline(40, ls="--", color="black", lw=1.0, ymax=0.92)
 axf.text(43, 0.5, "measured\ncrossover $\\approx$40%", fontsize=5.0)
 axf.text(15, 0.82, "fluorostats\n= DL", ha="center", fontsize=6.0, color=OKABE["green"])
 axf.text(75, 0.82, "use trained\nsegmenter", ha="center", fontsize=6.0, color=OKABE["vermillion"])
-axf.set_xlim(0,100); axf.set_ylim(0,1); axf.set_yticks([])
+axf.set_xlim(0,100)
+axf.set_ylim(0,1)
+axf.set_yticks([])
 axf.set_xlabel("overlap / crowding (%)")
 panel(axf, "f", "when to use which")
 
@@ -253,5 +279,6 @@ cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  "well-separated (c00) and a crowded (c75) field, showing connected-component merging under overlap. "
  "(f) Data-anchored scope map: fluorostats is at parity with trained segmenters up to ~40% crowding "
  "(green), beyond which a trained instance segmenter is preferred (red).")
-save(fig, "fig2_nuclei_boundary", tight=False); caption("fig2_nuclei_boundary", cap)
+save(fig, "fig2_nuclei_boundary", tight=False)
+caption("fig2_nuclei_boundary", cap)
 print("Figure 2 done")

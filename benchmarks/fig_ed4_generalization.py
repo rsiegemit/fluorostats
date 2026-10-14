@@ -171,9 +171,9 @@ def panel_b(ax):
     handles, leg_labels = ax.get_legend_handles_labels()
     # de-duplicate while preserving order
     seen = {}
-    for h, l in zip(handles, leg_labels):
-        if l not in seen:
-            seen[l] = h
+    for h, lab in zip(handles, leg_labels):
+        if lab not in seen:
+            seen[lab] = h
     # single row so legend order == bar left-to-right order (matplotlib fills a
     # multi-col legend column-major, which otherwise scrambles the order)
     ax.legend(seen.values(), seen.keys(), ncol=6, loc="upper center",

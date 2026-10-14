@@ -44,7 +44,9 @@ Usage:
     #            batch({name: folder, ...}, out_dir, geometry="wall")
 """
 from __future__ import annotations
-import sys, json, warnings
+import sys
+import json
+import warnings
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -58,9 +60,9 @@ from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 warnings.filterwarnings("ignore")
 
-from fluorostats.segment import binarize
-from fluorostats.objects import centroid_homogeneity
-from fluorostats import keyence, ring, texture, objects, spatial
+from fluorostats.segment import binarize  # noqa: E402 - after the warnings filter on purpose
+from fluorostats.objects import centroid_homogeneity  # noqa: E402 - after the warnings filter on purpose
+from fluorostats import keyence, ring, texture, objects, spatial  # noqa: E402 - after the warnings filter on purpose
 
 
 # --------------------------------------------------------------------------- #
@@ -113,7 +115,8 @@ def analyze_nuclei(dapi, vox):
 
 def analyze_zprofile(dapi, gfp, vox):
     vz = vox[0]
-    dth = np.percentile(dapi, 95); gth = np.percentile(gfp, 95)
+    dth = np.percentile(dapi, 95)
+    gth = np.percentile(gfp, 95)
     z = np.arange(dapi.shape[0]) * vz
     df = pd.DataFrame({
         "depth_um": z,
@@ -124,7 +127,8 @@ def analyze_zprofile(dapi, gfp, vox):
     })
     # wall band from DAPI %area: peak + FWHM
     y = df.dapi_area_pct.values
-    peak_i = int(y.argmax()); half = y[peak_i] / 2
+    peak_i = int(y.argmax())
+    half = y[peak_i] / 2
     above = np.where(y >= half)[0]
     span_idx = np.where(y > 1)[0]
     band = {"wall_peak_depth_um": round(float(z[peak_i]), 1),
@@ -285,7 +289,8 @@ def analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox):
 # Figures
 # --------------------------------------------------------------------------- #
 def _norm(m, lo=1, hi=99.7):
-    a, b = np.percentile(m, [lo, hi]); return np.clip((m - a) / (b - a + 1e-9), 0, 1)
+    a, b = np.percentile(m, [lo, hi])
+    return np.clip((m - a) / (b - a + 1e-9), 0, 1)
 
 
 def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
@@ -294,40 +299,76 @@ def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
     vx = out["_vox"][2]
     # A. overview
     fig, ax = plt.subplots(1, 4, figsize=(14, 3.4))
-    ax[0].imshow(_norm(dapi.max(0)), cmap="gray"); ax[0].set_title("DAPI (nuclei) MIP")
-    ax[1].imshow(_norm(gfp.max(0)), cmap="gray"); ax[1].set_title("GFP MIP")
-    mg = np.dstack([_norm(dapi.max(0)), _norm(gfp.max(0)), _norm(dapi.max(0)) * 0.3]); ax[2].imshow(np.clip(mg, 0, 1)); ax[2].set_title("merge (R=DAPI G=GFP)")
-    for a in ax[:3]: a.set_xticks([]); a.set_yticks([])
+    ax[0].imshow(_norm(dapi.max(0)), cmap="gray")
+    ax[0].set_title("DAPI (nuclei) MIP")
+    ax[1].imshow(_norm(gfp.max(0)), cmap="gray")
+    ax[1].set_title("GFP MIP")
+    mg = np.dstack([_norm(dapi.max(0)), _norm(gfp.max(0)), _norm(dapi.max(0)) * 0.3])
+    ax[2].imshow(np.clip(mg, 0, 1))
+    ax[2].set_title("merge (R=DAPI G=GFP)")
+    for a in ax[:3]:
+        a.set_xticks([])
+        a.set_yticks([])
     ax[3].plot(zdf.depth_um, zdf.dapi_area_pct, color="#0072B2", label="DAPI %area (cells)")
     ax[3].plot(zdf.depth_um, zdf.gfp_area_pct, color="#009E73", label="GFP %area")
     ax[3].axvline(band["wall_peak_depth_um"], ls="--", color="k", lw=0.8)
-    ax[3].set_xlabel("depth (µm)"); ax[3].set_ylabel("% area"); ax[3].legend(fontsize=7); ax[3].set_title("cells vs depth")
+    ax[3].set_xlabel("depth (µm)")
+    ax[3].set_ylabel("% area")
+    ax[3].legend(fontsize=7)
+    ax[3].set_title("cells vs depth")
     fig.suptitle(f"{name} — {out['nuclei_count']} nuclei, {out['density_per_mm3']:.0f}/mm³, wall peak {band['wall_peak_depth_um']:.0f}µm", fontsize=10)
-    fig.tight_layout(); fig.savefig(out["_dir"] / f"{name}_A_overview.png", dpi=140); plt.close(fig)
+    fig.tight_layout()
+    fig.savefig(out["_dir"] / f"{name}_A_overview.png", dpi=140)
+    plt.close(fig)
     # B. nuclei size + spatial
     fig, ax = plt.subplots(1, 2, figsize=(8, 3.3))
     props = pd.DataFrame(regionprops_table(lab, properties=["area"]))
     ax[0].hist((props["area"] * vx * vx * out["_vox"][0]).clip(upper=np.percentile(props["area"] * vx * vx * out["_vox"][0], 99)), bins=40, color="#0072B2")
-    ax[0].set_xlabel("nucleus volume (µm³)"); ax[0].set_ylabel("count"); ax[0].set_title("nucleus size dist")
+    ax[0].set_xlabel("nucleus volume (µm³)")
+    ax[0].set_ylabel("count")
+    ax[0].set_title("nucleus size dist")
     ax[1].scatter(peaks[:, 2], peaks[:, 1], s=3, c="#0072B2", alpha=0.5)
-    ax[1].set_aspect("equal"); ax[1].invert_yaxis(); ax[1].set_xticks([]); ax[1].set_yticks([])
+    ax[1].set_aspect("equal")
+    ax[1].invert_yaxis()
+    ax[1].set_xticks([])
+    ax[1].set_yticks([])
     ax[1].set_title(f"nucleus centroids (Gini {out.get('spatial_gini')})")
-    fig.tight_layout(); fig.savefig(out["_dir"] / f"{name}_B_nuclei.png", dpi=140); plt.close(fig)
+    fig.tight_layout()
+    fig.savefig(out["_dir"] / f"{name}_B_nuclei.png", dpi=140)
+    plt.close(fig)
     # C. wall / lumen
     fig, ax = plt.subplots(1, 3, figsize=(11, 3.4))
-    ax[0].imshow(_norm(mip_d), cmap="gray"); ax[0].set_title("cellular MIP (wall band)")
-    ov = np.dstack([_norm(mip_d)] * 3); ov[cmask] = [0.1, 0.5, 0.9]; ov[holes] = [1, 0.3, 0.1]
-    ax[1].imshow(ov); ax[1].set_title(f"cell mask (blue) / voids (red)\ncoverage {out['wall_coverage_pct']}%  lumen {out['lumen_area_um2']:.0f}µm²")
-    ax[2].plot(np.arange(len(radial)) * 10, radial, color="#0072B2"); ax[2].set_xlabel("radius from centroid (µm)"); ax[2].set_ylabel("DAPI intensity"); ax[2].set_title("radial profile (dip=lumen)")
-    for a in ax[:2]: a.set_xticks([]); a.set_yticks([])
-    fig.tight_layout(); fig.savefig(out["_dir"] / f"{name}_C_wall_lumen.png", dpi=140); plt.close(fig)
+    ax[0].imshow(_norm(mip_d), cmap="gray")
+    ax[0].set_title("cellular MIP (wall band)")
+    ov = np.dstack([_norm(mip_d)] * 3)
+    ov[cmask] = [0.1, 0.5, 0.9]
+    ov[holes] = [1, 0.3, 0.1]
+    ax[1].imshow(ov)
+    ax[1].set_title(f"cell mask (blue) / voids (red)\ncoverage {out['wall_coverage_pct']}%  lumen {out['lumen_area_um2']:.0f}µm²")
+    ax[2].plot(np.arange(len(radial)) * 10, radial, color="#0072B2")
+    ax[2].set_xlabel("radius from centroid (µm)")
+    ax[2].set_ylabel("DAPI intensity")
+    ax[2].set_title("radial profile (dip=lumen)")
+    for a in ax[:2]:
+        a.set_xticks([])
+        a.set_yticks([])
+    fig.tight_layout()
+    fig.savefig(out["_dir"] / f"{name}_C_wall_lumen.png", dpi=140)
+    plt.close(fig)
     # D. GFP network
     fig, ax = plt.subplots(1, 2, figsize=(8, 3.4))
-    ax[0].imshow(_norm(gmip), cmap="gray"); ax[0].set_title("GFP MIP")
-    ov = np.dstack([_norm(gmip)] * 3); ov[skel] = [0.1, 1, 0.3]
-    ax[1].imshow(ov); ax[1].set_title(f"GFP skeleton\n{out['gfp_coverage_pct']}% cov  {out.get('gfp_skeleton_junctions_per_mm2')}/mm² junctions")
-    for a in ax: a.set_xticks([]); a.set_yticks([])
-    fig.tight_layout(); fig.savefig(out["_dir"] / f"{name}_D_gfp_network.png", dpi=140); plt.close(fig)
+    ax[0].imshow(_norm(gmip), cmap="gray")
+    ax[0].set_title("GFP MIP")
+    ov = np.dstack([_norm(gmip)] * 3)
+    ov[skel] = [0.1, 1, 0.3]
+    ax[1].imshow(ov)
+    ax[1].set_title(f"GFP skeleton\n{out['gfp_coverage_pct']}% cov  {out.get('gfp_skeleton_junctions_per_mm2')}/mm² junctions")
+    for a in ax:
+        a.set_xticks([])
+        a.set_yticks([])
+    fig.tight_layout()
+    fig.savefig(out["_dir"] / f"{name}_D_gfp_network.png", dpi=140)
+    plt.close(fig)
 
 
 # --------------------------------------------------------------------------- #
@@ -335,7 +376,9 @@ def make_figures(out, name, dapi, gfp, lab, peaks, zdf, band, wall, gfp_res):
 # --------------------------------------------------------------------------- #
 def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None,
                    geometry: str | None = None):
-    in_dir = Path(in_dir); out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+    in_dir = Path(in_dir)
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     name = name or in_dir.name.strip().replace(" ", "_")
     print(f"[{name}] loading ({downsample}x)...")
     dapi, gfp, meta = load_stack(in_dir, downsample)
@@ -344,7 +387,8 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
     nuc, lab, bw, peaks = analyze_nuclei(dapi, vox)
     zdf, band = analyze_zprofile(dapi, gfp, vox)
     band_slices = np.where(zdf.dapi_area_pct.values > max(1, zdf.dapi_area_pct.max() * 0.25))[0]
-    if len(band_slices) == 0: band_slices = np.arange(dapi.shape[0])
+    if len(band_slices) == 0:
+        band_slices = np.arange(dapi.shape[0])
     wall, mip_d, cmask, holes, radial = analyze_wall_lumen(dapi, vox, band_slices)
     gfpm, gmip, gmask, skel = analyze_gfp(gfp, bw, vox)
     geom = analyze_geometry(geometry, peaks, cmask, gmip, gmask, vox)
@@ -353,7 +397,8 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
                "gfp_mean": round(float(gfp.mean()), 1), "dapi_mean": round(float(dapi.mean()), 1),
                "px_um": meta["px_um"], "z_step_um": meta["z_step_um"], "objective": meta["objective"],
                "n_slices": meta["n_slices_loaded"]}
-    summary["_dir"] = out_dir; summary["_vox"] = vox
+    summary["_dir"] = out_dir
+    summary["_vox"] = vox
     zdf.to_csv(out_dir / f"{name}_zprofile.csv", index=False)
     pd.DataFrame([{k: v for k, v in summary.items() if not k.startswith("_")}]).to_csv(out_dir / f"{name}_summary.csv", index=False)
     json.dump(meta, open(out_dir / f"{name}_meta.json", "w"), indent=2, default=str)
@@ -363,7 +408,8 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
 
 
 def batch(samples: dict, out_dir, downsample: int = 3, geometry: str | None = None):
-    out_dir = Path(out_dir); rows = []
+    out_dir = Path(out_dir)
+    rows = []
     for name, folder in samples.items():
         try:
             rows.append(analyze_folder(folder, Path(out_dir) / name, downsample,
@@ -381,5 +427,6 @@ def batch(samples: dict, out_dir, downsample: int = 3, geometry: str | None = No
 if __name__ == "__main__":
     a = sys.argv
     if len(a) < 3:
-        print("usage: keyence_tube_analysis.py <input_folder> <output_folder> [downsample]"); sys.exit(1)
+        print("usage: keyence_tube_analysis.py <input_folder> <output_folder> [downsample]")
+        sys.exit(1)
     analyze_folder(a[1], a[2], int(a[3]) if len(a) > 3 else 3)

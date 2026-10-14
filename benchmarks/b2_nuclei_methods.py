@@ -123,7 +123,9 @@ def main():
     gt_counts = np.array(gt_counts)
     rows = []
     for m in methods:
-        f1 = np.array(acc[m]["f1"]); ap = np.array(acc[m]["ap"]); cnt = np.array(acc[m]["cnt"])
+        f1 = np.array(acc[m]["f1"])
+        ap = np.array(acc[m]["ap"])
+        cnt = np.array(acc[m]["cnt"])
         rows.append({"method": m, "mean_F1": round(f1.mean(), 3),
                      "mean_AP": round(ap.mean(), 3),
                      "count_MAE": round(float(np.abs(cnt - gt_counts).mean()), 2)})
@@ -133,7 +135,8 @@ def main():
         if ev.exists():
             e = pd.read_csv(ev)
             sub = e[e["image"].isin([Path(imgs[s]).stem for s in common])]
-            f1 = sub[f"{fcol}_f1"]; f1 = f1[f1 >= 0]
+            f1 = sub[f"{fcol}_f1"]
+            f1 = f1[f1 >= 0]
             rows.append({"method": tool + " (DL)", "mean_F1": round(f1.mean(), 3),
                          "mean_AP": None, "count_MAE": None})
     df = pd.DataFrame(rows).sort_values("mean_F1", ascending=False).reset_index(drop=True)

@@ -177,7 +177,8 @@ def make_figures(df: pd.DataFrame, stats: dict, out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 4))
     condition_strip(df[df.region == "middle"], x_col="day", y_col="volume_fraction",
                     hue_col="material", marker_col="batch", ax=ax)
-    fig.tight_layout(); fig.savefig(out_dir / "middle_vf_strip.png", dpi=200)
+    fig.tight_layout()
+    fig.savefig(out_dir / "middle_vf_strip.png", dpi=200)
     plt.close(fig)
 
 

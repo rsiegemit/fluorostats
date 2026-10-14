@@ -55,9 +55,9 @@ ax_a.set_ylabel("foreground Dice")
 ax_a.set_xticks(noise["noise_sd"])
 ax_a.set_ylim(0.5, 0.96)
 # order legend so fluorostats is first; note it coincides with Otsu
-h, l = ax_a.get_legend_handles_labels()
-order = [l.index("fluorostats")] + [i for i, x in enumerate(l) if x != "fluorostats"]
-ax_a.legend([h[i] for i in order], [l[i] for i in order],
+h, labels = ax_a.get_legend_handles_labels()
+order = [labels.index("fluorostats")] + [i for i, x in enumerate(labels) if x != "fluorostats"]
+ax_a.legend([h[i] for i in order], [labels[i] for i in order],
             loc="lower left", handlelength=1.8, borderpad=0.2, labelspacing=0.25,
             title="(white dashes = Otsu)", title_fontsize=5.0)
 panel(ax_a, "a", xanchor=0.0315)   # row-leader
@@ -87,7 +87,8 @@ ax_b.set_ylim(0.35, 1.00)          # headroom so the label clears every bar top
 i_hi = len(levels) - 1
 xn = i_hi + (0 - (len(strat) - 1) / 2) * w                 # 'none' bar
 xf = i_hi + ((len(strat) - 1) - (len(strat) - 1) / 2) * w  # 'fluorostats' bar
-yn = float(denoise[strat[0]].iloc[i_hi]); yf = float(denoise[strat[-1]].iloc[i_hi])
+yn = float(denoise[strat[0]].iloc[i_hi])
+yf = float(denoise[strat[-1]].iloc[i_hi])
 ax_b.annotate("", xy=(xf, yf), xytext=(xn, yn),
               arrowprops=dict(arrowstyle="->", color=OKABE["black"], lw=0.8,
                               connectionstyle="arc3,rad=-0.25"))

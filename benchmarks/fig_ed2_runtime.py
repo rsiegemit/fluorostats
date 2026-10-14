@@ -14,6 +14,7 @@ import glob
 import numpy as np
 import pandas as pd
 import tifffile
+from skimage import filters
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -38,7 +39,6 @@ if not _b24:
     raise SystemExit("BBBC024 not found under $FLUOROSTATS_DATA "
                      f"({DATA}/BBBC024) — download per benchmarks/DATA_MANIFEST.md")
 vol = tifffile.imread(_b24[0]).astype(np.float32)
-from skimage import filters
 mask = vol > filters.threshold_otsu(vol)
 
 det_metrics = {
