@@ -5,6 +5,7 @@ one pass, so they guard the whole command path (previously 0% covered)."""
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 import tifffile
 from click.testing import CliRunner
@@ -37,7 +38,10 @@ def test_cli_quant2d(tmp_path):
     res = CliRunner().invoke(cli, ["quant2d", "--input", str(tmp_path / "in"),
                                    "--output", str(tmp_path / "out")])
     assert res.exit_code == 0, res.output
-    assert list((tmp_path / "out").rglob("*.csv"))          # per-file / per-condition written
+    df = pd.read_csv(tmp_path / "out" / "per_file.csv")
+    assert len(df) == 6 and df["area_fraction"].between(0, 1).all()
+    assert set(pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"]) == {"GelMA", "Hybrid"}
+    assert (tmp_path / "out" / "plots" / "pvalues.csv").exists()
 
 
 def test_cli_quant3d(tmp_path):
@@ -47,7 +51,6 @@ def test_cli_quant3d(tmp_path):
     assert res.exit_code == 0, res.output
     assert list((tmp_path / "out").rglob("*.csv"))
     # each row records which channel was measured and where its calibration came from
-    import pandas as pd
     df = pd.read_csv(tmp_path / "out" / "per_file.csv")
     assert {"voxel_size_source", "channel_used"} <= set(df.columns)
     assert df["voxel_size_source"].str.contains("default").all()   # synthetic TIFFs
@@ -57,6 +60,7 @@ def test_cli_quant3d(tmp_path):
 def test_cli_formats():
     res = CliRunner().invoke(cli, ["formats"])
     assert res.exit_code == 0
+    assert "[x] .tif" in res.output and "pip install" in res.output
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +138,8 @@ def test_cli_depth_cmd_output_override(tmp_path):
 
     res = CliRunner().invoke(cli, ["depth", str(mpath), "--output", str(override)])
     assert res.exit_code == 0, res.output
-    assert override.exists()
+    assert (override / "auc_per_stack.csv").exists()
+    assert not (tmp_path / "ignored").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +187,8 @@ def test_cli_viability_cmd_output_override(tmp_path):
 
     res = CliRunner().invoke(cli, ["viability", str(mpath), "--output", str(override)])
     assert res.exit_code == 0, res.output
-    assert override.exists()
+    assert (override / "viability_per_stack.csv").exists()
+    assert not (tmp_path / "ignored").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +235,8 @@ def test_quant3d_bg_radius(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert json.loads((tmp_path / "out" / "run_config.json").read_text())["bg_radius"] == 5
+    assert len(pd.read_csv(tmp_path / "out" / "per_file.csv")) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -247,6 +255,9 @@ def test_quant3d_with_skeleton(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    row = pd.read_csv(tmp_path / "out" / "per_file.csv").iloc[0]
+    # measured (a number, possibly 0), not left blank as with --no-skeleton
+    assert row[["total_length_um", "n_branches", "n_junctions"]].notna().all()
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +278,8 @@ def test_quant3d_single_condition_no_plots(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert not (tmp_path / "out" / "plots").exists()
+    assert pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"].tolist() == ["GelMA"]
 
 
 def test_quant2d_single_condition_no_plots(tmp_path):
@@ -281,6 +294,8 @@ def test_quant2d_single_condition_no_plots(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert not (tmp_path / "out" / "plots").exists()
+    assert pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"].tolist() == ["GelMA"]
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +333,7 @@ def test_cli_quant3d_condition_from_grandparent(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert pd.read_csv(tmp_path / "out" / "per_file.csv")["condition"].tolist() == ["cond_A"]
 
 
 def test_cli_quant3d_condition_from_filename(tmp_path):
@@ -334,6 +350,7 @@ def test_cli_quant3d_condition_from_filename(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert pd.read_csv(tmp_path / "out" / "per_file.csv")["condition"].tolist() == ["replicate01"]
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +386,7 @@ def test_cli_quant3d_channel_int(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert pd.read_csv(tmp_path / "out" / "per_file.csv")["channel_used"].tolist() == ["0 (Ch1)"]
 
 
 def test_cli_quant3d_channel_name(tmp_path):
@@ -397,6 +415,7 @@ def test_cli_quant3d_channel_name(tmp_path):
         "--no-plots",
     ])
     assert res.exit_code == 0, res.output
+    assert pd.read_csv(tmp_path / "out" / "per_file.csv")["channel_used"].tolist() == ["0 (Ch1)"]
 
 
 @pytest.mark.parametrize("opt,val", [("--threshold-scale", "0"), ("--min-size", "-1"),
@@ -412,7 +431,6 @@ def test_cli_rejects_out_of_range_options(tmp_path, opt, val):
 def test_no_skeleton_leaves_skeleton_columns_blank_not_zero(tmp_path):
     # Regression: --no-skeleton wrote 0 into the skeleton columns, which were then
     # summarised, plotted and Mann-Whitney-tested as if they had been measured.
-    import pandas as pd
 
     _make_dataset(tmp_path / "in", _blob_3d)
     res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"),
@@ -425,11 +443,10 @@ def test_no_skeleton_leaves_skeleton_columns_blank_not_zero(tmp_path):
         assert df[col].isna().all()
     assert df["volume_fraction"].notna().all()
     plots_dir = tmp_path / "out" / "plots"
-    if plots_dir.exists():
-        assert not list(plots_dir.glob("total_length_um_*"))
-        pv = plots_dir / "pvalues.csv"
-        if pv.exists():
-            assert "total_length_um" not in pd.read_csv(pv)["metric"].tolist()
+    assert list(plots_dir.glob("volume_fraction_*"))
+    assert not list(plots_dir.glob("total_length_um_*"))
+    metrics = pd.read_csv(plots_dir / "pvalues.csv")["metric"].tolist()
+    assert "volume_fraction" in metrics and "total_length_um" not in metrics
 
 
 @pytest.mark.parametrize("cmd", ["quant2d", "quant3d"])
@@ -448,7 +465,6 @@ def test_quant_refuses_output_inside_input(tmp_path, cmd, sub):
 def test_rerun_removes_only_stale_outputs_it_owns(tmp_path):
     # Regression: plots and pvalues.csv from an earlier run survived a rerun that did
     # not rewrite them, leaving stale results next to new ones.
-    import pandas as pd
 
     _make_dataset(tmp_path / "in", _blob_2d)
     out = tmp_path / "out"
@@ -482,7 +498,6 @@ def test_rerun_removes_only_stale_outputs_it_owns(tmp_path):
 def test_quant2d_records_calibration_crop_box_and_um2_cluster_areas(tmp_path, monkeypatch):
     # quant2d dropped the loader's pixel size and the auto-crop box, so the µm² cluster
     # areas never reached any output.
-    import pandas as pd
     from fluorostats import io as iq_io
 
     _make_dataset(tmp_path / "in", _blob_2d)

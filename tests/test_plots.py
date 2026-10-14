@@ -99,7 +99,8 @@ def test_condition_strip_default_axes_and_palette():
         "val": [1.0, 2.0, 3.0, 4.0, 5.0],
     })
     ax = condition_strip(df, "cond", "val")
-    assert ax is not None
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["a", "b"]
+    assert len(ax.collections) == 2 and len(ax.lines) == 2       # points + median per level
     import matplotlib.pyplot as plt
     plt.close(ax.figure)
 
@@ -206,17 +207,21 @@ def test_add_pvalue_annotations_more_than_4_conditions_adjacent_pairs():
     conditions = ["a", "b", "c", "d", "e"]
     fig, ax = _make_ax_with_ylim()
     _add_pvalue_annotations(ax, data, x, conditions)
+    # only the d-e neighbour pair differs; all pairs would also bracket a-e etc.
+    assert [t.get_text() for t in ax.texts] == ["***"] and len(ax.lines) == 1
     plt.close(fig)
 
 
 def test_add_pvalue_annotations_skips_small_groups():
     """Groups with < 2 samples are skipped (line 219)."""
-    # Pair (0,1) has only 1 sample each → skipped
-    data = [np.array([1.0]), np.array([2.0]), np.array([1.0, 2.0, 3.0, 4.0])]
+    # Group a has one sample: its pairs are not tested, so b-c is the only test and
+    # its BH q equals its p (0.0079, "**"); testing a's pairs would make it "*".
+    data = [np.array([1.0]), np.array([1.0, 2, 3, 4, 5]), np.array([10.0, 11, 12, 13, 14])]
     x = np.arange(3)
     conditions = ["a", "b", "c"]
     fig, ax = _make_ax_with_ylim()
     _add_pvalue_annotations(ax, data, x, conditions)
+    assert [t.get_text() for t in ax.texts] == ["**"]
     plt.close(fig)
 
 
@@ -229,19 +234,21 @@ def test_add_pvalue_annotations_all_nonsig_returns_early():
     conditions = ["a", "b", "c"]
     fig, ax = _make_ax_with_ylim()
     _add_pvalue_annotations(ax, data, x, conditions)
+    assert len(ax.texts) == len(ax.lines) == 0 and ax.get_ylim() == (0, 10)
     plt.close(fig)
 
 
 def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
     """Mock mannwhitneyu to raise ValueError → except branch (lines 222-223)."""
-    data = [np.array([1.0, 2.0, 3.0]), np.array([4.0, 5.0, 6.0])]
+    # separated n=10 groups: "***" unless the failed test is skipped
+    data = [np.arange(10.0), np.arange(10.0) + 100]
     x = np.arange(2)
     conditions = ["a", "b"]
     fig, ax = _make_ax_with_ylim()
-    # The function does `from scipy.stats import mannwhitneyu` locally, so
-    # patching scipy.stats.mannwhitneyu is the right target.
+    # stats.mann_whitney calls scipy.stats.mannwhitneyu, so that is the patch target.
     with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
         _add_pvalue_annotations(ax, data, x, conditions)
+    assert len(ax.texts) == 0
     plt.close(fig)
 
 
@@ -279,7 +286,9 @@ def test_effect_size_heatmap_no_col_col_creates_all_stratum():
     ])
     # 'stratum' column absent → line 351 fires
     fig = effect_size_heatmap(df, col_col="stratum")
-    assert fig is not None
+    ax = fig.axes[0]
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["all"]
+    assert [t.get_text() for t in ax.texts] == ["0.30", "0.80*"]   # * marks sig_q05
     plt.close(fig)
 
 
@@ -370,6 +379,8 @@ def test_condition_strip_no_median():
     })
     fig, ax = plt.subplots()
     condition_strip(df, "cond", "val", hue_col="hue", ax=ax, show_median=False)
+    assert len(ax.lines) == 0 and len(ax.collections) == 4
+    assert [t.get_text() for t in ax.get_legend().get_texts()] == ["x", "y"]
     plt.close(fig)
 
 
@@ -404,6 +415,7 @@ def test_condition_strip_empty_cross_skips_scatter():
     })
     fig, ax = plt.subplots()
     condition_strip(df, "cond", "val", hue_col="hue", ax=ax)
+    assert len(ax.collections) == 2                    # (a, y) and (b, x) are not drawn
     plt.close(fig)
 
 
