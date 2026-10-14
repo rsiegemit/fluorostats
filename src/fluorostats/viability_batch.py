@@ -52,6 +52,7 @@ import numpy as np
 from .io import load_volume
 from . import stats
 from .manifest import check_groups
+from . import report
 from . import viability as viab
 
 DEFAULT_SEG = {"method": "otsu", "min_size": 32}
@@ -164,6 +165,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)
+    report.write_run_config(out, {"manifest": Path(manifest_path)}, nested={"resolved": m})
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []

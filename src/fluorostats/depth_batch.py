@@ -69,6 +69,7 @@ from .depth_figures import (group_color, plot_auc, plot_depth_curves,
                             plot_retention_multiwindow)
 from .io import load_volume
 from .manifest import check_groups
+from . import report
 from .style import apply_style
 
 # Window helpers and figures live in `depth` / `depth_figures`; re-exported here
@@ -311,6 +312,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     m = load_manifest(manifest_path)
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
     out_dir.mkdir(parents=True, exist_ok=True)
+    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
     apply_style()
 
     cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}

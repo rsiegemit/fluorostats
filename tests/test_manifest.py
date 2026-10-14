@@ -58,3 +58,22 @@ def test_viability_manifest_rejected_before_loading(tmp_path):
               groups=m["groups"])
     with pytest.raises(ValueError, match="live_channel must be.*\\n.*dead_channel must be"):
         viability_batch.load_manifest(_write(tmp_path, m3))
+
+
+def test_batch_runs_record_resolved_manifest_and_environment(tmp_path):
+    import numpy as np
+    import tifffile
+
+    z = np.arange(8)[:, None, None]
+    for name in ("a", "b"):
+        tifffile.imwrite(tmp_path / f"{name}.tif",
+                         np.broadcast_to(100 * np.exp(-z / 4.0) + 5, (8, 6, 6)).astype(np.float32))
+    m = {"auc_windows_um": [[0, 4]],
+         "groups": [{"name": "g", "stacks": [{"path": str(tmp_path / "a.tif"), "label": "a"},
+                                             {"path": str(tmp_path / "b.tif"), "label": "b"}]}]}
+    out = depth_batch.run(_write(tmp_path, m), output_override=str(tmp_path / "out"))
+    cfg = json.loads((out / "run_config.json").read_text())
+    assert cfg["manifest"].endswith("m.json")
+    assert cfg["resolved"]["reducer"] == "mean"            # defaults are recorded too
+    assert cfg["resolved"]["windows"] == [[0.0, 4.0]]
+    assert "numpy" in cfg["_environment"]["packages"]

@@ -1,10 +1,14 @@
-"""CSV report generation: per-file rows and per-condition summaries."""
+"""CSV report generation (per-file rows, per-condition summaries) and the
+run_config.json record of how an output folder was produced."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
+
+from .io import OPTIONAL_READERS
 
 
 # The reported metrics, in CSV column order: the one list every consumer (the
@@ -79,3 +83,49 @@ def write_per_condition_csv(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(str(out_path), index=False)
     return summary
+
+
+def environment() -> dict:
+    """Package versions + optional-reader availability, for the reproducibility record.
+
+    (The resolved per-file ``voxel_size_um`` is recorded per row in ``per_file.csv``.)
+    """
+    import importlib.metadata as _im
+    import importlib.util as _iu
+    import platform
+
+    pkgs: dict[str, str | None] = {}
+    for p in ("fluorostats", "numpy", "scipy", "scikit-image", "tifffile",
+              "pandas", "matplotlib", "skan"):
+        try:
+            pkgs[p] = _im.version(p)
+        except Exception:  # pragma: no cover - core deps are always installed
+            pkgs[p] = None
+    readers = {r: _iu.find_spec(r) is not None
+               for r in OPTIONAL_READERS}
+    return {"python": platform.python_version(), "packages": pkgs,
+            "optional_readers": readers}
+
+
+def write_run_config(output_dir: Path, params: dict, nested: dict | None = None) -> Path:
+    """Write ``run_config.json``: the run's parameters plus `environment`, so an
+    output folder says how it was produced.
+
+    From ``params`` only paths (as strings) and plain scalars are kept. ``nested``
+    adds structured values verbatim (e.g. a batch driver's resolved manifest);
+    anything not JSON-native in it is written as its string form.
+    """
+    config: dict = {}
+    for k, v in params.items():
+        if isinstance(v, Path):
+            config[k] = str(v)
+        elif isinstance(v, (str, int, float, bool, type(None))):
+            config[k] = v
+    if nested:
+        config.update(json.loads(json.dumps(nested, default=str)))
+    config["_environment"] = environment()
+
+    config_path = output_dir / "run_config.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+    return config_path

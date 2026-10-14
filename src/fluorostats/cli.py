@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-import json
 from pathlib import Path
 
 import click
@@ -130,7 +129,7 @@ def quant3d(
     click.echo(f"Found {len(files)} volume file(s)")
 
     # Save run config
-    _save_config(output_path, locals())
+    report.write_run_config(output_path, locals())
 
     measure = functools.partial(
         _measure_volume, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
@@ -193,7 +192,7 @@ def quant2d(
         return
 
     click.echo(f"Found {len(files)} image file(s)")
-    _save_config(output_path, locals())
+    report.write_run_config(output_path, locals())
 
     measure = functools.partial(
         _measure_image, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
@@ -367,38 +366,3 @@ def _parse_channel(channel: str | None) -> int | str | None:
         return channel
 
 
-def _environment() -> dict:
-    """Package versions + optional-reader availability, for the reproducibility record.
-
-    (The resolved per-file ``voxel_size_um`` is recorded per row in ``per_file.csv``.)
-    """
-    import importlib.metadata as _im
-    import importlib.util as _iu
-    import platform
-
-    pkgs: dict[str, str | None] = {}
-    for p in ("fluorostats", "numpy", "scipy", "scikit-image", "tifffile",
-              "pandas", "matplotlib", "skan"):
-        try:
-            pkgs[p] = _im.version(p)
-        except Exception:  # pragma: no cover - core deps are always installed
-            pkgs[p] = None
-    readers = {r: _iu.find_spec(r) is not None
-               for r in iq_io.OPTIONAL_READERS}
-    return {"python": platform.python_version(), "packages": pkgs,
-            "optional_readers": readers}
-
-
-def _save_config(output_dir: Path, params: dict) -> None:
-    """Save run parameters + environment for reproducibility."""
-    config: dict = {}
-    for k, v in params.items():
-        if isinstance(v, Path):
-            config[k] = str(v)
-        elif isinstance(v, (str, int, float, bool, type(None))):
-            config[k] = v
-    config["_environment"] = _environment()
-
-    config_path = output_dir / "run_config.json"
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
