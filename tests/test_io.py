@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import tifffile
 
-from fluorostats import io
+from fluorostats import io, io_vendors
 from fluorostats.io import (
     load_volume,
     load_image,
@@ -201,32 +201,6 @@ class TestSupportedFormatsAndDirs:
 # ---------------------------------------------------------------------------
 # io.py:435 — OME channel-name append (valid Channel with a Name)
 # ---------------------------------------------------------------------------
-def test_ome_metadata_channel_name_append():
-    ome_xml = (
-        '<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06">'
-        '<Image><Pixels PhysicalSizeX="0.5" PhysicalSizeY="0.5" PhysicalSizeZ="2.0">'
-        '<Channel Name="EGFP"/>'
-        '<Channel Fluor="mCherry"/>'
-        '</Pixels></Image></OME>'
-    )
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io._parse_ome_metadata(ome_xml, meta)
-    assert out["channel_names"] == ["EGFP", "mCherry"]
-    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
-    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}   # not mutated
-
-
-def test_ome_metadata_without_pixels_returns_meta_unchanged():
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    assert io._parse_ome_metadata("<OME><Image/></OME>", meta) == meta
-
-
-def test_imagej_metadata_returns_new_dict():
-    meta = {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
-    out = io._parse_imagej_metadata({"spacing": 2.0, "unit": "micron"}, meta)
-    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
-    assert meta == {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
-    assert io._parse_imagej_metadata({}, meta) is meta
 
 
 def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
@@ -425,3 +399,30 @@ def test_load_auto_single_plane_drops_z_from_calibration_record(tmp_path):
     assert arr.shape == (2, 8, 8)
     assert meta["voxel_size_um"] == (0.5, 0.5)
     assert meta["voxel_size_source"] == "y:file,x:file"
+
+
+def test_load_auto_falls_back_to_image_on_volume_error(monkeypatch, tmp_path):
+    # A .tif that fails volume loading falls back to load_image.
+    import tifffile
+
+    arr = np.random.default_rng(0).integers(0, 255, (16, 16), dtype=np.uint8)
+    path = tmp_path / "img.tif"
+    tifffile.imwrite(str(path), arr)
+
+    def boom(p):
+        raise RuntimeError("forced volume failure")
+
+    monkeypatch.setattr(io, "_read_volume", boom)
+    out, meta = io.load_auto(path)
+    assert out.shape == (1, 16, 16)
+
+
+def test_supported_formats_missing_optional_branch(monkeypatch):
+    # Force _require to raise so the "requires: pip install" note is emitted.
+    def _boom(pkg, extra):
+        raise ImportError("missing")
+
+    monkeypatch.setattr(io_vendors, "require", _boom)
+    fmts = io.supported_formats()
+    assert "requires" in fmts[".czi"]
+    assert "requires" in fmts[".oib"]
