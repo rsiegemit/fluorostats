@@ -68,6 +68,7 @@ from .depth import parse_window, window_bounds, window_label, window_title
 from .depth_figures import (group_color, plot_auc, plot_depth_curves,
                             plot_retention_multiwindow)
 from .io import load_volume
+from .manifest import check_groups
 from .style import apply_style
 
 # Window helpers and figures live in `depth` / `depth_figures`; re-exported here
@@ -97,10 +98,36 @@ def load_manifest(path: Path) -> dict:
     # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`.
     if "auc_windows_um" not in m:
         m["auc_windows_um"] = [m.get("auc_window_um", [0.0, 100.0])]
-    m["windows"] = [parse_window(w) for w in m["auc_windows_um"]]
     if "groups" not in m or not m["groups"]:
         raise ValueError("manifest must define at least one group with stacks")
+    _validate(m)
+    m["windows"] = [parse_window(w) for w in m["auc_windows_um"]]
     return m
+
+
+_ROLES = ("primary", "aux")
+_REDUCERS = ("mean", "median")
+
+
+def _validate(m: dict) -> None:
+    """Check a depth manifest before any image is loaded; raise listing every problem."""
+    problems = []
+    if not isinstance(m["channel"], int) or m["channel"] < 0:
+        problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
+    if m["reducer"] not in _REDUCERS:
+        problems.append(f"reducer must be one of {_REDUCERS}, got {m['reducer']!r}")
+    if not isinstance(m["n_surface"], int) or m["n_surface"] < 1:
+        problems.append(f"n_surface must be a positive integer, got {m['n_surface']!r}")
+    for w in m["auc_windows_um"]:
+        if isinstance(w, str):
+            if w.lower() != "full":
+                problems.append(f"AUC window {w!r} must be 'full' or [z0, z1]")
+        elif not (len(w) == 2 and 0 <= float(w[0]) < float(w[1])):
+            problems.append(f"AUC window {w!r} must be [z0, z1] with 0 <= z0 < z1 (µm)")
+    problems += check_groups(m["groups"], roles=_ROLES)
+    if problems:
+        raise ValueError("invalid depth manifest:\n  - " + "\n  - ".join(problems))
+
 
 
 # ---------------------------------------------------------------------------

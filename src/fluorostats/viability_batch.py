@@ -51,6 +51,7 @@ import numpy as np
 
 from .io import load_volume
 from . import stats
+from .manifest import check_groups
 from . import viability as viab
 
 DEFAULT_SEG = {"method": "otsu", "min_size": 32}
@@ -66,7 +67,24 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("seg", dict(DEFAULT_SEG))
     m.setdefault("count_method", "all")
     m.setdefault("output_dir", "viability_out")
+    _validate(m)
     return m
+
+
+def _validate(m: dict) -> None:
+    """Check a viability manifest before any image is loaded; raise listing every problem."""
+    problems = []
+    for key in ("live_channel", "dead_channel"):
+        if not isinstance(m[key], int) or m[key] < 0:
+            problems.append(f"{key} must be a non-negative integer, got {m[key]!r}")
+    if m["live_channel"] == m["dead_channel"]:
+        problems.append(f"live_channel and dead_channel are both {m['live_channel']}")
+    methods = ("all", "auto", *viab.COUNT_METHODS)
+    if m["count_method"] not in methods:
+        problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
+    problems += check_groups(m["groups"])
+    if problems:
+        raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
 
 
 def _counts(by_method: dict, m: str) -> tuple[float, float, float]:
@@ -156,9 +174,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
             r = analyse_stack(Path(st["path"]), cfg)
             rows.append({"group": gname, "stack": st["label"], **r})
 
-    # per-stack CSV
-    if not rows:
-        raise ValueError("no stacks analysed — every group's 'stacks' list is empty")
+    # per-stack CSV (load_manifest guarantees every group has stacks)
     fields = list(rows[0].keys())
     with open(out / "viability_per_stack.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields)

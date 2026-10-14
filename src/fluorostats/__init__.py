@@ -67,6 +67,7 @@ from . import (  # noqa: F401
     depth_batch,
     depth_figures,
     keyence,
+    manifest,
     objects,
     ring,
     texture,

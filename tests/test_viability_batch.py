@@ -86,6 +86,6 @@ def test_viability_batch_manifest_errors(tmp_path):
     with pytest.raises(ValueError):                      # empty groups (guard)
         run_man({**base, "groups": []}, "empty")
 
-    with pytest.raises(ValueError):                      # no stacks analysed guard
+    with pytest.raises(ValueError, match="has no stacks"):   # rejected by load_manifest
         run_man({**base, "output_dir": str(tmp_path / "o2"),
                  "groups": [{"name": "g", "stacks": []}]}, "nostacks")
