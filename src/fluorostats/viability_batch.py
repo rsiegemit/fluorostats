@@ -57,6 +57,7 @@ DEFAULT_SEG = {"method": "otsu", "min_size": 32}
 
 
 def load_manifest(path: Path) -> dict:
+    """Read a viability manifest (see the module docstring), filling defaults."""
     m = json.loads(Path(path).read_text())
     if "groups" not in m or not m["groups"]:
         raise ValueError("manifest needs a non-empty 'groups' list")
@@ -141,6 +142,7 @@ def _mean_sem(vals: list[float]) -> tuple[float, float, int]:
 
 
 def run(manifest_path: Path, output_override: str | None = None) -> Path:
+    """Analyse every stack in a manifest; write per-stack and group-summary CSVs."""
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)

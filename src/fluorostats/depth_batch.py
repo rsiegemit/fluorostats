@@ -85,6 +85,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 def load_manifest(path: Path) -> dict:
+    """Read a depth manifest (see the module docstring), filling defaults and parsing windows."""
     with open(path) as fh:
         m = json.load(fh)
     m.setdefault("title", "Depth-penetration analysis")
@@ -208,6 +209,7 @@ def aggregate_group(primary: list[dict]) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def write_profiles_csv(out: Path, rows: list[dict]) -> None:
+    """Long-form per-stack depth profiles: raw, background-subtracted and normalised."""
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["group", "stack", "role", "depth_um",
@@ -222,6 +224,7 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
 
 
 def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
+    """One row per stack: acquisition, λ fit, and absolute/normalised AUC per window."""
     labels = [window_label(w) for w in windows]
     header = ["group", "stack", "role", "voxel_z_um", "n_slices",
               "max_depth_um", "surface_intensity_subtracted",
@@ -250,6 +253,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
 
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:
+    """Long-form group mean ± SEM profiles, with each group's λ repeated per depth row."""
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["group", "n_primary_stacks", "depth_um",
