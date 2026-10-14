@@ -1,0 +1,16 @@
+{
+  "table": "b2_nuclei_ci.csv",
+  "producer": "benchmarks/producers/b2_nuclei_ci.py",
+  "params": {
+    "seed": 0,
+    "n_boot": 10000,
+    "ci": 0.95
+  },
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.8.2"
+  }
+}

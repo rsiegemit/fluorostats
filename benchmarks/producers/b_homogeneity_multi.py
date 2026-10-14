@@ -12,9 +12,8 @@ import numpy as np
 import pandas as pd
 from scipy import ndimage as ndi
 from scipy import stats as sps
-from scipy.spatial import cKDTree
 
-from common import RESULTS
+from common import clark_evans, lacunarity, morisita, quadrat_var, ripley_L_dev, write_table
 from fluorostats.morphometry import lateral_homogeneity
 from fluorostats.stats import mann_whitney
 
@@ -22,6 +21,7 @@ FIELD = 512          # image size (px)
 N_PTS = 400          # points per pattern
 BLOB_SIGMA = 3.0     # gaussian blob radius per point (px)
 REPS = 10
+PARAMS = {"field_px": FIELD, "n_points": N_PTS, "blob_sigma_px": BLOB_SIGMA, "replicates": REPS, "tiles": 8}
 
 
 def gen_regular(rng, jitter=0.15):
@@ -52,45 +52,6 @@ def render(pts):
     return ndi.gaussian_filter(img, BLOB_SIGMA)
 
 
-# Reference statistics: the independent, textbook definitions Gini is validated
-# against (field-area normalised), not library code. Clark-Evans here uses the
-# known field area, unlike objects.nearest_neighbor_stats (point bounding box).
-def ripley_L_dev(pts, area, r=40):
-    n = len(pts)
-    pairs = cKDTree(pts).query_pairs(r)
-    K = area * 2 * len(pairs) / (n * (n - 1)) if n > 1 else 0
-    return np.sqrt(K / np.pi) - r
-
-
-def clark_evans(pts, area, n):
-    d, _ = cKDTree(pts).query(pts, k=2)
-    return d[:, 1].mean() / (0.5 / np.sqrt(n / area))
-
-
-def _quadrat_counts(pts, q=8):
-    return np.histogram2d(pts[:, 1], pts[:, 0], bins=[np.linspace(0, FIELD, q + 1)] * 2)[0]
-
-
-def morisita(pts, q=8):
-    H = _quadrat_counts(pts, q)
-    n = H.sum()
-    return q * q * (np.sum(H * (H - 1))) / (n * (n - 1)) if n > 1 else 1.0
-
-
-def lacunarity(pts, box=64):
-    img = np.zeros((FIELD, FIELD))
-    idx = np.clip(pts.astype(int), 0, FIELD - 1)
-    img[idx[:, 1], idx[:, 0]] = 1
-    s = ndi.uniform_filter(img, box) * box * box
-    m = s.mean()
-    return 1 + s.var() / m ** 2 if m > 0 else 1.0
-
-
-def quadrat_var(pts, q=8):
-    H = _quadrat_counts(pts, q)
-    return H.var() / H.mean() if H.mean() > 0 else 0
-
-
 CONDITIONS = [(gen_regular, 0), (gen_csr, 1),
               (lambda r: gen_thomas(r, 20, 30), 2),
               (lambda r: gen_thomas(r, 10, 18), 3),
@@ -106,10 +67,10 @@ def main():
             pts = gen(np.random.default_rng(1000 * lvl + rep))
             gini = lateral_homogeneity(render(pts)[None], tiles=8)["lateral_gini"]
             recs.append({"level": lvl, "gini": gini, "clark_evans": clark_evans(pts, area, len(pts)),
-                         "ripley_L_dev": ripley_L_dev(pts, area), "morisita": morisita(pts),
-                         "lacunarity": lacunarity(pts), "quadrat_var": quadrat_var(pts)})
+                         "ripley_L_dev": ripley_L_dev(pts, area), "morisita": morisita(pts, FIELD),
+                         "lacunarity": lacunarity(pts, FIELD), "quadrat_var": quadrat_var(pts, FIELD)})
     df = pd.DataFrame(recs)
-    df.to_csv(RESULTS / "b_homogeneity_multi.csv", index=False)
+    write_table(df, "b_homogeneity_multi", PARAMS)
 
     uni = df[df.level <= 1]["gini"]
     clu = df[df.level >= 2]["gini"]
@@ -118,7 +79,7 @@ def main():
              "spearman_gini_vs_ref": round(float(sps.spearmanr(df["gini"], df[ref]).statistic), 3),
              "clustered_vs_uniform_AUC(gini)": round(float(auc), 3)} for ref in REFS]
     out = pd.DataFrame(rows)
-    out.to_csv(RESULTS / "b_homogeneity_multi_corr.csv", index=False)
+    write_table(out, "b_homogeneity_multi_corr", PARAMS)
     print(out.to_string(index=False))
 
 

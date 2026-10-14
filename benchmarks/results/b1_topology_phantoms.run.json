@@ -1,0 +1,22 @@
+{
+  "table": "b1_topology_phantoms.csv",
+  "producer": "benchmarks/producers/b1_topology_phantoms.py",
+  "params": {
+    "phantoms": [
+      "solid_ball",
+      "2_disjoint_balls",
+      "3_disjoint_balls",
+      "5_disjoint_balls",
+      "solid_torus",
+      "hollow_ball"
+    ],
+    "lcc_tolerance": 0.02
+  },
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.8.2"
+  }
+}

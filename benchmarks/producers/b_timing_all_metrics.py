@@ -5,10 +5,12 @@ BBBC039 image, the Kerkhoff "700 Live; 700 Dead-1" image, seeded random samples)
 mean wall-clock ms over 3-5 repeats after one warm-up. Times depend on the
 machine, so a re-run reproduces relative cost, not the committed digits.
 
-The two DL rows are the cluster-measured CPU inference times (``time_dl.py``),
-carried as constants. Comparator implementations (point-pattern statistics,
-lacunarity, Kerkhoff peak count) are the independent references being timed,
-not library code. Data: ``$FLUOROSTATS_DATA/{BBBC024,BBBC039,kerkhoff_lda}``.
+The two DL rows are CPU inference times measured on the cluster (cluster script,
+not included), carried as constants in ``common.DL_CPU_MS``. Comparator
+implementations (the point-pattern statistics and lacunarity that
+b_homogeneity_multi validates the tile Gini against, the Kerkhoff peak count) are
+the independent references in ``common.py``, not library code.
+Data: ``$FLUOROSTATS_DATA/{BBBC024,BBBC039,kerkhoff_lda}``.
 """
 from __future__ import annotations
 
@@ -21,7 +23,6 @@ import pandas as pd
 import tifffile
 from scipy import ndimage as ndi
 from scipy import stats as sps
-from scipy.spatial import cKDTree
 from skimage import filters, restoration
 from skimage.feature import peak_local_max
 from skimage.filters import median
@@ -29,11 +30,11 @@ from skimage.measure import euler_number
 from skimage.morphology import medial_axis, remove_small_objects, skeletonize, thin
 from skimage.segmentation import watershed
 
-from common import DATA, RESULTS, bbbc024_volumes, bbbc039_pairs, require
+from common import (DATA, DL_CPU_MS, bbbc024_volumes, bbbc039_pairs, clark_evans, kerkhoff_peak_count,
+                    lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds, write_table)
 from fluorostats import (agreement, metrics_2d, metrics_3d, morphometry, objects, preprocess, segment,
                          skeleton, stats, validate, viability)
 
-DL_CPU_MS = {"StarDist (per 2D img, CPU cluster)": 215.1, "Cellpose (per 2D img, CPU cluster)": 5547.0}
 SLOW = ["rolling", "average_precision", "median_filter", "watershed", "instance_f1"]  # 3 repeats, else 5
 
 
@@ -58,35 +59,15 @@ def load_inputs():
 
 
 def point_pattern_comparators(d):
-    H = W = d.vol.shape[1]
-
-    def clark_evans(p):
-        dist = cKDTree(p).query(p, k=2)[0]
-        return dist[:, 1].mean() / (0.5 / np.sqrt(len(p) / (H * W)))
-
-    def quadrat_counts(p, g=8):
-        return np.histogram2d(p[:, 0], p[:, 1], bins=g)[0].ravel()
-
-    def morisita(p):
-        h = quadrat_counts(p)
-        n = h.sum()
-        return len(h) * (h * (h - 1)).sum() / (n * (n - 1))
-
-    def quadrat_vmr(p):
-        h = quadrat_counts(p)
-        return h.var() / h.mean()
-
-    def lacunarity(m, box=16):
-        s = np.add.reduceat(np.add.reduceat(m.astype(float), np.arange(0, m.shape[0], box), 0),
-                            np.arange(0, m.shape[1], box), 1)
-        return 1 + s.var() / (s.mean() ** 2 + 1e-9)
-
+    """The reference statistics b_homogeneity_multi validates the tile Gini against."""
+    field = d.vol.shape[1]
+    area = field * field
     return [
-        ("comparator", "clark_evans NN", lambda: clark_evans(d.pts)),
-        ("comparator", "morisita index", lambda: morisita(d.pts)),
-        ("comparator", "quadrat_variance", lambda: quadrat_vmr(d.pts)),
-        ("comparator", "ripleys_K", lambda: len(cKDTree(d.pts).query_pairs(40))),
-        ("comparator", "lacunarity", lambda: lacunarity(d.mask[d.mask.shape[0] // 2])),
+        ("comparator", "clark_evans NN", lambda: clark_evans(d.pts, area, len(d.pts))),
+        ("comparator", "morisita index", lambda: morisita(d.pts, field)),
+        ("comparator", "quadrat_variance", lambda: quadrat_var(d.pts, field)),
+        ("comparator", "ripleys_K", lambda: ripley_L_dev(d.pts, area)),
+        ("comparator", "lacunarity", lambda: lacunarity(d.pts, field)),
     ]
 
 
@@ -94,12 +75,8 @@ def segmentation_ops(d):
     v = d.vol
     return [
         ("fluorostats", "segment.binarize(otsu) 3D", lambda: segment.binarize(v, method="otsu", min_size=20)),
-        ("comparator", "threshold_otsu 3D", lambda: v > filters.threshold_otsu(v)),
-        ("comparator", "threshold_li 3D", lambda: v > filters.threshold_li(v)),
-        ("comparator", "threshold_isodata 3D", lambda: v > filters.threshold_isodata(v)),
-        ("comparator", "threshold_triangle 3D", lambda: v > filters.threshold_triangle(v)),
-        ("comparator", "threshold_yen 3D", lambda: v > filters.threshold_yen(v)),
-        ("comparator", "threshold_mean 3D", lambda: v > filters.threshold_mean(v)),
+        *[("comparator", f"threshold_{name} 3D", lambda fn=fn: v > fn(v))
+          for name, fn in thresholds(["otsu", "li", "isodata", "triangle", "yen", "mean"]).items()],
         ("fluorostats", "preprocess.denoise(gauss) 3D", lambda: preprocess.denoise(v, sigma=1.0)),
         ("comparator", "median_filter 3D", lambda: median(v, footprint=np.ones((3, 3, 3)))),
         ("comparator", "gaussian_sigma2 3D", lambda: ndi.gaussian_filter(v, 2.0)),
@@ -150,11 +127,10 @@ def viability_stats_ops(d):
     by_count = [("fluorostats", f"viability.live_dead_by_count {m}",
                  lambda m=m: viability.live_dead_by_count(live, dead, method=m))
                 for m in ("cc", "maxima", "watershed", "auto", "all")]
-    peaks = lambda im: len(peak_local_max(im, min_distance=3, threshold_abs=im.max() * 0.15))  # noqa: E731
     return [
         ("fluorostats", "viability.live_dead_fractions", lambda: viability.live_dead_fractions(live, dead, min_size=8)),
         *by_count,
-        ("comparator", "Kerkhoff macro (peak count)", lambda: (peaks(live), peaks(dead))),
+        ("comparator", "Kerkhoff macro (peak count)", lambda: (kerkhoff_peak_count(live), kerkhoff_peak_count(dead))),
         ("fluorostats", "viability.attenuation_correct", lambda: viability.attenuation_correct(d.vol)),
         ("fluorostats", "stats.mann_whitney", lambda: stats.mann_whitney(a, b)),
         ("comparator", "scipy.mannwhitneyu", lambda: sps.mannwhitneyu(a, b, alternative="two-sided")),
@@ -189,9 +165,9 @@ def main():
     for grp, name, fn in segmentation_ops(d) + metric_ops(d) + viability_stats_ops(d):
         reps = 3 if any(k in name for k in SLOW) else 5
         rows.append({"group": grp, "metric": name, "ms": round(mean_ms(fn, reps), 3)})
-    rows += [{"group": "comparator", "metric": k, "ms": v} for k, v in DL_CPU_MS.items()]
+    rows += [{"group": "comparator", "metric": f"{k} (per 2D img, CPU cluster)", "ms": v} for k, v in DL_CPU_MS.items()]
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_timing_all_metrics.csv", index=False)
+    write_table(df, "b_timing_all_metrics", {"dl_cpu_ms": DL_CPU_MS}, timing=True)
     print(df.to_string(index=False))
 
 

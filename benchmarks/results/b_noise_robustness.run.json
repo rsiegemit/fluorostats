@@ -1,0 +1,23 @@
+{
+  "table": "b_noise_robustness.csv",
+  "producer": "benchmarks/producers/b_noise_robustness.py",
+  "params": {
+    "seed": 0,
+    "noise_sd": [
+      0,
+      20,
+      40,
+      80,
+      160
+    ],
+    "min_size": 30,
+    "n_volumes": 5
+  },
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.8.2"
+  }
+}

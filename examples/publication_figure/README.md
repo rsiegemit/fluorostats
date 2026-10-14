@@ -20,6 +20,7 @@ cd examples/publication_figure
 python depth_penetration_figure.py
 ```
 
-It writes the figure to `figures/main/` and summary CSVs to `results/`
-(both are git-ignored). `depth_penetration.png` in this folder is a committed
+It writes `figures/main/depth_penetration.{pdf,png}` with its caption (`.txt`,
+every number read from the run) and `results/depth_penetration_*.csv` (both
+folders are git-ignored). `depth_penetration.png` in this folder is a committed
 preview of the expected output.

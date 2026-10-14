@@ -11,7 +11,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from common import RESULTS
+from common import write_table
 from fluorostats.metrics_3d import connectivity_metrics
 
 
@@ -80,7 +80,7 @@ def main():
             "PASS": euler_ok and ncomp_ok and lcc_ok,
         })
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b1_topology_phantoms.csv", index=False)
+    write_table(df, "b1_topology_phantoms", {"phantoms": [c[0] for c in CASES], "lcc_tolerance": 0.02})
     print(df.to_string(index=False))
     return 0 if df["PASS"].all() else 1
 

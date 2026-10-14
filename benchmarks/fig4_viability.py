@@ -8,11 +8,9 @@ import figstyle as F
 from figstyle import OKABE, panel, save, caption
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-from fluorostats.agreement import lins_ccc
 from fluorostats.segment import binarize
 F.apply_style()
 R = Path(__file__).resolve().parent / "results"
-STACK = F.DATA / "viability" / "zccs1035_Day14_LiveDead.tif"
 BLUE = OKABE["blue"]
 GREEN = OKABE["green"]
 MAG = OKABE["purple"]
@@ -45,7 +43,7 @@ cols = [BLUE if "attenuation" in m else GREY for m in bm.method]
 axa.hlines(y, 0, bm.rel_bias_pct, color=cols, lw=1.3, zorder=1)
 axa.scatter(bm.rel_bias_pct, y, color=cols, s=44, edgecolor="black", lw=0.4, zorder=3)
 for yi, rb in zip(y, bm.rel_bias_pct):
-    axa.text(rb + 0.8, yi, f"+{rb:.1f}%", va="center", fontsize=F.FS["annot"])
+    axa.text(rb + 0.8, yi, f"{rb:+.1f}%", va="center", fontsize=F.FS["annot"])
 axa.axvline(0, color="black", lw=0.6)
 axa.set_xlim(-1, 32)
 axa.set_ylim(-0.6, len(bm)-0.4)
@@ -69,9 +67,10 @@ ext = pd.read_csv(R/"b_viability_external.csv")
 tv = ext.true_viability.values
 mac = ext["Kerkhoff_macro_peakcount"].values
 fx = ext["fluorostats_maxima(NEW)"].values
-# fluorostats-vs-ground-truth agreement (computed, not hand-typed): Lin's CCC + MAE
-ccc_v = lins_ccc(fx, tv)
-mae_v = float(np.abs(fx - tv).mean())
+# fluorostats-vs-ground-truth agreement (Lin's CCC + MAE), from the producer's table
+agr = pd.read_csv(R/"b_viability_external_agreement.csv", float_precision="round_trip").set_index("estimator")
+ccc_v = agr.loc["fluorostats_maxima(NEW)", "lins_ccc"]
+mae_v = agr.loc["fluorostats_maxima(NEW)", "MAE"]
 axc = fig.add_subplot(gs[1, :2])
 axc.scatter(tv, ext["fluorostats_objcount"].values, s=10, color=GREY, alpha=0.55,
             zorder=1, label="fs alt. modes (count, area)")
@@ -100,8 +99,8 @@ axd.text(0.5, 0.08, f"vs ground truth: CCC {ccc_v:.3f}, MAE {mae_v:.3f}", transf
 panel(axd, "d", "fluorostats $-$ macro = 0")
 
 # (e) Live/Dead qualitative overlay
-live = F.load_channels(STACK, 2, down=8)
-dead = F.load_channels(STACK, 1, down=8)
+live = F.load_sbiad2130_channel(2)
+dead = F.load_sbiad2130_channel(1)
 z = live.shape[0]//2
 gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.10)
 seg = dict(method="otsu", min_size=8)
@@ -111,7 +110,7 @@ dm_mid = binarize(dead[z], **seg)
 panels_c = [
     (F.composite2ch(live[z], dead[z]), "raw mid-plane\n(green live / magenta dead)"),
     (np.dstack([dm_mid*0.85, lm_mid*0.85, dm_mid*0.85]), "fluorostats\nclassification\n(grey = both, black = neither)"),
-    (F.composite2ch(live.max(0), dead.max(0)), f"MIP — 2D collapses\ndepth (+{rbias['MIP']:.0f}%)"),
+    (F.composite2ch(live.max(0), dead.max(0)), f"MIP — 2D collapses\ndepth ({rbias['MIP']:+.0f}%)"),
 ]
 for i,(img,ttl) in enumerate(panels_c):
     ax = fig.add_subplot(gs_c[i])
@@ -124,9 +123,9 @@ for i,(img,ttl) in enumerate(panels_c):
 
 cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (BioImage Archive "
  "S-BIAD2130), 2D/heuristic reductions overestimate the live fraction relative to the true voxelwise "
- f"3D value: mid-plane +{rbias['midplane_slice']:.1f}%, brightest-focus +{rbias['brightest_focus_slice']:.1f}%, "
- f"MIP +{rbias['MIP']:.1f}%, naive mean-of-slices +{rbias['mean_of_per_slice']:.1f}%; "
- f"attenuation-corrected 3D stays within +{rbias['attenuation_corrected_3D']:.1f}% (blue). (b) Per-z live fraction shows the depth "
+ f"3D value: mid-plane {rbias['midplane_slice']:+.1f}%, brightest-focus {rbias['brightest_focus_slice']:+.1f}%, "
+ f"MIP {rbias['MIP']:+.1f}%, naive mean-of-slices {rbias['mean_of_per_slice']:+.1f}%; "
+ f"attenuation-corrected 3D stays within {rbias['attenuation_corrected_3D']:+.1f}% (blue). (b) Per-z live fraction shows the depth "
  "gradient (raw) that a single 2D readout misses, and how attenuation correction flattens it. "
  "(c) On the published Kerkhoff Fiji Live/Dead macro's synthetic dataset (Zenodo 10395753, exact "
  "ground-truth viability), fluorostats live_dead_by_count(maxima; blue) reproduces the macro exactly "

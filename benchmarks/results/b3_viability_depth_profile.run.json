@@ -1,0 +1,21 @@
+{
+  "table": "b3_viability_depth_profile.csv",
+  "producer": "benchmarks/producers/b3_viability_depth_profile.py",
+  "params": {
+    "live_channel": 2,
+    "z_um": 5.5,
+    "xy_downsample": 8,
+    "seg": {
+      "method": "otsu",
+      "threshold_scale": 1.0,
+      "min_size": 8
+    }
+  },
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.8.2"
+  }
+}

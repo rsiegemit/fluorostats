@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import RESULTS, load_sbiad2130_channel
+from common import load_sbiad2130_channel, write_table
 from fluorostats.viability import attenuation_correct, live_dead_fractions, viability_depth_profile
 
 SEG = dict(method="otsu", threshold_scale=1.0, min_size=8)
@@ -39,7 +39,7 @@ def main():
              "abs_bias_vs_3D": round(float(v) - ref, 4),
              "rel_bias_pct": round((float(v) - ref) / ref * 100, 1)} for name, v in methods.items()]
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b3_viability_multi.csv", index=False)
+    write_table(df, "b3_viability_multi", {"live_channel": 2, "dead_channel": 1, "xy_downsample": 8, "seg": SEG})
     print(df.to_string(index=False))
 
 

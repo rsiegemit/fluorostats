@@ -5,17 +5,21 @@
 (c) Per-nucleus median-diameter recovery error (%) vs BBBC024 ground truth.
 """
 from __future__ import annotations
+import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from figstyle import OKABE, apply_style, save, panel, caption, SUPP, TW
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from figstyle import OKABE, RAW_OTSU_CC, apply_style, save, panel, caption, SUPP, TW  # noqa: E402
 
 apply_style()
 
-noise = pd.read_csv("results/b_noise_robustness.csv")
-denoise = pd.read_csv("results/b_denoising.csv")
-size = pd.read_csv("results/b_nuclei_size.csv")
+RES = Path(__file__).resolve().parent / "results"
+noise = pd.read_csv(RES / "b_noise_robustness.csv")
+denoise = pd.read_csv(RES / "b_denoising.csv")
+size = pd.read_csv(RES / "b_nuclei_size.csv")
 
 FLU = OKABE["blue"]
 
@@ -32,7 +36,7 @@ ax_b = fig.add_subplot(gs[1, 0])
 ax_c = fig.add_subplot(gs[1, 1])
 
 # ---- (a) Noise robustness ----------------------------------------------------
-flu_col = "fluorostats(Otsu+CC)"
+flu_col = RAW_OTSU_CC
 # other methods: grey/coloured with distinct markers; fluorostats blue bold on top
 others = {
     "Otsu":     dict(c=OKABE["grey"],       m="s", ls="--"),
@@ -105,7 +109,7 @@ sz = size.sort_values("pct_error").reset_index(drop=True)
 # collapse identical Otsu/Isodata/fluorostats tie into readable short labels
 name_map = {
     "Otsu_1979": "Otsu", "Isodata_1978": "Isodata",
-    "fluorostats(Otsu+CC)": "fluorostats", "Li_1993": "Li",
+    RAW_OTSU_CC: "fluorostats", "Li_1993": "Li",
     "Triangle_1977": "Triangle",
 }
 sz["short"] = sz["method"].map(name_map)
@@ -143,7 +147,7 @@ cap = (
     "dedicated denoisers. "
     "(c) Per-nucleus median-diameter recovery error relative to BBBC024 ground truth "
     f"({size_by['GT_median'].iloc[0]:.1f} um), sorted best-to-worst. fluorostats is "
-    f"best-tied at {size_by.loc['fluorostats(Otsu+CC)', 'pct_error']:.1f}% error, versus "
+    f"best-tied at {size_by.loc[RAW_OTSU_CC, 'pct_error']:.1f}% error, versus "
     f"{size_by.loc['Li_1993', 'pct_error']:.1f}% (Li) and "
     f"{size_by.loc['Triangle_1977', 'pct_error']:.1f}% (Triangle). Blue denotes fluorostats "
     "throughout."

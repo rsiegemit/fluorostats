@@ -3,7 +3,7 @@
 There is no public ground-truth dataset for confocal depth-penetration (unlike
 BBBC039 for nuclei), and the tools people actually use for it (Fiji Plot Z-axis
 Profile, Imaris, ZEN, NIS-Elements, CellProfiler, MATLAB) are GUI/commercial and
-not scriptable head-to-head here. So this benchmark is built on CONSTRUCTED
+not scriptable head-to-head here. So this example is built on CONSTRUCTED
 ground truth and FAITHFUL reimplementations of the standard algorithms:
 
   A. Correctness on synthetic ground truth. Beer-Lambert z-stacks
@@ -12,7 +12,10 @@ ground truth and FAITHFUL reimplementations of the standard algorithms:
      (lambda*(1-e^{-Z/lambda})). We check fluorostats recovers these EXACTLY on
      noiseless stacks (pipeline math is exact) and within SEM on noisy stacks,
      and that a two-condition contrast (short vs long lambda) recovers the right
-     ordering + gap with the built-in Welch test.
+     ordering + gap with the built-in Welch test (stats.welch_t).
+
+  A(lambda). Penetration-constant recovery: the single-exponential fit recovers
+     the known lambda on noiseless stacks and on SNR~10 noisy replicates.
 
   B. Faithful reimplementation parity. Fiji's "Plot Z-axis Profile" is the
      per-slice spatial mean; we show fluorostats reproduces it BIT-FOR-BIT, that
@@ -20,12 +23,12 @@ ground truth and FAITHFUL reimplementations of the standard algorithms:
      accurate than the naive rectangular-sum (Sigma v*dz) an Excel/Prism manual
      workflow uses.
 
-  D. Determinism + timing. Bit-identical across repeated runs; wall-clock across
+  C. Determinism + timing. Bit-identical across repeated runs; wall-clock across
      representative stack sizes (documents that this is sub-second numpy, i.e.
      speed is not the differentiator -- reproducibility + the full pipeline is).
 
-Pure numpy/scipy; runs locally. Writes results/b_depth_penetration_*.csv and a
-figure to figures/main/.
+Pure numpy/scipy; runs locally. Writes results/depth_penetration_*.csv and the
+figure depth_penetration.{pdf,png} (+ caption) to figures/main/.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 from fluorostats import depth  # noqa: E402
+from fluorostats import stats  # noqa: E402
 from fluorostats import pubfig as F  # noqa: E402
 from fluorostats.pubfig import OKABE, panel  # noqa: E402
 
@@ -67,6 +71,15 @@ def beer_lambert_stack(n_z, yx, i0, lam, bg, sigma=0.0, dz=1.0, seed=0):
         rng = np.random.default_rng(seed)
         vol = vol + rng.normal(0.0, sigma, size=vol.shape)
     return vol.astype(np.float32), z, dz
+
+
+def noisy_replicate(n_z, yx, i0, lam, bg, sigma, dz, r):
+    """Background-subtracted per-slice profile of noisy replicate ``r`` (stack seed ``r``)
+    against its matched bg-only blank (seed ``100 + r``), per the real workflow."""
+    vol, _, _ = beer_lambert_stack(n_z, yx, i0, lam, bg, sigma=sigma, dz=dz, seed=r)
+    blank_vol, _, _ = beer_lambert_stack(n_z, yx, 0.0, lam, bg, sigma=sigma, dz=dz, seed=100 + r)
+    blank = depth.intensity_depth_profile(blank_vol, dz)
+    return depth.subtract_background(depth.intensity_depth_profile(vol, dz), blank)
 
 
 def analytic_auc_absolute(i0, lam, z0, z1):
@@ -142,16 +155,13 @@ def benchmark_A():
     # i.e. surface SNR ~10, a realistic good-confocal regime).
     lam, sigma, n_rep = 40.0, 100.0, 8
     gt_norm = noiseless_norm_auc(i0, lam, bg, dz, n_z, yx, 0.0, z1, n_surface=3)
-    noisy = []
+    noisy, curves = [], []
     for r in range(n_rep):
-        vol, z, _ = beer_lambert_stack(n_z, yx, i0, lam, bg, sigma=sigma, dz=dz, seed=r)
-        # blank stack (bg only) as the matched no-fluo control, per the real workflow
-        blank_vol, _, _ = beer_lambert_stack(n_z, yx, 0.0, lam, bg, sigma=sigma, dz=dz, seed=100 + r)
-        blank = depth.intensity_depth_profile(blank_vol, dz)
-        prof = depth.intensity_depth_profile(vol, dz)
-        sub = depth.subtract_background(prof, blank)
+        sub = noisy_replicate(n_z, yx, i0, lam, bg, sigma, dz, r)
         nrm = depth.normalize_to_surface(sub, n_surface=3)
-        noisy.append(depth.auc_depth(prof.depth_um, nrm.normalized, z_min=0.0, z_max=z1))
+        noisy.append(depth.auc_depth(sub.depth_um, nrm.normalized, z_min=0.0, z_max=z1))
+        # surface-slice reference (n_surface=1) for the figure, so it matches e^{-z/λ}
+        curves.append(depth.normalize_to_surface(sub, n_surface=1).normalized)
     noisy = np.array(noisy)
     mad = float(np.abs(noisy - gt_norm).mean())
     print(f"  A2 noisy (sigma={sigma:.0f}, {n_rep} reps): recovered norm-AUC "
@@ -173,8 +183,7 @@ def benchmark_A():
             vol, _, _ = beer_lambert_stack(n_z, yx, i0, lam_c, bg, sigma=sigma, dz=dz, seed=200 + r)
             _, norm_auc = run_pipeline(vol, dz, bg, 0.0, z_win, n_surface=3)
             rf[cond].append(norm_auc / z_win)
-    from scipy import stats as ss
-    t, p = ss.ttest_ind(rf["short"], rf["long"], equal_var=False)
+    p = stats.welch_t(rf["short"], rf["long"])["p"]
     print(f"  A3 discrimination: retained-frac short={np.mean(rf['short']):.3f} "
           f"(gt {rf_gt_short:.3f}) long={np.mean(rf['long']):.3f} (gt {rf_gt_long:.3f})  "
           f"Welch p={p:.2e}  ordering_correct={np.mean(rf['short'])<np.mean(rf['long'])}")
@@ -189,7 +198,7 @@ def benchmark_A():
     return rows, dict(lam_short=lam_short, lam_long=lam_long, z_win=z_win,
                       rf_short=rf["short"], rf_long=rf["long"],
                       rf_gt_short=rf_gt_short, rf_gt_long=rf_gt_long, welch_p=p,
-                      noisy_curve=dict(i0=i0, lam=40.0, bg=bg, dz=dz, n_z=n_z, yx=yx, sigma=sigma))
+                      noisy_curve=dict(lam=lam, dz=dz, n_z=n_z, snr=i0 / sigma, curves=np.vstack(curves)))
 
 
 # --------------------------------------------------------------------------- #
@@ -231,11 +240,7 @@ def benchmark_A_lambda():
     lam, sigma, n_rep = 40.0, 100.0, 8
     noisy_lams, noisy_r2 = [], []
     for r in range(n_rep):
-        vol, _, _ = beer_lambert_stack(n_z, yx, i0, lam, bg, sigma=sigma, dz=dz, seed=r)
-        blank_vol, _, _ = beer_lambert_stack(n_z, yx, 0.0, lam, bg, sigma=sigma, dz=dz, seed=100 + r)
-        blank = depth.intensity_depth_profile(blank_vol, dz)
-        prof = depth.intensity_depth_profile(vol, dz)
-        sub = depth.subtract_background(prof, blank)
+        sub = noisy_replicate(n_z, yx, i0, lam, bg, sigma, dz, r)
         fit = depth.fit_penetration_depth(sub.depth_um, sub.mean)
         noisy_lams.append(fit.lambda_um)
         noisy_r2.append(fit.r_squared)
@@ -296,10 +301,10 @@ def benchmark_B():
 
 
 # --------------------------------------------------------------------------- #
-# D. Determinism + timing
+# C. Determinism + timing
 # --------------------------------------------------------------------------- #
-def benchmark_D():
-    print("\n=== D. Determinism + timing ===")
+def benchmark_C():
+    print("\n=== C. Determinism + timing ===")
     vol, z, dz = beer_lambert_stack(60, 256, 1000.0, 40.0, 50.0, sigma=300.0, dz=2.0, seed=1)
     a = run_pipeline(vol, dz, 50.0, 0.0, 100.0)
     b = run_pipeline(vol, dz, 50.0, 0.0, 100.0)
@@ -332,18 +337,7 @@ def make_figure(ctx, lam_ctx):
     z = np.arange(p["n_z"]) * p["dz"]
     z1 = z[-1]
     analytic = np.exp(-z / p["lam"])
-    curves = []
-    for r in range(8):
-        vol, _, _ = beer_lambert_stack(p["n_z"], p["yx"], p["i0"], p["lam"], p["bg"],
-                                       sigma=p["sigma"], dz=p["dz"], seed=r)
-        blank_vol, _, _ = beer_lambert_stack(p["n_z"], p["yx"], 0.0, p["lam"], p["bg"],
-                                             sigma=p["sigma"], dz=p["dz"], seed=100 + r)
-        blank = depth.intensity_depth_profile(blank_vol, p["dz"])
-        prof = depth.intensity_depth_profile(vol, p["dz"])
-        sub = depth.subtract_background(prof, blank)
-        nrm = depth.normalize_to_surface(sub, n_surface=1)  # ref = surface slice -> matches e^{-z/λ}
-        curves.append(nrm.normalized)
-    curves = np.vstack(curves)
+    curves = p["curves"]
     m = curves.mean(0)
     sd = curves.std(0, ddof=1)
     axa = fig.add_subplot(gs[0, 0])
@@ -407,33 +401,47 @@ def make_figure(ctx, lam_ctx):
              transform=axc.transAxes, ha="center", va="top", fontsize=5.0, color="#333")
     panel(axc, "c", "condition discrimination")
 
-    F.save(fig, "b_depth_penetration", FIGURES, tight=False)
-    F.caption("b_depth_penetration",
-            "Depth-penetration module validation on synthetic Beer-Lambert ground truth. "
-            "(a) Surface-normalised intensity vs depth: the known analytic decay e^(-z/lambda) "
-            "(black dashed) and fluorostats recovery from noisy z-stacks (blue, mean +/- s.d. over "
-            "8 replicates, surface SNR ~10) coincide. (b) Penetration-constant recovery: the "
-            "single-exponential fit (fluorostats.depth.fit_penetration_depth, scipy curve_fit) "
-            "recovers the known lambda (20/40/80/160 um) on the identity line to <0.1%% on "
-            "noiseless stacks (example fit R^2 shown); on SNR~10 noisy stacks lambda stays within "
-            "~1%%. (c) Two-condition discrimination (short vs long penetration, lambda=30 vs 70): "
-            "recovered mean retained fraction over 0-100 um (bars, per-stack dots) lands on the "
-            "analytic truth (dashed) for both, and the built-in Welch t-test separates them "
-            "(p=4.2e-24). Absolute/normalised AUC are recovered to <0.1%% on noiseless stacks "
-            "(exact) and within noise on noisy stacks; fluorostats reproduces the standard "
-            "per-slice-mean profile (Fiji Plot Z-axis Profile) bit-for-bit and its trapezoidal AUC "
-            "is ~175x more accurate than a naive rectangular sum.", FIGURES)
+    F.save(fig, "depth_penetration", FIGURES, tight=False)
+
+
+def caption_text(ctx, lam_ctx, a_rows, alam_rows, b_rows):
+    """Figure caption; every number is read from the benchmark results."""
+    p = ctx["noisy_curve"]
+    exact_lam = max(r["lambda_err_pct"] for r in alam_rows if r["test"] == "Alam_exact_noiseless")
+    noisy_lam = next(r["lambda_err_pct"] for r in alam_rows if r["test"] == "Alam_noisy_recovery")
+    exact_auc = max(max(r["err_norm_pct"], r["err_abs_pct"]) for r in a_rows if r["test"] == "A1_exact_noiseless")
+    err = {r["check"]: r["value"] for r in b_rows}
+    fold = err["rectangular_err_pct_vs_analytic"] / err["trapezoid_err_pct_vs_analytic"]
+    known = "/".join(f"{k:g}" for k in lam_ctx["known"])
+    return (
+        "Depth-penetration module validation on synthetic Beer-Lambert ground truth. "
+        "(a) Surface-normalised intensity vs depth: the known analytic decay e^(-z/lambda) "
+        "(black dashed) and fluorostats recovery from noisy z-stacks (blue, mean +/- s.d. over "
+        f"{len(p['curves'])} replicates, surface SNR ~{p['snr']:.0f}) coincide. (b) Penetration-constant "
+        "recovery: the single-exponential fit (fluorostats.depth.fit_penetration_depth, scipy curve_fit) "
+        f"recovers the known lambda ({known} um) on the identity line to within {exact_lam:.2g}% on "
+        "noiseless stacks (example fit R^2 shown); on SNR~"
+        f"{p['snr']:.0f} noisy stacks the mean recovered lambda is within {noisy_lam:.2g}%. "
+        f"(c) Two-condition discrimination (short vs long penetration, lambda={ctx['lam_short']:g} vs "
+        f"{ctx['lam_long']:g}): recovered mean retained fraction over 0-{ctx['z_win']:g} um (bars, "
+        "per-stack dots) lands on the analytic truth (dashed) for both, and the built-in Welch t-test "
+        f"separates them (p={ctx['welch_p']:.1e}). Absolute/normalised AUC are recovered to within "
+        f"{exact_auc:.2g}% on noiseless stacks and within noise on noisy stacks; fluorostats reproduces "
+        "the standard per-slice-mean profile (Fiji Plot Z-axis Profile) "
+        f"{'bit-for-bit' if b_rows[0]['ok'] else 'NOT bit-for-bit'} and its trapezoidal AUC is "
+        f"~{fold:.0f}x more accurate than a naive rectangular sum.")
 
 
 def main():
     a_rows, ctx = benchmark_A()
     alam_rows, lam_ctx = benchmark_A_lambda()
     b_rows = benchmark_B()
-    d_rows = benchmark_D()
+    c_rows = benchmark_C()
 
-    pd.DataFrame(a_rows + alam_rows).to_csv(RES / "b_depth_penetration_correctness.csv", index=False)
-    pd.DataFrame(b_rows + d_rows).to_csv(RES / "b_depth_penetration_parity_timing.csv", index=False)
+    pd.DataFrame(a_rows + alam_rows).to_csv(RES / "depth_penetration_correctness.csv", index=False)
+    pd.DataFrame(b_rows + c_rows).to_csv(RES / "depth_penetration_parity_timing.csv", index=False)
     make_figure(ctx, lam_ctx)
+    F.caption("depth_penetration", caption_text(ctx, lam_ctx, a_rows, alam_rows, b_rows), FIGURES)
 
     print("\n=== SUMMARY ===")
     print("  A exactness (noiseless): all normalized-AUC errors < %.3f%% (trapezoid discretization)"
@@ -441,9 +449,9 @@ def main():
     print("  A(lambda) recovery (noiseless): max err = %.3f%%"
           % max(r["lambda_err_pct"] for r in alam_rows if r["test"] == "Alam_exact_noiseless"))
     print("  B Fiji per-slice-mean parity: %s" % ("BIT-EXACT" if b_rows[0]["ok"] else "MISMATCH"))
-    print("  D determinism: %s" % ("bit-identical" if d_rows[0]["ok"] else "NON-DETERMINISTIC"))
-    print("  wrote results/b_depth_penetration_correctness.csv, "
-          "results/b_depth_penetration_parity_timing.csv, figure b_depth_penetration.{pdf,png}")
+    print("  C determinism: %s" % ("bit-identical" if c_rows[0]["ok"] else "NON-DETERMINISTIC"))
+    print("  wrote results/depth_penetration_correctness.csv, "
+          "results/depth_penetration_parity_timing.csv, figure depth_penetration.{pdf,png}")
 
 
 if __name__ == "__main__":

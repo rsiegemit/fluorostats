@@ -13,8 +13,9 @@ from scipy import ndimage as ndi
 from skimage import filters, restoration
 from skimage.filters import median
 
-from common import RESULTS, bbbc024_volumes, foreground_dice
+from common import bbbc024_volumes, write_table
 from fluorostats.preprocess import denoise
+from fluorostats.validate import dice
 
 SEED = 0
 NOISE_SD = [40, 80, 160]
@@ -39,10 +40,10 @@ def main():
             noisy = (clean.astype(np.float32) + rng.normal(0, sd, clean.shape)).astype(np.float32)
             for name, fn in DENOISERS.items():
                 d = fn(noisy)
-                acc[name].append(foreground_dice(d > filters.threshold_otsu(d), gt))
+                acc[name].append(dice(d > filters.threshold_otsu(d), gt))
         rows.append({"noise_sd": sd, **{m: round(float(np.mean(v)), 3) for m, v in acc.items()}})
     df = pd.DataFrame(rows)
-    df.to_csv(RESULTS / "b_denoising.csv", index=False)
+    write_table(df, "b_denoising", {"seed": SEED, "noise_sd": NOISE_SD, "n_volumes": 5, "denoisers": list(DENOISERS)})
     print(df.to_string(index=False))
 
 

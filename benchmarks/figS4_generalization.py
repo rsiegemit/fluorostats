@@ -12,23 +12,27 @@ independent public datasets and imaging modalities it was never tuned on:
 (b) Cell Tracking Challenge 3D foreground Dice on two unseen modalities
     (Fluo-C3DH-A549, Fluo-N3DH-CHO), fluorostats vs threshold baselines.
 
-Run:  python3.13 figS4_generalization.py
+Run:  python3.13 benchmarks/figS4_generalization.py (from any directory)
 Outputs PDF+PNG to figures/supplementary/ plus a .txt caption.
 """
 from __future__ import annotations
 
 import os
+import sys
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import figstyle
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import figstyle  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "results")
 
-STARDIST_AP50 = 0.864  # published StarDist trained-DL AP@0.5 on DSB2018 test
+# published StarDist trained-DL AP@0.5 on DSB2018 test (Schmidt et al. 2018; VALIDATION.md):
+# an external literature value, so it has no results table to be read from
+STARDIST_AP50 = 0.864
 
 # pretty method labels for display
 LABELS = {
@@ -115,7 +119,7 @@ def panel_a(ax):
     # "% of trained model" headline, placed in the clear whitespace beside the two
     # shortest bars (Yen 0.578, Triangle 0.185): starts right of the Yen value
     # label and stays left of the StarDist reference line, centred on rows 0-1.
-    best = float(f1.max())
+    best = float(df.loc["fluorostats", "mean_f1@0.5"])   # the default (headline) row
     pct = 100.0 * best / STARDIST_AP50
     # placed on the Triangle row (bottom, shortest bar 0.185) in genuinely clear space
     # to the right of that bar -> live text, no halo carving into the Yen bar above
@@ -197,7 +201,8 @@ def main():
     figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)", xanchor=0.0315)   # row-leader
     figstyle.save(fig, "figS4_generalization", figstyle.SUPP, tight=False)
 
-    best_f1 = float(pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv"))["mean_f1@0.5"].max())
+    dsb = pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv")).set_index("method")
+    best_f1 = float(dsb.loc["fluorostats", "mean_f1@0.5"])
     caption = (
         "Figure S4 | Generalization across independent datasets and "
         "imaging modalities. Because fluorostats is training-free, it applies the "
