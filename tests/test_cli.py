@@ -537,3 +537,16 @@ def test_help_states_defaults_and_result_changing_options(cmd, default):
     for opt in ("--channel", "--min-size", "--sigma", "--bg-radius", "--threshold-scale"):
         help_line = text.split(opt, 1)[1].split(" --", 1)[0]
         assert "CAN AFFECT RESULTS" in help_line, opt
+
+
+@pytest.mark.parametrize("cmd,maker,extra", [("quant2d", _blob_2d, []),
+                                             ("quant3d", _blob_3d, ["--no-skeleton"])])
+def test_overlays_of_same_named_files_in_different_conditions_are_kept(tmp_path, cmd, maker,
+                                                                       extra):
+    _make_dataset(tmp_path / "in", maker)
+    res = CliRunner().invoke(cli, [cmd, "--input", str(tmp_path / "in"), "--output",
+                                   str(tmp_path / "out"), "--no-plots", *extra])
+    assert res.exit_code == 0, res.output
+    made = sorted(p.relative_to(tmp_path / "out" / "overlays").as_posix()
+                  for p in (tmp_path / "out" / "overlays").rglob("*.png"))
+    assert made == [f"{c}/s{i}_overlay.png" for c in ("GelMA", "Hybrid") for i in range(3)]

@@ -137,7 +137,7 @@ def quant3d(
         _measure_volume, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
         threshold=threshold, threshold_scale=threshold_scale, min_size=min_size,
         no_skeleton=no_skeleton, prune=prune, min_branch_length=min_branch_length,
-        overlay_dir=None if no_overlays else output_path / "overlays")
+        overlay_dir=None if no_overlays else output_path / "overlays", input_root=input_path)
     rows = _quantify_files(files, condition_from, "Processing volumes", measure)
 
     # Every reported metric is plotted except n_branches, as in earlier releases.
@@ -199,7 +199,8 @@ def quant2d(
     measure = functools.partial(
         _measure_image, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
         threshold=threshold, threshold_scale=threshold_scale, min_size=min_size,
-        auto_crop=auto_crop, overlay_dir=None if no_overlays else output_path / "overlays")
+        auto_crop=auto_crop, overlay_dir=None if no_overlays else output_path / "overlays",
+        input_root=input_path)
     rows = _quantify_files(files, condition_from, "Processing images", measure)
     _report_and_plot(rows, output_path, "2d", list(report.METRICS_2D), no_plots,
                      "2D Coverage Summary")
@@ -230,7 +231,7 @@ def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size):
 
 
 def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length,
-                    overlay_dir, **seg) -> dict:
+                    overlay_dir, input_root, **seg) -> dict:
     """quant3d's per-file metrics (volume fraction, connectivity, skeleton, coverage)."""
     arr, meta = iq_io.load_volume(fpath)
     voxel_size = meta["voxel_size_um"]
@@ -246,7 +247,7 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
             mask, voxel_size_um=voxel_size,
             prune=prune, min_branch_length_um=min_branch_length)
     if overlay_dir is not None:
-        qc.overlay_3d(vol, mask, overlay_dir / f"{fpath.stem}_overlay.png")
+        qc.overlay_3d(vol, mask, _overlay_path(fpath, input_root, overlay_dir))
     return {
         "shape": str(arr.shape),
         "voxel_size_um": str(voxel_size),
@@ -259,7 +260,8 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
     }
 
 
-def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict:
+def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, input_root,
+                   **seg) -> dict:
     """quant2d's per-file metrics (area fraction, clusters, coverage uniformity)."""
     arr, meta = iq_io.load_image(fpath)
     crop_box = ""
@@ -269,7 +271,7 @@ def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict
     ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
     img, mask = _segment(arr[ch], **seg)
     if overlay_dir is not None:
-        qc.overlay_2d(img, mask, overlay_dir / f"{fpath.stem}_overlay.png")
+        qc.overlay_2d(img, mask, _overlay_path(fpath, input_root, overlay_dir))
     py, px = meta["voxel_size_um"]
     return {
         "shape": str(arr.shape),
@@ -282,6 +284,13 @@ def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, **seg) -> dict
         **metrics_2d.coverage_metrics(mask, pixel_size_um=math.sqrt(py * px)),
         **spatial.coverage_heterogeneity(mask),
     }
+
+
+def _overlay_path(fpath: Path, input_root: Path, overlay_dir: Path) -> Path:
+    """The QC overlay for ``fpath``, mirroring its subfolder under the input root so
+    same-named files in different condition folders do not overwrite each other."""
+    rel = fpath.relative_to(input_root).parent
+    return overlay_dir / rel / f"{fpath.stem}_overlay.png"
 
 
 def _channel_label(index: int, names: list[str]) -> str:
