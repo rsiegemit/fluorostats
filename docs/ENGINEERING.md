@@ -152,7 +152,49 @@ methods_paper/     # git-ignored: manuscript work and collaborator data (DAT-1)
 
 ## Current state
 
-Audit against these rules: pending (see the audit report for the findings and the proposed fixes).
+**Audit, 2026-10-14** (five parallel read-only audits, one per rule family; ~90 findings).
+Fixes landed one per commit on branch `engineering-audit`. Refactors were proven
+behaviour-identical with a golden harness (every public function and CLI command on
+fixed inputs, plus all nine figure/example scripts, compared byte for byte); changes
+that alter outputs are listed in `CHANGELOG.md` under Unreleased with their paper impact.
+
+Now compliant:
+
+- MOD-3/MOD-4: no import cycles, no cross-module private access (tests included).
+- MOD-6: every function body in `src/` is under 60 lines and nests at most four
+  levels, except `style.apply_style` (recorded exception: one rcParams table).
+- SIN: one Gini/CV, FOV volume, viability ratio, Welch/Mann-Whitney path, metric
+  list (`report.METRICS_*`), format registry (`io.FORMATS`), count-method and
+  threshold-method registry, figure kit (`pubfig`); quant2d/quant3d share one
+  pipeline.
+- ERR/CFG: silent fallbacks warn or are recorded; manifests and CLI options are
+  validated up front; every command writes `run_config.json`.
+- TST: 100% line coverage; one test file per module; bug fixes carry a test that
+  fails on the old code. STY-1: ruff-clean across src, tests, benchmarks, examples.
+- DOC-4: supplementary figures use S1-S4; caption numbers are read from data.
+
+Open, each needing an owner decision (unifying or fixing changes numbers or API):
+
+- [ ] **Fig S2 (c)** plots and the manuscript legend states a trained-pipeline
+  run-to-run CV of 3.2% that was never measured (typed as "illustrative").
+- [ ] **Fig 6 Live/Dead** counts were not re-run under the `min_size` fix; the raw
+  HUVEC stacks are not on this machine.
+- [ ] **Manuscript text vs data**: "F1 falls from 0.94 to 0.15" (Fig 2d's table: 0.922
+  to 0.134); "≈40% crossover" is not derivable from the 0/25/50/75% curve; Fig S4's
+  CTC SEG 0.908/0.925 is uncited.
+- [ ] SIN-1, kept separate because unifying changes numbers: three tile-grid
+  remainder conventions (`morphometry` crop, `objects` float bins, `spatial`
+  linspace); mean/SEM empty/NaN conventions in `plots`, `depth_batch`,
+  `viability_batch`; `qc` vs `render3d` overlay colour/normalisation.
+- [ ] MOD-5: the spacing argument is `voxel_size_um`, `spacing`, `pixel_size_um` or
+  `voxel_size_z_um` depending on the module; `live_dead_by_count` returns a
+  different shape for `method="all"`, and its `method` collides with the threshold
+  `method` passed through `**seg`.
+- [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default (existing
+  manifests rely on it); `examples/keyence_tube_analysis.py` and
+  `multi_condition_pipeline.py` are dataset-specific and could become manifest runs.
+- [ ] ERR-3 honesty fixes not applied: SEM for n = 1 is 0.0 (not NaN); an AUC window
+  entirely past a stack returns 0.0. ImageJ TIFF x/y resolution is not read (warned).
 
 ## Validating a change
 

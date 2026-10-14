@@ -3,6 +3,63 @@
 Notable changes to fluorostats. Format follows [Keep a Changelog](https://keepachangelog.com);
 versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+An audit against the new engineering rules (`docs/ENGINEERING.md`). Refactors were
+proven behaviour-identical with a golden-output harness over every public
+function, every CLI command and every figure script; the changes below that DO
+alter outputs are listed first, each with its effect on the manuscript.
+
+### Fixed (changes outputs)
+- **Leica `.lif` voxel sizes were 10^6 too large.** readlif reports pixels per
+  µm; the loader also multiplied by 1e6. A file with no z length also lost its
+  valid x/y calibration. *Paper: no `.lif` data used.*
+- **`segment.binarize(min_size=...)` removed objects of exactly that size** on
+  scikit-image >= 0.26 (its `max_size` is inclusive), but kept them on older
+  versions and disagreed with `objects.label_3d`. Now "smaller objects are
+  removed" on every version. *Paper: Fig 2 unaffected (uses `label_3d`); Fig 4
+  panel (e) overlay changes by 0.04-0.09% of its pixels, no number moves; Fig 6
+  Live/Dead counts (min_size 5) NOT re-verified — raw data not available here.*
+- **CLI summary-panel stars used raw p-values** while `pvalues.csv` starred BH
+  q-values; they now use the same q-values. *Paper: CLI plots only.*
+- **`--no-skeleton` wrote 0 into the skeleton columns**, which were then
+  summarised, plotted and tested as measurements; they are now blank (NaN).
+- **An unnamed 4-channel (RGBA) image was measured on red**; it now maps to
+  green like 2- and 3-channel inputs (still announced as a positional guess).
+- **`objects.centroid_homogeneity` crashed on 2D centroids**; 3D is unchanged.
+- Figure S3's caption said Triangle fails at high noise; its own table shows
+  Triangle is best there (fails at low noise). Caption text only.
+
+### Added
+- Warnings, instead of silent fallbacks, when: an axis has no calibration in the
+  file (and `meta["voxel_size_source"]` records which axes were read); the green
+  channel is chosen by position; extra time/scene axes are dropped or a Leica
+  file holds more than one image; a z-stack is read as a 2D image; a consensus
+  threshold method fails; a depth AUC window runs past a stack; replicate blanks
+  have different z-steps.
+- `per_file.csv` columns `channel_used` (2D, 3D) and `voxel_size_source` (3D).
+- Batch manifests are validated before any image loads (`fluorostats.manifest`);
+  `fluorostats depth` / `viability` write `run_config.json`.
+- CLI options reject out-of-range values; `--threshold` offers every method the
+  library implements (`segment.METHODS`), not just otsu/li.
+- `fluorostats.pubfig` (publication-figure kit), `stats.gini`,
+  `stats.coefficient_of_variation`, `stats.bootstrap_mean_ci`, `stats.welch_t`,
+  `spatial.coverage_heterogeneity`, `preprocess.green_channel_index`,
+  `io.FORMATS`, `report.write_run_config`, `depth_figures`.
+- Metric labels: `n_junctions` is "Junction-to-Junction Branches" (it never was
+  a junction count); `n_junction_nodes` and the coverage metrics get labels.
+
+### Changed (behaviour-identical)
+- One implementation per concern: Gini/CV, FOV density, viability ratio,
+  batch-driver statistics, the reported-metric lists, file formats, count
+  methods; quant2d/quant3d share one pipeline; depth_batch split by concern;
+  long functions and deep nesting broken up; the benchmark figure kit moved
+  into the library and its example copy deleted.
+- Tests organised one file per module; ruff-clean across src, tests,
+  benchmarks and examples.
+- Supplementary figure scripts and outputs use the manuscript's S1-S4 names;
+  caption numbers are read from the tables they describe.
+
 ## [0.8.2]
 
 ### Fixed

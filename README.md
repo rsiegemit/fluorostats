@@ -120,10 +120,18 @@ fluorostats depth ./my_experiment/manifest.json
 Start with the `overlays/` folder — each image gets a QC overlay (grayscale intensity + magenta segmentation mask) for immediate visual verification.
 
 Then inspect:
-- `per_file.csv` — measurements for every file
+- `per_file.csv` — measurements for every file, plus which channel was measured
+  (`channel_used`) and, for 3D, whether each voxel size came from the file or is
+  the 1.0 µm placeholder (`voxel_size_source`)
 - `per_condition.csv` — summary statistics grouped by condition
 - `plots/summary_panel.png` — all metrics in one composite figure
-- `plots/pvalues.csv` — statistical comparisons (available when replicates are present)
+- `plots/pvalues.csv` — statistical comparisons (available when replicates are present);
+  the summary panel's significance stars use the same Benjamini–Hochberg q-values
+- `run_config.json` — the parameters and package versions that produced the folder
+
+Watch the console too: fluorostats warns, rather than guessing silently, when a
+file lacks calibration, when the channel is chosen by position because no name
+matched a dye, or when extra axes (time points, scenes) are dropped.
 
 ## Tuning
 
@@ -154,10 +162,10 @@ fluorostats formats   # check availability on the current system
 | `.tif` `.tiff` | Universal / OME-TIFF / ImageJ | included |
 | `.png` `.jpg` `.bmp` | Exported snapshots | included |
 | `.npy` | NumPy arrays | included |
-| `.oib` `.oif` | Olympus FluoView | `fluorostats[olympus]` |
-| `.czi` | Zeiss ZEN | `fluorostats[zeiss]` |
-| `.nd2` | Nikon NIS-Elements | `fluorostats[nikon]` |
-| `.lif` | Leica LAS X | `fluorostats[leica]` |
+| `.oib` `.oif` | Olympus FluoView | `pip install oiffile` (extra `olympus`) |
+| `.czi` | Zeiss ZEN | `pip install czifile` (extra `zeiss`) |
+| `.nd2` | Nikon NIS-Elements | `pip install nd2` (extra `nikon`) |
+| `.lif` | Leica LAS X | `pip install readlif` (extra `leica`) |
 | `*_CHF*.ome.tif` folder + `.gci` | Keyence BZ-X (per-slice z-stack export) | included |
 
 Keyence BZ-X exports a z-stack as one OME-TIFF per slice (all channels inside each file) plus an `Image .gci` metadata archive. Load the whole stack — pixel size, z-step, and channel names read from the `.gci` — in one call:
@@ -422,6 +430,11 @@ anova = scheirer_ray_hare(df, value_col="lateral_gini",
                           factor_a="material", factor_b="day")
 ```
 
+`stats` also holds the small pieces the rest of the library shares, so there is
+one implementation of each: `gini` and `coefficient_of_variation` (the `ddof` is
+explicit), `bootstrap_mean_ci` (seeded percentile bootstrap of a mean) and
+`welch_t` (for contrasts that ask for a parametric test by name).
+
 ### Bootstrap power analysis
 
 ```python
@@ -445,7 +458,22 @@ apply_style()                       # clean typography, spines, grid, palette
 color = material_color("Hybrid")    # consistent per-condition colors
 ```
 
-`apply_style()` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` / `MATERIAL_COLORS` give a consistent color story, and `DARK_PALETTE` drives the black-background 3D look below.
+`apply_style()` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` gives a consistent color story (`MATERIAL_COLORS` is a default condition→color map; pass your own colors for other conditions), and `DARK_PALETTE` drives the black-background 3D look below.
+
+For multi-panel journal figures, `fluorostats.pubfig` is the kit the methods-paper
+figures are built with: an Okabe–Ito palette, a 5–7 pt type scale, bold panel
+letters, image helpers and scale bars, lollipop and Bland–Altman panels, and an
+exporter that writes PDF + 600-dpi PNG at the authored size.
+
+```python
+from fluorostats import pubfig as F
+
+F.apply_style()
+fig, ax = plt.subplots(figsize=(3.5, 2.6))
+...
+F.panel(ax, "a", "ground-truth recovery")
+F.save(fig, "fig1", "figures/")      # figures/fig1.pdf + fig1.png
+```
 
 ### 3D reconstruction (isosurface, voxel cloud)
 
@@ -464,7 +492,7 @@ render_isosurface(mask, voxel_size_um=meta["voxel_size_um"],
 
 Marching-cubes isosurface on a physical-micrometre grid. `style="dark"` renders on black with a faint box and white scalebar; `smooth_iter` applies Laplacian mesh smoothing for continuous tubes; `shade=True` adds Lambertian per-face shading for depth. `render_voxel_cloud` is a chunky voxel variant.
 
-### Slide-style image panels (no segmentation)
+### Image panels (no segmentation)
 
 ```python
 from fluorostats.render3d import live_dead_mip, mip_grid, layer_split_mip, depth_coded_mip
@@ -513,12 +541,14 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 | `--output` | required | Output folder for results |
 | `--condition-from` | `parent` | Label source: `parent` folder, `grandparent`, or `filename` |
 | `--channel` | auto | Force channel by index or name |
-| `--threshold` | `otsu` | Thresholding method: `otsu` or `li` |
-| `--threshold-scale` | `0.9` | Scale threshold (lower = more sensitive) |
-| `--min-size` | `64` | Min object size in voxels |
+| `--threshold` | `otsu` | `otsu`, `li`, `isodata`, `triangle`, `yen`, `mean`, `auto` (picked from the histogram) or `consensus` (majority vote) |
+| `--threshold-scale` | `0.9` | Scale threshold, > 0 (lower = more sensitive) |
+| `--min-size` | `64` | Min object size in voxels (smaller objects are removed) |
 | `--sigma` | `1.0` | Gaussian blur sigma |
 | `--bg-radius` | `0` | Background subtraction radius (0 = off) |
-| `--no-skeleton` | off | Skip skeleton analysis (faster) |
+| `--no-skeleton` | off | Skip skeleton analysis (faster); skeleton columns are left blank |
+| `--prune/--no-prune` | off | Prune skeleton spurs shorter than `--min-branch-length` |
+| `--min-branch-length` | `5.0` | Spur-pruning length in µm (with `--prune`) |
 | `--no-overlays` | off | Skip QC overlay images |
 | `--no-plots` | off | Skip comparison plots |
 
@@ -533,14 +563,29 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 | `--output` | required | Output folder for results |
 | `--condition-from` | `parent` | Label source: `parent` folder, `grandparent`, or `filename` |
 | `--channel` | auto | Force channel by index or name |
-| `--threshold` | `li` | Thresholding method: `otsu` or `li` |
-| `--threshold-scale` | `1.0` | Scale threshold (lower = more sensitive) |
-| `--min-size` | `64` | Min object size in pixels |
+| `--threshold` | `li` | Same choices as quant3d |
+| `--threshold-scale` | `1.0` | Scale threshold, > 0 (lower = more sensitive) |
+| `--min-size` | `64` | Min object size in pixels (smaller objects are removed) |
 | `--sigma` | `1.0` | Gaussian blur sigma |
 | `--bg-radius` | `15` | Background subtraction radius (0 = off) |
-| `--auto-crop` | on | Auto-crop microscope software borders |
+| `--auto-crop/--no-auto-crop` | on | Auto-crop microscope software borders |
 | `--no-overlays` | off | Skip QC overlay images |
 | `--no-plots` | off | Skip comparison plots |
+
+</details>
+
+<details>
+<summary>fluorostats depth / viability / formats</summary>
+
+| Command | Description |
+|---------|-------------|
+| `fluorostats depth MANIFEST [--output DIR]` | Depth-penetration batch run from a JSON manifest (schema in `fluorostats.depth_batch`) |
+| `fluorostats viability MANIFEST [--output DIR]` | Live/Dead batch run from a JSON manifest (schema in `fluorostats.viability_batch`) |
+| `fluorostats formats` | List file formats and whether their readers are installed |
+
+Manifests are checked before any image is loaded: a typo in a channel index, a
+role, an AUC window or a file path is reported at once, all problems together.
+Both commands write `run_config.json` with the fully resolved manifest.
 
 </details>
 
@@ -556,7 +601,8 @@ That is the concept DOI: it always resolves to the newest release, so it never
 goes stale. Each release also gets its own version DOI — cite that instead to
 pin an exact version (v0.8.0 is
 [10.5281/zenodo.22942365](https://doi.org/10.5281/zenodo.22942365), v0.8.1 is
-[10.5281/zenodo.22945043](https://doi.org/10.5281/zenodo.22945043)).
+[10.5281/zenodo.22945043](https://doi.org/10.5281/zenodo.22945043), v0.8.2 is
+[10.5281/zenodo.22947222](https://doi.org/10.5281/zenodo.22947222)).
 
 Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) (GitHub's
 "Cite this repository" button reads it) and [`.zenodo.json`](.zenodo.json).
