@@ -385,6 +385,10 @@ def _load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
         raise ValueError(f"No images found in LIF file: {path}")
 
     img = reader.get_image(0)
+    if len(reader.image_list) > 1 or getattr(img.dims, "t", 1) > 1:
+        warnings.warn(f"{path.name}: reading image 0 at time point 0 only "
+                      f"({len(reader.image_list)} images, {getattr(img.dims, 't', 1)} time points "
+                      "in the file).", RuntimeWarning, stacklevel=3)
     meta = _parse_lif_metadata(img)
     meta["format"] = "leica_lif"
 
@@ -536,6 +540,10 @@ def _squeeze_singleton_dims(arr: np.ndarray) -> np.ndarray:
         arr = arr[0]
     while arr.ndim > 4 and arr.shape[-1] == 1:
         arr = arr[..., 0]
+    if arr.ndim > 4:
+        warnings.warn(f"array of shape {arr.shape} has more than 4 non-singleton axes; keeping "
+                      "only the first index of each extra leading axis (e.g. time point, scene).",
+                      RuntimeWarning, stacklevel=4)
     while arr.ndim > 4:
         arr = arr[0]
     return arr
@@ -558,6 +566,10 @@ def _canonicalize_volume(arr: np.ndarray, meta: dict) -> np.ndarray:
                           RuntimeWarning, stacklevel=3)
             arr = np.moveaxis(arr, -1, 0)
     elif ndim == 5:
+        if arr.shape[0] > 1:
+            warnings.warn(f"5D array of shape {arr.shape}: keeping only the first of "
+                          f"{arr.shape[0]} entries along the leading axis (e.g. time point).",
+                          RuntimeWarning, stacklevel=3)
         arr = arr[0]
     elif ndim == 2:
         arr = arr[np.newaxis, np.newaxis]
@@ -583,6 +595,10 @@ def _canonicalize_image(arr: np.ndarray, meta: dict) -> np.ndarray:
     elif arr.ndim == 3:
         if arr.shape[2] <= 4:
             arr = np.moveaxis(arr, -1, 0)
+        elif arr.shape[0] > 4:
+            warnings.warn(f"3D array of shape {arr.shape} read as a 2D image: its {arr.shape[0]} "
+                          "planes are treated as channels. If it is a z-stack, load it with "
+                          "load_volume / quant3d instead.", RuntimeWarning, stacklevel=3)
     else:
         raise ValueError(f"Unexpected 2D image shape: {arr.shape}")
 

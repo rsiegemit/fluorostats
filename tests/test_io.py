@@ -248,3 +248,27 @@ def test_image_without_calibration_warns_for_both_axes(tmp_path):
     with pytest.warns(RuntimeWarning, match="no y/x calibration"):
         _, meta = load_image(p)
     assert meta["voxel_size_source"] == "y:default,x:default"
+
+
+def test_loaders_announce_discarded_axes(tmp_path):
+    # Extra leading axes (time points, scenes) are reduced to their first index:
+    # that is announced, as is a z-stack being read as a 2D image.
+    import tifffile
+
+    p5 = tmp_path / "t5.npy"
+    np.save(p5, np.zeros((2, 1, 3, 8, 8), np.float32))          # (T, C, Z, Y, X)
+    with pytest.warns(RuntimeWarning, match="first of 2 entries"):
+        arr, _ = load_volume(p5)
+    assert arr.shape == (1, 3, 8, 8)
+
+    p6 = tmp_path / "t6.npy"
+    np.save(p6, np.zeros((2, 3, 1, 3, 8, 8), np.float32))
+    with pytest.warns(RuntimeWarning, match="more than 4 non-singleton axes"):
+        arr6, _ = load_volume(p6)
+    assert arr6.shape == (1, 3, 8, 8)
+
+    pz = tmp_path / "zstack.tif"
+    tifffile.imwrite(pz, np.zeros((6, 8, 8), np.uint16))
+    with pytest.warns(RuntimeWarning, match="planes are treated as channels"):
+        img, _ = load_image(pz)
+    assert img.shape == (6, 8, 8)

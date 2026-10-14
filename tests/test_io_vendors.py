@@ -529,3 +529,20 @@ def test_safe_float_paths():
     assert io._safe_float("2.5", 1.0) == 2.5
     assert io._safe_float("-1", 9.0) == 9.0  # non-positive -> default
     assert io._safe_float("abc", 7.0) == 7.0  # unparseable -> default
+
+
+def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
+    fake = _make_fake_readlif(1, 2, [1e6, 1e6, 1e6])
+    base = fake.LifFile
+
+    class TwoImages(base):
+        def __init__(self, path):
+            super().__init__(path)
+            self.image_list = [{"name": "img0"}, {"name": "img1"}]
+
+    fake.LifFile = TwoImages
+    monkeypatch.setitem(sys.modules, "readlif", fake)
+    p = tmp_path / "s.lif"
+    p.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="reading image 0 at time point 0 only"):
+        io.load_volume(p)
