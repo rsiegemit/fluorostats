@@ -114,7 +114,7 @@ def quant3d(
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
+    output_path = _output_outside_input(input_path, Path(output_dir))
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Resolve channel override
@@ -179,7 +179,7 @@ def quant2d(
     """Quantify 2D fluorescence images: area fraction (cell coverage) and
     spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
+    output_path = _output_outside_input(input_path, Path(output_dir))
     output_path.mkdir(parents=True, exist_ok=True)
 
     ch_override = _parse_channel(channel)
@@ -295,12 +295,20 @@ def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) 
 def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     """Shared quant2d/quant3d tail: per-metric plots, summary panel, p-values.
 
-    No-op unless plots are enabled and there is more than one condition.
+    Draws only when plots are enabled and there is more than one condition; either
+    way, the plot files an earlier run left that this run did not rewrite are removed.
     """
-    if no_plots or len(df["condition"].unique()) <= 1:
-        return
-
     plot_dir = output_path / "plots"
+    previous = _remove_owned_plots(plot_dir)
+    if not no_plots and len(df["condition"].unique()) > 1:
+        _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title)
+    for path in previous:
+        if not path.exists():
+            click.echo(f"Removed stale {path} (not produced by this run)")
+
+
+def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
+    """Draw the per-metric plots, the summary panel and pvalues.csv into ``plot_dir``."""
     has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
 
     for metric in metrics:
@@ -325,6 +333,36 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
+
+
+def _output_outside_input(input_path: Path, output_path: Path) -> Path:
+    """``output_path``, refused when it is (inside) the input folder.
+
+    Inputs are found recursively, so a rerun would read this tool's own overlay and
+    plot images back in as samples.
+    """
+    if output_path.resolve().is_relative_to(input_path.resolve()):
+        raise click.UsageError(
+            f"--output {output_path} is inside the input folder {input_path}; a rerun "
+            "would read its overlay/plot images as samples. Choose an output folder "
+            "outside --input.")
+    return output_path
+
+
+def _remove_owned_plots(plot_dir: Path) -> list[Path]:
+    """Delete the plot files an earlier run wrote; return the paths deleted.
+
+    Only names this tool writes (any reported metric's ``_bar``/``_box`` PNG, the
+    summary panel, ``pvalues.csv``) are touched, so an earlier run's results never
+    sit next to this run's and nothing else in the folder is removed.
+    """
+    owned = [plot_dir / f"{m}_{kind}.png" for m in {*report.METRICS_2D, *report.METRICS_3D}
+             for kind in ("bar", "box")]
+    owned += [plot_dir / "summary_panel.png", plot_dir / "pvalues.csv"]
+    removed = sorted(p for p in owned if p.exists())
+    for path in removed:
+        path.unlink()
+    return removed
 
 
 def _find_files(root: Path, suffixes: set[str]) -> list[Path]:

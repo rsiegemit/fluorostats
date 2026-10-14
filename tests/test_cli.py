@@ -430,3 +430,50 @@ def test_no_skeleton_leaves_skeleton_columns_blank_not_zero(tmp_path):
         pv = plots_dir / "pvalues.csv"
         if pv.exists():
             assert "total_length_um" not in pd.read_csv(pv)["metric"].tolist()
+
+
+@pytest.mark.parametrize("cmd", ["quant2d", "quant3d"])
+@pytest.mark.parametrize("sub", [".", "out", "GelMA/out"])
+def test_quant_refuses_output_inside_input(tmp_path, cmd, sub):
+    # Regression: an output folder inside the input folder was accepted, so a rerun
+    # picked up the tool's own overlay/plot PNGs as input images.
+    _make_dataset(tmp_path / "in", _blob_2d)
+    out = tmp_path / "in" / sub
+    res = CliRunner().invoke(cli, [cmd, "--input", str(tmp_path / "in"), "--output", str(out)])
+    assert res.exit_code == 2
+    assert "inside the input folder" in res.output
+    assert not (out / "per_file.csv").exists()
+
+
+def test_rerun_removes_only_stale_outputs_it_owns(tmp_path):
+    # Regression: plots and pvalues.csv from an earlier run survived a rerun that did
+    # not rewrite them, leaving stale results next to new ones.
+    import pandas as pd
+
+    _make_dataset(tmp_path / "in", _blob_2d)
+    out = tmp_path / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-overlays"]
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    plot_dir = out / "plots"
+    assert (plot_dir / "pvalues.csv").exists() and (plot_dir / "area_fraction_bar.png").exists()
+    (plot_dir / "my_notes.txt").write_text("not the tool's")
+    (plot_dir / "custom.png").write_bytes(b"x")
+
+    # one replicate per condition: box plots are rewritten, bars and p-values are not
+    for cond in ("GelMA", "Hybrid"):
+        for i in (1, 2):
+            (tmp_path / "in" / cond / f"s{i}.tif").unlink()
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 0, res.output
+    assert not (plot_dir / "pvalues.csv").exists()
+    assert not list(plot_dir.glob("*_bar.png"))
+    assert (plot_dir / "area_fraction_box.png").exists()
+    assert "pvalues.csv" in res.output and "area_fraction_bar.png" in res.output
+    assert "area_fraction_box.png" not in res.output          # rewritten, not removed
+    assert (plot_dir / "my_notes.txt").exists() and (plot_dir / "custom.png").exists()
+    assert len(pd.read_csv(out / "per_file.csv")) == 2
+
+    # --no-plots: every plot the tool named goes; foreign files stay
+    res = CliRunner().invoke(cli, args + ["--no-plots"])
+    assert res.exit_code == 0, res.output
+    assert sorted(p.name for p in plot_dir.iterdir()) == ["custom.png", "my_notes.txt"]
