@@ -103,3 +103,41 @@ def test_fov_area_uses_y_and_x_pixel_sizes(monkeypatch):
     monkeypatch.setattr(viability_batch, "load_volume", lambda p: (vol, meta))
     row = viability_batch.analyse_stack(Path("x.npy"), _cfg())
     assert row["fov_mm2"] == pytest.approx((1.0 * 80) * (0.5 * 96) / 1e6)
+
+
+def _one_stack_manifest(tmp_path, **over):
+    p = tmp_path / "s.npy"
+    np.save(p, _blob_stack(3, 3))
+    man = {"live_channel": 0, "dead_channel": 1, "count_method": "cc",
+           "output_dir": str(tmp_path / "o"),
+           "groups": [{"name": "g", "stacks": [{"label": "s", "path": str(p)}]}], **over}
+    mp = tmp_path / "m.json"
+    mp.write_text(json.dumps(man))
+    return mp
+
+
+def test_manifest_rejects_aux_role(tmp_path):
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text())
+    man["groups"][0]["stacks"][0]["role"] = "aux"
+    mp.write_text(json.dumps(man))
+    with pytest.raises(ValueError, match="role must be one of"):
+        viability_batch.load_manifest(mp)
+
+
+@pytest.mark.parametrize("seg, msg", [
+    ({"method": "bogus"}, "seg.method must be one of"),
+    ({"min_size": -1}, "seg.min_size must be a non-negative integer"),
+    ({"min_size": 2.5}, "seg.min_size must be a non-negative integer"),
+    ({"threshold_scale": 0}, "seg.threshold_scale must be a positive number"),
+    ({"sigma": 1.0}, "seg has unknown keys"),
+    ("otsu", "seg must be an object"),
+])
+def test_manifest_rejects_bad_seg_block(tmp_path, seg, msg):
+    with pytest.raises(ValueError, match=msg):
+        viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))
+
+
+def test_manifest_accepts_full_seg_block(tmp_path):
+    seg = {"method": "li", "min_size": 0, "threshold_scale": 0.8}
+    assert viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))["seg"] == seg

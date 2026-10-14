@@ -53,9 +53,12 @@ from .io import load_volume
 from . import stats
 from .manifest import check_groups
 from . import report
+from . import segment
 from . import viability as viab
 
 DEFAULT_SEG = {"method": "otsu", "min_size": viab.AREA_MIN_SIZE}
+# Viability runs analyse every stack; there is no auxiliary stack role.
+_ROLES = ("primary",)
 
 
 def load_manifest(path: Path) -> dict:
@@ -83,9 +86,29 @@ def _validate(m: dict) -> None:
     methods = ("all", "auto", *viab.COUNT_METHODS)
     if m["count_method"] not in methods:
         problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
-    problems += check_groups(m["groups"])
+    problems += _check_seg(m["seg"])
+    problems += check_groups(m["groups"], roles=_ROLES)
     if problems:
         raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
+
+
+def _check_seg(seg) -> list[str]:
+    """Problems with the manifest's ``seg`` block (keyword arguments of `segment.binarize`)."""
+    if not isinstance(seg, dict):
+        return [f"seg must be an object of segmentation settings, got {seg!r}"]
+    problems = []
+    unknown = sorted(set(seg) - {"method", "min_size", "threshold_scale"})
+    if unknown:
+        problems.append(f"seg has unknown keys {unknown} (use method, min_size, threshold_scale)")
+    if "method" in seg and seg["method"] not in segment.METHODS:
+        problems.append(f"seg.method must be one of {segment.METHODS}, got {seg['method']!r}")
+    ms = seg.get("min_size", 0)
+    if not isinstance(ms, int) or isinstance(ms, bool) or ms < 0:
+        problems.append(f"seg.min_size must be a non-negative integer, got {ms!r}")
+    ts = seg.get("threshold_scale", 1.0)
+    if not isinstance(ts, (int, float)) or isinstance(ts, bool) or ts <= 0:
+        problems.append(f"seg.threshold_scale must be a positive number, got {ts!r}")
+    return problems
 
 
 def _counts(by_method: dict, m: str) -> tuple[float, float, float]:
