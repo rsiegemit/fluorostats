@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import csv
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -153,6 +154,10 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     auc = {}
     for w in cfg["windows"]:
         z0, z1 = window_bounds(w, max_depth)
+        if z1 > max_depth:
+            warnings.warn(f"{Path(path).name}: AUC window {window_title(w)} reaches past the "
+                          f"stack's {max_depth:g} µm; only {max(max_depth - z0, 0.0):g} µm of it "
+                          "is covered (see window_covered_um).", RuntimeWarning, stacklevel=2)
         auc[window_label(w)] = {
             "absolute": depth.auc_depth(raw.depth_um, subtracted.mean, z_min=z0, z_max=z1),
             "normalized": depth.auc_depth(raw.depth_um, normalized.normalized, z_min=z0, z_max=z1),
@@ -363,6 +368,11 @@ def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
     if len(profs) == 1:
         blank = profs[0]
     else:
+        steps = {float(np.median(np.diff(p.depth_um))) for p in profs if p.depth_um.size > 1}
+        if len(steps) > 1:
+            warnings.warn(f"replicate blanks have different z-steps {sorted(steps)} µm; they are "
+                          "averaged slice by slice on the first blank's depth axis.",
+                          RuntimeWarning, stacklevel=2)
         n = min(len(p.mean) for p in profs)
         stack = np.stack([p.mean[:n] for p in profs])
         blank = depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),

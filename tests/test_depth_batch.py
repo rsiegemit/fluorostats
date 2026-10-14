@@ -340,3 +340,26 @@ def test_run_two_groups_with_fit_ok_hits_ttest_branches(tmp_path):
     out = depth_batch.run(mpath)
     assert (out / "auc_per_stack.csv").exists()
     assert (out / "group_depth_summary.csv").exists()
+
+
+def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):
+    def ij(path, value, spacing, n_z=6):
+        tifffile.imwrite(path, np.full((n_z, 1, 6, 6), value, np.uint16), imagej=True,
+                         metadata={"spacing": spacing, "axes": "ZCYX"})
+
+    ij(tmp_path / "b1.tif", 5, 2.0)
+    ij(tmp_path / "b2.tif", 6, 4.0)                      # different z-step
+    z = np.arange(6)[:, None, None]
+    tifffile.imwrite(tmp_path / "s.tif",
+                     (100 * np.exp(-z / 3.0) + 10)[:, None].repeat(6, 2).repeat(6, 3).astype(np.uint16),
+                     imagej=True, metadata={"spacing": 2.0, "axes": "ZCYX"})
+    m = {"auc_windows_um": [[0, 50]], "output_dir": str(tmp_path / "out"),          # stack is 10 µm deep
+         "groups": [{"name": "A", "background": [str(tmp_path / "b1.tif"), str(tmp_path / "b2.tif")],
+                     "stacks": [{"label": "s", "path": str(tmp_path / "s.tif")}]}]}
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    with pytest.warns(RuntimeWarning) as rec:
+        depth_batch.run(mpath)
+    msgs = " | ".join(str(w.message) for w in rec)
+    assert "different z-steps" in msgs
+    assert "reaches past the stack" in msgs
