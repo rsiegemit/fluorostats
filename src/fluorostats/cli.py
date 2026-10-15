@@ -8,19 +8,13 @@ from pathlib import Path
 import click
 import matplotlib
 
-from . import cli_paths
+from . import cli_measure, cli_paths
 from . import io as iq_io
 from . import (
-    metrics_2d,
-    metrics_3d,
     plots,
-    preprocess,
     pubfig,
-    qc,
     report,
     segment,
-    skeleton,
-    spatial,
     stats,
 )
 from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
@@ -249,7 +243,7 @@ def quant3d(
     click.echo(f"Found {len(files)} volume file(s)")
 
     measure = functools.partial(
-        _measure_volume,
+        cli_measure.measure_volume,
         ch_override=ch_override,
         sigma=sigma,
         bg_radius=bg_radius,
@@ -263,7 +257,7 @@ def quant3d(
         overlay_dir=None if no_overlays else output_path / "overlays",
         input_root=input_path,
     )
-    rows = _quantify_files(files, condition_from, "Processing volumes", measure)
+    rows = cli_measure.quantify_files(files, condition_from, "Processing volumes", measure)
 
     # Every reported metric is plotted except n_branches, as in earlier releases.
     plotted = [m for m in report.METRICS_3D if m != "n_branches"]
@@ -387,7 +381,7 @@ def quant2d(
     click.echo(f"Found {len(files)} image file(s)")
 
     measure = functools.partial(
-        _measure_image,
+        cli_measure.measure_image,
         ch_override=ch_override,
         sigma=sigma,
         bg_radius=bg_radius,
@@ -398,7 +392,7 @@ def quant2d(
         overlay_dir=None if no_overlays else output_path / "overlays",
         input_root=input_path,
     )
-    rows = _quantify_files(files, condition_from, "Processing images", measure)
+    rows = cli_measure.quantify_files(files, condition_from, "Processing images", measure)
     _report_and_plot(
         rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
     )
@@ -408,97 +402,6 @@ def quant2d(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _quantify_files(files, condition_from, label, measure) -> list[dict]:
-    """Run ``measure(path) -> dict`` over files, tagging condition + replicate."""
-    rows: list[dict] = []
-    rep_counter = _ReplicateCounter()
-    with click.progressbar(files, label=label) as bar:
-        for fpath in bar:
-            condition = cli_paths.get_condition(fpath, condition_from)
-            replicate = rep_counter.next(condition)
-            rows.append(
-                {
-                    "file": fpath.name,
-                    "condition": condition,
-                    "replicate": replicate,
-                    **measure(fpath),
-                }
-            )
-    return rows
-
-
-def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size, opening="ball"):
-    """The CLI's options mapped onto `segment.segment_channel` (quant2d has no
-    --opening: its 2D opening is disk(1) for every choice but "none")."""
-    return segment.segment_channel(
-        img,
-        method=threshold,
-        min_size=min_size,
-        threshold_scale=threshold_scale,
-        sigma=sigma,
-        bg_radius=bg_radius,
-        opening=opening,
-    )
-
-
-def _measure_volume(
-    fpath, *, ch_override, no_skeleton, prune, min_branch_length, overlay_dir, input_root, **seg
-) -> dict:
-    """quant3d's per-file metrics (volume fraction, connectivity, skeleton, coverage)."""
-    arr, meta = iq_io.load_volume(fpath)
-    voxel_size = meta["voxel_size_um"]
-    ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
-    vol, mask = _segment(arr[ch], **seg)
-
-    # --no-skeleton: same keys as skeleton_metrics() so the CSV keeps its shape, but
-    # NaN (not measured) rather than 0 (measured, nothing there), so skipped
-    # metrics are left out of plots and statistics instead of entering as zeros.
-    skel = dict(skeleton.UNMEASURED_METRICS)
-    if not no_skeleton:
-        skel = skeleton.skeleton_metrics(
-            mask, voxel_size_um=voxel_size, prune=prune, min_branch_length_um=min_branch_length
-        )
-    if overlay_dir is not None:
-        qc.overlay_3d(vol, mask, cli_paths.overlay_path(fpath, input_root, overlay_dir))
-    return {
-        "shape": str(arr.shape),
-        "voxel_size_um": str(voxel_size),
-        "voxel_size_source": meta.get("voxel_size_source", ""),
-        "channel_used": _channel_label(ch, meta["channel_names"]),
-        "volume_fraction": metrics_3d.volume_fraction(mask),
-        **metrics_3d.connectivity_metrics(mask),
-        **skel,
-        **spatial.coverage_heterogeneity(mask),
-    }
-
-
-def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, input_root, **seg) -> dict:
-    """quant2d's per-file metrics (area fraction, clusters, coverage uniformity)."""
-    arr, meta = iq_io.load_image(fpath)
-    crop_box = ""
-    if auto_crop:  # crop microscope borders before channel selection
-        arr, (y0, y1, x0, x1) = preprocess.auto_crop(arr)
-        crop_box = f"[{y0}:{y1}, {x0}:{x1}]"
-    ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
-    img, mask = _segment(arr[ch], **seg)
-    if overlay_dir is not None:
-        qc.overlay_2d(img, mask, cli_paths.overlay_path(fpath, input_root, overlay_dir))
-    return {
-        "shape": str(arr.shape),
-        "voxel_size_um": str(meta["voxel_size_um"]),
-        "voxel_size_source": meta.get("voxel_size_source", ""),
-        "auto_crop_box": crop_box,
-        "channel_used": _channel_label(ch, meta["channel_names"]),
-        **metrics_2d.coverage_metrics(mask, voxel_size_um=meta["voxel_size_um"]),
-        **spatial.coverage_heterogeneity(mask),
-    }
-
-
-def _channel_label(index: int, names: list[str]) -> str:
-    """The measured channel as ``"<index> (<name>)"`` for the per-file record."""
-    return f"{index} ({names[index]})" if index < len(names) else str(index)
 
 
 def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) -> None:
@@ -563,17 +466,6 @@ def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
-
-
-class _ReplicateCounter:
-    """Auto-assign replicate IDs per condition."""
-
-    def __init__(self):
-        self._counts: dict[str, int] = {}
-
-    def next(self, condition: str) -> int:
-        self._counts[condition] = self._counts.get(condition, 0) + 1
-        return self._counts[condition]
 
 
 def _parse_channel(channel: str | None) -> int | str | None:
