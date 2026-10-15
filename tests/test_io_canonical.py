@@ -1,7 +1,7 @@
 """Tests for io_canonical: (C, Z, Y, X) / (C, Y, X) layout from reader arrays.
 
 Axis-name reordering is exercised end to end through the loaders in
-test_io.py (TIFF) and test_io_vendors.py (ND2, CZI fakes).
+test_io.py and test_io_tiff.py (TIFF) and the test_io_vendors*.py files (ND2, CZI fakes).
 """
 
 import warnings
@@ -27,7 +27,7 @@ def test_canonicalize_volume_high_ndim_recurses():
 
 
 def test_canonicalize_image_bad_ndim_raises():
-    with pytest.raises(ValueError, match="Unexpected 2D image shape"):
+    with pytest.raises(ValueError, match="Unexpected 2D image shape.*use load_volume"):
         io_canonical.canonicalize_image(np.zeros((2, 2, 2, 2)), {"channel_names": []})
 
 
@@ -42,6 +42,20 @@ def test_squeeze_non_singleton_high_ndim():
     arr = np.zeros((2, 3, 4, 8, 8), dtype=np.uint16)
     out = io_canonical.squeeze_singleton_dims(arr)
     assert out.ndim == 4
+
+
+@pytest.mark.parametrize("shape", [(3, 2, 64, 64), (12, 64, 64, 2), (6, 64, 64, 3)])
+@pytest.mark.parametrize("lead", [(1,), (1, 1)])
+def test_leading_singleton_axes_keep_the_4d_rule(shape, lead):
+    # Regression: (1,) + shape skipped the 4D rule: its guess was not announced, and
+    # channel-last layouts the 4D rule accepts were refused.
+    meta = {"channel_names": [], "format": "numpy"}
+    with pytest.warns(RuntimeWarning) as want:
+        expected, _ = io_canonical.canonicalize_volume(np.zeros(shape, np.uint8), meta)
+    with pytest.warns(RuntimeWarning) as got:
+        out, _ = io_canonical.canonicalize_volume(np.zeros(lead + shape, np.uint8), meta)
+    assert out.shape == expected.shape
+    assert [str(w.message) for w in got] == [str(w.message) for w in want]
 
 
 def test_canonicalize_volume_high_ndim_squeezes():
@@ -160,7 +174,8 @@ def test_channel_names_are_padded_into_a_new_meta():
     meta = {"channel_names": ["DAPI"], "format": "x"}
     arr, out = io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
     assert arr.shape == (3, 2, 16, 16)
-    assert out == {"channel_names": ["DAPI", "Ch2", "Ch3"], "format": "x"}
+    # labelled colour samples carry their channel's name; unlabelled ones are padded
+    assert out == {"channel_names": ["DAPI[0]", "DAPI[1]", "DAPI[2]"], "format": "x"}
     assert meta == {"channel_names": ["DAPI"], "format": "x"}
     img, image_meta = io_canonical.canonicalize_image(np.zeros((16, 16, 3)), meta)
     assert img.shape == (3, 16, 16)

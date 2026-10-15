@@ -51,6 +51,17 @@ def _int64_to_double(value) -> float | None:
         return None
 
 
+# The keys of the .gci part of the meta; a folder without a .gci gets them as None.
+_NO_GCI: dict = {
+    "px_um": None,
+    "z_step_um": None,
+    "n_slices": None,
+    "objective": None,
+    "channels": {},
+    "z_step_note": None,
+}
+
+
 def parse_gci(gci_path: str | Path) -> dict:
     """Parse a Keyence ``.gci`` archive into an acquisition-metadata dict.
 
@@ -60,11 +71,7 @@ def parse_gci(gci_path: str | Path) -> dict:
     """
     gci_path = Path(gci_path)
     meta: dict = {
-        "px_um": None,
-        "z_step_um": None,
-        "n_slices": None,
-        "objective": None,
-        "channels": {},
+        **_NO_GCI,
         "z_step_note": "Stack/Pitch read as 0.1-µm units; confirm against the acquisition GUI.",
     }
     with zipfile.ZipFile(gci_path) as z:
@@ -170,6 +177,19 @@ def _warn_z_gaps(indices: list[int], folder: Path) -> None:
         )
 
 
+def _warn_slice_count(n_listed: int | None, n_found: int, folder: Path) -> None:
+    """Warn when the ``.gci`` slice count differs from the slices found, which
+    catches missing slices at either end of the stack (`_warn_z_gaps` sees only
+    gaps inside it)."""
+    if n_listed is not None and n_listed != n_found:
+        warnings.warn(
+            f"{folder.name}: the .gci lists {n_listed} z slices but {n_found} were found; "
+            "the stack is built from the files present, so check for missing slices.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+
 def load_keyence_stack(
     folder: str | Path, downsample: int = 1, channel: int | None = None
 ) -> tuple[np.ndarray, dict]:
@@ -192,7 +212,8 @@ def load_keyence_stack(
         ``meta`` includes parsed ``.gci`` fields (when present) plus
         ``voxel_size_um`` — (z, y, x) µm per voxel of the returned array, with
         ``downsample`` applied; an axis the ``.gci`` does not give is 1.0 — and
-        ``n_slices_loaded``. Deprecated, kept for existing callers: ``px_um`` /
+        ``n_slices_loaded``. The ``.gci`` keys are None when the folder has no
+        ``.gci``. Deprecated, kept for existing callers: ``px_um`` /
         ``z_step_um`` (the raw ``.gci`` values, ``px_um`` before downsampling)
         and ``vox_xy_um`` / ``vox_z_um``; use ``voxel_size_um``. Reading them
         gives no DeprecationWarning (a plain dict key cannot warn when read).
@@ -217,13 +238,13 @@ def load_keyence_stack(
     arr = np.stack(planes, axis=1) if channel is None else np.stack(planes, axis=0)
 
     gci = next((p for p in folder.glob("*.gci")), None)
-    meta = parse_gci(gci) if gci else {"px_um": None, "z_step_um": None, "channels": {}}
+    meta = parse_gci(gci) if gci else {**_NO_GCI, "channels": {}}
+    _warn_slice_count(meta["n_slices"], len(files), folder)
     meta["n_slices_loaded"] = len(files)
     meta["downsample"] = downsample
-    if meta.get("px_um"):
-        meta["vox_xy_um"] = round(meta["px_um"] * downsample, 5)
-    meta["vox_z_um"] = meta.get("z_step_um")
-    px, z = meta.get("px_um"), meta.get("z_step_um")
+    px, z = meta["px_um"], meta["z_step_um"]
+    meta["vox_xy_um"] = round(px * downsample, 5) if px else None
+    meta["vox_z_um"] = z
     xy = round(px * downsample, 5) if px else 1.0
     meta["voxel_size_um"] = (z or 1.0, xy, xy)
     return arr, meta

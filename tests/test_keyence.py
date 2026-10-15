@@ -160,3 +160,26 @@ def test_gci_handlers_return_new_dicts():
     assert meta == {"z_step_um": None, "n_slices": None, "channels": {"0": {"name": "DAPI"}}}
     zero = "<Numerator>1</Numerator><Denominator>0</Denominator>"
     assert keyence._gci_exposure("Channel0/x", zero, meta) is meta  # nothing to record
+
+
+@pytest.mark.parametrize("total", [4, 2])
+def test_slice_count_other_than_the_gci_count_warns(tmp_path, total):
+    # Regression: trailing missing slices were not detected (no gap inside the stack).
+    for zi in range(1, 4):
+        tifffile.imwrite(
+            tmp_path / f"Image _Z{zi:03d}_CHF.bz.ome.tif", np.zeros((2, 4, 4), np.uint16)
+        )
+    _write_gci(tmp_path / "Image .gci", total=total)
+    with pytest.warns(RuntimeWarning, match=f"lists {total} z slices but 3 were found"):
+        _, meta = keyence.load_keyence_stack(tmp_path)
+    assert (meta["n_slices"], meta["n_slices_loaded"]) == (total, 3)
+
+
+def test_meta_has_the_same_keys_with_and_without_gci(keyence_folder):
+    _, with_gci = keyence.load_keyence_stack(keyence_folder)
+    (keyence_folder / "Image .gci").unlink()
+    _, without = keyence.load_keyence_stack(keyence_folder)
+    assert set(without) == set(with_gci)
+    assert {
+        k: without[k] for k in ("px_um", "vox_xy_um", "n_slices", "z_step_note")
+    } == dict.fromkeys(("px_um", "vox_xy_um", "n_slices", "z_step_note"))
