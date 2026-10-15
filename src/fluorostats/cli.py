@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 import matplotlib
 
+from . import cli_paths
 from . import io as iq_io
 from . import (
     metrics_2d,
@@ -21,13 +22,7 @@ from . import (
     spatial,
     stats,
 )
-
-# How a file's condition label is derived from its path (--condition-from), by name.
-CONDITION_FROM = {
-    "parent": lambda path: path.parent.name,
-    "grandparent": lambda path: path.parent.parent.name,
-    "filename": lambda path: path.stem,  # the name without its extension
-}
+from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
 
 
 @click.group()
@@ -222,18 +217,18 @@ def quant3d(
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = _output_outside_input(input_path, Path(output_dir))
+    output_path = cli_paths.output_outside_input(input_path, Path(output_dir))
 
     # Resolve channel override
     ch_override = _parse_channel(channel)
 
     # Find volume files
-    files = _find_files(input_path, iq_io.VOLUME_SUFFIXES, iq_io.DIRECTORY_FORMATS)
+    files = cli_paths.find_files(input_path, iq_io.VOLUME_SUFFIXES, iq_io.DIRECTORY_FORMATS)
     if not files:
         raise click.UsageError(f"No volume files found in {input_path}")
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
     output_path.mkdir(parents=True, exist_ok=True)
-    previous = _remove_owned_outputs(output_path)
+    previous = cli_paths.remove_owned_outputs(output_path)
 
     click.echo(f"Found {len(files)} volume file(s)")
 
@@ -355,11 +350,11 @@ def quant2d(
     """Quantify 2D fluorescence images: area fraction (cell coverage) and
     spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = _output_outside_input(input_path, Path(output_dir))
+    output_path = cli_paths.output_outside_input(input_path, Path(output_dir))
 
     ch_override = _parse_channel(channel)
 
-    files = _find_files(input_path, iq_io.IMAGE_SUFFIXES)
+    files = cli_paths.find_files(input_path, iq_io.IMAGE_SUFFIXES)
     if not files:
         raise click.UsageError(
             f"No image files found in {input_path} "
@@ -369,7 +364,7 @@ def quant2d(
         )
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
     output_path.mkdir(parents=True, exist_ok=True)
-    previous = _remove_owned_outputs(output_path)
+    previous = cli_paths.remove_owned_outputs(output_path)
 
     click.echo(f"Found {len(files)} image file(s)")
 
@@ -403,7 +398,7 @@ def _quantify_files(files, condition_from, label, measure) -> list[dict]:
     rep_counter = _ReplicateCounter()
     with click.progressbar(files, label=label) as bar:
         for fpath in bar:
-            condition = _get_condition(fpath, condition_from)
+            condition = cli_paths.get_condition(fpath, condition_from)
             replicate = rep_counter.next(condition)
             rows.append(
                 {
@@ -448,7 +443,7 @@ def _measure_volume(
             mask, voxel_size_um=voxel_size, prune=prune, min_branch_length_um=min_branch_length
         )
     if overlay_dir is not None:
-        qc.overlay_3d(vol, mask, _overlay_path(fpath, input_root, overlay_dir))
+        qc.overlay_3d(vol, mask, cli_paths.overlay_path(fpath, input_root, overlay_dir))
     return {
         "shape": str(arr.shape),
         "voxel_size_um": str(voxel_size),
@@ -471,7 +466,7 @@ def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, input_root, **
     ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
     img, mask = _segment(arr[ch], **seg)
     if overlay_dir is not None:
-        qc.overlay_2d(img, mask, _overlay_path(fpath, input_root, overlay_dir))
+        qc.overlay_2d(img, mask, cli_paths.overlay_path(fpath, input_root, overlay_dir))
     return {
         "shape": str(arr.shape),
         "voxel_size_um": str(meta["voxel_size_um"]),
@@ -481,13 +476,6 @@ def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, input_root, **
         **metrics_2d.coverage_metrics(mask, voxel_size_um=meta["voxel_size_um"]),
         **spatial.coverage_heterogeneity(mask),
     }
-
-
-def _overlay_path(fpath: Path, input_root: Path, overlay_dir: Path) -> Path:
-    """The QC overlay for ``fpath``, mirroring its subfolder under the input root so
-    same-named files in different condition folders do not overwrite each other."""
-    rel = fpath.relative_to(input_root).parent
-    return overlay_dir / rel / f"{fpath.stem}_overlay.png"
 
 
 def _channel_label(index: int, names: list[str]) -> str:
@@ -555,68 +543,6 @@ def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
-
-
-def _output_outside_input(input_path: Path, output_path: Path) -> Path:
-    """``output_path``, refused when it is (inside) the input folder.
-
-    Inputs are found recursively, so a rerun would read this tool's own overlay and
-    plot images back in as samples.
-    """
-    if output_path.resolve().is_relative_to(input_path.resolve()):
-        raise click.UsageError(
-            f"--output {output_path} is inside the input folder {input_path}; a rerun "
-            "would read its overlay/plot images as samples. Choose an output folder "
-            "outside --input."
-        )
-    return output_path
-
-
-def _remove_owned_outputs(output_path: Path) -> list[Path]:
-    """Delete the files an earlier run wrote; return the paths deleted.
-
-    Only names this tool writes are touched (any reported metric's ``_bar``/``_box``
-    PNG, the summary panel, ``pvalues.csv``, ``*_overlay.png`` under ``overlays/``,
-    ``run_config.json``), so an earlier run's results never sit next to this run's
-    and nothing else in the folder is removed.
-    """
-    plot_dir = output_path / "plots"
-    owned = [
-        plot_dir / f"{m}_{kind}.png"
-        for m in {*report.METRICS_2D, *report.METRICS_3D}
-        for kind in ("bar", "box")
-    ]
-    owned += [
-        plot_dir / "summary_panel.png",
-        plot_dir / "pvalues.csv",
-        output_path / "run_config.json",
-    ]
-    owned += (output_path / "overlays").rglob("*_overlay.png")
-    return report.remove_outputs(owned)
-
-
-def _find_files(root: Path, suffixes: set[str], directory_formats=()) -> list[Path]:
-    """Recursively find files with matching suffixes, in sorted order.
-
-    A folder that one of ``directory_formats`` accepts (e.g. a Keyence BZ-X export,
-    one volume stored as per-slice files) is one input: it is returned in place of
-    the files inside it.
-    """
-    entries = [root, *sorted(root.rglob("*"))]
-    folders = [d for d in entries if d.is_dir() and any(f.probe(d) for f in directory_formats)]
-    files = [
-        f
-        for f in entries
-        if f.is_file()
-        and f.suffix.lower() in suffixes
-        and not any(f.is_relative_to(d) for d in folders)
-    ]
-    return sorted(folders + files)
-
-
-def _get_condition(fpath: Path, mode: str) -> str:
-    """Derive the experimental condition label from the file path (:data:`CONDITION_FROM`)."""
-    return CONDITION_FROM[mode](fpath)
 
 
 class _ReplicateCounter:
