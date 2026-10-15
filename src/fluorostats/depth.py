@@ -322,7 +322,9 @@ def _fit_quality(y: np.ndarray, model: np.ndarray) -> tuple[float, float]:
     return r_squared, rmse
 
 
-# Default minimum R² for an accepted λ fit (see `fit_penetration_depth`).
+# Default minimum R² for an accepted λ fit (see `fit_penetration_depth`). Chosen on
+# collaborator hydrogel profiles; no committed benchmark table records that choice
+# yet (REU-5, an open item).
 FIT_R2_THRESHOLD = 0.85
 
 
@@ -353,9 +355,9 @@ def fit_penetration_depth(
         Fit the 3-parameter model with an additive floor ``c``.
     r2_threshold:
         Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default
-        :data:`FIT_R2_THRESHOLD` = 0.85, tuned against real hydrogel profiles:
-        clean single-exponential decays clear it, near-flat/non-exponential
-        profiles do not; the depth manifest's ``fit_r2_threshold``).
+        :data:`FIT_R2_THRESHOLD`: clean single-exponential decays clear it,
+        near-flat/non-exponential profiles do not; the depth manifest's
+        ``fit_r2_threshold``).
         An honest flag, not a hard gate: λ is always returned, but a poor
         fit means "single-exponential does not hold; use AUC".
 

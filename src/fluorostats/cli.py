@@ -25,6 +25,10 @@ from . import (
 )
 from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
 
+# REU-5: no committed benchmark table chose these result-changing defaults yet (an
+# open item): quant3d --threshold-scale 0.9 and --min-branch-length 5 µm, quant2d
+# --threshold li and --bg-radius 15.
+
 # Every command that writes an output folder takes the same --overwrite (CFG-1).
 _overwrite_option = click.option(
     "--overwrite",

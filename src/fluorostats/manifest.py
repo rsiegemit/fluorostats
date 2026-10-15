@@ -16,12 +16,12 @@ from .depth import parse_window, window_label
 from .stats import REDUCERS
 
 
-def is_int(v) -> bool:
+def is_int(v: object) -> bool:
     """An integer, not a bool (JSON true/false are ints to Python)."""
     return isinstance(v, int) and not isinstance(v, bool)
 
 
-def is_number(v) -> bool:
+def is_number(v: object) -> bool:
     """An int or float, not a bool."""
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
@@ -45,7 +45,7 @@ def _repeated(values: list) -> list:
     return [v for i, v in enumerate(present) if v in present[i + 1 :] and v not in present[:i]]
 
 
-def require_groups(m) -> None:
+def require_groups(m: object) -> None:
     """Raise ValueError unless ``m`` (a parsed manifest) is a JSON object with a
     non-empty ``groups`` list; the batch loaders call it before reading any field."""
     if not isinstance(m, dict):

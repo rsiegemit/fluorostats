@@ -34,7 +34,7 @@ Manifest schema (all fields except groups/stacks are optional)::
       "reducer": "mean",           # "mean" | "median" (per-slice spatial stat)
       "n_surface": 3,              # slices averaged for surface normalisation
       "fit_offset": false,         # true → 3-parameter exp fit with additive floor
-      "fit_r2_threshold": 0.85,    # minimum R² for an accepted λ fit (fit_ok)
+      "fit_r2_threshold": 0.85,    # minimum R² for fit_ok (default depth.FIT_R2_THRESHOLD)
       "parametric": false,         # true → also print Welch t-tests (Mann-Whitney always)
       "auc_windows_um": [[0, 100], [0, 200], "full"],  # one or more windows
       "output_dir": "results/permeability",
@@ -130,7 +130,7 @@ def load_manifest(path: Path) -> dict:
         # people who write manifests run the CLI and never see a DeprecationWarning.
         msg = "depth manifest: 'auc_window_um' is deprecated; use 'auc_windows_um': [[z0, z1]]"
         warnings.warn(msg, FutureWarning, stacklevel=2)
-    if "auc_windows_um" not in m:
+    if "auc_windows_um" not in m:  # default [0, 100] µm: no benchmark chose it (REU-5, open)
         m["auc_windows_um"] = [m.pop("auc_window_um", [0.0, 100.0])]
     _validate(m)
     m["windows"] = [depth.parse_window(w) for w in m["auc_windows_um"]]

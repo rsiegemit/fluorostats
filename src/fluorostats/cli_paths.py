@@ -8,11 +8,13 @@ outputs before a rerun).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import click
 
 from . import report
+from .io import DirectoryFormat
 
 # How a file's condition label is derived from its path (--condition-from), by name.
 CONDITION_FROM = {
@@ -27,7 +29,9 @@ def get_condition(fpath: Path, mode: str) -> str:
     return CONDITION_FROM[mode](fpath)
 
 
-def find_files(root: Path, suffixes: set[str], directory_formats=()) -> list[Path]:
+def find_files(
+    root: Path, suffixes: set[str], directory_formats: Iterable[DirectoryFormat] = ()
+) -> list[Path]:
     """Recursively find files with matching suffixes, in sorted order.
 
     A folder that one of ``directory_formats`` accepts (e.g. a Keyence BZ-X export,

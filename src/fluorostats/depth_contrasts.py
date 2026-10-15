@@ -164,7 +164,9 @@ def _print_skipped(n_groups: int, which: str = "") -> None:
     )
 
 
-def print_auc_summary(rows, windows, parametric: bool, tests: list[dict]) -> None:
+def print_auc_summary(
+    rows: list[dict], windows: list[tuple], parametric: bool, tests: list[dict]
+) -> None:
     """Per-window normalised AUC by group; with two groups, the Mann-Whitney contrasts
     of ``tests`` (preceded by Welch when ``parametric``)."""
     auc = {c["window"]: c for c in tests if c["metric"] == "auc_normalized"}
@@ -188,7 +190,7 @@ def print_auc_summary(rows, windows, parametric: bool, tests: list[dict]) -> Non
             print(f"  ({c['n_partial']} stack(s) cover only part of it; see window_covered_um)")
 
 
-def print_lambda_summary(rows, parametric: bool, tests: list[dict]) -> None:
+def print_lambda_summary(rows: list[dict], parametric: bool, tests: list[dict]) -> None:
     """Per-group penetration constant λ and its Mann-Whitney contrast from ``tests``
     (Welch too when ``parametric``)."""
     print("\n=== Penetration constant λ (single-exponential fit, absolute profile) ===")
