@@ -166,13 +166,16 @@ def spatial_heterogeneity(grid: np.ndarray, connectivity: str = "rook") -> dict:
     """Summarise how uniform a value grid is.
 
     Returns dict with keys:
-        cv — coefficient of variation across valid cells (0 = uniform).
+        cv — coefficient of variation across valid cells (0 = uniform), in the
+            population form (ddof=0): the cells are every tile of the image, not
+            a sample of them, as for `morphometry` lateral_cv and `objects`
+            centroid_cv.
         morans_i — spatial autocorrelation (see `morans_i`).
         n — number of valid (non-NaN) cells.
     """
     g = np.asarray(grid, dtype=float)
     v = g[~np.isnan(g)]
-    cv = coefficient_of_variation(v, ddof=1)
+    cv = coefficient_of_variation(v)
     return {"cv": cv, "morans_i": morans_i(g, connectivity), "n": int(v.size)}
 
 

@@ -93,3 +93,17 @@ def test_tile_point_density_per_area_uses_exact_tile_area():
     grid = spatial.tile_point_density(np.array([[1.0, 1.0]]), (10, 10), grid=(4, 4),
                                       per_area=True, pixel_area=2.0)
     assert grid[0, 0] == pytest.approx(1 / (2.5 * 2.5 * 2.0))
+
+
+def test_tile_cv_is_the_population_cv_like_the_other_homogeneity_metrics():
+    # The tiles are every tile of the image (a population, not a sample): ddof=0,
+    # as morphometry.lateral_cv and objects.centroid_cv use.
+    from fluorostats.stats import coefficient_of_variation
+    grid = np.array([[1.0, 2.0], [3.0, np.nan]])
+    v = np.array([1.0, 2.0, 3.0])
+    assert spatial.spatial_heterogeneity(grid)["cv"] == pytest.approx(v.std() / v.mean())
+    mask = np.zeros((10, 10), bool)
+    mask[:5, :7] = True
+    tiles = spatial.tile_reduce(mask.astype(float), lambda t: float(t.mean()), grid=(5, 5))
+    assert spatial.coverage_heterogeneity(mask)["coverage_tile_cv"] == pytest.approx(
+        coefficient_of_variation(tiles))
