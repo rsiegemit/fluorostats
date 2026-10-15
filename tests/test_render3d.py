@@ -7,6 +7,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib.colors import to_hex
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from fluorostats.metrics_3d import (
     fov_volume_mm3,
@@ -24,6 +26,7 @@ from fluorostats.render3d import (
     depth_coded_mip,
     layer_split_mip,
 )
+from fluorostats.pubfig import DARK_PALETTE, PALETTE
 
 
 def _solid_mask() -> np.ndarray:
@@ -125,6 +128,10 @@ def test_render_isosurface_dark_style():
     ax = fig.add_subplot(111, projection="3d")
     render_isosurface(mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax,
                       style="dark", smooth_iter=2, color="#F5C518")
+    # under the signal guard: a dark empty panel with the message in the dark ink
+    assert to_hex(ax.get_facecolor()) == DARK_PALETTE["background"]
+    assert [t.get_text() for t in ax.texts] == ["(insufficient signal)"]
+    assert to_hex(ax.texts[0].get_color()) == DARK_PALETTE["ink"].lower()
     plt.close(fig)
 
 
@@ -141,6 +148,11 @@ def test_live_dead_mip_handles_zero_dead():
     live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
     fig, ax = plt.subplots()
     live_dead_mip(live, dead=None, ax=ax)
+    rgb = ax.images[0].get_array()
+    assert rgb.shape == (16, 16, 3)
+    # live only: every pixel is a shade of the live colour (40, 220, 60) on black
+    np.testing.assert_allclose(rgb[..., 0] / (40 / 255), rgb[..., 1] / (220 / 255), atol=1e-6)
+    assert rgb[..., 1].max() == pytest.approx(220 / 255)
     plt.close(fig)
 
 
@@ -164,13 +176,20 @@ def test_depth_coded_mip_runs():
     vol = np.random.RandomState(0).rand(8, 16, 16).astype(np.float32)
     fig, ax = plt.subplots()
     depth_coded_mip(vol, ax=ax)
+    rgb = ax.images[0].get_array()
+    assert rgb.shape == (16, 16, 3) and rgb.min() >= 0 and rgb.max() <= 1
+    assert len(ax.get_xticks()) == 0 and len(ax.get_yticks()) == 0
     plt.close(fig)
 
 
 def test_layer_split_mip_runs():
     vol = np.random.RandomState(0).rand(10, 16, 16).astype(np.float32)
-    fig, (a, b) = plt.subplots(1, 2)
+    fig, (a, b, ref_top, ref_bot) = plt.subplots(1, 4)
     layer_split_mip(vol, ax_top=a, ax_bot=b, split=0.5)
+    live_dead_mip(vol[:5], ax=ref_top)          # the top half is slices 0-4
+    live_dead_mip(vol[5:], ax=ref_bot)
+    np.testing.assert_array_equal(a.images[0].get_array(), ref_top.images[0].get_array())
+    np.testing.assert_array_equal(b.images[0].get_array(), ref_bot.images[0].get_array())
     plt.close(fig)
 
 
@@ -206,13 +225,23 @@ def test_render_isosurface_dark_smoothed_mesh_body():
     ax = fig.add_subplot(111, projection="3d")
     render_isosurface(_solid_mask(), ax=ax, downsample=(1, 4, 4),
                       style="dark", smooth_iter=2, shade=False)
+    assert any(isinstance(c, Poly3DCollection) for c in ax.collections)
+    assert to_hex(ax.get_facecolor()) == DARK_PALETTE["background"]
+    assert len(ax.get_xticks()) == len(ax.get_yticks()) == len(ax.get_zticks()) == 0
+    assert ax.get_xlabel() == ""                          # bare axes: no µm labels
+    assert len(ax.lines) == 12 + 1                        # bounding box edges + scale bar
+    assert [t.get_text() for t in ax.texts] == ["100 µm"]
+    assert to_hex(ax.texts[0].get_color()) == DARK_PALETTE["scalebar"].lower()
     plt.close(fig)
 
 
 def test_render_isosurface_creates_own_axes_when_none():
     """ax=None branch builds its own 3D figure."""
     ax = render_isosurface(_solid_mask(), downsample=(1, 4, 4))
-    assert ax is not None
+    assert ax.name == "3d"
+    assert tuple(ax.figure.get_size_inches()) == (6.0, 5.0)
+    assert any(isinstance(c, Poly3DCollection) for c in ax.collections)
+    assert ax.get_xlabel() == ax.get_ylabel() == ax.get_zlabel() == "µm"   # light style
     plt.close(ax.figure)
 
 
@@ -244,7 +273,9 @@ def test_render_voxel_cloud_creates_own_axes():
     mask = np.zeros((6, 24, 24), dtype=bool)
     mask[1:5, 4:20, 4:20] = True
     ax = render_voxel_cloud(mask, downsample=(1, 4, 4))
-    assert ax is not None
+    assert ax.name == "3d"
+    assert len(ax.collections) > 0                        # the voxel faces
+    assert len(ax.get_xticks()) == len(ax.get_yticks()) == len(ax.get_zticks()) == 0
     plt.close(ax.figure)
 
 
@@ -264,7 +295,10 @@ def test_live_dead_mip_all_zero_live_no_border():
     """All-zero live hits the m.max()==0 early return in _to_norm; border=None."""
     live = np.zeros((4, 16, 16), dtype=np.float32)
     fig, ax = plt.subplots()
+    default_edge = ax.spines["left"].get_edgecolor()
     live_dead_mip(live, dead=None, ax=ax, border=None)
+    assert not ax.images[0].get_array().any()            # black: nothing to show
+    assert ax.spines["left"].get_edgecolor() == default_edge
     plt.close(fig)
 
 
@@ -272,6 +306,7 @@ def test_depth_coded_mip_z_axis_last():
     vol = np.random.RandomState(0).rand(16, 16, 8).astype(np.float32)
     fig, ax = plt.subplots()
     depth_coded_mip(vol, ax=ax, z_axis=2)
+    assert ax.images[0].get_array().shape == (16, 16, 3)  # projected along the last axis
     plt.close(fig)
 
 
@@ -280,7 +315,11 @@ def test_mip_grid_missing_cell_placeholder(tmp_path):
     cells = {("D1", "top"): {"live": live}}  # ("D1","bot") missing -> placeholder
     fig = mip_grid(cells, rows=["D1"], cols=["top", "bot"],
                    row_labels=["Day1"], col_labels=["Top", "Bottom"])
-    assert fig is not None
+    texts = [t.get_text() for ax in fig.axes for t in ax.texts]
+    assert texts == ["Top", "Bottom", "Day1", "—"]
+    rendered, placeholder = fig.axes[3], fig.axes[4]
+    assert len(rendered.images) == 1 and len(placeholder.images) == 0
+    assert to_hex(placeholder.get_facecolor()) == "#f0f0f0"
     plt.close(fig)
 
 
@@ -307,7 +346,8 @@ def test_mip_overlay_creates_own_axes_when_none():
     """ax=None → fig, ax = plt.subplots() fires (line 285)."""
     intensity = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32) * 100
     ax = mip_overlay(intensity)   # no ax passed
-    assert ax is not None
+    assert tuple(ax.figure.get_size_inches()) == (4.0, 4.0)
+    assert ax.images[0].get_array().shape == (16, 16, 3)
     plt.close(ax.figure)
 
 
@@ -319,7 +359,9 @@ def test_live_dead_mip_creates_own_axes_when_none():
     """ax=None → fig, ax = plt.subplots() fires (line 325)."""
     live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
     ax = live_dead_mip(live)   # no ax passed
-    assert ax is not None
+    assert tuple(ax.figure.get_size_inches()) == (4.0, 4.0)
+    assert len(ax.images) == 1
+    assert to_hex(ax.spines["left"].get_edgecolor()) == PALETTE["ink"].lower()   # default border
     plt.close(ax.figure)
 
 
@@ -331,7 +373,8 @@ def test_depth_coded_mip_creates_own_axes_when_none():
     """ax=None → fig, ax = plt.subplots() fires (line 452)."""
     vol = np.random.RandomState(0).rand(8, 16, 16).astype(np.float32)
     ax = depth_coded_mip(vol)   # no ax passed
-    assert ax is not None
+    assert tuple(ax.figure.get_size_inches()) == (4.0, 4.0)
+    assert ax.images[0].get_array().shape == (16, 16, 3)
     plt.close(ax.figure)
 
 

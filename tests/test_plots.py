@@ -309,9 +309,11 @@ def test_effect_size_heatmap_with_title(tmp_path):
     df = pd.DataFrame([
         {"metric": "vf", "stratum": "top", "cliffs_delta": 0.8, "sig_q05": True},
     ])
-    out = tmp_path / "hm_title.png"
-    effect_size_heatmap(df, out_path=out, title="My Title")
-    assert out.exists()
+    fig = effect_size_heatmap(df, title="My Title")
+    ax = fig.axes[0]
+    assert ax.get_title() == "My Title"
+    assert [t.get_text() for t in ax.texts] == ["0.80*"]          # value, starred as significant
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -323,9 +325,12 @@ def test_forest_plot_with_title(tmp_path):
     fc = pd.DataFrame([
         {"label": "VF", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 4.0},
     ])
-    out = tmp_path / "forest_title.png"
-    forest_plot(fc, out_path=out, title="Forest Title")
-    assert out.exists()
+    fig = forest_plot(fc, title="Forest Title")
+    ax = fig.axes[0]
+    assert ax.get_title() == "Forest Title"
+    assert ax.patches[0].get_width() == 2.0                       # bar at the median
+    assert [t.get_text() for t in ax.get_yticklabels()] == ["VF"]
+    plt.close(fig)
 
 
 def test_forest_plot_no_reference_no_log_scale(tmp_path):
@@ -333,9 +338,13 @@ def test_forest_plot_no_reference_no_log_scale(tmp_path):
     fc = pd.DataFrame([
         {"label": "A", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 3.0},
     ])
-    out = tmp_path / "forest_nolog.png"
-    forest_plot(fc, out_path=out, reference=None, log_scale=False)
-    assert out.exists()
+    fig = forest_plot(fc, reference=None, log_scale=False)
+    ax = fig.axes[0]
+    with_ref = forest_plot(fc).axes[0]
+    assert ax.get_xscale() == "linear" and with_ref.get_xscale() == "log"
+    assert len(with_ref.lines) == len(ax.lines) + 1               # only the reference line
+    assert list(with_ref.lines[-1].get_xdata()) == [1.0, 1.0]
+    plt.close("all")
 
 
 # ---------------------------------------------------------------------------
@@ -355,27 +364,32 @@ def _make_modality_df():
 def test_modality_panel_missing_metric_sets_axis_invisible(tmp_path):
     """When metric not in sub.columns, ax.set_visible(False) fires (line 464)."""
     df = _make_modality_df()
-    out = tmp_path / "mod_missing.png"
-    # 'missing_col' does not exist in df → the axis should be set invisible
-    modality_panel(df, metrics=["vf", "missing_col"], out_path=out)
-    assert out.exists()
+    # 'missing_col' does not exist in df → its column of axes is hidden
+    fig = modality_panel(df, metrics=["vf", "missing_col"])
+    axes = np.array(fig.axes).reshape(2, 2)
+    assert [ax.get_visible() for ax in axes[:, 0]] == [True, True]
+    assert [ax.get_visible() for ax in axes[:, 1]] == [False, False]
+    plt.close(fig)
 
 
 def test_modality_panel_multiple_rows_hides_x_tick_labels(tmp_path):
     """With nrows > 1, rows 0..nrows-2 have x-tick labels hidden (lines 511-512)."""
     df = _make_modality_df()
-    out = tmp_path / "mod_multirow.png"
-    # Two modalities → nrows=2, so row 0 (i=0) will hit i < nrows-1
-    modality_panel(df, metrics=["vf"], out_path=out)
-    assert out.exists()
+    # Two modalities (rows sorted: Immuno, Live/Dead) → only the bottom row is labelled
+    fig = modality_panel(df, metrics=["vf"])
+    top, bottom = fig.axes
+    assert [t.get_text() for t in top.get_xticklabels()] == ["", ""]
+    assert [t.get_text() for t in bottom.get_xticklabels()] == ["A", "B"]
+    assert top.get_ylabel() == "Immuno\nVf" and bottom.get_ylabel() == "Live/Dead\nVf"
+    plt.close(fig)
 
 
 def test_modality_panel_with_title(tmp_path):
     """title kwarg triggers fig.suptitle (line 522)."""
     df = _make_modality_df()
-    out = tmp_path / "mod_title.png"
-    modality_panel(df, metrics=["vf"], out_path=out, title="My Modality Panel")
-    assert out.exists()
+    fig = modality_panel(df, metrics=["vf"], title="My Modality Panel")
+    assert fig.get_suptitle() == "My Modality Panel"
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
