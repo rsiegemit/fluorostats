@@ -385,7 +385,7 @@ def test_all_lists_every_public_function():
     import inspect
     public = {n for n, f in inspect.getmembers(stats, inspect.isfunction)
               if f.__module__ == stats.__name__ and not n.startswith("_")}
-    assert set(stats.__all__) == public
+    assert set(stats.__all__) - {"REDUCERS"} == public   # plus the one registry
 
 
 def test_bootstrap_mean_ci_drops_nan_like_the_fold_change_bootstrap():
@@ -465,3 +465,15 @@ def test_describe_along_an_axis_is_per_column_and_nan_aware():
     np.testing.assert_allclose(one["mean"], [1.0, 2.0, np.nan, 7.0])
     rows = stats.describe(a, axis=1)
     np.testing.assert_array_equal(rows["n"], [3, 2, 3])
+
+
+def test_bootstrap_fold_change_ci_refuses_an_unknown_agg_by_name():
+    # Regression: an unknown agg raised a bare KeyError('mode').
+    with pytest.raises(ValueError, match="agg must be 'mean' or 'median', got 'mode'"):
+        stats.bootstrap_fold_change_ci([1.0, 2.0], [3.0, 4.0], agg="mode")
+
+
+def test_one_reducer_registry_serves_depth_and_the_bootstrap():
+    from fluorostats import depth
+    assert depth.REDUCERS is stats.REDUCERS
+    assert stats.REDUCERS == {"mean": np.mean, "median": np.median}

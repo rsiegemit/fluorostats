@@ -27,12 +27,12 @@ The volume may be 3D ``(Z, Y, X)`` or 4D ``(C, Z, Y, X)``; pass
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any
 
 import numpy as np
 
+from . import stats
 from .deprecation import renamed_keyword
 
 
@@ -78,8 +78,9 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
     return arr.astype(np.float64, copy=False)
 
 
-# Per-slice spatial statistics, selectable by name (``reducer=``).
-REDUCERS: dict[str, Callable[..., Any]] = {"mean": np.mean, "median": np.median}
+# Per-slice spatial statistics, selectable by name (``reducer=``): the one
+# registry in `stats`, re-exported here.
+REDUCERS = stats.REDUCERS
 
 
 @renamed_keyword("voxel_size_z_um", "voxel_size_um")
@@ -119,10 +120,7 @@ def intensity_depth_profile(
     flat = stack.reshape(n_slices, -1)
     n_px = flat.shape[1]
 
-    if not isinstance(reducer, str) or reducer not in REDUCERS:
-        names = " or ".join(repr(k) for k in REDUCERS)
-        raise ValueError(f"reducer must be {names}, got {reducer!r}")
-    per_slice = REDUCERS[reducer](flat, axis=1)
+    per_slice = stats.reducer(reducer)(flat, axis=1)
 
     std = flat.std(axis=1, ddof=0)
     sem = std / np.sqrt(n_px)
