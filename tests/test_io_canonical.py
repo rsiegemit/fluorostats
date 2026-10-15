@@ -44,6 +44,20 @@ def test_squeeze_non_singleton_high_ndim():
     assert out.ndim == 4
 
 
+@pytest.mark.parametrize("shape", [(3, 2, 64, 64), (12, 64, 64, 2), (6, 64, 64, 3)])
+@pytest.mark.parametrize("lead", [(1,), (1, 1)])
+def test_leading_singleton_axes_keep_the_4d_rule(shape, lead):
+    # Regression: (1,) + shape skipped the 4D rule: its guess was not announced, and
+    # channel-last layouts the 4D rule accepts were refused.
+    meta = {"channel_names": [], "format": "numpy"}
+    with pytest.warns(RuntimeWarning) as want:
+        expected, _ = io_canonical.canonicalize_volume(np.zeros(shape, np.uint8), meta)
+    with pytest.warns(RuntimeWarning) as got:
+        out, _ = io_canonical.canonicalize_volume(np.zeros(lead + shape, np.uint8), meta)
+    assert out.shape == expected.shape
+    assert [str(w.message) for w in got] == [str(w.message) for w in want]
+
+
 def test_canonicalize_volume_high_ndim_squeezes():
     # 6D non-singleton -> squeeze collapses to 4D
     arr = np.zeros((2, 2, 3, 4, 8, 8), dtype=np.uint16)

@@ -191,13 +191,12 @@ def _volume_by_shape(arr: np.ndarray, advice: str) -> tuple[np.ndarray, list[str
                 f"5D array of shape {arr.shape}: keeping only the first of "
                 f"{arr.shape[0]} entries along the leading axis (e.g. time point)."
             )
-        arr = arr[0]
+        arr, more = _volume_by_shape(arr[0], advice)  # the 4D rule applies to what is left
+        notes += more
     elif ndim == 2:
         arr = arr[np.newaxis, np.newaxis]
     elif ndim > 5:
-        arr = squeeze_singleton_dims(arr)
-        if arr.ndim != 4:  # pragma: no cover - squeeze always yields 4D
-            return _volume_by_shape(arr, advice)
+        return _volume_by_shape(squeeze_singleton_dims(arr), advice)
     else:
         raise ValueError(f"Unexpected array shape {arr.shape} with {ndim} dims")
     return arr, notes
