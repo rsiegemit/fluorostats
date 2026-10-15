@@ -4,7 +4,8 @@ Every loader hands its reader's array to ``canonicalize_volume`` -> ``(C, Z, Y, 
 or ``canonicalize_image`` -> ``(C, Y, X)``. When the reader names its axes
 (tifffile, nd2, czifile letters) the array is reordered by name; otherwise the
 order is guessed from the shape, with a warning wherever the guess is ambiguous.
-Both set ``meta["channel_names"]`` to a new list padded up to the channel count.
+Both return the array and a new ``meta`` whose ``channel_names`` are padded up to
+the channel count; the ``meta`` passed in is not modified.
 """
 
 from __future__ import annotations
@@ -106,9 +107,10 @@ _MAX_PLAUSIBLE_CHANNELS = 4
 
 def canonicalize_volume(
     arr: np.ndarray, meta: dict, axes: str | None = None, index_axes: dict[str, str] | None = None
-) -> np.ndarray:
-    """Ensure array is (C, Z, Y, X): by axis name when the reader labels its axes
-    (``axes``), otherwise by shape."""
+) -> tuple[np.ndarray, dict]:
+    """``(arr, meta)`` with ``arr`` as (C, Z, Y, X): by axis name when the reader
+    labels its axes (``axes``), otherwise by shape; ``meta`` is a new dict with
+    the channel names padded."""
     index_axes = index_axes or {}
     axes = _unlabelled_as_z(axes, arr.shape, index_axes) if axes else None
     named = _by_axis_names(arr, axes, index_axes) if axes else None
@@ -126,8 +128,7 @@ def canonicalize_volume(
             RuntimeWarning,
             stacklevel=4,
         )
-    meta["channel_names"] = _padded_names(meta["channel_names"], arr.shape[0])
-    return arr
+    return arr, {**meta, "channel_names": _padded_names(meta["channel_names"], arr.shape[0])}
 
 
 # The shape rule's guess is refused beyond these: no fluorescence acquisition has
@@ -204,9 +205,10 @@ def _volume_by_shape(arr: np.ndarray, advice: str) -> tuple[np.ndarray, list[str
 
 def canonicalize_image(
     arr: np.ndarray, meta: dict, axes: str | None = None, index_axes: dict[str, str] | None = None
-) -> np.ndarray:
-    """Ensure 2D image is (C, Y, X): by axis name when the reader labels a single
-    plane (``axes``), otherwise by shape (a labelled z-stack keeps the shape rule)."""
+) -> tuple[np.ndarray, dict]:
+    """``(arr, meta)`` with the 2D image ``arr`` as (C, Y, X): by axis name when the
+    reader labels a single plane (``axes``), otherwise by shape (a labelled z-stack
+    keeps the shape rule); ``meta`` is a new dict with the channel names padded."""
     named = _by_axis_names(arr, axes, index_axes or {}) if axes else None
     if named is not None and named.shape[1] == 1:
         arr = named[:, 0]
@@ -226,5 +228,4 @@ def canonicalize_image(
     else:
         raise ValueError(f"Unexpected 2D image shape: {arr.shape}")
 
-    meta["channel_names"] = _padded_names(meta["channel_names"], arr.shape[0])
-    return arr
+    return arr, {**meta, "channel_names": _padded_names(meta["channel_names"], arr.shape[0])}

@@ -22,7 +22,7 @@ def test_canonicalize_volume_bad_ndim_raises():
 def test_canonicalize_volume_high_ndim_recurses():
     # 6D with leading singletons collapses to 4D via recursion
     arr = np.zeros((1, 1, 2, 3, 8, 8), dtype=np.uint16)
-    out = io_canonical.canonicalize_volume(arr, {"channel_names": []})
+    out, _ = io_canonical.canonicalize_volume(arr, {"channel_names": []})
     assert out.shape == (2, 3, 8, 8)
 
 
@@ -47,7 +47,7 @@ def test_squeeze_non_singleton_high_ndim():
 def test_canonicalize_volume_high_ndim_squeezes():
     # 6D non-singleton -> squeeze collapses to 4D
     arr = np.zeros((2, 2, 3, 4, 8, 8), dtype=np.uint16)
-    out = io_canonical.canonicalize_volume(arr, {"channel_names": []})
+    out, _ = io_canonical.canonicalize_volume(arr, {"channel_names": []})
     assert out.ndim == 4
 
 
@@ -139,7 +139,9 @@ def test_single_plane_unlabelled_axis_needs_no_assumption():
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        out = io_canonical.canonicalize_volume(np.zeros((1, 16, 16)), {"channel_names": []}, "QYX")
+        out, _ = io_canonical.canonicalize_volume(
+            np.zeros((1, 16, 16)), {"channel_names": []}, "QYX"
+        )
     assert out.shape == (1, 1, 16, 16)
 
 
@@ -153,13 +155,14 @@ def test_unlabelled_4d_guess_is_announced(tmp_path):
     assert arr.shape == (5, 8, 32, 32)
 
 
-def test_channel_names_are_padded_into_a_new_list():
-    names = ["DAPI"]
-    meta = {"channel_names": names}
-    io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
-    assert meta["channel_names"] == ["DAPI", "Ch2", "Ch3"]
-    assert names == ["DAPI"]
-    image_meta = {"channel_names": names}
-    io_canonical.canonicalize_image(np.zeros((16, 16, 3)), image_meta)
+def test_channel_names_are_padded_into_a_new_meta():
+    # The caller's meta is not modified; the padded names are in the returned meta.
+    meta = {"channel_names": ["DAPI"], "format": "x"}
+    arr, out = io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
+    assert arr.shape == (3, 2, 16, 16)
+    assert out == {"channel_names": ["DAPI", "Ch2", "Ch3"], "format": "x"}
+    assert meta == {"channel_names": ["DAPI"], "format": "x"}
+    img, image_meta = io_canonical.canonicalize_image(np.zeros((16, 16, 3)), meta)
+    assert img.shape == (3, 16, 16)
     assert image_meta["channel_names"] == ["DAPI", "Ch2", "Ch3"]
-    assert names == ["DAPI"]
+    assert meta == {"channel_names": ["DAPI"], "format": "x"}

@@ -87,7 +87,7 @@ def load_olympus_volume(path: Path) -> tuple[np.ndarray, dict]:
 
     meta = _parse_olympus_metadata(oif)
     meta["format"] = "olympus"
-    arr = canonicalize_volume(arr, meta)
+    arr, meta = canonicalize_volume(arr, meta)
     oif.close()
     return arr, meta
 
@@ -176,7 +176,7 @@ def load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
         meta = _parse_czi_metadata(czi)
 
     meta["format"] = "zeiss_czi"
-    arr = canonicalize_volume(
+    arr, meta = canonicalize_volume(
         arr if axes else squeeze_singleton_dims(arr), meta, axes, _CZI_INDEX_AXES
     )
     return arr, meta
@@ -272,7 +272,7 @@ def load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
         meta = _parse_nd2_metadata(f)
 
     meta["format"] = "nikon_nd2"
-    arr = canonicalize_volume(
+    arr, meta = canonicalize_volume(
         arr if axes else squeeze_singleton_dims(arr),
         meta,
         axes,
@@ -359,7 +359,7 @@ def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
     # so reshape to (Z, C, H, W) THEN transpose to (C, Z, H, W). Reshaping straight to
     # (C, Z, ...) interleaves channels for multi-channel z-stacks (only 1-channel is safe).
     arr = np.array(frames).reshape(n_z, n_channels, h, w).transpose(1, 0, 2, 3)
-    arr = canonicalize_volume(arr, meta, "CZYX")
+    arr, meta = canonicalize_volume(arr, meta, "CZYX")
     return arr, meta
 
 
@@ -408,7 +408,7 @@ def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
         meta = _tiff_volume_meta(tif)
-    data = canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
+    data, meta = canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 
 
@@ -442,7 +442,7 @@ def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
         "_read_axes": volume_meta.get("_read_axes", set()) - {"z"},
         "_axis_source": {a: s for a, s in volume_meta.get("_axis_source", {}).items() if a != "z"},
     }
-    data = canonicalize_image(data, meta, axes, _TIFF_INDEX_AXES)
+    data, meta = canonicalize_image(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 
 
