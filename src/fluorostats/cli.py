@@ -121,7 +121,7 @@ def quant3d(
     ch_override = _parse_channel(channel)
 
     # Find volume files
-    files = _find_files(input_path, iq_io.VOLUME_SUFFIXES)
+    files = _find_files(input_path, iq_io.VOLUME_SUFFIXES, iq_io.DIRECTORY_FORMATS)
     if not files:
         raise click.UsageError(f"No volume files found in {input_path}")
     config = dict(locals())   # recorded in run_config.json once the run has succeeded
@@ -384,13 +384,18 @@ def _remove_owned_outputs(output_path: Path) -> list[Path]:
     return report.remove_outputs(owned)
 
 
-def _find_files(root: Path, suffixes: set[str]) -> list[Path]:
-    """Recursively find files with matching suffixes."""
-    files = []
-    for f in sorted(root.rglob("*")):
-        if f.is_file() and f.suffix.lower() in suffixes:
-            files.append(f)
-    return files
+def _find_files(root: Path, suffixes: set[str], directory_formats=()) -> list[Path]:
+    """Recursively find files with matching suffixes, in sorted order.
+
+    A folder that one of ``directory_formats`` accepts (e.g. a Keyence BZ-X export,
+    one volume stored as per-slice files) is one input: it is returned in place of
+    the files inside it.
+    """
+    entries = [root, *sorted(root.rglob("*"))]
+    folders = [d for d in entries if d.is_dir() and any(f.probe(d) for f in directory_formats)]
+    files = [f for f in entries if f.is_file() and f.suffix.lower() in suffixes
+             and not any(f.is_relative_to(d) for d in folders)]
+    return sorted(folders + files)
 
 
 def _get_condition(fpath: Path, mode: str) -> str:

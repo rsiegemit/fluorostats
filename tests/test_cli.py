@@ -578,3 +578,26 @@ def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monke
     res = CliRunner().invoke(cli, args)
     assert isinstance(res.exception, RuntimeError)
     assert not (out / "run_config.json").exists()
+
+
+def test_quant3d_measures_a_keyence_folder_as_one_volume(tmp_path):
+    # Regression: inputs were found by suffix only, so every *_CHF slice of a Keyence
+    # BZ-X folder was measured as its own sample and counted as a replicate.
+    for cond, tubes in (("GelMA", ("tube1", "tube2")), ("Hybrid", ("tube3",))):
+        for ti, tube in enumerate(tubes):
+            d = tmp_path / "in" / cond / tube
+            d.mkdir(parents=True)
+            vol = _blob_3d(ti)
+            for zi in range(vol.shape[0]):
+                tifffile.imwrite(d / f"Image_Z{zi + 1:03d}_CHF.bz.ome.tif",
+                                 np.stack([vol[zi], vol[zi] // 2]))
+    tifffile.imwrite(tmp_path / "in" / "Hybrid" / "plain.tif", _blob_3d(5))
+    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"), "--output",
+                                   str(tmp_path / "out"), "--no-skeleton", "--no-plots"])
+    assert res.exit_code == 0, res.output
+    assert "Found 4 volume file(s)" in res.output
+    df = pd.read_csv(tmp_path / "out" / "per_file.csv")
+    assert df[["file", "condition"]].values.tolist() == [
+        ["tube1", "GelMA"], ["tube2", "GelMA"], ["plain.tif", "Hybrid"], ["tube3", "Hybrid"]]
+    assert (df.loc[df["file"] != "plain.tif", "shape"] == "(2, 8, 48, 48)").all()
+    assert (tmp_path / "out" / "overlays" / "GelMA" / "tube1_overlay.png").exists()
