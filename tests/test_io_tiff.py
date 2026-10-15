@@ -23,7 +23,7 @@ def test_ome_metadata_parse_error():
 def test_imagej_metadata_unparseable_spacing_warns():
     # spacing present but non-float -> announced, defaults kept
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    with pytest.warns(RuntimeWarning, match="'notanumber' is not a positive number"):
+    with pytest.warns(RuntimeWarning, match="'notanumber' is not a nonzero number"):
         out = io_tiff._parse_imagej_metadata({"spacing": "notanumber"}, meta)
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
 
@@ -147,9 +147,9 @@ def test_2d_ome_tiff_reads_calibration_and_channel_names(tmp_path):
     assert {k: auto_meta[k] for k in meta} == meta
 
 
-@pytest.mark.parametrize("spacing", [0.0, -2.0, float("nan")])
-def test_imagej_non_positive_spacing_is_not_calibration(tmp_path, spacing):
-    # Regression: spacing 0 or negative was taken as the z voxel size, labelled 'file'.
+@pytest.mark.parametrize("spacing", [0.0, float("nan")])
+def test_imagej_zero_spacing_is_not_calibration(tmp_path, spacing):
+    # Regression: spacing 0 was taken as the z voxel size, labelled 'file'.
     p = tmp_path / "ij.tif"
     tifffile.imwrite(
         p,
@@ -158,11 +158,11 @@ def test_imagej_non_positive_spacing_is_not_calibration(tmp_path, spacing):
         resolution=(2.0, 2.0),
         metadata={"axes": "ZYX", "spacing": spacing, "unit": "um"},
     )
-    with pytest.warns(RuntimeWarning, match="not a positive number"):
+    with pytest.warns(RuntimeWarning, match="not a nonzero number"):
         vol, meta = io.load_volume(p)
     assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)
     assert meta["voxel_size_source"] == "z:default,y:file,x:file"
-    with pytest.warns(RuntimeWarning, match="not a positive number"):
+    with pytest.warns(RuntimeWarning, match="not a nonzero number"):
         assert io.read_voxel_size(p) == ((1.0, 0.5, 0.5), "z:default,y:file,x:file")
 
 
@@ -211,3 +211,20 @@ def test_ome_rgb_channel_names_follow_their_samples(tmp_path, load, shape, axes)
         arr, meta = load(p)
     assert meta["channel_names"] == [f"{n}[{s}]" for n in ("DAPI", "GFP") for s in range(3)]
     assert [int(arr[i].max()) for i in range(6)] == [10 * c + s for c in range(2) for s in range(3)]
+
+
+def test_imagej_negative_spacing_gives_its_magnitude(tmp_path):
+    # A stack acquired top-down has a negative spacing; it was read as -2.0 µm.
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 8, 8), np.uint16),
+        imagej=True,
+        resolution=(2.0, 2.0),
+        metadata={"axes": "ZYX", "spacing": -2.0, "unit": "um"},
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _, meta = io.load_volume(p)
+    assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"

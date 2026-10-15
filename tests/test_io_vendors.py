@@ -9,6 +9,7 @@ vendor files."""
 
 import sys
 import types
+import warnings
 
 import numpy as np
 import pytest
@@ -306,3 +307,16 @@ def test_lif_y_copied_from_x_is_said_and_recorded(monkeypatch, tmp_path):
     assert not [w for w in rec if "no y calibration" in str(w.message)]
     assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
     assert meta["voxel_size_source"] == "z:file,y:copied-from-x,x:file"
+
+
+def test_lif_negative_length_is_a_calibration(monkeypatch, tmp_path):
+    # Regression: a z stack acquired top-down has a negative z Length in the LIF
+    # XML (readlif's scale is then negative) and was reported as uncalibrated.
+    _install_readlif(monkeypatch, _make_fake_readlif(1, 2, [2.0, 2.0, -0.5]))
+    path = tmp_path / "neg.lif"
+    path.write_bytes(b"")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _, meta = io.load_volume(path)
+    assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"

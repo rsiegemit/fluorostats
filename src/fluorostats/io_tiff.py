@@ -157,20 +157,28 @@ def _imagej_xy_um(tif: tifffile.TiffFile, ij_meta: dict) -> dict | None:
     return out
 
 
+def _magnitude(value):
+    """``|value|`` as a float, or ``value`` itself when it is not a number."""
+    try:
+        return abs(float(value))
+    except (TypeError, ValueError):
+        return value
+
+
 def _parse_imagej_metadata(ij_meta: dict, meta: dict, xy: dict | None = None) -> dict:
     """``meta`` plus the ImageJ voxel size converted to µm, as a new dict: z from
     ``spacing``, y/x from ``xy`` (see `_imagej_xy_um`)."""
     size = dict(zip("zyx", meta["voxel_size_um"]))
     read, noted = set(), {}
-    if "spacing" in ij_meta and not valid_size(ij_meta["spacing"]):
+    spacing = _magnitude(ij_meta.get("spacing"))  # negative: a stack acquired top-down
+    if "spacing" in ij_meta and not valid_size(spacing):
         warnings.warn(
-            f"ImageJ spacing {ij_meta['spacing']!r} is not a positive number; the z "
+            f"ImageJ spacing {ij_meta['spacing']!r} is not a nonzero number; the z "
             "spacing is not read.",
             RuntimeWarning,
             stacklevel=3,
         )
     elif "spacing" in ij_meta:
-        spacing = float(ij_meta["spacing"])
         size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
         read.add("z")
         noted.update({} if source == "file" else {"z": source})
