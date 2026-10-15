@@ -281,23 +281,24 @@ def _write_group_summary(path: Path, rows: list[dict], groups: list[str]) -> Non
                 sw.writerow([g, int(d["n"][i]), mk, f"{d['mean'][i]:.5g}", f"{d['sem'][i]:.5g}"])
 
 
+def _by_group(rows: list[dict], groups: list[str], metric: str) -> dict[str, list[float]]:
+    """``metric``'s non-NaN values per group, in manifest order."""
+    return {g: [r[metric] for r in rows if r["group"] == g and r[metric] == r[metric]]
+            for g in groups}
+
+
 def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
-    """The two-group statistics of a run, as `depth_batch.contrasts` rows (same columns;
-    ``window`` empty): two-sided Mann-Whitney with Cliff's delta on each of
-    ``live_cov_pct``, ``live_density_permm2`` and ``viability_area`` (NaN stacks
-    dropped), BH-FDR across those metrics. None unless there are exactly two groups."""
-    if len(groups) != 2:
-        return []
+    """The two-group statistics of a run, as `depth_contrasts.mann_whitney_contrasts`
+    rows (the contrasts.csv columns; ``window`` empty): two-sided Mann-Whitney with
+    Cliff's delta on each of ``live_cov_pct``, ``live_density_permm2`` and
+    ``viability_area`` (NaN stacks dropped; a metric with an empty group is skipped),
+    BH-FDR across those metrics. None unless there are exactly two groups."""
     entries = []
     for mk in _CONTRAST_METRICS:
-        a, b = ([r[mk] for r in rows if r["group"] == g and r[mk] == r[mk]] for g in groups)
-        if a and b:
-            entries.append((mk, "", {groups[0]: a, groups[1]: b}))
-    tests = mann_whitney_contrasts(entries, across="metrics")
-    for c, (_, _, bg) in zip(tests, entries):     # console extra: ratio of group means
-        ma, mb = (float(np.mean(v)) for v in bg.values())
-        c["fold"] = mb / ma if ma else float("nan")
-    return tests
+        bg = _by_group(rows, groups, mk)
+        if len(bg) == 2 and all(bg.values()):
+            entries.append((mk, "", bg))
+    return mann_whitney_contrasts(entries, across="metrics")
 
 
 def _print_summary(rows: list[dict], groups: list[str], tests: list[dict]) -> None:
@@ -309,10 +310,10 @@ def _print_summary(rows: list[dict], groups: list[str], tests: list[dict]) -> No
         parts = [f"{g}: {d['mean'][i]:.3g}±{d['sem'][i]:.2g} (n={int(d['n'][i])})"
                  for g, d in by_group.items()]
         print(f"  {mk:<26} " + "   ".join(parts))
-    _print_contrast(groups, tests)
+    _print_contrast(rows, groups, tests)
 
 
-def _print_contrast(groups: list[str], tests: list[dict]) -> None:
+def _print_contrast(rows: list[dict], groups: list[str], tests: list[dict]) -> None:
     """Print the `contrasts` rows (the same rows contrasts.csv holds)."""
     if len(groups) != 2:
         print(f"\n(two-group contrast skipped: {len(groups)} group(s); it compares exactly two)")
@@ -320,6 +321,8 @@ def _print_contrast(groups: list[str], tests: list[dict]) -> None:
     print("\n=== Two-group contrast (Mann-Whitney U, two-sided; Cliff's delta; "
           "BH-FDR q across these tests) ===")
     for c in tests:
+        a, b = _by_group(rows, groups, c["metric"]).values()
+        fold = float(np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
         print(f"  {c['metric']:<26} {c['group_a']} vs {c['group_b']}: U={c['U']:.0f}, "
               f"p={c['p']:.4g}, q={c['q']:.4g}, delta={c['cliffs_delta']:+.2f}, "
-              f"fold={c['fold']:.2f}x (n={c['n_a']},{c['n_b']})")
+              f"fold={fold:.2f}x (n={c['n_a']},{c['n_b']})")
