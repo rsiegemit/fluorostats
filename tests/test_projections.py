@@ -188,3 +188,33 @@ def test_render3d_still_provides_the_moved_panels(name):
     with pytest.warns(DeprecationWarning, match=f"render3d.{name} is deprecated; use"):
         assert getattr(render3d, name) is getattr(projections, name)
     assert name not in render3d.__all__
+
+
+def test_live_dead_mip_is_the_pubfig_composite_of_the_projections():
+    # M6 (SIN-1): live_dead_mip had its own percentile normalisation and composite.
+    from fluorostats import pubfig
+
+    rng = np.random.default_rng(5)
+    live, dead = rng.random((2, 4, 12, 12))
+    fig, ax = plt.subplots()
+    live_dead_mip(live, dead, ax=ax, gamma=0.75)
+    expected = pubfig.composite2ch(
+        live.max(0),
+        dead.max(0),
+        live_rgb=np.array([40, 220, 60]) / 255,
+        dead_rgb=np.array([240, 30, 40]) / 255,
+        gamma=0.75,
+    )
+    np.testing.assert_array_equal(ax.images[0].get_array(), expected)
+    plt.close(fig)
+
+
+def test_depth_coded_mip_normalises_with_pubfig_imnorm(monkeypatch):
+    from fluorostats import projections, pubfig
+
+    seen = []
+    monkeypatch.setattr(pubfig, "imnorm", lambda a, lo, hi: seen.append((lo, hi)) or a * 0 + 0.5)
+    fig, ax = plt.subplots()
+    projections.depth_coded_mip(np.ones((3, 4, 4)), ax=ax)
+    assert seen == [(1, 99.5)]
+    plt.close(fig)

@@ -28,7 +28,7 @@ import warnings
 from collections.abc import Callable
 from math import erf, sqrt
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -375,12 +375,26 @@ def outline(ax: plt.Axes, labels: np.ndarray, rgb: Sequence[float], width: int =
 
 
 def composite2ch(
-    live: np.ndarray, dead: np.ndarray, live_gain: float = 1.0, dead_gain: float = 1.0
+    live: np.ndarray,
+    dead: np.ndarray | None,
+    live_gain: float = 1.0,
+    dead_gain: float = 1.0,
+    *,
+    live_rgb: ArrayLike = (0.1, 1.0, 0.0),
+    dead_rgb: ArrayLike = (1.0, 0.0, 1.0),
+    clip: tuple[float, float] = (1, 99.5),
+    gamma: float = 1.0,
+    background: ArrayLike = (0.0, 0.0, 0.0),
 ) -> np.ndarray:
-    """Green (live) / magenta (dead) two-channel RGB composite, colourblind-safe."""
-    g = imnorm(live) * live_gain
-    r = imnorm(dead) * dead_gain
-    return np.clip(np.dstack([r + 0.1 * g, g, r]), 0, 1)
+    """Two-channel RGB composite in [0, 1], the one live/dead composite: each channel
+    `imnorm`-ed (percentiles ``clip``), raised to ``gamma``, scaled by its gain and
+    added in its colour (RGB in [0, 1]); live is blended over ``background``. The
+    default green (live) / magenta (dead) is colourblind-safe; ``dead`` may be None."""
+    g = (imnorm(live, *clip) ** gamma * live_gain)[..., None]
+    rgb = g * np.asarray(live_rgb) + (1 - g) * np.asarray(background)
+    if dead is not None:
+        rgb = rgb + (imnorm(dead, *clip) ** gamma * dead_gain)[..., None] * np.asarray(dead_rgb)
+    return np.clip(rgb, 0, 1)
 
 
 def fill_mask(ax: plt.Axes, mask: np.ndarray, rgb: Sequence[float], alpha: float = 0.85) -> None:
@@ -418,16 +432,10 @@ def scalebar(
         tx, tha = xr + length_px / 2, "center"
     else:
         tx, tha = (xr + length_px if right else xr), ("right" if right else "left")
-    ax.text(
-        tx,
-        yb - 0.02 * H,
-        label,
-        color=color,
-        ha=tha,
-        va="bottom",
-        fontsize=FS["annot"],
-        fontweight="bold",
+    text_style: dict[str, Any] = dict(
+        color=color, ha=tha, va="bottom", fontsize=FS["annot"], fontweight="bold"
     )
+    ax.text(tx, yb - 0.02 * H, label, **text_style)
 
 
 # ---- export ----
@@ -507,15 +515,8 @@ def lollipop(
     lo_x = floor if floor is not None else max(0.0, min(values) - 0.03)
     hi_x = max(values) + (max(values) - lo_x) * 0.14
     for row, i in enumerate(idx):
-        c = (
-            colors[i]
-            if colors
-            else (
-                OKABE["blue"]
-                if highlight and highlight in str(labels[i]).lower()
-                else OKABE["grey"]
-            )
-        )
+        hit = highlight and highlight in str(labels[i]).lower()
+        c = colors[i] if colors else OKABE["blue" if hit else "grey"]
         ax.plot(
             [lo_x, values[i]],
             [row, row],

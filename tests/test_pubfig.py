@@ -179,3 +179,18 @@ def test_text_sizes_come_from_the_one_font_scale():
     sizes = {t.get_fontsize() for t in ax.texts}
     assert sizes == {pubfig.FS["value"], pubfig.FS["annot"]}
     assert {t.get_fontsize() for t in ax.get_yticklabels()} == {pubfig.FS["tick"]}
+
+
+def test_composite2ch_colours_gamma_and_background_are_parameters():
+    rng = np.random.default_rng(3)
+    live, dead = rng.random((2, 16, 16))
+    default = pubfig.composite2ch(live, dead)
+    g, r = pubfig.imnorm(live), pubfig.imnorm(dead)
+    np.testing.assert_array_equal(default, np.clip(np.dstack([r + 0.1 * g, g, r]), 0, 1))
+    bg = np.array([0.2, 0.2, 0.2])
+    rgb = pubfig.composite2ch(
+        live, None, live_rgb=(0.0, 1.0, 0.0), clip=(0, 100), gamma=0.5, background=bg
+    )
+    n = pubfig.imnorm(live, 0, 100) ** 0.5
+    np.testing.assert_allclose(rgb[..., 1], np.clip(n + (1 - n) * 0.2, 0, 1))
+    np.testing.assert_allclose(rgb[..., 0], (1 - n) * 0.2)

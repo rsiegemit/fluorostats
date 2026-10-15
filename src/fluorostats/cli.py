@@ -15,6 +15,7 @@ from . import (
     metrics_3d,
     plots,
     preprocess,
+    pubfig,
     qc,
     report,
     segment,
@@ -528,7 +529,9 @@ def _finish(output_path: Path, config: dict, previous: list[Path], tool: str) ->
 
 
 def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
-    """Draw the per-metric plots, the summary panel and pvalues.csv into ``plot_dir``."""
+    """Draw the per-metric plots, the summary panel and pvalues.csv into ``plot_dir``,
+    in the house figure theme."""
+    pubfig.apply_style("house")
     has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
     # unmeasured metrics (e.g. skeleton columns under --no-skeleton) are neither
     # plotted nor listed as untestable pairs in pvalues.csv

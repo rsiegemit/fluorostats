@@ -15,6 +15,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
+from . import pubfig
 from .pubfig import PALETTE
 from .qc import overlay_rgb
 
@@ -65,36 +66,24 @@ def live_dead_mip(
 
     ``live`` is the live-cell channel (typically Alexa-488 / Calcein /
     GFP), ``dead`` is the dead-cell channel (typically PI / Alexa-568).
-    Each channel is independently percentile-clipped, gamma-corrected,
-    then composited additively into an RGB image on a black background.
+    Each channel's MIP is independently percentile-clipped, gamma-corrected,
+    then composited additively into an RGB image on ``background``
+    (`pubfig.composite2ch`, the one live/dead composite).
 
     Returns the matplotlib axis. The signature mirrors :func:`mip_overlay`
     so the two helpers can be swapped inside grid layouts.
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(4, 4))
-    lo, hi = percentile_clip
-    lc = np.array(live_color, dtype=float) / 255.0
-    bg = np.array(background, dtype=float) / 255.0
-
-    def _to_norm(vol: np.ndarray) -> np.ndarray:
-        m = vol.max(axis=z_axis).astype(float)
-        if m.max() == 0:
-            return m
-        v_lo, v_hi = np.percentile(m, [lo, hi])
-        m = np.clip((m - v_lo) / max(1e-9, v_hi - v_lo), 0, 1)
-        return m**gamma
-
-    live_n = _to_norm(live)
-    rgb = live_n[..., None] * lc[None, None, :] + (1 - live_n[..., None]) * bg[None, None, :]
-
-    if dead is not None:
-        dc = np.array(dead_color, dtype=float) / 255.0
-        dead_n = _to_norm(dead)
-        # Additive blend on top of the live composite
-        rgb = rgb + dead_n[..., None] * dc[None, None, :]
-
-    rgb = np.clip(rgb, 0, 1)
+    rgb = pubfig.composite2ch(
+        live.max(axis=z_axis),
+        None if dead is None else dead.max(axis=z_axis),
+        live_rgb=np.array(live_color, dtype=float) / 255.0,
+        dead_rgb=np.array(dead_color, dtype=float) / 255.0,
+        clip=percentile_clip,
+        gamma=gamma,
+        background=np.array(background, dtype=float) / 255.0,
+    )
     ax.imshow(rgb)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -237,11 +226,9 @@ def depth_coded_mip(
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(4, 4))
-    vol = volume.astype(np.float32)
-    lo, hi = np.percentile(vol, percentile_clip)
-    vol_norm = np.clip((vol - lo) / max(1e-9, hi - lo), 0, 1) ** gamma
+    vol_norm = pubfig.imnorm(volume, *percentile_clip) ** gamma
     mip = vol_norm.max(axis=z_axis)
-    nz = vol.shape[z_axis]
+    nz = volume.shape[z_axis]
     # intensity-weighted depth
     z_idx = np.arange(nz)
     if z_axis == 0:
@@ -250,7 +237,7 @@ def depth_coded_mip(
         )
     else:
         depth = (
-            vol_norm * np.arange(nz).reshape([1] * z_axis + [-1] + [1] * (vol.ndim - z_axis - 1))
+            vol_norm * np.arange(nz).reshape([1] * z_axis + [-1] + [1] * (volume.ndim - z_axis - 1))
         ).sum(axis=z_axis) / np.where(vol_norm.sum(axis=z_axis) == 0, 1, vol_norm.sum(axis=z_axis))
     depth_norm = depth / max(1, nz - 1)
     cmap_obj = plt.get_cmap(cmap)
