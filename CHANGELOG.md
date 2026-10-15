@@ -5,58 +5,170 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
-An audit against the new engineering rules (`docs/ENGINEERING.md`). Refactors were
-proven behaviour-identical with a golden-output harness over every public
-function, every CLI command and every figure script; the changes below that DO
-alter outputs are listed first.
+Three rounds of audits against the engineering rules (`docs/ENGINEERING.md`).
+Refactors were proven behaviour-identical with a golden-output harness over every
+public function, every CLI command and every figure script. The changes below that
+DO alter outputs come first, each with the inputs it affects.
 
 ### Fixed (changes outputs)
-- **Leica `.lif` voxel sizes were 10^6 too large.** readlif reports pixels per
-  µm; the loader also multiplied by 1e6. A file with no z length also lost its
-  valid x/y calibration.
-- **`segment.binarize(min_size=...)` removed objects of exactly that size** on
-  scikit-image >= 0.26 (its `max_size` is inclusive), but kept them on older
-  versions and disagreed with `objects.label_3d`. Now "smaller objects are
-  removed" on every version.
+
+Reading files
+- **Axis order comes from the file's axis labels** (TIFF series axes, nd2 sizes,
+  czifile axes), not from the array shape. Changes results for TIFF/ND2/CZI files
+  not already in (C, Z, Y, X) order: ImageJ ZCYX hyperstacks with more than one
+  channel, OME files with Z before C or a time axis, RGB TIFFs (colour samples are
+  channels), single-plane multichannel files, and RGB z-stacks with one unlabelled
+  axis (taken as z, with a warning). Time points, positions and scenes keep index 0
+  with a warning. Files without labels keep the shape rule, which now warns when it
+  guesses and refuses layouts with more than 10 channels or X < 5.
+- **Channel names stay positional.** An unnamed channel no longer shifts later names
+  onto the wrong channel (OME/CZI/ND2/Olympus: ["", "GFP"] was read as ["GFP",
+  "Ch2"], so the green-channel pick measured the empty channel). CZI names come from
+  the image's channels only (they collected every `Channel` element of the file).
+- **Voxel sizes are converted from their stated unit** (OME `PhysicalSize*Unit`,
+  ImageJ `unit`/`zunit`; 500 nm pixels were read as 500 µm); ImageJ x/y pixel size
+  is read from the resolution tags when the file names a unit; Leica `.lif` sizes
+  were 10^6 too large; ND2 axes nd2 cannot calibrate are recorded as defaulted. An
+  unknown or missing unit keeps the value, warns and records `file-unit-unknown`.
+- **CZI/ND2/LIF/Olympus metadata parsers keep what they read** and warn naming what
+  they could not (a CZI with a non-numeric z `Distance` lost its x/y sizes silently).
+- **Unnamed 4-channel inputs are measured on channel 1 (green), not channel 0**, for
+  RGBA images and unnamed 4-channel volumes in `quant3d` (announced as a guess).
+
+Segmentation and objects
+- **`objects.watershed_split(min_size>0)` re-merged the objects it split** (the size
+  filter relabelled the foreground). It now filters the watershed labels, and seeds
+  at the h-maxima of the distance transform (h = `min_distance`/2) so irregular or
+  elongated objects are not over-split. Watershed counts change everywhere,
+  including `live_dead_by_count(method="watershed"/"all")` and the viability
+  driver's watershed, consensus and spread columns.
+- **One small-object rule** (`segment.remove_small`: objects smaller than `min_size`
+  are removed, objects of exactly `min_size` kept) on every scikit-image version,
+  used by `binarize`, `label_3d` and the benchmark producers.
+- **`skeleton.n_junction_nodes` merges junction voxels with full connectivity** as
+  documented (about 1% fewer nodes where branches touch diagonally).
+- **`texture.orientation_anisotropy` angles use the regionprops convention** of
+  `object_shape_metrics` (they were mirrored), and never read 180.
+- **`objects.nearest_neighbor_stats`** uses the 2D or 3D Clark-Evans formula for the
+  number of axes the points span (coplanar 3D points mixed an area with the 3D
+  constant); NaN with a warning below two varying axes.
+
+Measurements and statistics
+- **A value that was never measured is NaN, not 0**: a skeleton that cannot be
+  measured; `largest_component_fraction` and cluster areas of an empty mask; the
+  mean branch length of no branches; the regime estimate with no segmented cell;
+  the count spread when one method ran; a depth AUC window entirely past a stack;
+  R² of a constant depth profile; the SD/SEM of a single value (depth curves and
+  λ, viability summaries, plot error bars, Bland-Altman limits); an empty
+  condition's bar; density for a zero imaged volume.
+- **Skeleton spur pruning compares branch length in µm** with per-axis voxel sizes.
+- **An all-tied Mann-Whitney comparison has p = NaN on every scipy** (scipy < 1.18
+  said 1.0).
+- **Tile CVs use the population form (ddof=0) everywhere**: `coverage_tile_cv` and
+  `spatial_heterogeneity` cv are about 2% lower on the default 5×5 grid.
+- **One tiling rule for images and one for points** (`lateral_homogeneity` used to
+  crop edge pixels; point binning used two edge rules).
+- **`power`**: one resampling helper and one seeding rule; `power_curve` now equals
+  `bootstrap_power` at each n, `fdr_power_curve` values change, and an empty group
+  has NaN power (was 0).
+- **`morphometry.depth_span`/`depth_centroid`** use the z voxel size whatever
+  `z_axis` is; `depth_centroid`'s `z_*` keys are slices and the µm values are the new
+  `z_*_um` keys.
+- **`fluorostats viability`**: the field of view uses the y pixel size for y; counts
+  use the manifest's `seg.method` (they always used Otsu); omitted live/dead channels
+  are resolved from dye names (with a warning when it falls back to 0/1).
 - **CLI summary-panel stars used raw p-values** while `pvalues.csv` starred BH
-  q-values; they now use the same q-values.
-- **`--no-skeleton` wrote 0 into the skeleton columns**, which were then
-  summarised, plotted and tested as measurements; they are now blank (NaN).
-- **An unnamed 4-channel (RGBA) image was measured on red**; it now maps to
-  green like 2- and 3-channel inputs (still announced as a positional guess).
-- **`objects.centroid_homogeneity` crashed on 2D centroids**; 3D is unchanged.
-- Figure S3's caption said Triangle fails at high noise; its own table shows
-  Triangle is best there (fails at low noise). Caption text only.
+  q-values; both use q now.
+
+CLI and drivers
+- **`quant2d`/`quant3d` refuse an `--output` inside `--input`**; reruns remove the
+  tool's own earlier plots, overlays and (depth) figures, naming each, and every
+  command writes `run_config.json` last, so a failed run leaves none. An input
+  folder with nothing to measure exits 2.
+- **QC overlays of same-named files in different condition folders no longer
+  overwrite each other**; **fractional depth AUC windows** no longer overwrite each
+  other's figures.
+- **`quant3d` measures a Keyence BZ-X folder as one volume** (each slice was measured
+  as its own sample).
+- **Depth**: the group grid stops within the shallowest stack (it extrapolated); the
+  λ overlay uses the manifest's `n_surface` and fitted floor; `window_covered_um` is
+  0, not negative; the Welch t-test is printed only with `"parametric": true`.
+- **Manifests are validated before any image loads**: unknown fields at any level,
+  non-bool flags, `true`/`false` as channels, malformed windows, unknown colours,
+  duplicate group names or stack labels, empty groups, `"role": "aux"` or a group
+  `background` in a viability manifest, a bad `seg` block. Late failures (channel out
+  of range, too few slices) name the file. Unknown option values
+  (`attenuation_correct(reference=)`, `morans_i(connectivity=)`,
+  `render_isosurface(style=)`, report `mode`, bootstrap `agg`) raise.
+- **Figures**: bars use one style (some `*_bar.png` change); more than eight
+  conditions get distinct colours; `render3d.mip_overlay` uses the QC overlays'
+  min-max stretch.
+- Importing `fluorostats` no longer imports pyplot or switches the matplotlib
+  backend.
 
 ### Added
-- Warnings, instead of silent fallbacks, when: an axis has no calibration in the
-  file (and `meta["voxel_size_source"]` records which axes were read); the green
-  channel is chosen by position; extra time/scene axes are dropped or a Leica
-  file holds more than one image; a z-stack is read as a 2D image; a consensus
-  threshold method fails; a depth AUC window runs past a stack; replicate blanks
-  have different z-steps.
-- `per_file.csv` columns `channel_used` (2D, 3D) and `voxel_size_source` (3D).
-- Batch manifests are validated before any image loads (`fluorostats.manifest`);
-  `fluorostats depth` / `viability` write `run_config.json`.
-- CLI options reject out-of-range values; `--threshold` offers every method the
-  library implements (`segment.METHODS`), not just otsu/li.
-- `fluorostats.pubfig` (publication-figure kit), `stats.gini`,
-  `stats.coefficient_of_variation`, `stats.bootstrap_mean_ci`, `stats.welch_t`,
-  `spatial.coverage_heterogeneity`, `preprocess.green_channel_index`,
-  `io.FORMATS`, `report.write_run_config`, `depth_figures`.
-- Metric labels: `n_junctions` is "Junction-to-Junction Branches" (it never was
-  a junction count); `n_junction_nodes` and the coverage metrics get labels.
+- `voxel_size_source` (which axes came from the file, which were defaulted, copied
+  or assumed) in every per-file/per-stack table; quant2d also records
+  `voxel_size_um`, `auto_crop_box` and µm² cluster areas; `channel_used`.
+- `contrasts.csv` from `fluorostats depth` and `fluorostats viability` (the printed
+  two-group Mann-Whitney contrasts with n, U, p, BH q, Cliff's δ, test and
+  correction). `pvalues.csv` names its test and correction, reports Cliff's δ and
+  keeps untestable pairs with a `reason`.
+- Warnings instead of silent fallbacks (defaulted calibration, positional channel
+  guesses, dropped axes, layout guesses, mis-saved z-stacks, Keyence gaps and its
+  assumed z unit, failed threshold algorithms, partial windows, trimmed blanks,
+  unbalanced Scheirer-Ray-Hare designs, zero fold-change denominators).
+- Options: `quant3d --opening ball|disk|none` (the 3D noise opening erases
+  structures thinner than three slices; `disk` opens each slice), depth manifest
+  `parametric` and `fit_r2_threshold`; CLI defaults shown and result-changing
+  options marked.
+- API: `segment.segment_channel`, `segment.remove_small`, `segment.OPENINGS`,
+  `validate.dice`, `stats.describe(axis=)`, `stats.compute_pvalues`,
+  `stats.significance_stars`, `stats.REDUCERS`, `stats.gini`,
+  `stats.coefficient_of_variation`, `stats.welch_t`, `stats.bootstrap_mean_ci(rng=)`,
+  `viability.live_ratio`, `viability.live_dead_channels`, `qc.overlay_rgb`,
+  `io.read_voxel_size`, `io.FORMATS`, `io.DIRECTORY_FORMATS`, `pubfig` (one figure
+  style module with themes, `save_figure`, `TEXT_WIDTH_IN`), `depth_figures`,
+  `depth_contrasts`, `projections` (2D MIP panels, moved from `render3d`, which re-exports them), `cli_paths` (CLI input discovery and output hygiene), `manifest`, `deprecation`, `skeleton.UNMEASURED_METRICS`.
+- Type checking (mypy) and a CI workflow (ruff lint and format, mypy, the test
+  suite at 100% coverage on Python 3.10-3.13); `ruff` and `mypy` pinned in `dev`.
 
-### Changed (behaviour-identical)
-- One implementation per concern: Gini/CV, FOV density, viability ratio,
-  batch-driver statistics, the reported-metric lists, file formats, count
-  methods; quant2d/quant3d share one pipeline; depth_batch split by concern;
-  long functions and deep nesting broken up; the benchmark figure kit moved
-  into the library and its example copy deleted.
-- Tests organised one file per module; ruff-clean across src, tests,
-  benchmarks and examples.
-- Supplementary figure scripts and outputs use S1-S4 names;
-  caption numbers are read from the tables they describe.
+### Changed
+- **One name for the voxel-size argument, `voxel_size_um`** (per-axis µm in array
+  order; a scalar means isotropic): `ring_morphometry`/`mesh_size` (`spacing`),
+  `coverage_metrics` (`pixel_size_um`), `intensity_depth_profile`
+  (`voxel_size_z_um`), `prune_skeleton` (`min_branch_length_px` ->
+  `min_branch_length`). The old keywords keep working with a DeprecationWarning;
+  `watershed_split`'s `footprint_size` (keyword or positional) is accepted and
+  ignored with a DeprecationWarning.
+- **`live_dead_by_count` returns one flat set of keys in every mode** (n_live, n_dead,
+  viability, consensus, spread, method/reason per channel, and per-method counts);
+  `by_method` (method "all") is kept but deprecated.
+- `fluorostats.style` is a thin layer over `pubfig`; `fluorostats.io` is split into
+  `io`, `io_vendors` and `io_canonical`; `plots.compute_pvalues` is
+  `stats.compute_pvalues`. Every existing public name keeps working.
+- `keyence.load_keyence_stack` returns `voxel_size_um`; its `px_um`/`z_step_um`/
+  `vox_*` keys are deprecated.
+- Metric labels: `n_junctions` is "Junction-to-Junction Branches".
+
+### Benchmarks and examples
+- Every locally reproducible results table is regenerated with this library
+  (watershed columns change materially; others in the 3rd-4th decimal);
+  cluster-only tables (deep-learning timings, `b_ve_metrics`) are unchanged. Every
+  producer writes `<table>.run.json` (parameters, library versions, git commit).
+- Producers use the library's small-object rule; a failed threshold scores NaN; the
+  two fluorostats Otsu+CC pipelines are named in the tables; new count-agreement
+  and derived tables; column renames: `median_diam_vox` (BBBC024 is uncalibrated),
+  `fluorostats_maxima`, `bias_vs_3D`; `b4_reaver_ranking` gains `mean_bias`.
+- Figure scripts only read and plot (recorded exceptions: live determinism runs and
+  display overlays); caption numbers and claims come from the tables; Figure 2(d)
+  shows the default and watershed pipelines as separate lines; the Figure 4 scale
+  bar is drawn from the file's calibration (it was 438 µm labelled 1 mm); scripts
+  run from any directory; S1-S4 names; stale previews removed.
+- Examples: `keyence_tube_analysis` uses the library's ring, watershed, diameter,
+  density and junction-node measurements (its outputs change);
+  `multi_condition_pipeline` creates its output folder; the depth-penetration
+  example reads its caption from its run.
 
 ## [0.8.2]
 

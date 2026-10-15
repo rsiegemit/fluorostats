@@ -17,11 +17,11 @@ Each piece owns all of its functionality behind a small interface, so it can be 
 
 | ID | Rule | Check |
 | --- | --- | --- |
-| MOD-1 | One concern per module. Reading (`io`, `keyence`), preprocessing, segmentation, each metric family (`metrics_2d`, `metrics_3d`, `skeleton`, `objects`, `morphometry`, `ring`, `texture`, `spatial`, `depth`, `viability`), statistics (`stats`, `agreement`, `power`), validation, QC, reporting and figures (`plots`, `render3d`, `style`) each keep their logic, options and tests in their own module. | You can name the one concern a module serves; changing that concern touches one module. |
+| MOD-1 | One concern per module. Reading (`io`, `io_vendors`, `io_canonical`, `keyence`), manifests (`manifest`), preprocessing, segmentation, each metric family (`metrics_2d`, `metrics_3d`, `skeleton`, `objects`, `morphometry`, `ring`, `texture`, `spatial`, `depth`, `viability`), statistics (`stats`, `agreement`, `power`), validation, QC, reporting (`report`, `depth_contrasts`) and figures (`plots`, `render3d`, `projections`, `style`, `pubfig`, `depth_figures`) each keep their logic, options and tests in their own module. | You can name the one concern a module serves; changing that concern touches one module. |
 | MOD-2 | Swappable by name. Variants (threshold methods, count methods, reducers, file formats) are chosen by a named option resolved in one place (a dict/registry or one dispatch function), not by `if` chains repeated in each caller. Adding a variant is one implementation plus one registration. | Grep for a variant's name finds its implementation, its registration and its tests, nothing else. |
-| MOD-3 | Dependencies point one way: measurement modules (`io` … `validate`) ← orchestration (`depth_batch`, `viability_batch`, `report`, `cli`) ← scripts (`benchmarks/`, `examples/`). Measurement modules never import plotting, `click` or orchestration; nothing in `src/` imports `benchmarks/` or `examples/`. No cycles; no function-level import used to dodge one. | The import graph has no upward edges and no cycles. |
-| MOD-4 | Use only a module's public surface. No `module._private` access across module boundaries; if a caller needs it, the owner makes it public. | No `_name` imported or accessed from outside its module. |
-| MOD-5 | Components meet at explicit data contracts: arrays are `(C, Z, Y, X)` / `(Z, Y, X)` / `(Y, X)` with a metadata dict carrying calibrated spacing in µm; metric functions return flat `dict`s of named scalars; batch drivers read a JSON manifest and write CSV tables plus a config record. A contract change is backward compatible or versioned. | A consumer needs only the artifact, not the producer's code path. |
+| MOD-3 | Dependencies point one way: measurement modules (`io` … `validate`) ← orchestration (`depth_batch`, `viability_batch`, `report`, `cli`, `cli_paths`) ← scripts (`benchmarks/`, `examples/`). Measurement modules never import plotting, `click` or orchestration; nothing in `src/` imports `benchmarks/` or `examples/`. No cycles; no function-level import used to dodge one. | The import graph has no upward edges and no cycles. |
+| MOD-4 | Use only a module's public surface. No `module._private` access across module boundaries; if a caller needs it, the owner makes it public. A module's own test file (`test_<module>.py`) may exercise that module's private helpers. | No `_name` imported or accessed from outside its module, except by its own test file. |
+| MOD-5 | Components meet at explicit data contracts: arrays are `(C, Z, Y, X)` / `(Z, Y, X)` / `(Y, X)` with a metadata dict carrying calibrated spacing in µm; metric functions return flat `dict`s of named scalars (functions measuring per object or per depth return arrays or tables and say so); batch drivers read a JSON manifest and write CSV tables plus a config record. A contract change is backward compatible or versioned. | A consumer needs only the artifact, not the producer's code path. |
 | MOD-6 | Size limits: files ≤ 600 lines (1,000 hard maximum); function bodies ≤ 60 lines, docstrings excluded; nesting ≤ 4 levels. A file past the limit is split along its concerns (MOD-1), not by line count. | Line counts. |
 | MOD-7 | Composition happens in one place per entry point (each CLI command, each batch driver's `run`). Metric functions never load files or build their own dependencies. | Swapping a component changes one composition site and one option. |
 
@@ -74,7 +74,7 @@ Everything exists in exactly one place. Duplication is how two copies drift apar
 
 ## 6. Results and statistics (EXP)
 
-These rules exist because the paper's numbers depend on them.
+These rules exist because the published numbers depend on them.
 
 | ID | Rule | Check |
 | --- | --- | --- |
@@ -82,7 +82,7 @@ These rules exist because the paper's numbers depend on them.
 | EXP-2 | Small-sample inference is non-parametric by default: two-sided Mann-Whitney U with Cliff's δ, BH-FDR across any grid of tests, the biological replicate (stack, tube) as the unit of replication. A parametric test appears only when asked for and is labelled. | Reported p-values name the test, the n and the correction. |
 | EXP-3 | Every metric is validated against a reference implementation or analytic ground truth, and that check is a regression test. | The metric has a test that would fail if it drifted. |
 | EXP-4 | Deterministic: no random seed in the measurement path; any resampling (bootstrap, power) takes an explicit seed. | Two runs give identical bits. |
-| EXP-5 | A change that can move a published number ships only with the evidence and a CHANGELOG entry, and the manuscript is checked for the number. | The commit says which published numbers it can move, or "none". |
+| EXP-5 | A change that can move a published number ships only with the evidence and a CHANGELOG entry, and every place that reports the number is checked. | The commit says which published numbers it can move, or "none". |
 
 ## 7. Data and artifacts (DAT)
 
@@ -90,7 +90,7 @@ These rules exist because the paper's numbers depend on them.
 | --- | --- | --- |
 | DAT-1 | Raw microscopy never enters Git; collaborator or proprietary data never leaves `methods_paper/` (git-ignored). Only derived numeric tables are committed. | `git ls-files` has no image stacks; the tag tarball has no `methods_paper/`. |
 | DAT-2 | Inputs are never modified in place; outputs go to a named output directory. | No writes next to input files. |
-| DAT-3 | Tables written for figures carry the columns the figure needs and nothing derived ad hoc in the plotting script. | A figure script reads, filters and plots; it does not compute metrics. |
+| DAT-3 | Tables written for figures carry the columns the figure needs and nothing derived ad hoc in the plotting script. A figure that must compute on the reader's machine (a live reproducibility run, a display overlay) says so in a `# exception DAT-3:` comment. | A figure script reads, filters and plots; it does not compute metrics outside a recorded exception. |
 
 ## 8. Configuration (CFG)
 
@@ -105,10 +105,10 @@ These rules exist because the paper's numbers depend on them.
 
 | ID | Rule | Check |
 | --- | --- | --- |
-| STY-1 | `ruff check src tests benchmarks examples` passes. One statement per line. | Lint is clean. |
+| STY-1 | `ruff check src tests benchmarks examples` and `ruff format --check src tests` pass; `mypy` (configured in `pyproject.toml`) passes for `src/`. One statement per line. | CI is green. |
 | STY-2 | Names say what a thing is or does; no `_v2`, `_new`, `_final`, `_gaps2` for live code or tests. | A reader can predict a module from its name. |
 | STY-3 | Comments explain why. A comment that no longer matches the code is a bug. | Docstrings match behaviour. |
-| STY-4 | Public functions have type hints and docstrings stating shapes and units. No function mutates its arguments unless its name says so. | Review. |
+| STY-4 | Public functions have type hints and docstrings stating shapes and units. No function mutates its arguments unless its name says so. A renamed or retired keyword keeps working for one release with a `DeprecationWarning` (`fluorostats.deprecation`). | mypy; review. |
 
 ## 10. Errors (ERR)
 
@@ -135,60 +135,80 @@ These rules exist because the paper's numbers depend on them.
 | DOC-1 | Each fact has one home. `README.md` is the user guide and index; `docs/` holds how things work; `CHANGELOG.md` the release record; `benchmarks/DATA_MANIFEST.md` the datasets. | No two docs state the same fact differently. |
 | DOC-2 | A change updates the docs it affects in the same commit. | The commit includes them. |
 | DOC-3 | Commits are authored by the project owner only: no `Co-Authored-By`, session links or tool footers in commits, PRs or release notes. | `git log` shows none. |
-| DOC-4 | The deposited archive is reviewer-facing: anything shipped in a tagged release (manifest, README, results tables) must agree with the manuscript. | Release checklist. |
+| DOC-4 | The deposited archive is public: anything shipped in a tagged release (manifest, README, results tables) must agree with the results it reports. | Release checklist. |
 
 ## Target layout
 
 ```text
 src/fluorostats/   # the library. Measurement modules (no plotting, no click) <- orchestration (depth_batch,
-                   # viability_batch, report, cli) ; figures in plots / render3d / style
+                   # viability_batch, report, cli) ; figures in plots / render3d / projections / pubfig / depth_figures
 tests/             # one test_<module>.py per module (TST-3)
-benchmarks/        # paper figure scripts: read results/, call the library, plot (REU-3, DAT-3)
-  results/         # derived metric tables (committed); DATA_MANIFEST.md, VALIDATION.md
+benchmarks/        # figure scripts: read results/ and plot (DAT-3)
+  producers/       # one producer per results table, sharing common.py (REU-3, REU-4)
+  results/         # derived metric tables + <table>.run.json (committed); DATA_MANIFEST.md, VALIDATION.md
+.github/workflows/ # CI: ruff, mypy, pytest at 100% coverage on Python 3.10-3.13
 examples/          # worked examples of the public API, each importing everything it uses from fluorostats
 docs/              # how things work; this file
-methods_paper/     # git-ignored: manuscript work and collaborator data (DAT-1)
+methods_paper/     # git-ignored: local drafts and collaborator data (DAT-1)
 ```
 
 ## Current state
 
-**Audit, 2026-10-14** (five parallel read-only audits, one per rule family; ~90 findings).
-Fixes landed one per commit on branch `engineering-audit`. Refactors were proven
-behaviour-identical with a golden harness (every public function and CLI command on
-fixed inputs, plus all nine figure/example scripts, compared byte for byte); changes
-that alter outputs are listed in `CHANGELOG.md` under Unreleased.
+**Three audit rounds, 2026-10-14.** Each round ran five parallel read-only audits
+(one per rule family) plus an independent review; fixes landed one per commit on
+branch `engineering-audit`. Refactors were proven behaviour-identical with a golden
+harness (every public function and CLI command on fixed inputs, plus every figure
+and example script compared byte for byte); changes that alter outputs are listed
+in `CHANGELOG.md` under Unreleased with the inputs they affect.
 
-Now compliant:
+Now compliant (measured, not estimated):
 
-- MOD-3/MOD-4: no import cycles, no cross-module private access (tests included).
-- MOD-6: every function body in `src/` is under 60 lines and nests at most four
-  levels, except `style.apply_style` (recorded exception: one rcParams table).
-- SIN: one Gini/CV, FOV volume, viability ratio, Welch/Mann-Whitney path, metric
-  list (`report.METRICS_*`), format registry (`io.FORMATS`), count-method and
-  threshold-method registry, figure kit (`pubfig`); quant2d/quant3d share one
-  pipeline.
-- ERR/CFG: silent fallbacks warn or are recorded; manifests and CLI options are
-  validated up front; every command writes `run_config.json`.
-- TST: 100% line coverage; one test file per module; bug fixes carry a test that
-  fails on the old code. STY-1: ruff-clean across src, tests, benchmarks, examples.
-- DOC-4: supplementary figures use S1-S4; caption numbers are read from data.
+- MOD-1/MOD-6: every file in `src/`, `tests/`, `benchmarks/` and `examples/` is at
+  most 600 lines; every function body is at most 60 lines and nests at most four
+  levels.
+- MOD-2: one registry per variant family (file and folder formats, threshold, count
+  and opening methods, reducers, report modes, condition modes, render themes,
+  reported metrics).
+- MOD-3/MOD-4: no import cycles or upward edges; `import fluorostats` loads no
+  plotting backend; no private access across modules outside a module's own test
+  file.
+- MOD-5: one voxel-size argument, `voxel_size_um`; one key set per function
+  (`live_dead_by_count` returns the same flat keys in every mode); renamed or
+  retired arguments keep working for one release with a DeprecationWarning.
+- GEN-2/GEN-3: axis order and channel names from the file's labels; lengths
+  converted from their stated unit; every defaulted, copied or assumed calibration
+  recorded in `voxel_size_source`; results do not depend on the installed scipy or
+  scikit-image version where those libraries changed behaviour.
+- SIN: one implementation per concern, including the small-object rule, mean/SD/SEM,
+  tiling, mask overlays, contrasts, figure style and the segmentation pipeline;
+  benchmark producers share `benchmarks/producers/common.py`.
+- ERR/CFG/EXP: values never measured are NaN; fallbacks warn or are recorded;
+  manifests and options are validated before any image loads; every command and
+  every producer records its configuration (producers also the git commit).
+- TST/STY: 100% line coverage on Python 3.10-3.13; ruff (lint and format, pinned) and
+  mypy clean; CI runs all of it on every push.
+- DAT/REU: figure scripts read committed tables (recorded DAT-3 exceptions: live
+  determinism runs and display overlays), and every table regenerates from HEAD
+  except the cluster-only ones marked in `benchmarks/README.md`.
 
-Open, each needing an owner decision (unifying or fixing changes numbers or API):
+Open, each needing an owner decision:
 
-- [ ] `benchmarks/figS2_runtime.py` panel (c) plots a typed value, not a measured one.
-- [ ] SIN-1, kept separate because unifying changes numbers: three tile-grid
-  remainder conventions (`morphometry` crop, `objects` float bins, `spatial`
-  linspace); mean/SEM empty/NaN conventions in `plots`, `depth_batch`,
-  `viability_batch`; `qc` vs `render3d` overlay colour/normalisation.
-- [ ] MOD-5: the spacing argument is `voxel_size_um`, `spacing`, `pixel_size_um` or
-  `voxel_size_z_um` depending on the module; `live_dead_by_count` returns a
-  different shape for `method="all"`, and its `method` collides with the threshold
-  `method` passed through `**seg`.
-- [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default (existing
-  manifests rely on it); `examples/keyence_tube_analysis.py` and
+- [ ] `benchmarks/figS2_runtime.py`: panel (c) plots a typed value, not a measured
+  one; the platform label and the deep-learning timings are typed (cluster-only,
+  no run record).
+- [ ] Typed figure annotations in `fig2_nuclei.py` (the deep-learning reference
+  line and the panel (f) crossover/scope map), which the watershed line in panel (d)
+  now contradicts.
+- [ ] `benchmarks/results/ve_crops.npz` (a display panel) has no producer.
+- [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default
+  (existing manifests rely on it); `examples/keyence_tube_analysis.py` and
   `multi_condition_pipeline.py` are dataset-specific and could become manifest runs.
-- [ ] ERR-3 honesty fixes not applied: SEM for n = 1 is 0.0 (not NaN); an AUC window
-  entirely past a stack returns 0.0. ImageJ TIFF x/y resolution is not read (warned).
+- [ ] Olympus readers order axes by shape: oiffile's own axis labels are unverified
+  on a real `.oib`, so multichannel Olympus files carry the layout-guess warning.
+- [ ] MIN-2: deprecated names to remove in a release that announces it:
+  `live_dead_by_count`'s `by_method`, Keyence `px_um`/`z_step_um`/`vox_*` keys,
+  the renamed voxel-size keywords, `watershed_split`'s `footprint_size`, the
+  `metrics_3d` skeleton re-exports and `plots.compute_pvalues`.
 
 ## Validating a change
 

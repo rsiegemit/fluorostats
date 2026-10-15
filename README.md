@@ -12,7 +12,7 @@ FluoroStats is a Python CLI tool and library that converts microscopy images —
 
 ## Why FluoroStats?
 
-Fluorescence microscopy experiments often produce clear qualitative differences between conditions — more cells, denser networks, better coverage. But manuscripts require quantitative evidence: volume fractions, connectivity metrics, error bars, and p-values.
+Fluorescence microscopy experiments often produce clear qualitative differences between conditions — more cells, denser networks, better coverage. But reporting them requires quantitative evidence: volume fractions, connectivity metrics, error bars, and p-values.
 
 FluoroStats bridges that gap with a single command:
 
@@ -121,12 +121,13 @@ Start with the `overlays/` folder — each image gets a QC overlay (grayscale in
 
 Then inspect:
 - `per_file.csv` — measurements for every file, plus which channel was measured
-  (`channel_used`) and, for 3D, whether each voxel size came from the file or is
-  the 1.0 µm placeholder (`voxel_size_source`)
+  (`channel_used`) and whether each voxel size came from the file or is the 1.0 µm
+  placeholder (`voxel_size_source`)
 - `per_condition.csv` — summary statistics grouped by condition
 - `plots/summary_panel.png` — all metrics in one composite figure
-- `plots/pvalues.csv` — statistical comparisons (available when replicates are present);
-  the summary panel's significance stars use the same Benjamini–Hochberg q-values
+- `plots/pvalues.csv` — statistical comparisons (available when replicates are present):
+  two-sided Mann-Whitney U, Cliff's δ and Benjamini–Hochberg q-values, which the
+  summary panel's stars use; pairs that cannot be tested are listed with a `reason`
 - `run_config.json` — the parameters and package versions that produced the folder
 
 Watch the console too: fluorostats warns, rather than guessing silently, when a
@@ -330,7 +331,8 @@ corr = attenuation_correct(volume)        # per-z normalisation: biological deat
 
 # count-based viability — robust to crowding (area under-reports when cells overlap)
 cnt  = live_dead_by_count(live_channel, dead_channel, method="all")
-#   -> {'by_method': {cc/watershed/maxima}, 'consensus': median, 'spread': disagreement}
+#   -> {'n_live_cc', ..., 'viability_maxima', 'consensus': median, 'spread': disagreement, ...}
+#      the same flat keys for every method (NaN where a method did not run)
 ```
 
 Quantifies the Calcein-AM / PI (live/dead) assay in a depth-aware way. In thick 3D samples a single plane or a maximum-intensity projection overestimates viability and misses depth-dependent core death — `viability_2d_vs_3d` measures that overestimation and `viability_depth_profile` exposes the gradient. `live_dead_by_count` counts cells instead of area (via `cc`, `watershed`, prominence-`maxima`, a transparent `auto`, or `all`+consensus); on a published synthetic Live/Dead set the `maxima` mode matches the reference Fiji macro exactly (CCC 0.987). No single counting mode is universally best — `maxima` excels on crowded single-peak cells, `cc` is most noise-robust — so pick by regime or use `all`.
@@ -460,8 +462,8 @@ color = material_color("Hybrid")    # consistent per-condition colors
 
 `apply_style()` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` gives a consistent color story (`MATERIAL_COLORS` is a default condition→color map; pass your own colors for other conditions), and `DARK_PALETTE` drives the black-background 3D look below.
 
-For multi-panel journal figures, `fluorostats.pubfig` is the kit the methods-paper
-figures are built with: an Okabe–Ito palette, a 5–7 pt type scale, bold panel
+For compact multi-panel figures, `fluorostats.pubfig` is the kit the benchmark
+figures are built with (and the one figure style of the package): an Okabe–Ito palette, a 5–7 pt type scale, bold panel
 letters, image helpers and scale bars, lollipop and Bland–Altman panels, and an
 exporter that writes PDF + 600-dpi PNG at the authored size.
 
@@ -546,6 +548,7 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 | `--min-size` | `64` | Min object size in voxels (smaller objects are removed) |
 | `--sigma` | `1.0` | Gaussian blur sigma |
 | `--bg-radius` | `0` | Background subtraction radius (0 = off) |
+| `--opening` | `ball` | Noise opening: `ball` (3D; erases structures thinner than 3 slices), `disk` (per slice) or `none` |
 | `--no-skeleton` | off | Skip skeleton analysis (faster); skeleton columns are left blank |
 | `--prune/--no-prune` | off | Prune skeleton spurs shorter than `--min-branch-length` |
 | `--min-branch-length` | `5.0` | Spur-pruning length in µm (with `--prune`) |
@@ -583,9 +586,15 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 | `fluorostats viability MANIFEST [--output DIR]` | Live/Dead batch run from a JSON manifest (schema in `fluorostats.viability_batch`) |
 | `fluorostats formats` | List file formats and whether their readers are installed |
 
-Manifests are checked before any image is loaded: a typo in a channel index, a
-role, an AUC window or a file path is reported at once, all problems together.
-Both commands write `run_config.json` with the fully resolved manifest.
+Manifests are checked before any image is loaded: an unknown field, a typo in a
+channel index, a role, an AUC window or a file path is reported at once, all
+problems together. Both commands write their two-group statistics to
+`contrasts.csv` (Mann-Whitney, Cliff's δ, BH q) and, last, `run_config.json` with
+the fully resolved manifest. Depth manifests take `"parametric": true` to also print
+a Welch t-test and `fit_r2_threshold` (default 0.85) for the λ fit.
+
+`quant3d` also accepts Keyence BZ-X folders as volumes; an input folder with
+nothing to measure exits with status 2.
 
 </details>
 
@@ -595,7 +604,11 @@ Both commands write `run_config.json` with the fully resolved manifest.
 pip install -e ".[dev]"
 pytest --cov=fluorostats          # the suite runs at 100% line coverage
 ruff check src tests benchmarks examples
+ruff format --check src tests
+mypy                              # configured in pyproject.toml
 ```
+
+CI runs the same checks on Python 3.10-3.13.
 
 Engineering rules for contributions are in [docs/ENGINEERING.md](docs/ENGINEERING.md).
 
