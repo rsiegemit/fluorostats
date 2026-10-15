@@ -104,6 +104,7 @@ panel(axd, "d", "fluorostats $-$ macro = 0")
 live = F.load_sbiad2130_channel(F.SBIAD2130_LIVE_CH)
 dead = F.load_sbiad2130_channel(F.SBIAD2130_DEAD_CH)
 z = live.shape[0]//2
+SCALEBAR_UM = 500
 gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.10)
 lm_mid = binarize(live[z], **F.SBIAD2130_SEG)
 dm_mid = binarize(dead[z], **F.SBIAD2130_SEG)
@@ -119,7 +120,9 @@ for i,(img,ttl) in enumerate(panels_c):
     F.image_axes(ax)
     ax.set_title(ttl, fontsize=6.0, loc="center")
     if i == 0:
-        F.scalebar(ax, 60, "1 mm", center_label=True)
+        # 500 µm at the file's calibration (the stack is XY-downsampled on load)
+        F.scalebar(ax, SCALEBAR_UM / F.sbiad2130_voxel_um()[2], f"{SCALEBAR_UM} µm",
+                   center_label=True)
         panel(ax, "e", xanchor=0.0315)  # row-leader
 
 cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (BioImage Archive "
@@ -135,7 +138,7 @@ cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (
  f"algorithm; the agreement with ground truth (CCC {ccc_v:.3f}, MAE {mae_v:.3f}) is a separate, each-method-vs-"
  "truth comparison. (e) Two-channel Live/Dead crop (green live, magenta dead): raw mid-plane, "
  "fluorostats live/dead classification, and the maximum-intensity projection that collapses depth "
- "and inflates viability. Scale bar 1 mm (approx., downsampled).")
+ f"and inflates viability. Scale bar {SCALEBAR_UM} µm.")
 save(fig, "fig4_viability", tight=False)
 caption("fig4_viability", cap)
 print("Figure 4 done")

@@ -34,6 +34,7 @@ from skimage.filters import threshold_minimum
 from skimage.segmentation import watershed
 
 import fluorostats
+from fluorostats import io as fs_io
 from fluorostats.objects import label_3d
 from fluorostats.segment import THRESHOLD_METHODS, remove_small, segment_channel
 
@@ -64,13 +65,13 @@ SMALL_OBJECT_RULE = "keep >= min_size"
 # (b_ve_metrics checks it on each run); the fig3 overlay is labelled with it.
 VE_AUTO_RESOLVED = "li"
 
-# S-BIAD2130 Day-14 Live/Dead stack: channel roles, the XY downsample applied on
-# read, the z step (µm; the file's ImageJ "spacing") and the segmentation every
-# viability table and figure of it uses.
+# S-BIAD2130 Day-14 Live/Dead stack: file, channel roles, the XY downsample applied
+# on read and the segmentation every viability table and figure of it uses. Its
+# voxel size comes from the file (`sbiad2130_voxel_um`).
+SBIAD2130_STACK = "viability/zccs1035_Day14_LiveDead.tif"
 SBIAD2130_LIVE_CH = 2
 SBIAD2130_DEAD_CH = 1
 SBIAD2130_DOWNSAMPLE = 8
-SBIAD2130_Z_UM = 5.5
 SBIAD2130_SEG = dict(method="otsu", threshold_scale=1.0, min_size=8)
 
 # Find-Maxima parameters of the published Kerkhoff Fiji Live/Dead macro: peak
@@ -162,11 +163,18 @@ def bbbc024_volumes(subdir: str = "BBBC024", n: int | None = None) -> list[tuple
 
 def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = SBIAD2130_DOWNSAMPLE) -> np.ndarray:
     """One channel of the S-BIAD2130 Day-14 Live/Dead ZCYX stack, XY-downsampled on read."""
-    stack = require(DATA / "viability" / "zccs1035_Day14_LiveDead.tif")
+    stack = require(DATA / SBIAD2130_STACK)
     with tifffile.TiffFile(stack) as t:
         nz = len(t.pages) // n_ch
         return np.stack([t.pages[z * n_ch + ch].asarray()[::down, ::down].astype(np.float32)
                          for z in range(nz)])
+
+
+def sbiad2130_voxel_um(down: int = SBIAD2130_DOWNSAMPLE) -> tuple[float, float, float]:
+    """(z, y, x) µm of the S-BIAD2130 stack as `load_sbiad2130_channel` returns it
+    (XY downsampled by ``down``), from the file's own calibration."""
+    (z, y, x), _ = fs_io.read_voxel_size(require(DATA / SBIAD2130_STACK))
+    return z, y * down, x * down
 
 
 def thresholds(names, labels: dict[str, str] | None = None) -> dict:
