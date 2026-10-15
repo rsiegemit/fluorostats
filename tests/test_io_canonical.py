@@ -174,7 +174,8 @@ def test_channel_names_are_padded_into_a_new_meta():
     meta = {"channel_names": ["DAPI"], "format": "x"}
     arr, out = io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
     assert arr.shape == (3, 2, 16, 16)
-    assert out == {"channel_names": ["DAPI", "Ch2", "Ch3"], "format": "x"}
+    # labelled colour samples carry their channel's name; unlabelled ones are padded
+    assert out == {"channel_names": ["DAPI[0]", "DAPI[1]", "DAPI[2]"], "format": "x"}
     assert meta == {"channel_names": ["DAPI"], "format": "x"}
     img, image_meta = io_canonical.canonicalize_image(np.zeros((16, 16, 3)), meta)
     assert img.shape == (3, 16, 16)

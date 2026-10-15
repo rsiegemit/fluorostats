@@ -173,3 +173,37 @@ def test_imagej_inch_unit_is_converted(tmp_path):
         _, meta = io.load_image(p)
     assert meta["voxel_size_um"] == pytest.approx((25400 / 72, 25400 / 72))
     assert meta["voxel_size_source"] == "y:file,x:file"
+
+
+def _ome_rgb(path, shape, axes):
+    """OME RGB file whose channel c, sample s holds the value 10 * c + s."""
+    a = np.zeros(shape, np.uint8)
+    for c in range(2):
+        for s in range(3):
+            a[c, ..., s] = 10 * c + s
+    tifffile.imwrite(
+        path,
+        a,
+        ome=True,
+        photometric="rgb",
+        metadata={"axes": axes, "Channel": {"Name": ["DAPI", "GFP"]}},
+    )
+
+
+@pytest.mark.parametrize(
+    "load, shape, axes",
+    [
+        (io.load_volume, (2, 3, 8, 9, 3), "CZYXS"),
+        (io.load_image, (2, 8, 9, 3), "CYXS"),
+    ],
+)
+def test_ome_rgb_channel_names_follow_their_samples(tmp_path, load, shape, axes):
+    # Regression: the samples were expanded channel-major but the names were not, so
+    # 'GFP' named DAPI's second sample and GFP's data was under Ch4-Ch6.
+    p = tmp_path / "rgb.ome.tif"
+    _ome_rgb(p, shape, axes)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # uncalibrated
+        arr, meta = load(p)
+    assert meta["channel_names"] == [f"{n}[{s}]" for n in ("DAPI", "GFP") for s in range(3)]
+    assert [int(arr[i].max()) for i in range(6)] == [10 * c + s for c in range(2) for s in range(3)]

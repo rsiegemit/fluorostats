@@ -11,6 +11,7 @@ the channel count; the ``meta`` passed in is not modified.
 from __future__ import annotations
 
 import warnings
+from typing import cast
 
 import numpy as np
 
@@ -67,6 +68,16 @@ def _by_axis_names(arr: np.ndarray, axes: str, index_axes: dict[str, str]) -> np
     return arr.reshape(-1, *arr.shape[2:])
 
 
+def _per_sample_names(names: list[str], axes: str, shape: tuple[int, ...]) -> list[str]:
+    """``names`` with each one expanded to ``name[s]`` per colour sample when the
+    named ``axes`` carry S > 1 samples (they become channel-major channels, see
+    `_by_axis_names`), so every name stays on its data; otherwise ``names``."""
+    n_samples = dict(zip(axes, shape)).get("S", 1)
+    if n_samples == 1:
+        return names
+    return [f"{n}[{s}]" for n in names for s in range(n_samples)]
+
+
 def _padded_names(names: list[str], n_channels: int) -> list[str]:
     """``names`` extended with ``Ch<i+1>`` up to ``n_channels``, as a new list."""
     return [*names, *(f"Ch{i + 1}" for i in range(len(names), n_channels))]
@@ -114,12 +125,14 @@ def canonicalize_volume(
     index_axes = index_axes or {}
     axes = _unlabelled_as_z(axes, arr.shape, index_axes) if axes else None
     named = _by_axis_names(arr, axes, index_axes) if axes else None
+    names = meta["channel_names"]
     if named is None:
         arr, notes = _volume_by_shape(arr, _layout_advice(meta))
         _checked(arr, meta)
         for note in notes:  # announced only once the guess is accepted
             warnings.warn(note, RuntimeWarning, stacklevel=2)
     else:
+        names = _per_sample_names(names, cast(str, axes), arr.shape)
         arr = named
     if named is not None and arr.shape[1] == 1 and arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
         warnings.warn(
@@ -128,7 +141,7 @@ def canonicalize_volume(
             RuntimeWarning,
             stacklevel=4,
         )
-    return arr, {**meta, "channel_names": _padded_names(meta["channel_names"], arr.shape[0])}
+    return arr, {**meta, "channel_names": _padded_names(names, arr.shape[0])}
 
 
 # The shape rule's guess is refused beyond these: no fluorescence acquisition has
@@ -209,7 +222,9 @@ def canonicalize_image(
     reader labels a single plane (``axes``), otherwise by shape (a labelled z-stack
     keeps the shape rule); ``meta`` is a new dict with the channel names padded."""
     named = _by_axis_names(arr, axes, index_axes or {}) if axes else None
+    names = meta["channel_names"]
     if named is not None and named.shape[1] == 1:
+        names = _per_sample_names(names, cast(str, axes), arr.shape)
         arr = named[:, 0]
     elif arr.ndim == 2:
         arr = arr[np.newaxis]
@@ -227,4 +242,4 @@ def canonicalize_image(
     else:
         raise ValueError(f"Unexpected 2D image shape: {arr.shape}")
 
-    return arr, {**meta, "channel_names": _padded_names(meta["channel_names"], arr.shape[0])}
+    return arr, {**meta, "channel_names": _padded_names(names, arr.shape[0])}
