@@ -3,7 +3,7 @@
 Summarises the committed table ``results/b_vascular_sproutangio_multi.csv`` (no
 raw data needed). The fluorostats volume fraction, in percent, is compared
 between every pair of VEGF groups by the library's pairwise grid
-(``plots.compute_pvalues``: two-sided Mann-Whitney U, Cliff's delta, BH-FDR q
+(``stats.compute_pvalues``: two-sided Mann-Whitney U, Cliff's delta, BH-FDR q
 across the contrasts), plus the bootstrap CI (5000 resamples, seed 0) of the
 median fold change group_b / group_a (``stats.bootstrap_fold_change_ci``).
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import pandas as pd
 
 from common import RESULTS, write_table
-from fluorostats.plots import compute_pvalues
+from fluorostats.stats import compute_pvalues
 from fluorostats.stats import bootstrap_fold_change_ci
 
 N_BOOT = 5000

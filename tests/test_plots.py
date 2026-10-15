@@ -14,7 +14,6 @@ from unittest.mock import patch
 from fluorostats import plots
 from fluorostats.plots import (
     _add_pvalue_annotations,
-    _pvalue_stars,
     effect_size_heatmap,
     forest_plot,
     condition_strip,
@@ -22,7 +21,6 @@ from fluorostats.plots import (
     bar_mean_sem,
     boxplot_by_condition,
     summary_panel,
-    compute_pvalues,
 )
 
 
@@ -64,34 +62,6 @@ def test_summary_panel_no_available_metrics_is_noop(tmp_path):
     df = pd.DataFrame({"condition": ["a", "b"]})
     summary_panel(df, ["does_not_exist"], out)
     assert not out.exists()
-
-
-def test_compute_pvalues_flags_significance():
-    pvals = compute_pvalues(_replicate_df(), ["volume_fraction", "missing_metric"])
-    assert set(pvals["metric"]) == {"volume_fraction"}
-    assert (pvals["significance"] != "ns").all()
-
-
-def test_compute_pvalues_names_test_correction_and_effect_size():
-    # pvalues.csv named neither the test nor the correction and had no effect size.
-    from fluorostats import stats
-
-    df = _replicate_df()
-    df.loc[df.index[:3], "n_components"] = np.nan
-    pvals = compute_pvalues(df, ["volume_fraction", "n_components"])
-    assert list(pvals.columns) == ["metric", "condition_a", "condition_b", "n_a", "n_b",
-                                   "p_value", "q_value", "significance", "cliffs_delta",
-                                   "test", "correction", "reason"]
-    assert (pvals["reason"] == "").all()
-    assert (pvals["test"] == "Mann-Whitney U, two-sided").all()
-    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all tested rows").all()
-    for row in pvals.itertuples():
-        a = df.loc[df["condition"] == row.condition_a, row.metric].dropna()
-        b = df.loc[df["condition"] == row.condition_b, row.metric].dropna()
-        ref = stats.mann_whitney(a, b)
-        assert (row.n_a, row.n_b) == (len(a), len(b))
-        assert row.p_value == ref["p"] and row.cliffs_delta == ref["cliffs_delta"] == -1.0
-    assert list(pvals["q_value"]) == list(stats.bh_fdr(pvals["p_value"].to_numpy()))
 
 
 def test_condition_strip_default_axes_and_palette():
@@ -165,31 +135,6 @@ def test_modality_panel_writes_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _pvalue_stars — lines 254, 258
-# ---------------------------------------------------------------------------
-
-def test_pvalue_stars_triple_and_double_star():
-    # p < 0.001 → "***"; p in [0.001, 0.01) → "**"
-    assert _pvalue_stars(0.0009) == "***"
-    assert _pvalue_stars(0.001) == "**"   # exactly at threshold: not < 0.001
-    assert _pvalue_stars(0.005) == "**"
-    assert _pvalue_stars(0.009) == "**"
-
-
-def test_pvalue_stars_single_star():
-    # p in [0.01, 0.05) → "*"  (line 258)
-    assert _pvalue_stars(0.01) == "*"
-    assert _pvalue_stars(0.04) == "*"
-    assert _pvalue_stars(0.049) == "*"
-
-
-def test_pvalue_stars_ns():
-    # p >= 0.05 → "ns"
-    assert _pvalue_stars(0.05) == "ns"
-    assert _pvalue_stars(0.99) == "ns"
-
-
-# ---------------------------------------------------------------------------
 # _add_pvalue_annotations — lines 213, 219, 222-223
 # ---------------------------------------------------------------------------
 
@@ -252,38 +197,6 @@ def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
         _add_pvalue_annotations(ax, data, x, conditions)
     assert len(ax.texts) == 0
     plt.close(fig)
-
-
-# ---------------------------------------------------------------------------
-# compute_pvalues — lines 294-295 (ValueError continue)
-# ---------------------------------------------------------------------------
-
-def test_compute_pvalues_keeps_untestable_pairs_with_a_reason():
-    # Regression: pairs that could not be tested were dropped silently, so pvalues.csv
-    # did not show that a comparison had been attempted.
-    df = pd.DataFrame({
-        "condition": ["a", "b", "b", "b", "c", "c", "c", "d", "d"],
-        "metric": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 5.0, 6.0],
-    })
-    result = compute_pvalues(df, ["metric"])
-    rows = {(r.condition_a, r.condition_b): r for r in result.itertuples()}
-    assert len(rows) == 6                                     # every pair is listed
-    assert rows[("a", "b")].reason == "n<2" and rows[("a", "b")].n_a == 1
-    assert rows[("b", "c")].reason == "all values tied"
-    for pair in (("a", "b"), ("b", "c")):
-        assert np.isnan(rows[pair].p_value) and np.isnan(rows[pair].q_value)
-        assert rows[pair].significance == ""
-    assert rows[("b", "d")].reason == "" and rows[("b", "d")].p_value > 0
-    tested = result[result["reason"] == ""]
-    from fluorostats import stats
-    assert list(tested["q_value"]) == list(stats.bh_fdr(tested["p_value"].to_numpy()))
-
-
-def test_compute_pvalues_skips_missing_metric():
-    """Metrics not in df are skipped."""
-    df = pd.DataFrame({"condition": ["a", "b"], "metric": [1.0, 2.0]})
-    result = compute_pvalues(df, ["does_not_exist"])
-    assert result.empty
 
 
 # ---------------------------------------------------------------------------
@@ -411,23 +324,6 @@ def test_condition_strip_no_median():
 
 
 # ---------------------------------------------------------------------------
-# compute_pvalues — lines 294-295 (ValueError continue via mock)
-# ---------------------------------------------------------------------------
-
-def test_compute_pvalues_mannwhitney_valueerror_via_mock():
-    """Mock mannwhitneyu to raise ValueError → except continue (lines 294-295)."""
-    df = pd.DataFrame({
-        "condition": ["a", "a", "a", "b", "b", "b"],
-        "metric": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    })
-    with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
-        result = compute_pvalues(df, ["metric"])
-    # ValueError was caught: the pair is kept, untested, with the reason
-    assert result["reason"].tolist() == ["test not computable"]
-    assert np.isnan(result["p_value"]).all()
-
-
-# ---------------------------------------------------------------------------
 # condition_strip — line 464: vals.size == 0 → continue (empty (x, hue, marker) cross)
 # ---------------------------------------------------------------------------
 
@@ -550,3 +446,9 @@ def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
     np.testing.assert_allclose(points(box_ax)[:, 0] - 1, points(bar_ax)[:, 0], atol=1e-12)
     assert np.abs(points(bar_ax)[:, 0] - np.repeat([0, 1], 6)).max() <= 0.05
     assert caps(bar_ax) == caps(panel_ax) == [8.0, 8.0]           # capsize 4 -> 2 * 4 pt
+
+
+def test_plots_compute_pvalues_is_the_stats_function():
+    """Moved to stats; the plots name stays for existing callers."""
+    from fluorostats import plots, stats
+    assert plots.compute_pvalues is stats.compute_pvalues

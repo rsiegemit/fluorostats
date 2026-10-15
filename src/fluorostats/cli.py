@@ -9,7 +9,8 @@ import click
 import matplotlib
 
 from . import io as iq_io
-from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, skeleton, spatial
+from . import (metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, skeleton,
+               spatial, stats)
 
 # How a file's condition label is derived from its path (--condition-from), by name.
 CONDITION_FROM = {
@@ -351,7 +352,7 @@ def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
         plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
 
     # p-values first, so the summary panel's stars use the same BH q-values as pvalues.csv
-    pvals = plots.compute_pvalues(df, metrics) if has_replicates else None
+    pvals = stats.compute_pvalues(df, metrics) if has_replicates else None
     plots.summary_panel(
         df, metrics, plot_dir / "summary_panel.png",
         title=summary_title,

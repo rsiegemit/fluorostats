@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Sequence
+from itertools import combinations
 from typing import Any
 
 import numpy as np
@@ -265,6 +266,76 @@ def stratified_mann_whitney(
     return out
 
 
+def significance_stars(p: float) -> str:
+    """``***`` p < 0.001, ``**`` < 0.01, ``*`` < 0.05, else ``ns``."""
+    if p < 0.001:
+        return "***"
+    if p < 0.01:
+        return "**"
+    if p < 0.05:
+        return "*"
+    return "ns"
+
+
+def compute_pvalues(
+    df: pd.DataFrame,
+    metrics: list[str],
+) -> pd.DataFrame:
+    """Compute pairwise Mann-Whitney U p-values for all condition pairs.
+
+    Multiple-comparison corrected: a Benjamini-Hochberg ``q_value`` is computed
+    across every tested row of the grid (metric × condition-pair), and the
+    ``significance`` stars reflect the corrected q, matching the library's default
+    correction (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
+
+    A pair that cannot be tested is kept with ``p_value``/``q_value`` NaN, empty
+    ``significance`` and a ``reason`` ("n<2", "all values tied", "test not
+    computable"); ``reason`` is empty for tested rows.
+
+    Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
+    p_value, q_value, significance, cliffs_delta (``stats.cliffs_delta`` of a vs b),
+    test and correction (naming both), reason; empty if no metric is in ``df``.
+    """
+
+    conditions = sorted(df["condition"].unique())
+    rows = []
+
+    for metric in metrics:
+        if metric not in df.columns:
+            continue
+        for i, j in combinations(range(len(conditions)), 2):
+            a = df.loc[df["condition"] == conditions[i], metric].dropna().values
+            b = df.loc[df["condition"] == conditions[j], metric].dropna().values
+            rows.append({"metric": metric, "condition_a": conditions[i],
+                         "condition_b": conditions[j], "n_a": len(a), "n_b": len(b),
+                         **_pair_test(a, b)})
+
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out["q_value"] = bh_fdr(out["p_value"].values)
+        # stars on the CORRECTED q; none for an untested pair
+        out["significance"] = [significance_stars(q) if not np.isnan(q) else "" for q in out["q_value"]]
+        out["test"] = "Mann-Whitney U, two-sided"
+        out["correction"] = "Benjamini-Hochberg FDR across all tested rows"
+        # existing columns first, in their earlier order; the added ones last
+        out = out[["metric", "condition_a", "condition_b", "n_a", "n_b", "p_value",
+                   "q_value", "significance", "cliffs_delta", "test", "correction", "reason"]]
+    return out
+
+
+def _pair_test(a: np.ndarray, b: np.ndarray) -> dict:
+    """``p_value``, ``cliffs_delta`` and ``reason`` (empty when tested) for one pair."""
+    nan = float("nan")
+    if len(a) < 2 or len(b) < 2:
+        return {"p_value": nan, "cliffs_delta": nan, "reason": "n<2"}
+    res = mann_whitney(a, b)
+    reason = ""
+    if np.isnan(res["p"]):      # the test could not be computed
+        tied = np.ptp(np.concatenate([a, b])) == 0
+        reason = "all values tied" if tied else "test not computable"
+    return {"p_value": res["p"], "cliffs_delta": res["cliffs_delta"], "reason": reason}
+
+
 # ---------------------------------------------------------------------------
 # Bootstrap confidence intervals
 # ---------------------------------------------------------------------------
@@ -436,6 +507,8 @@ def scheirer_ray_hare(
 
 
 __all__ = [
+    "compute_pvalues",
+    "significance_stars",
     "describe",
     "REDUCERS",
     "reducer",
