@@ -75,25 +75,39 @@ def test_depth_span_empty_volume():
 
 
 def test_depth_centroid_returns_um():
-    # Slice keys are always slices; the _um keys carry micrometres.
+    # Regression: z_centroid / z_p* are µm when calibrated and slices when not, as in
+    # v0.8.2; the _um keys are always µm (NaN uncalibrated), _slices always slices.
     vol = np.zeros((10, 4, 4), dtype=np.float32)
     vol[5] = 1.0
     res = depth_centroid(vol, voxel_size_um=(2.0, 1.0, 1.0))
-    assert res["z_centroid"] == pytest.approx(5.0) and res["z_p50"] == pytest.approx(5.0)
+    assert res["z_centroid"] == pytest.approx(10.0) and res["z_p50"] == pytest.approx(10.0)
     assert res["z_centroid_um"] == pytest.approx(10.0)
     assert res["z_p50_um"] == pytest.approx(10.0)
+    assert res["z_centroid_slices"] == pytest.approx(5.0)
+    assert res["z_p50_slices"] == pytest.approx(5.0)
     uncal = depth_centroid(vol)
     assert uncal["z_centroid"] == pytest.approx(5.0) and np.isnan(uncal["z_centroid_um"])
+    assert uncal["z_centroid_slices"] == pytest.approx(5.0)
+    assert (
+        set(res)
+        == set(uncal)
+        == {f"z_{k}{u}" for k in ("centroid", "p25", "p50", "p75") for u in ("", "_um", "_slices")}
+    )
 
 
-def test_depth_metrics_use_the_z_voxel_size_on_any_z_axis():
-    # voxel_size_um is (vz, vy, vx) whatever axis holds z: z_axis=2 still uses vz.
+def test_depth_metrics_take_the_voxel_size_of_the_z_axis():
+    # voxel_size_um is per axis in array order, so z_axis=2 takes its third entry
+    # (as in v0.8.2); a scalar is isotropic.
     vol = np.zeros((4, 4, 10), dtype=np.float32)
     vol[:, :, 2:7] = 1.0
-    span = depth_span(vol, voxel_size_um=(5.0, 0.5, 0.5), z_axis=2)
+    span = depth_span(vol, voxel_size_um=(0.5, 0.5, 5.0), z_axis=2)
     assert span["span_slices"] == 5 and span["span_um"] == pytest.approx(25.0)
-    cen = depth_centroid(vol, voxel_size_um=(5.0, 0.5, 0.5), z_axis=2)
-    assert cen["z_centroid_um"] == pytest.approx(5.0 * cen["z_centroid"])
+    cen = depth_centroid(vol, voxel_size_um=(0.5, 0.5, 5.0), z_axis=2)
+    assert cen["z_centroid_um"] == pytest.approx(5.0 * cen["z_centroid_slices"])
+    assert depth_span(vol, voxel_size_um=5.0, z_axis=2)["span_um"] == pytest.approx(25.0)
+    assert depth_span(vol, voxel_size_um=np.array([0.5, 0.5, 5.0]), z_axis=2)[
+        "span_um"
+    ] == pytest.approx(25.0)
 
 
 def test_depth_span_uncalibrated_um_is_nan():
@@ -114,9 +128,10 @@ def test_depth_span_zero_volume():
     assert out["span_um"] == 0.0
 
 
-def test_depth_centroid_zero_volume():
-    out = morphometry.depth_centroid(np.zeros((5, 8, 8)))
-    assert out["z_centroid"] == 0.0 and out["z_p50"] == 0.0
+def test_depth_centroid_zero_volume_is_nan():
+    # Regression: a volume with no signal has no centroid; it used to be 0.0.
+    out = morphometry.depth_centroid(np.zeros((5, 8, 8)), voxel_size_um=(2.0, 1.0, 1.0))
+    assert all(np.isnan(v) for v in out.values())
 
 
 def test_lateral_homogeneity_too_small_for_tiles():
