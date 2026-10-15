@@ -119,3 +119,15 @@ def test_unlabelled_4d_guess_is_announced(tmp_path):
     with pytest.warns(RuntimeWarning, match=r"read as \(C, Z, Y, X\) with 5 channels"):
         arr, _ = load_volume(p)
     assert arr.shape == (5, 8, 32, 32)
+
+
+def test_channel_names_are_padded_into_a_new_list():
+    names = ["DAPI"]
+    meta = {"channel_names": names}
+    io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
+    assert meta["channel_names"] == ["DAPI", "Ch2", "Ch3"]
+    assert names == ["DAPI"]
+    image_meta = {"channel_names": names}
+    io_canonical.canonicalize_image(np.zeros((16, 16, 3)), image_meta)
+    assert image_meta["channel_names"] == ["DAPI", "Ch2", "Ch3"]
+    assert names == ["DAPI"]

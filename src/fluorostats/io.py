@@ -203,12 +203,6 @@ def _load_standard_image(path: Path) -> tuple[np.ndarray, dict]:
 
 
 # ---------------------------------------------------------------------------
-# Canonicalization helpers
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
 # Format registry: the one place each supported format is described (SIN-4).
 # The suffix sets, `load_volume` / `load_image` dispatch, `supported_formats`
 # and the CLI's reader list all derive from it. Insertion order is the order

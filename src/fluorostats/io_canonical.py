@@ -4,7 +4,7 @@ Every loader hands its reader's array to ``canonicalize_volume`` -> ``(C, Z, Y, 
 or ``canonicalize_image`` -> ``(C, Y, X)``. When the reader names its axes
 (tifffile, nd2, czifile letters) the array is reordered by name; otherwise the
 order is guessed from the shape, with a warning wherever the guess is ambiguous.
-Both fill ``meta["channel_names"]`` up to the channel count.
+Both set ``meta["channel_names"]`` to a new list padded up to the channel count.
 """
 
 from __future__ import annotations
@@ -60,6 +60,11 @@ def _by_axis_names(arr: np.ndarray, axes: str, index_axes: dict[str, str]) -> np
     return arr.reshape(-1, *arr.shape[2:])
 
 
+def _padded_names(names: list[str], n_channels: int) -> list[str]:
+    """``names`` extended with ``Ch<i+1>`` up to ``n_channels``, as a new list."""
+    return [*names, *(f"Ch{i + 1}" for i in range(len(names), n_channels))]
+
+
 # tifffile's letters for an axis it cannot name (sequence, image index).
 _UNLABELLED_AXES = "QI"
 
@@ -97,10 +102,7 @@ def canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
         warnings.warn(f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
                       f"z-stack, re-save it with axes 'ZYX' (or slices={arr.shape[0]}).",
                       RuntimeWarning, stacklevel=4)
-    n_ch = arr.shape[0]
-    if len(meta["channel_names"]) < n_ch:
-        for i in range(len(meta["channel_names"]), n_ch):
-            meta["channel_names"].append(f"Ch{i + 1}")
+    meta["channel_names"] = _padded_names(meta["channel_names"], arr.shape[0])
     return arr
 
 
@@ -176,9 +178,5 @@ def canonicalize_image(arr: np.ndarray, meta: dict, axes: str | None = None,
     else:
         raise ValueError(f"Unexpected 2D image shape: {arr.shape}")
 
-    n_ch = arr.shape[0]
-    if len(meta["channel_names"]) < n_ch:
-        for i in range(len(meta["channel_names"]), n_ch):
-            meta["channel_names"].append(f"Ch{i + 1}")
-
+    meta["channel_names"] = _padded_names(meta["channel_names"], arr.shape[0])
     return arr
