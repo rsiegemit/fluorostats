@@ -426,3 +426,23 @@ def test_centroid_homogeneity_is_gini_of_tile_point_density():
     res = centroid_homogeneity(pts, (500, 500), tiles=8)
     assert res["centroid_gini"] == pytest.approx(stats.gini(counts))
     assert res["centroid_cv"] == pytest.approx(stats.coefficient_of_variation(counts))
+
+
+def test_watershed_splits_touching_blobs():
+    # two overlapping disks forming a dumbbell -> CC labeling sees 1, watershed 2
+    mask = np.zeros((40, 70), bool)
+    yy, xx = np.ogrid[:40, :70]
+    mask |= (yy - 20) ** 2 + (xx - 25) ** 2 <= 13**2
+    mask |= (yy - 20) ** 2 + (xx - 45) ** 2 <= 13**2
+    _, n_cc = label_3d(mask)
+    _, n_ws = objects.watershed_split(mask, min_distance=5)
+    assert n_cc == 1
+    assert n_ws == 2
+
+
+def test_clear_border_removes_edge_objects():
+    lab = np.zeros((30, 30), int)
+    lab[0:5, 10:15] = 1  # touches top border
+    lab[12:18, 12:18] = 2  # interior
+    _, n = objects.clear_border_labels(lab)
+    assert n == 1  # only the interior object survives

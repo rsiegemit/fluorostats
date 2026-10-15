@@ -1,4 +1,4 @@
-"""Tests for fluorostats.validate and objects watershed/border helpers."""
+"""Tests for fluorostats.validate."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import pytest
 
 from fluorostats import validate
 from fluorostats.validate import instance_f1, average_precision
-from fluorostats.objects import watershed_split, clear_border_labels, label_3d
 
 
 def _two_labeled_blobs():
@@ -47,31 +46,6 @@ def test_average_precision_perfect():
     gt = _two_labeled_blobs()
     ap = average_precision(gt, gt)
     assert ap["mAP"] == pytest.approx(1.0)
-
-
-# ---------------------------------------------------------------------------
-# objects: watershed split + clear border
-# ---------------------------------------------------------------------------
-
-
-def test_watershed_splits_touching_blobs():
-    # two overlapping disks forming a dumbbell -> CC labeling sees 1, watershed 2
-    mask = np.zeros((40, 70), bool)
-    yy, xx = np.ogrid[:40, :70]
-    mask |= (yy - 20) ** 2 + (xx - 25) ** 2 <= 13**2
-    mask |= (yy - 20) ** 2 + (xx - 45) ** 2 <= 13**2
-    _, n_cc = label_3d(mask)
-    _, n_ws = watershed_split(mask, min_distance=5)
-    assert n_cc == 1
-    assert n_ws == 2
-
-
-def test_clear_border_removes_edge_objects():
-    lab = np.zeros((30, 30), int)
-    lab[0:5, 10:15] = 1  # touches top border
-    lab[12:18, 12:18] = 2  # interior
-    _, n = clear_border_labels(lab)
-    assert n == 1  # only the interior object survives
 
 
 def test_validate_empty_gt_and_double_claim():
