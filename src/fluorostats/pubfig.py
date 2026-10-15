@@ -4,7 +4,7 @@ Two rcParams themes chosen by name (:func:`apply_style`): ``"compact"`` — a
 5-7 pt type scale on white for multi-panel figures, with the Okabe-Ito
 colourblind-safe palette — and ``"house"`` — the 11 pt look with a light grid
 and the :data:`PALETTE` colours that the CLI, depth and render figures use
-(`fluorostats.style` keeps its names as a thin layer over this). Plus bold
+(the deprecated `fluorostats.style` re-exports its names). Plus bold
 lowercase panel letters, image-panel helpers (percentile normalisation,
 outlines, fills, scale bars), dot/lollipop and Bland-Altman panels,
 :func:`save_figure` (the one writer every figure goes through) and :func:`save`,
@@ -23,6 +23,7 @@ belong to the scripts that use this kit, not here. Usage::
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Sequence
@@ -272,13 +273,16 @@ def panel(
     axis top-left, plus an optional short roman descriptor beside it.
 
     Offset points keep labels identical across figures and never expand the saved
-    bbox. ``dx``/``dy`` are accepted for backward compatibility and ignored.
+    bbox. ``dx``/``dy`` are deprecated and ignored (a DeprecationWarning); use ``pad``.
 
     ``xanchor``: None (default) anchors the letter to the axes frame. A float
     places the letter x at that FIGURE-fraction position (y still from the axes'
     top edge and ``pad[1]``), so row-leading letters across panels with different
     tick-label widths share one page x instead of drifting with each axes frame.
     """
+    if dx is not None or dy is not None:
+        msg = "panel(): 'dx' and 'dy' are deprecated and ignored; use 'pad'"
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
     if xanchor is None:
         ax.annotate(
             label,

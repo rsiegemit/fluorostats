@@ -15,7 +15,7 @@ from fluorostats.depth_figures import (
     plot_depth_curves,  # noqa: E402
     plot_retention_multiwindow,
 )
-from fluorostats.style import material_color  # noqa: E402
+from fluorostats.pubfig import material_color  # noqa: E402
 
 
 @pytest.fixture

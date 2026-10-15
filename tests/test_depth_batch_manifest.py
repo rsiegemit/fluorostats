@@ -22,7 +22,8 @@ def test_load_manifest_singular_auc_window(tmp_path):
     }
     mpath = tmp_path / "manifest.json"
     mpath.write_text(json.dumps(m))
-    loaded = load_manifest(mpath)
+    with pytest.warns(FutureWarning, match="'auc_window_um' is deprecated; use 'auc_windows_um'"):
+        loaded = load_manifest(mpath)
     assert loaded["windows"] == [(0.0, 10.0)]
 
 

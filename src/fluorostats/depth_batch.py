@@ -54,7 +54,7 @@ Manifest schema (all fields except groups/stacks are optional)::
 
 ``auc_windows_um`` accepts ``[z0, z1]`` pairs and/or the string ``"full"``
 (each stack's entire acquired range); the singular ``auc_window_um`` is
-still accepted for back-compat. ``role`` defaults to ``"primary"``; ``aux``
+deprecated (still read, with a FutureWarning). ``role`` defaults to ``"primary"``; ``aux``
 stacks are exported and drawn faintly but excluded from the group mean/SEM
 curves and AUC statistics, so short or differently-acquired stacks can ride
 along without biasing the matched comparison.
@@ -70,16 +70,13 @@ from pathlib import Path
 import numpy as np
 from matplotlib.colors import is_color_like
 
-from . import depth, stats
-from .depth import parse_window, window_bounds, window_label, window_title
-from .depth_figures import group_color, plot_auc, plot_depth_curves, plot_retention_multiwindow
+from . import depth, depth_figures, stats
+from .deprecation import moved_names
 from .io import load_volume
 from .manifest import check_depth, require_groups
 from . import pubfig, report
 from .depth_contrasts import contrasts, print_auc_summary, print_lambda_summary, write_contrasts_csv
 
-# Window helpers and figures live in `depth` / `depth_figures`; re-exported here
-# so ``from fluorostats.depth_batch import plot_auc, parse_window`` keeps working.
 __all__ = [
     "load_manifest",
     "analyse_stack",
@@ -88,14 +85,24 @@ __all__ = [
     "write_profiles_csv",
     "write_auc_csv",
     "write_group_summary_csv",
-    "parse_window",
-    "window_label",
-    "window_title",
-    "window_bounds",
-    "plot_depth_curves",
-    "plot_auc",
-    "plot_retention_multiwindow",
 ]
+
+# The window helpers and figures live in `depth` / `depth_figures`; the names still
+# resolve here for one release, with a DeprecationWarning (STY-4).
+_moved_windows = moved_names(
+    __name__, ("parse_window", "window_label", "window_title", "window_bounds"), depth
+)
+_moved_figures = moved_names(
+    __name__, ("plot_depth_curves", "plot_auc", "plot_retention_multiwindow"), depth_figures
+)
+
+
+def __getattr__(name: str):
+    """A moved window helper or figure function, with its DeprecationWarning."""
+    try:
+        return _moved_windows(name)
+    except AttributeError:
+        return _moved_figures(name)
 
 
 # ---------------------------------------------------------------------------
@@ -116,12 +123,17 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("fit_offset", False)
     m.setdefault("fit_r2_threshold", depth.FIT_R2_THRESHOLD)
     m.setdefault("parametric", False)
-    # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`; a
+    # Accept the deprecated singular `auc_window_um` or plural `auc_windows_um`; a
     # manifest giving both keeps both, and validation refuses it.
+    if "auc_window_um" in m:
+        # exception STY-4: a FutureWarning, which is shown by default, because the
+        # people who write manifests run the CLI and never see a DeprecationWarning.
+        msg = "depth manifest: 'auc_window_um' is deprecated; use 'auc_windows_um': [[z0, z1]]"
+        warnings.warn(msg, FutureWarning, stacklevel=2)
     if "auc_windows_um" not in m:
         m["auc_windows_um"] = [m.pop("auc_window_um", [0.0, 100.0])]
     _validate(m)
-    m["windows"] = [parse_window(w) for w in m["auc_windows_um"]]
+    m["windows"] = [depth.parse_window(w) for w in m["auc_windows_um"]]
     return m
 
 
@@ -177,17 +189,17 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     max_depth = float(raw.depth_um[-1])
     auc = {}
     for w in cfg["windows"]:
-        z0, z1 = window_bounds(w, max_depth)
+        z0, z1 = depth.window_bounds(w, max_depth)
         covered = max(min(z1, max_depth) - z0, 0.0)
         if z1 > max_depth:
             warnings.warn(
-                f"{Path(path).name}: AUC window {window_title(w)} reaches past the "
+                f"{Path(path).name}: AUC window {depth.window_title(w)} reaches past the "
                 f"stack's {max_depth:g} µm; only {covered:g} µm of it "
                 "is covered (see window_covered_um).",
                 RuntimeWarning,
                 stacklevel=2,
             )
-        auc[window_label(w)] = {
+        auc[depth.window_label(w)] = {
             "absolute": depth.auc_depth(raw.depth_um, subtracted.mean, z_min=z0, z_max=z1),
             "normalized": depth.auc_depth(raw.depth_um, norm_curve, z_min=z0, z_max=z1),
             "covered_um": float(covered),
@@ -302,7 +314,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
     ``voxel_size_source`` (which voxel axes were read from the file vs defaulted) and
     ``window_complete_<window>`` (1 when the stack covers the whole window, 0 when
     its AUC is over only ``window_covered_um`` of it)."""
-    labels = [window_label(w) for w in windows]
+    labels = [depth.window_label(w) for w in windows]
     header = [
         "group",
         "stack",
@@ -463,7 +475,7 @@ def _analyse_groups(groups: list[dict], cfg: dict):
     per_group_primary: dict[str, list[dict]] = {}
     for grp in groups:
         gname = grp["name"]
-        colors[gname] = group_color(gname, grp.get("color"))
+        colors[gname] = depth_figures.group_color(gname, grp.get("color"))
         bg = grp.get("background")
         blank = _load_blank(bg, cfg) if bg else None
         per_group_primary.setdefault(gname, [])
@@ -540,7 +552,7 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
     fixed = [w for w in windows if w != ("full",)]
     shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
     model = {"n_surface": cfg["n_surface"], "fit_offset": cfg["fit_offset"]}
-    plot_depth_curves(
+    depth_figures.plot_depth_curves(
         rows,
         aggregates,
         colors,
@@ -551,7 +563,7 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
         auc_window=shade_window,
         **model,
     )
-    plot_depth_curves(
+    depth_figures.plot_depth_curves(
         rows,
         aggregates,
         colors,
@@ -563,11 +575,15 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
         **model,
     )
     for w in windows:
-        lab = window_label(w)
-        plot_auc(rows, colors, w, out_dir / f"fig_auc_normalized_{lab}", use_normalized=True)
-        plot_auc(rows, colors, w, out_dir / f"fig_auc_absolute_{lab}", use_normalized=False)
+        lab = depth.window_label(w)
+        out_norm, out_abs = (
+            out_dir / f"fig_auc_normalized_{lab}",
+            out_dir / f"fig_auc_absolute_{lab}",
+        )
+        depth_figures.plot_auc(rows, colors, w, out_norm, use_normalized=True)
+        depth_figures.plot_auc(rows, colors, w, out_abs, use_normalized=False)
     if len(windows) > 1:
-        plot_retention_multiwindow(
+        depth_figures.plot_retention_multiwindow(
             rows,
             colors,
             windows,

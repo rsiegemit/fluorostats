@@ -23,15 +23,16 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import marching_cubes
 
+from . import projections
+from .deprecation import moved_names
 from .pubfig import DARK_PALETTE, PALETTE, save_figure
 
-# The 2D MIP panels live in `projections`; re-exported here, where they were first defined.
-from .projections import (
-    depth_coded_mip,
-    layer_split_mip,
-    live_dead_mip,
-    mip_grid,
-    mip_overlay,
+# The 2D MIP panels live in `projections`; the names still resolve here, where they
+# were first defined, for one release with a DeprecationWarning (STY-4).
+__getattr__ = moved_names(
+    __name__,
+    ("mip_overlay", "live_dead_mip", "mip_grid", "depth_coded_mip", "layer_split_mip"),
+    projections,
 )
 
 
@@ -372,10 +373,5 @@ __all__ = [
     "block_reduce_max",
     "render_isosurface",
     "render_voxel_cloud",
-    "mip_overlay",
-    "live_dead_mip",
-    "mip_grid",
-    "depth_coded_mip",
-    "layer_split_mip",
     "save_isosurface",
 ]

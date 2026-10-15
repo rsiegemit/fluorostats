@@ -181,7 +181,10 @@ def test_mip_overlay_composites_with_the_qc_rule():
     "name", ["mip_overlay", "live_dead_mip", "mip_grid", "depth_coded_mip", "layer_split_mip"]
 )
 def test_render3d_still_provides_the_moved_panels(name):
-    """The panels moved to projections; render3d keeps the v0.8.2 names."""
+    """The panels moved to projections; render3d keeps the v0.8.2 names for one
+    release, with a DeprecationWarning (STY-4)."""
     from fluorostats import projections, render3d
 
-    assert getattr(render3d, name) is getattr(projections, name)
+    with pytest.warns(DeprecationWarning, match=f"render3d.{name} is deprecated; use"):
+        assert getattr(render3d, name) is getattr(projections, name)
+    assert name not in render3d.__all__

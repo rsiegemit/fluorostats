@@ -24,19 +24,6 @@ def test_apply_style_sets_compact_rcparams():
     plt.rcdefaults()
 
 
-def test_house_theme_is_the_style_modules_look():
-    from fluorostats import style
-
-    style.apply_style(font_scale=1.5)
-    via_style = dict(plt.rcParams)
-    plt.rcdefaults()
-    pubfig.apply_style("house", font_scale=1.5)
-    assert dict(plt.rcParams) == via_style
-    assert plt.rcParams["font.size"] == 16.5 and plt.rcParams["axes.grid"] is True
-    assert style.PALETTE is pubfig.PALETTE and style.lighten is pubfig.lighten
-    plt.rcdefaults()
-
-
 def test_unknown_theme_is_refused():
     with pytest.raises(ValueError, match="theme must be one of \\('compact', 'house'\\)"):
         pubfig.apply_style("poster")
@@ -150,3 +137,27 @@ def test_bland_altman_panel_matches_agreement(annotate):
 @pytest.mark.parametrize("x,expected", [(382.6, 380), (14.8, 15), (0, 0.0), (-7.77, -7.8)])
 def test_round_sig(x, expected):
     assert pubfig.round_sig(x) == expected
+
+
+def test_palette_keys():
+    for k in ["primary", "accent", "ink", "paper", "grid"]:
+        assert pubfig.PALETTE[k].startswith("#")
+    assert {"mesh", "background"} <= set(pubfig.DARK_PALETTE)
+
+
+def test_material_color_exact_substring_and_fallback():
+    assert pubfig.material_color("GelMA") == pubfig.MATERIAL_COLORS["GelMA"]
+    assert pubfig.material_color("my GelMA sample") == pubfig.MATERIAL_COLORS["GelMA"]
+    assert pubfig.material_color("totally unknown") == pubfig.PALETTE["muted"]
+
+
+def test_darken_and_lighten_move_away_from_the_colour():
+    assert pubfig.darken("#888888", 0.2) != "#888888" != pubfig.lighten("#888888", 0.2)
+
+
+def test_panel_dx_dy_are_ignored_with_a_warning():
+    # STY-4: retired keywords were accepted and ignored silently.
+    fig, ax = plt.subplots()
+    with pytest.warns(DeprecationWarning, match="panel\\(\\): 'dx' and 'dy' are deprecated"):
+        pubfig.panel(ax, "a", dx=3.0)
+    assert [t.get_text() for t in ax.texts] == ["a"]
