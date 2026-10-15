@@ -194,3 +194,34 @@ def test_remove_small_keeps_objects_of_exactly_min_size(n, kept):
     m[0, :n] = True
     assert segment.remove_small(m, 4).any() == kept
     assert segment.remove_small(m, 0) is m
+
+
+def _sheet(thickness):
+    rng = np.random.default_rng(0)
+    vol = rng.normal(10, 1, (10, 48, 48))
+    vol[4:4 + thickness] += 50
+    return vol
+
+
+def test_ball_opening_erases_a_two_slice_sheet_disk_keeps_it():
+    vol = _sheet(2)
+    n_true = 2 * 48 * 48
+    assert binarize(vol, min_size=0).sum() < 0.2 * n_true            # default "ball"
+    for opening in ("disk", "none"):
+        assert binarize(vol, min_size=0, opening=opening).sum() >= 0.99 * n_true
+    # a 3-slice sheet survives the default
+    assert binarize(_sheet(3), min_size=0).sum() >= 0.9 * 3 * 48 * 48
+
+
+def test_opening_options_and_2d():
+    img = np.zeros((20, 20))
+    img[5:15, 5:15] = 100.0
+    img[0, 0] = 100.0                                   # salt pixel
+    assert not binarize(img, min_size=0)[0, 0]
+    assert not binarize(img, min_size=0, opening="disk")[0, 0]
+    assert binarize(img, min_size=0, opening="none")[0, 0]
+    with pytest.raises(ValueError, match="Unknown opening"):
+        binarize(img, opening="cube")
+    _, mask = segment.segment_channel(_sheet(2), sigma=0.0, min_size=0, opening="disk")
+    assert mask.sum() >= 0.99 * 2 * 48 * 48
+
