@@ -37,6 +37,34 @@ def test_orientation_mask_restricts():
     assert a["n_pixels"] == int(mask.sum())
 
 
+@pytest.mark.parametrize("theta", [0, 45, 90, 135])
+def test_orientation_matches_regionprops_convention(theta):
+    # Parallel stripes and an ellipse along the same axis report the same angle as
+    # objects.object_shape_metrics (regionprops): one convention for both modules.
+    from fluorostats.objects import object_shape_metrics
+    yy, xx = np.mgrid[0:129, 0:129] - 64.0
+    d = np.array([np.cos(np.radians(theta)), np.sin(np.radians(theta))])  # (row, col)
+    along, across = yy * d[0] + xx * d[1], -yy * d[1] + xx * d[0]
+    stripes = np.cos(2 * np.pi * across / 8.0)
+    ellipse = ((along / 40.0) ** 2 + (across / 12.0) ** 2 <= 1).astype(int)
+    ref = object_shape_metrics(ellipse)["orientation_deg"][0] % 180.0
+    got = texture.orientation_anisotropy(stripes)["dominant_orientation_deg"]
+    assert 0.0 <= got < 180.0
+    diff = abs(got - ref) % 180.0
+    assert min(diff, 180.0 - diff) < 1.0
+
+
+@pytest.mark.parametrize("jxy", [1e-18, -1e-18])
+def test_orientation_near_axis_stays_in_half_open_range(monkeypatch, jxy):
+    # A principal axis a rounding error off vertical must read 0, never 180.0.
+    import skimage.feature
+    ones = np.ones((8, 8))
+    monkeypatch.setattr(skimage.feature, "structure_tensor",
+                        lambda img, sigma, order: (0.0 * ones, jxy * ones, ones))
+    got = texture.orientation_anisotropy(np.eye(8))["dominant_orientation_deg"]
+    assert 0.0 <= got < 1e-9
+
+
 # --------------------------------------------------------------------------- #
 # texture.mesh_size
 # --------------------------------------------------------------------------- #
