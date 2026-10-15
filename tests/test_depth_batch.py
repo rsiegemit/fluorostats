@@ -1,6 +1,7 @@
 """Smoke test for the depth-penetration batch driver (fluorostats.depth_batch)."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -499,3 +500,35 @@ def test_run_refuses_a_folder_holding_files_it_did_not_write(tmp_path):
     (out / "depth_profiles_long.csv").write_text("stale")
     depth_batch.run(mpath)  # a rerun of its own folder rewrites its tables
     assert (out / "depth_profiles_long.csv").read_text().startswith("group,stack")
+
+
+# A subprocess preamble: any open() in fluorostats without an encoding is an error.
+_UTF8_ONLY = (
+    "import warnings\n"
+    "warnings.filterwarnings('error', category=EncodingWarning, module='fluorostats')\n"
+)
+
+
+def test_run_names_utf8_for_every_text_file_it_reads_and_writes(tmp_path):
+    # Regression (W1): files were opened in the locale encoding, so a manifest or
+    # labels with "µ" broke on Windows (cp1252). Run twice (the rerun reads its own
+    # run_config.json) with every default-encoding open turned into an error.
+    import os
+    import subprocess
+    import sys
+
+    s0, s1 = tmp_path / "s0.tif", tmp_path / "s1.tif"
+    decay_stack(s0)
+    decay_stack(s1)
+    stacks = [{"label": "µ-gel 0", "path": str(s0)}, {"label": "µ-gel 1", "path": str(s1)}]
+    m = {"output_dir": str(tmp_path / "out"), "groups": [{"name": "Gel µ", "stacks": stacks}]}
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+    code = f"{_UTF8_ONLY}from fluorostats import depth_batch\nfor _ in range(2): depth_batch.run({str(mpath)!r})"
+    env = {**os.environ, "PYTHONPATH": str(Path(depth.__file__).parents[1]), "MPLBACKEND": "Agg"}
+    flags = ["-X", "warn_default_encoding"]
+    res = subprocess.run(
+        [sys.executable, *flags, "-c", code], env=env, capture_output=True, text=True
+    )
+    assert res.returncode == 0, res.stderr[-2000:]
+    assert "µ-gel 0" in (tmp_path / "out" / "auc_per_stack.csv").read_text(encoding="utf-8")

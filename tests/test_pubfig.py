@@ -194,3 +194,23 @@ def test_composite2ch_colours_gamma_and_background_are_parameters():
     n = pubfig.imnorm(live, 0, 100) ** 0.5
     np.testing.assert_allclose(rgb[..., 1], np.clip(n + (1 - n) * 0.2, 0, 1))
     np.testing.assert_allclose(rgb[..., 0], (1 - n) * 0.2)
+
+
+def test_caption_is_written_as_utf8(tmp_path):
+    # W1: text files are opened as UTF-8, never in the locale's encoding.
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    code = (
+        "import warnings\nwarnings.filterwarnings('error', category=EncodingWarning, module='fluorostats')\n"
+        f"from fluorostats import pubfig\npubfig.caption('f', 'λ in µm', {str(tmp_path)!r})"
+    )
+    env = {**os.environ, "PYTHONPATH": str(Path(pubfig.__file__).parents[1])}
+    flags = ["-X", "warn_default_encoding"]
+    res = subprocess.run(
+        [sys.executable, *flags, "-c", code], env=env, capture_output=True, text=True
+    )
+    assert res.returncode == 0, res.stderr[-2000:]
+    assert (tmp_path / "f.txt").read_bytes() == "λ in µm\n".encode("utf-8")

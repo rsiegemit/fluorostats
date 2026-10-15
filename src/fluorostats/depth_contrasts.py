@@ -128,7 +128,7 @@ _CONTRAST_COLUMNS = [
 def write_contrasts_csv(out: Path, tests: list[dict]) -> None:
     """One row per contrast (`contrasts` / `mann_whitney_contrasts`); only the header
     when there is none."""
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(_CONTRAST_COLUMNS)
         for c in tests:

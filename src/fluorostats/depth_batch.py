@@ -112,7 +112,7 @@ def __getattr__(name: str):
 
 def load_manifest(path: Path) -> dict:
     """Read a depth manifest (see the module docstring), filling defaults and parsing windows."""
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         m = json.load(fh)
     require_groups(m)
     m.setdefault("title", "Depth-penetration analysis")
@@ -288,7 +288,7 @@ def aggregate_group(primary: list[dict]) -> dict | None:
 
 def write_profiles_csv(out: Path, rows: list[dict]) -> None:
     """Long-form per-stack depth profiles: raw, background-subtracted and normalised."""
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(
             ["group", "stack", "role", "depth_um", "raw_mean", "bg_subtracted", "normalized"]
@@ -334,7 +334,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}", f"window_covered_um_{lab}"]
     # appended last so existing column positions hold
     header += ["voxel_size_source"] + [f"window_complete_{lab}" for lab in labels]
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(header)
         for r in rows:
@@ -366,7 +366,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:
     """Long-form group mean ± SEM profiles, with each group's λ repeated per depth row."""
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(
             [
