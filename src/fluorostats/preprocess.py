@@ -10,6 +10,11 @@ from skimage.filters import gaussian
 from skimage.morphology import disk, white_tophat
 
 
+# `auto_crop`: a row or column whose intensity variance is below this fraction of
+# the median row/column variance is a blank border. Hand-set; no benchmark table
+# chose it.
+AUTO_CROP_VAR_FRACTION = 0.05
+
 # Real dye/fluorophore names that indicate the green / F-actin channel. Deliberately
 # NOT a positional token like "ch2": the loader pads missing channel names with
 # placeholders "Ch1", "Ch2", … (always placeholders for Leica), so a "ch2" pattern would
@@ -162,11 +167,11 @@ def auto_crop(arr: np.ndarray, margin: int = 5) -> tuple[np.ndarray, tuple[int, 
     row_var = np.var(work, axis=1)
     col_var = np.var(work, axis=0)
 
-    # Threshold: rows/columns with variance < 5% of median variance are borders
+    # rows/columns with variance < AUTO_CROP_VAR_FRACTION of the median are borders
     median_row_var = np.median(row_var[row_var > 0]) if np.any(row_var > 0) else 1.0
     median_col_var = np.median(col_var[col_var > 0]) if np.any(col_var > 0) else 1.0
-    row_thresh = median_row_var * 0.05
-    col_thresh = median_col_var * 0.05
+    row_thresh = median_row_var * AUTO_CROP_VAR_FRACTION
+    col_thresh = median_col_var * AUTO_CROP_VAR_FRACTION
 
     # Find first/last non-border row and column
     active_rows = np.where(row_var > row_thresh)[0]

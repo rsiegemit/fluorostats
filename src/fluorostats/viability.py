@@ -48,6 +48,12 @@ COUNT_MIN_SIZE = 5
 CLEAN_SNR = 8.0
 LOW_SNR = 3.0
 CROWDED = 1.5
+# The regime estimate's peak count: peaks above REGIME_THRESHOLD_REL of the image
+# maximum, smoothed with sigma = radius / RADIUS_PER_SIGMA (also the smoothing the
+# maxima count gets from the estimated radius). Hand-set with the constants above;
+# no benchmark table chose them.
+REGIME_THRESHOLD_REL = 0.2
+RADIUS_PER_SIGMA = 1.5
 
 
 def _mask(
@@ -208,9 +214,9 @@ def _estimate_regime(channel: np.ndarray, **seg) -> dict:
     radius = (med / np.pi) ** 0.5 if ch.ndim == 2 else (med * 0.75 / np.pi) ** (1 / 3)
     n_pk = count_local_maxima(
         ch,
-        min_distance=max(2, int(radius / 1.5)),
-        threshold_rel=0.2,
-        smooth_sigma=max(1.0, radius / 1.5),
+        min_distance=max(2, int(radius / RADIUS_PER_SIGMA)),
+        threshold_rel=REGIME_THRESHOLD_REL,
+        smooth_sigma=max(1.0, radius / RADIUS_PER_SIGMA),
     )["count"]
     crowding = n_pk / max(n_cc, 1)
     return {"radius": radius, "snr": snr, "crowding": float(crowding), "n_cc": n_cc}
@@ -259,7 +265,7 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
             "cc",
             (f"defaulting to robust CC (SNR {r['snr']:.1f}, crowding {r['crowding']:.2f})"),
         )
-    smooth = r["radius"] / 1.5 if _COUNTERS[method].smoothed else 0.0
+    smooth = r["radius"] / RADIUS_PER_SIGMA if _COUNTERS[method].smoothed else 0.0
     return {"method": method, "smooth_sigma": smooth, "reason": reason, **r}
 
 
@@ -288,8 +294,8 @@ def _count_every_method(live: np.ndarray, dead: np.ndarray, count_one, rseg: dic
     out = _count_record()
     # auto-smooth the smoothed methods from each channel's estimated radius
     # (no cells -> radius NaN -> no smoothing)
-    sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
-    sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
+    sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / RADIUS_PER_SIGMA
+    sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / RADIUS_PER_SIGMA
     for m in COUNT_METHODS:
         smoothed = _COUNTERS[m].smoothed
         nl = count_one(live, m, sig_l if smoothed else 0.0)
