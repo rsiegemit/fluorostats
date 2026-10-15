@@ -268,6 +268,7 @@ def _count_every_method(live: np.ndarray, dead: np.ndarray, count_one, rseg: dic
     ]
     if vals:
         out["consensus"] = out["viability"] = float(np.median(vals))
+    if len(vals) > 1:  # one viability has no spread
         out["spread"] = float(max(vals) - min(vals))
     # deprecated v0.8.2 nested form of the per-method keys
     out["by_method"] = {
@@ -318,7 +319,8 @@ def live_dead_by_count(
     - ``n_live``, ``n_dead``, ``viability`` — the counts and their ratio (NaN
       counts for ``all``: there is no single count; its viability is the consensus);
     - ``consensus`` — median viability over the methods run (equals ``viability``);
-      ``spread`` — max − min of those viabilities, NaN when only one method ran;
+      ``spread`` — max − min of those viabilities, NaN when fewer than two methods
+      gave one (a single method ran, or ``all`` found cells with only one);
     - ``method_live``, ``method_dead``, ``reason_live``, ``reason_dead`` — the
       method used on each channel and (``auto``) why ("" for ``all``);
     - ``n_live_<m>``, ``n_dead_<m>``, ``viability_<m>`` for every ``m`` in
