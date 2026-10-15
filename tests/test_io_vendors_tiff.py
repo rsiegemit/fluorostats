@@ -81,3 +81,16 @@ def test_imagej_resolution_without_a_unit_is_not_calibration(tmp_path):
 def test_imagej_xy_missing_or_zero_resolution_is_not_calibration(tags):
     tif = types.SimpleNamespace(pages=[types.SimpleNamespace(tags=tags)])
     assert io_vendors._imagej_xy_um(tif, {"unit": "micron"}) is None
+
+
+def test_ome_unnamed_channel_keeps_its_position(tmp_path):
+    # Regression: an empty Name used to be dropped, so 'GFP' moved to channel 0 and
+    # the signal channel was labelled 'Ch2'.
+    p = tmp_path / "unnamed.ome.tif"
+    data = np.zeros((2, 3, 8, 8), np.uint16)
+    data[1] = 5
+    tifffile.imwrite(p, data, ome=True, metadata={"axes": "CZYX", "Channel": {"Name": ["", "GFP"]}})
+    with pytest.warns(RuntimeWarning, match="calibration"):
+        arr, meta = io.load_volume(p)
+    assert meta["channel_names"] == ["Ch1", "GFP"]
+    assert arr[meta["channel_names"].index("GFP")].max() == 5

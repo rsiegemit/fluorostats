@@ -123,3 +123,10 @@ def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
     assert any("time point 0 of 2" in str(w.message) for w in rec)
     assert out.shape == (2, 5, 8, 8)
     assert (out[0].mean(), out[1].mean()) == (1, 2)
+
+
+@pytest.mark.parametrize("xml", ['<root><Channel Name=""/><Channel Name="mCherry"/></root>',
+                                 "<root><DyeName/><DyeName>mCherry</DyeName></root>"])
+def test_czi_unnamed_channel_keeps_its_position(xml):
+    meta = io_vendors._parse_czi_metadata(types.SimpleNamespace(metadata=lambda: xml))
+    assert meta["channel_names"] == ["Ch1", "mCherry"]

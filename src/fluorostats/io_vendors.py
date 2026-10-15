@@ -58,6 +58,12 @@ def _safe_float(val, default: float) -> float:
         return default
 
 
+def _positional_names(names: list[str | None]) -> list[str]:
+    """Channel names in file order, an empty one becoming ``Ch<i+1>`` in place so
+    every later name keeps its channel."""
+    return [n or f"Ch{i + 1}" for i, n in enumerate(names)]
+
+
 # ---------------------------------------------------------------------------
 # Olympus .oib / .oif
 # ---------------------------------------------------------------------------
@@ -88,7 +94,7 @@ def _parse_olympus_metadata(oif) -> dict:
         return meta
 
     voxel_x, voxel_y, voxel_z = 1.0, 1.0, 1.0
-    channel_names: list[str] = []
+    channel_names: list[str | None] = []
     read: set[str] = set()
 
     for section_name, section in settings.items():
@@ -96,8 +102,7 @@ def _parse_olympus_metadata(oif) -> dict:
 
         if re.match(r"Channel \d+ Parameters$", section_str):
             dye = _section_get(section, "DyeName")
-            if dye and dye != "(null)" and dye != "None":
-                channel_names.append(dye)
+            channel_names.append(dye if dye not in ("(null)", "None") else None)
 
         if section_str == "Reference Image Parameter":
             wx, hy = _section_get(section, "WidthConvertValue"), _section_get(section, "HeightConvertValue")
@@ -111,7 +116,7 @@ def _parse_olympus_metadata(oif) -> dict:
                 voxel_z = z
                 read.add("z")
 
-    meta["channel_names"] = channel_names
+    meta["channel_names"] = _positional_names(channel_names)
     meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
     meta["_read_axes"] = read
     return meta
@@ -199,11 +204,10 @@ def _czi_voxel_um(root):
 
 def _czi_channel_names(root) -> list[str]:
     """Channel names from ``Channel@Name``, falling back to ``DyeName`` text."""
-    names = [ch.get("Name", "") for ch in root.iter("Channel")]
-    names = [n for n in names if n]
-    if not names:
-        names = [dye.text for dye in root.iter("DyeName") if dye.text]
-    return names
+    names = [ch.get("Name") for ch in root.iter("Channel")]
+    if not any(names):
+        names = [dye.text for dye in root.iter("DyeName")]
+    return _positional_names(names)
 
 
 def _parse_czi_metadata(czi) -> dict:
@@ -264,10 +268,9 @@ def _parse_nd2_metadata(f) -> dict:
 
     try:
         if hasattr(f, "metadata") and hasattr(f.metadata, "channels"):
-            for ch in f.metadata.channels:
-                name = getattr(ch.channel, "name", "") or getattr(ch, "name", "")
-                if name:
-                    meta["channel_names"].append(name)
+            meta["channel_names"] = _positional_names(
+                [getattr(ch.channel, "name", "") or getattr(ch, "name", "")
+                 for ch in f.metadata.channels])
     except Exception:
         pass
 
@@ -432,9 +435,10 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
         size[a], source = _length_um(float(pixels.attrib[key]), pixels.get(f"{key}Unit", "µm"), a)
         if source != "file":                    # the OME default unit is µm
             noted[a] = source
-    names = [ch.get("Name", "") or ch.get("Fluor", "") for ch in pixels.findall("{*}Channel")]
+    names = _positional_names([ch.get("Name") or ch.get("Fluor")
+                               for ch in pixels.findall("{*}Channel")])
     return {**meta, "voxel_size_um": (size["z"], size["y"], size["x"]), "_read_axes": set(read),
-            "_axis_source": noted, "channel_names": meta["channel_names"] + [n for n in names if n]}
+            "_axis_source": noted, "channel_names": meta["channel_names"] + names}
 
 
 def _imagej_xy_um(tif: tifffile.TiffFile, ij_meta: dict) -> dict | None:

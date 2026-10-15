@@ -79,6 +79,17 @@ def test_load_olympus_volume(monkeypatch, tmp_path):
     assert meta["voxel_size_um"] == (2.0, 0.25, 0.25)
 
 
+def test_olympus_unnamed_channel_keeps_its_position(monkeypatch, tmp_path):
+    mainfile = {"Channel 1 Parameters": {"DyeName": "(null)"},
+                "Channel 2 Parameters": {"DyeName": "FITC"}}
+    monkeypatch.setitem(sys.modules, "oiffile", _make_fake_oiffile(mainfile))
+    path = tmp_path / "sample.oib"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="calibration"):
+        _, meta = io.load_volume(path)
+    assert meta["channel_names"] == ["Ch1", "FITC"]
+
+
 def test_olympus_z_units_um_and_default(monkeypatch, tmp_path):
     mainfile = {
         "Axis 3 Parameters Common": {

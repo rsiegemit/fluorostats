@@ -166,3 +166,12 @@ def test_labelled_axes_with_unknown_name_fall_back_to_shape(monkeypatch, tmp_pat
     with pytest.warns(RuntimeWarning, match="first of 3 entries"):
         out, _ = io.load_volume(path)
     assert out.shape == (2, 5, 8, 8)
+
+
+def test_nd2_unnamed_channel_keeps_its_position(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "nd2", _make_fake_nd2(np.zeros((2, 5, 8, 8), np.uint16),
+                                                            (0.3, 0.3, 1.5), ["", "488"]))
+    path = tmp_path / "s.nd2"
+    path.write_bytes(b"")
+    _, meta = io.load_volume(path)
+    assert meta["channel_names"] == ["Ch1", "488"]
