@@ -34,13 +34,19 @@ from scipy import stats as sps
 # Descriptive summaries
 # ---------------------------------------------------------------------------
 
-def describe(values) -> dict:
+def describe(values: ArrayLike, axis: int | None = None) -> dict:
     """``{"n", "mean", "sd", "sem"}`` of the non-NaN values; NaN where undefined.
 
     NaN entries are dropped and ``n`` counts what remains. The mean is NaN for
     n = 0; the sample SD (ddof=1) and SEM are NaN for n < 2, because a single value
     has no measured spread (0.0 would claim a precision nobody measured).
+
+    With ``axis`` the same summary is taken along that axis of an array (e.g. per
+    depth over a ``(stacks, depths)`` array with ``axis=0``) and each entry is an
+    array; without it, of all values, as scalars.
     """
+    if axis is not None:
+        return _describe_along(np.asarray(values, dtype=float), axis)
     a = np.asarray(values, dtype=float).ravel()
     a = a[~np.isnan(a)]
     n = int(a.size)
@@ -48,6 +54,19 @@ def describe(values) -> dict:
     sd = float(a.std(ddof=1)) if n > 1 else nan
     return {"n": n, "mean": float(a.mean()) if n else nan, "sd": sd,
             "sem": sd / float(np.sqrt(n)) if n > 1 else nan}
+
+
+def _describe_along(a: np.ndarray, axis: int) -> dict:
+    """`describe` along ``axis``: the same rules per position, as arrays, without warnings."""
+    valid = ~np.isnan(a)
+    n = valid.sum(axis=axis)
+    undefined = np.full(n.shape, np.nan)
+    mean = np.divide(np.where(valid, a, 0.0).sum(axis=axis), n, out=undefined.copy(),
+                     where=n > 0)
+    dev = np.where(valid, a - np.expand_dims(mean, axis), 0.0)
+    sd = np.sqrt(np.divide((dev ** 2).sum(axis=axis), n - 1, out=undefined.copy(), where=n > 1))
+    sem = np.divide(sd, np.sqrt(n), out=undefined.copy(), where=n > 1)
+    return {"n": n, "mean": mean, "sd": sd, "sem": sem}
 
 
 # ---------------------------------------------------------------------------

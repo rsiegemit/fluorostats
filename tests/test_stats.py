@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -445,3 +447,21 @@ def test_mann_whitney_all_tied_is_undefined_on_every_scipy():
     r = stats.mann_whitney([2.0, 2.0, 2.0], [2.0, 2.0])
     assert np.isnan(r["p"]) and r["u"] == 3.0 and r["cliffs_delta"] == 0.0
     assert stats.mann_whitney([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])["p"] == 1.0
+
+
+def test_describe_along_an_axis_is_per_column_and_nan_aware():
+    a = np.array([[1.0, 2.0, np.nan, 7.0],
+                  [3.0, np.nan, np.nan, 7.0],
+                  [5.0, 4.0, np.nan, 7.0]])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")              # no empty-slice / ddof warnings
+        d = stats.describe(a, axis=0)
+    np.testing.assert_array_equal(d["n"], [3, 2, 0, 3])
+    np.testing.assert_allclose(d["mean"], [3.0, 3.0, np.nan, 7.0])
+    np.testing.assert_allclose(d["sd"], [2.0, np.sqrt(2.0), np.nan, 0.0])
+    np.testing.assert_allclose(d["sem"], [2.0 / np.sqrt(3), 1.0, np.nan, 0.0])
+    one = stats.describe(a[:1], axis=0)              # a single value has no spread
+    assert np.isnan(one["sd"]).all() and np.isnan(one["sem"]).all()
+    np.testing.assert_allclose(one["mean"], [1.0, 2.0, np.nan, 7.0])
+    rows = stats.describe(a, axis=1)
+    np.testing.assert_array_equal(rows["n"], [3, 2, 3])
