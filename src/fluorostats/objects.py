@@ -165,13 +165,13 @@ def count_local_maxima(
 
 
 def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
-    """Remove objects touching any image border and relabel.
+    """Remove objects touching any image border and relabel the rest 1..n.
 
     Useful for count endpoints where partial edge objects bias the total
-    (e.g. BBBC039 ground truth excludes border nuclei). Returns (labels, n).
+    (e.g. BBBC039 ground truth excludes border nuclei). Touching objects keep
+    their own labels, so a `watershed_split` result stays split. Returns (labels, n).
     """
-    cleared = clear_border(labels)
-    return label_3d(cleared > 0, min_size=0)
+    return remove_small_labels(clear_border(labels), 1)
 
 
 def object_volumes_voxels(labels: np.ndarray) -> np.ndarray:

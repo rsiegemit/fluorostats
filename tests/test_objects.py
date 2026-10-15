@@ -446,3 +446,21 @@ def test_clear_border_removes_edge_objects():
     lab[12:18, 12:18] = 2  # interior
     _, n = objects.clear_border_labels(lab)
     assert n == 1  # only the interior object survives
+
+
+def test_clear_border_labels_keeps_touching_objects_apart():
+    """Clearing the border must not re-merge touching labels (e.g. a watershed split)."""
+    lab = np.zeros((20, 20), int)
+    lab[0:3, 0:3] = 7  # touches the border -> removed
+    lab[5:10, 5:10] = 3
+    lab[10:15, 5:10] = 9  # touches label 3
+    cleared, n = objects.clear_border_labels(lab)
+    assert n == 2
+    assert set(np.unique(cleared)) == {0, 1, 2}
+    assert (cleared[5:10, 5:10] == 1).all() and (cleared[10:15, 5:10] == 2).all()
+
+
+def test_clear_border_labels_after_watershed_keeps_the_split():
+    labels, n = objects.watershed_split(_touching_discs())
+    assert n == 2
+    assert objects.clear_border_labels(labels)[1] == 2
