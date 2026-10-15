@@ -384,3 +384,129 @@ def test_quant3d_opening_choices_and_help():
     assert all(name in text.split("--opening")[1][:400] for name in OPENINGS)
     bad = CliRunner().invoke(cli, ["quant3d", "--input", ".", "--output", "o", "--opening", "cube"])
     assert bad.exit_code == 2
+
+
+def test_cli_quant3d_condition_from_grandparent(tmp_path):
+    """--condition-from grandparent works end-to-end."""
+    # structure: in/parent/cond_A/s0.tif
+    d = tmp_path / "in" / "cond_A" / "sub"
+    d.mkdir(parents=True)
+    tifffile.imwrite(d / "s0.tif", blob_3d(0))
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--condition-from",
+            "grandparent",
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert pd.read_csv(tmp_path / "out" / "per_file.csv")["condition"].tolist() == ["cond_A"]
+
+
+def test_cli_quant3d_condition_from_filename(tmp_path):
+    """--condition-from filename works end-to-end."""
+    d = tmp_path / "in" / "sub"
+    d.mkdir(parents=True)
+    tifffile.imwrite(d / "replicate01.tif", blob_3d(2))
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--condition-from",
+            "filename",
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert pd.read_csv(tmp_path / "out" / "per_file.csv")["condition"].tolist() == ["replicate01"]
+
+
+def test_quant3d_measures_a_keyence_folder_as_one_volume(tmp_path):
+    # Regression: inputs were found by suffix only, so every *_CHF slice of a Keyence
+    # BZ-X folder was measured as its own sample and counted as a replicate.
+    for cond, tubes in (("GelMA", ("tube1", "tube2")), ("Hybrid", ("tube3",))):
+        for ti, tube in enumerate(tubes):
+            d = tmp_path / "in" / cond / tube
+            d.mkdir(parents=True)
+            vol = blob_3d(ti)
+            for zi in range(vol.shape[0]):
+                tifffile.imwrite(
+                    d / f"Image_Z{zi + 1:03d}_CHF.bz.ome.tif", np.stack([vol[zi], vol[zi] // 2])
+                )
+    tifffile.imwrite(tmp_path / "in" / "Hybrid" / "plain.tif", blob_3d(5))
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "Found 4 volume file(s)" in res.output
+    df = pd.read_csv(tmp_path / "out" / "per_file.csv")
+    assert df[["file", "condition"]].values.tolist() == [
+        ["tube1", "GelMA"],
+        ["tube2", "GelMA"],
+        ["plain.tif", "Hybrid"],
+        ["tube3", "Hybrid"],
+    ]
+    assert (df.loc[df["file"] != "plain.tif", "shape"] == "(2, 8, 48, 48)").all()
+    assert (tmp_path / "out" / "overlays" / "GelMA" / "tube1_overlay.png").exists()
+
+
+@pytest.mark.parametrize("cmd", ["quant2d", "quant3d"])
+def test_condition_modes_come_from_one_registry(cmd):
+    from fluorostats.cli import CONDITION_FROM
+
+    option = next(p for p in cli.commands[cmd].params if p.name == "condition_from")
+    assert (
+        list(option.type.choices) == list(CONDITION_FROM) == ["parent", "grandparent", "filename"]
+    )
+
+
+def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monkeypatch):
+    # Regression: overlays of files no longer in the input survived a rerun, and
+    # run_config.json was written before measuring, so a run that failed part-way left a
+    # folder claiming the new configuration over the old run's tables.
+    from fluorostats import cli as cli_mod
+
+    make_dataset(tmp_path / "in", blob_2d)
+    out = tmp_path / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    assert (out / "overlays" / "GelMA" / "s2_overlay.png").exists()
+    (out / "overlays" / "GelMA" / "notes.png").write_bytes(b"x")  # not the tool's
+
+    (tmp_path / "in" / "GelMA" / "s2.tif").unlink()
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 0, res.output
+    assert not (out / "overlays" / "GelMA" / "s2_overlay.png").exists()
+    assert "s2_overlay.png (not produced by this run)" in res.output
+    assert "s1_overlay.png" not in res.output  # rewritten, not removed
+    assert (out / "overlays" / "GelMA" / "notes.png").exists()
+    assert json.loads((out / "run_config.json").read_text())["threshold"] == "li"
+
+    def fail(*a, **k):
+        raise RuntimeError("measurement failed")
+
+    monkeypatch.setattr(cli_mod, "_measure_image", fail)
+    res = CliRunner().invoke(cli, args)
+    assert isinstance(res.exception, RuntimeError)
+    assert not (out / "run_config.json").exists()
