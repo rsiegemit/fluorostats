@@ -3,8 +3,8 @@
 (a) Per-operation runtime (log x, horizontal bars) for a curated, category-grouped
     set of ~14 representative operations: the 2D-segmentation head-to-head
     (fluorostats vs StarDist vs Cellpose) plus fluorostats metrics spanning the
-    dynamic range and their matched SciPy / scikit-image equivalents. fluorostats
-    sits at parity with the underlying library call on shared operations.
+    dynamic range and their matched SciPy / scikit-image equivalents; the caption
+    states each wrapper's time ratio to its underlying library call.
 (b) Determinism: three fluorostats metrics run N=20x on the SAME BBBC024 volume
     give bit-identical output (spread = 0), unlike seed/hardware-sensitive DL.
 (c) Reproducibility: run-to-run spread (CV%) — fluorostats 0.0 vs a trained
@@ -35,6 +35,8 @@ DATA = F.DATA      # honours $FLUOROSTATS_DATA, like every other figure script
 # ----------------------------------------------------------------------------
 # Panel (b) data — computed LIVE: N=20 identical runs on one real BBBC024 volume
 # ----------------------------------------------------------------------------
+# exception DAT-3: determinism is a property of the reader's own run, so the
+# repeated metric calls happen on the reader's machine, not in a stored table.
 N_RUNS = 20
 _b24 = sorted(glob.glob(str(F.require(DATA / "BBBC024") / "image-final_*.tif")))
 vol = tifffile.imread(_b24[0]).astype(np.float32)
@@ -202,6 +204,9 @@ axA.legend(handles=legA, loc="center right", bbox_to_anchor=(1.0, 0.30),
 seg_f = lookup(F.DENOISED_OTSU_CC)
 seg_sd = lookup("comparator,StarDist (per 2D img, CPU cluster)")
 seg_cp = lookup("comparator,Cellpose (per 2D img, CPU cluster)")
+# wrapper / underlying-call time ratios on shared operations, for the caption
+ratio_conn = lookup("fluorostats,metrics_3d.connectivity_metrics") / lookup("comparator,euler_number(skimage) 3D")
+ratio_mwu = lookup("fluorostats,stats.mann_whitney") / lookup("comparator,scipy.mannwhitneyu")
 
 F.panel(axA, "a", xanchor=0.0315)   # row-leader
 
@@ -252,10 +257,11 @@ CAPTION = (
     "set of representative fluorostats operations (blue) and their matched "
     "SciPy / scikit-image reference implementations (grey), timed on identical "
     "inputs (one BBBC024 3D volume; 2D nuclei image; synthetic live/dead field) on "
-    "a single Apple Silicon Mac CPU (darwin). Shared operations run at parity with "
-    "their library equivalents (e.g. fluorostats connectivity vs euler_number; "
-    "stats.mann_whitney vs scipy.mannwhitneyu), confirming fluorostats adds "
-    "negligible overhead over the underlying call. For headline 2D instance "
+    "a single Apple Silicon Mac CPU (darwin). On shared operations the fluorostats "
+    f"wrapper takes {ratio_conn:.2f}× the time of its library equivalent for "
+    f"connectivity (metrics_3d.connectivity_metrics vs euler_number) and {ratio_mwu:.2f}× "
+    "for stats.mann_whitney vs scipy.mannwhitneyu (both return more than the bare call). "
+    "For headline 2D instance "
     "segmentation, fluorostats (Otsu + connected components) runs at "
     f"{seg_f:.1f} ms/image versus {seg_sd:.0f} ms for StarDist (~{F.round_sig(seg_sd/seg_f):.0f}×) "
     f"and {seg_cp:.0f} ms for Cellpose (~{F.round_sig(seg_cp/seg_f):.0f}×), both measured on CPU. "
