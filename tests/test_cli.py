@@ -4,6 +4,7 @@ These drive io -> preprocess -> segment -> metrics -> report -> qc -> plots in
 one pass, so they guard the whole command path (previously 0% covered)."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -534,3 +535,14 @@ def test_cli_plots_are_drawn_in_the_house_theme(tmp_path, monkeypatch):
     df = pd.DataFrame({"condition": ["a", "a", "b", "b"], "volume_fraction": [1.0, 2, 3, 4]})
     cli._draw_plots_and_pvalues(df, ["volume_fraction"], tmp_path, "t")
     assert themes == ["house"]
+
+
+def test_min_branch_length_default_is_the_skeleton_default():
+    # SIN-2: the CLI typed 5.0 where skeleton defines DEFAULT_MIN_BRANCH_LENGTH_UM.
+    from fluorostats import cli as cli_mod, skeleton
+
+    option = next(p for p in cli.commands["quant3d"].params if p.name == "min_branch_length")
+    assert option.default is skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM
+    assert "skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM" in Path(cli_mod.__file__).read_text(
+        encoding="utf-8"
+    )
