@@ -16,7 +16,10 @@ depth-aware way:
                                     biological death gradient from optical decay.
 
 Segmentation is delegated to :mod:`fluorostats.segment`; pass already-segmented
-boolean masks, or raw channels plus a ``threshold``/``method`` to segment here.
+boolean masks, or raw channels plus a ``threshold``/``method`` to segment here. The
+segmentation keywords are ``method``, ``min_size``, ``threshold_scale`` and
+``opening`` (`segment.binarize`'s; its default 3D ``"ball"`` opening erases cells
+thinner than 3 z-slices, so use ``opening="disk"`` for a monolayer).
 """
 
 from __future__ import annotations
@@ -53,11 +56,14 @@ def _mask(
     method: str = DEFAULT_SEG_METHOD,
     threshold_scale: float = 1.0,
     min_size: int = AREA_MIN_SIZE,
+    opening: str = "ball",
 ) -> np.ndarray:
     if mask is not None:
         return mask > 0
     assert channel is not None  # callers pass a channel whenever they pass no mask
-    return binarize(channel, method=method, threshold_scale=threshold_scale, min_size=min_size)
+    return binarize(
+        channel, method=method, threshold_scale=threshold_scale, min_size=min_size, opening=opening
+    )
 
 
 def _count_cc(ch, sig, cseg, min_distance, threshold_rel) -> int:
@@ -444,6 +450,11 @@ def viability_2d_vs_3d(
     Returns dict: live_fraction_midplane, live_fraction_mip, live_fraction_3d,
     overestimate_mip = mip / 3d (>1 means the 2D MIP overstates coverage), and
     overestimate_midplane = midplane / 3d.
+
+    The 3D mask uses `segment.binarize`'s ``opening`` (``seg``): the default
+    ``"ball"`` erases cells thinner than 3 z-slices, so a monolayer reads a live
+    fraction of 0 (overestimate NaN) or one biased to its thickest cells; pass
+    ``opening="disk"`` for thin samples.
 
     Projection: the MIP here is the maximum projection of the 3D live MASK (the
     volume is segmented once in 3D, then projected), so a voxel counts as covered

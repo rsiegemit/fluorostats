@@ -373,3 +373,20 @@ def test_a_failed_rerun_leaves_no_earlier_outputs_or_run_config(tmp_path, monkey
     with pytest.raises(RuntimeError, match="unreadable stack"):
         viability_batch.run(mp)
     assert not any((out / n).exists() for n in names)
+
+
+def test_manifest_seg_opening_is_validated(tmp_path):
+    seg = {"method": "otsu", "opening": "disk"}
+    assert viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))["seg"] == seg
+    with pytest.raises(ValueError, match="seg.opening must be one of"):
+        viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg={"opening": "cube"}))
+
+
+def test_seg_opening_disk_measures_single_slice_cells_in_3d(tmp_path):
+    """The synthetic cells lie in one z-slice: the default "ball" opening erases them
+    from the 3D mask; "disk" keeps them."""
+    m = json.loads(_manifest(tmp_path).read_text())
+    m["seg"]["opening"] = "disk"
+    stack = m["groups"][1]["stacks"][0]["path"]
+    row = viability_batch.analyse_stack(Path(stack), {**m, "seg": m["seg"]})
+    assert row["live_frac_3d"] > 0

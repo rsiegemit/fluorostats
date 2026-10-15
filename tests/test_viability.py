@@ -371,3 +371,20 @@ def test_live_dead_channels_rejects_negative_indices():
 def test_live_dead_channels_positional_dead_guess_stays_channel_1():
     with pytest.warns(RuntimeWarning, match="dead channel"):
         assert viability.live_dead_channels(["DAPI", "Ch2", "FITC"]) == (2, 1)
+
+
+def _monolayer(thick=1):
+    """8-slice stack with four bright cells spanning ``thick`` slices."""
+    rng = np.random.default_rng(0)
+    yy, xx = np.mgrid[:96, :96]
+    v = rng.normal(10, 2, (8, 96, 96))
+    for cy, cx in [(20, 20), (50, 60), (70, 30), (30, 75)]:
+        v[2 : 2 + thick][:, (yy - cy) ** 2 + (xx - cx) ** 2 <= 36] += 100
+    return v
+
+
+def test_viability_2d_vs_3d_disk_opening_keeps_a_monolayer():
+    """opening="disk" keeps cells thinner than 3 slices that "ball" erases."""
+    r = viability.viability_2d_vs_3d(_monolayer(), opening="disk")
+    assert r["live_fraction_3d"] > 0
+    assert r["overestimate_mip"] == pytest.approx(8.0, rel=0.05)  # 1 of 8 slices

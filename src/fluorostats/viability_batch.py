@@ -42,7 +42,8 @@ Manifest schema (all fields except groups/stacks optional)::
                                   # with a warning. The names used are written to
                                   # live_channel_name / dead_channel_name.
       "seg": {"method": "otsu", "min_size": 32},   # segment.binarize kwargs: method,
-                                  # min_size, threshold_scale (see "Segmentation").
+                                  # min_size, threshold_scale, opening (see
+                                  # "Segmentation").
       "count_method": "all",      # live_dead_by_count method: all | cc | watershed | maxima | auto
       "output_dir": "viability_out",
       "groups": [
@@ -70,6 +71,11 @@ Segmentation: ``seg.method`` thresholds everything, the cell counts included
     also drops labelled objects below `viability.COUNT_MIN_SIZE`;
   - the regime estimate (``regime_*`` columns, and ``auto``'s choice) always uses
     `viability.COUNT_MIN_SIZE`, whatever ``seg.min_size`` is.
+
+``seg.opening`` (default ``"ball"``) is the salt-noise opening of every mask. Only
+the 3D mask of the 2D-vs-3D bias depends on it beyond 2D (``"ball"`` and ``"disk"``
+are the same on the projections): ``"ball"`` erases cells thinner than 3 z-slices,
+so for a monolayer at a coarse z-step set ``"disk"``.
 """
 
 from __future__ import annotations
@@ -105,7 +111,7 @@ _ROLES = ("primary",)
 _FIELDS = ("title", "live_channel", "dead_channel", "seg", "count_method", "output_dir", "groups")
 _GROUP_FIELDS = ("name", "stacks")
 _STACK_FIELDS = ("label", "path", "role")
-_SEG_FIELDS = ("method", "min_size", "threshold_scale")
+_SEG_FIELDS = ("method", "min_size", "threshold_scale", "opening")
 # The metrics of the two-group contrast (console and contrasts.csv).
 _CONTRAST_METRICS = ("live_cov_pct", "live_density_permm2", "viability_area")
 # Every file a run writes; an earlier run's copies are removed when a run starts.
@@ -160,6 +166,10 @@ def _check_seg(seg) -> list[str]:
     ms = seg.get("min_size", 0)
     if not is_int(ms) or ms < 0:
         problems.append(f"seg.min_size must be a non-negative integer, got {ms!r}")
+    if seg.get("opening", "ball") not in segment.OPENINGS:
+        problems.append(
+            f"seg.opening must be one of {tuple(segment.OPENINGS)}, got {seg['opening']!r}"
+        )
     ts = seg.get("threshold_scale", 1.0)
     if not is_number(ts) or ts <= 0:
         problems.append(f"seg.threshold_scale must be a positive number, got {ts!r}")
