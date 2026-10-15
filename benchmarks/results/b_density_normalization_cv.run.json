@@ -22,12 +22,12 @@
       1.0
     ]
   },
-  "git_commit": "2455fa6",
+  "git_commit": "227d69e",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",
     "scipy": "1.17.1",
     "scikit-image": "0.26.0",
-    "fluorostats": "0.8.2"
+    "fluorostats": "0.9.0.dev0"
   }
 }

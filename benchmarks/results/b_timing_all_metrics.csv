@@ -47,7 +47,7 @@ fluorostats,viability.live_dead_by_count maxima,11.283
 fluorostats,viability.live_dead_by_count watershed,34.199
 fluorostats,viability.live_dead_by_count auto,39.985
 fluorostats,viability.live_dead_by_count all,85.906
-comparator,Kerkhoff macro (peak count),10.735
+comparator,skimage peak count (live + dead),10.735
 fluorostats,viability.attenuation_correct,55.346
 fluorostats,stats.mann_whitney,0.371
 comparator,scipy.mannwhitneyu,0.239
