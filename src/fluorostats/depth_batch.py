@@ -71,7 +71,7 @@ from .depth import parse_window, window_bounds, window_label, window_title
 from .depth_figures import (group_color, plot_auc, plot_depth_curves,
                             plot_retention_multiwindow)
 from .io import load_volume
-from .manifest import check_groups
+from .manifest import check_depth
 from . import pubfig, report
 
 # Window helpers and figures live in `depth` / `depth_figures`; re-exported here
@@ -109,59 +109,15 @@ def load_manifest(path: Path) -> dict:
     return m
 
 
-_ROLES = ("primary", "aux")
-
-
 def _validate(m: dict) -> None:
     """Check a depth manifest before any image is loaded; raise listing every problem."""
-    problems = []
-    if not _is_int(m["channel"]) or m["channel"] < 0:
-        problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
-    reducers = tuple(depth.REDUCERS)
-    if m["reducer"] not in reducers:
-        problems.append(f"reducer must be one of {reducers}, got {m['reducer']!r}")
-    if not _is_int(m["n_surface"]) or m["n_surface"] < 1:
-        problems.append(f"n_surface must be a positive integer, got {m['n_surface']!r}")
-    if not isinstance(m["parametric"], bool):
-        problems.append(f"parametric must be true or false, got {m['parametric']!r}")
-    problems += _window_problems(m["auc_windows_um"])
+    problems = check_depth(m)
     for grp in m["groups"]:
         c = grp.get("color")
         if c is not None and not is_color_like(c):
             problems.append(f"group {grp.get('name')!r}: color {c!r} is not a matplotlib colour")
-    problems += check_groups(m["groups"], roles=_ROLES)
     if problems:
         raise ValueError("invalid depth manifest:\n  - " + "\n  - ".join(problems))
-
-
-def _is_int(v) -> bool:
-    """An integer, not a bool (JSON true/false are ints to Python)."""
-    return isinstance(v, int) and not isinstance(v, bool)
-
-
-def _is_number(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
-
-
-def _window_problems(windows) -> list[str]:
-    """Problems with ``auc_windows_um``: a list of [z0, z1] pairs (µm) and/or "full"."""
-    form = "a list of [z0, z1] pairs (µm) and/or 'full', e.g. [[0, 100], 'full']"
-    if not isinstance(windows, list) or not windows:
-        return [f"auc_windows_um must be {form}; got {windows!r}"]
-    if all(_is_number(w) for w in windows):
-        return [f"auc_windows_um must be {form}; a single window is [{windows!r}], "
-                f"not {windows!r}"]
-    problems = []
-    for w in windows:
-        if isinstance(w, str) and w.lower() == "full":
-            continue
-        if not (isinstance(w, list) and len(w) == 2 and all(_is_number(v) for v in w)):
-            problems.append(f"auc_windows_um entry {w!r} must be 'full' or a [z0, z1] pair of "
-                            f"numbers; auc_windows_um is {form}")
-        elif not 0 <= w[0] < w[1]:
-            problems.append(f"AUC window {w!r} must be [z0, z1] with 0 <= z0 < z1 (µm)")
-    return problems
-
 
 
 # ---------------------------------------------------------------------------
