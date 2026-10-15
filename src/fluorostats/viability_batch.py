@@ -82,7 +82,7 @@ import numpy as np
 
 from .io import load_volume
 from . import stats
-from .depth_batch import write_contrasts_csv
+from .depth_contrasts import mann_whitney_contrasts, write_contrasts_csv
 from .manifest import check_groups, is_int, is_number, unknown_keys
 from . import report
 from . import segment
@@ -288,18 +288,16 @@ def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
     dropped), BH-FDR across those metrics. None unless there are exactly two groups."""
     if len(groups) != 2:
         return []
-    out = []
+    entries = []
     for mk in _CONTRAST_METRICS:
         a, b = ([r[mk] for r in rows if r["group"] == g and r[mk] == r[mk]] for g in groups)
         if a and b:
-            mw = stats.mann_whitney(a, b)
-            out.append({"metric": mk, "window": "", "group_a": groups[0], "group_b": groups[1],
-                        "n_a": mw["n_x"], "n_b": mw["n_y"], "U": mw["u"], "p": mw["p"],
-                        "cliffs_delta": mw["cliffs_delta"], "test": "Mann-Whitney U, two-sided",
-                        "fold": float(np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")})
-    qs = stats.bh_fdr([c["p"] for c in out])
-    return [{**c, "q": float(q), "correction": f"Benjamini-Hochberg FDR across {len(out)} metrics"}
-            for c, q in zip(out, qs)]
+            entries.append((mk, "", {groups[0]: a, groups[1]: b}))
+    tests = mann_whitney_contrasts(entries, across="metrics")
+    for c, (_, _, bg) in zip(tests, entries):     # console extra: ratio of group means
+        ma, mb = (float(np.mean(v)) for v in bg.values())
+        c["fold"] = mb / ma if ma else float("nan")
+    return tests
 
 
 def _print_summary(rows: list[dict], groups: list[str], tests: list[dict]) -> None:
