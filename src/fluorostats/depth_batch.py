@@ -243,12 +243,11 @@ def aggregate_group(primary: list[dict]) -> dict | None:
     if not primary:
         return None
     grid = _common_grid(primary)
-    sub = np.vstack([np.interp(grid, p["depth_um"], p["bg_subtracted"]) for p in primary])
-    nrm = np.vstack([np.interp(grid, p["depth_um"], p["normalized"]) for p in primary])
-    n = len(primary)
-
-    def sem(a):   # NaN for one stack: no measured spread (stats.describe convention)
-        return a.std(axis=0, ddof=1) / np.sqrt(n) if n > 1 else np.full(a.shape[1], np.nan)
+    # per depth over the stacks; SEM NaN for one stack (no measured spread)
+    sub = stats.describe([np.interp(grid, p["depth_um"], p["bg_subtracted"]) for p in primary],
+                         axis=0)
+    nrm = stats.describe([np.interp(grid, p["depth_um"], p["normalized"]) for p in primary],
+                         axis=0)
 
     # Penetration constant λ over primary stacks. Only fits that converged,
     # cleared the R² threshold, AND landed within the acquired depth range
@@ -261,9 +260,9 @@ def aggregate_group(primary: list[dict]) -> dict | None:
     lam = stats.describe(ok_lams)
     return {
         "depth_um": grid,
-        "sub_mean": sub.mean(axis=0), "sub_sem": sem(sub),
-        "norm_mean": nrm.mean(axis=0), "norm_sem": sem(nrm),
-        "n": n,
+        "sub_mean": sub["mean"], "sub_sem": sub["sem"],
+        "norm_mean": nrm["mean"], "norm_sem": nrm["sem"],
+        "n": len(primary),
         "lambda_mean_um": lam["mean"],
         "lambda_sem_um": lam["sem"],
         "n_lambda_ok": lam["n"],
@@ -290,7 +289,7 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
                             f"{res['normalized'][i]:.6g}"])
 
 
-def write_auc_csv(out: Path, rows: list[dict], windows) -> None:
+def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
     """One row per stack: acquisition, λ fit, absolute/normalised AUC per window, and
     ``voxel_size_source`` (which voxel axes were read from the file vs defaulted)."""
     labels = [window_label(w) for w in windows]
@@ -445,9 +444,8 @@ def _average_blanks(profs: list[depth.DepthProfile]) -> depth.DepthProfile:
     if len(lengths) > 1:
         warnings.warn(f"replicate blanks have {lengths} slices; they are averaged over the "
                       f"first {n} (the shortest).", RuntimeWarning, stacklevel=3)
-    stack = np.stack([p.mean[:n] for p in profs])
-    return depth.DepthProfile(profs[0].depth_um[:n], stack.mean(0),
-                              stack.std(0, ddof=1) / len(profs) ** 0.5, profs[0].n_pixels)
+    d = stats.describe([p.mean[:n] for p in profs], axis=0)
+    return depth.DepthProfile(profs[0].depth_um[:n], d["mean"], d["sem"], profs[0].n_pixels)
 
 
 def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path) -> None:
