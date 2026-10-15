@@ -135,11 +135,13 @@ def test_binarize_unknown_method_raises():
 
 def test_segment_constant_image_paths():
     flat = np.zeros((16, 16), np.float32)
-    # some threshold algorithms raise on a constant image -> exercised except branches
-    choice = segment.choose_threshold_method(flat)
-    assert "method" in choice
-    out = segment.binarize(flat, method="consensus")
-    assert out.shape == flat.shape
+    # isodata raises on a constant image: both meta-methods announce it and go on
+    with pytest.warns(RuntimeWarning, match="isodata failed"):
+        choice = segment.choose_threshold_method(flat)
+    assert choice["method"] == "otsu" and np.isnan(choice["fractions"]["isodata"])
+    with pytest.warns(RuntimeWarning, match="isodata failed"):
+        out = segment.binarize(flat, method="consensus")
+    assert out.shape == flat.shape and not out.any()
 
 
 def test_consensus_announces_a_failed_method(monkeypatch):
