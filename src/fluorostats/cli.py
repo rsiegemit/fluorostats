@@ -46,8 +46,11 @@ def formats():
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
         click.echo(f"  [{marker}] {ext:<8} {desc}")
-    click.echo("\nInstall all readers: pip install " + " ".join(iq_io.OPTIONAL_READERS))
-    click.echo('(from a fluorostats checkout: pip install -e ".[all]")')
+    click.echo('\nInstall all readers: pip install "fluorostats[all]"')
+    readers = " ".join(iq_io.OPTIONAL_READERS)
+    click.echo(
+        f'(from a checkout: pip install -e ".[all]"; the readers alone: pip install {readers})'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +153,7 @@ def _run_driver(run, manifest: str, *args) -> Path:
 @click.option(
     "--channel",
     default=None,
-    help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
+    help="Channel to measure, by index (int) or name substring (ImageJ TIFFs carry no channel names: use an index); default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
 )
 @click.option(
     "--threshold",
@@ -237,6 +240,9 @@ def quant3d(
 ):
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
+    pruning = prune or _given("min_branch_length")
+    if no_skeleton and pruning:
+        raise click.UsageError("--prune / --min-branch-length have no effect with --no-skeleton")
     input_path = Path(input_dir)
     output_path = cli_paths.output_outside_input(input_path, Path(output_dir))
 
@@ -310,7 +316,7 @@ def quant3d(
 @click.option(
     "--channel",
     default=None,
-    help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
+    help="Channel to measure, by index (int) or name substring (ImageJ TIFFs carry no channel names: use an index); default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
 )
 @click.option(
     "--threshold",
@@ -487,6 +493,12 @@ def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
 
     click.echo(f"Plots saved to {plot_dir}")
+
+
+def _given(param: str) -> bool:
+    """Whether the current command's option ``param`` was typed, not defaulted."""
+    source = click.get_current_context().get_parameter_source(param)
+    return source == click.core.ParameterSource.COMMANDLINE
 
 
 def _parse_channel(channel: str | None) -> int | str | None:

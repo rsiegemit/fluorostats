@@ -55,7 +55,21 @@ def test_cli_quant3d(tmp_path):
 def test_cli_formats():
     res = CliRunner().invoke(cli, ["formats"])
     assert res.exit_code == 0
-    assert "[x] .tif" in res.output and "pip install" in res.output
+    assert "[x] .tif" in res.output
+    # Packaging (LOW): the install hint names the package extra first, the checkout second.
+    hints = [line for line in res.output.splitlines() if "pip install" in line]
+    assert hints[0].endswith('pip install "fluorostats[all]"') and '-e ".[all]"' in hints[1]
+
+
+@pytest.mark.parametrize("flags", [["--prune"], ["--min-branch-length", "3"]])
+def test_pruning_options_with_no_skeleton_are_a_usage_error(tmp_path, flags):
+    # Regression (C5): --prune / --min-branch-length were silently ignored under
+    # --no-skeleton.
+    make_dataset(tmp_path / "in", blob_3d)
+    args = ["quant3d", "--input", str(tmp_path / "in"), "--output", str(tmp_path / "out")]
+    res = CliRunner().invoke(cli, args + ["--no-skeleton", *flags])
+    assert res.exit_code == 2 and "--no-skeleton" in res.output
+    assert not (tmp_path / "out").exists()
 
 
 # ---------------------------------------------------------------------------
