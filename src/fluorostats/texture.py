@@ -41,12 +41,18 @@ def orientation_anisotropy(
     -------
     dict with keys:
         coherence — 0 (isotropic) … 1 (fully aligned).
-        dominant_orientation_deg — preferred axis in [0, 180).
+        dominant_orientation_deg — preferred axis in [0, 180), in the same
+            convention as ``objects.object_shape_metrics`` ``orientation_deg``
+            (skimage regionprops: 0 = along the row axis, i.e. vertical; 90 =
+            horizontal), so the two can be compared directly.
         n_pixels — pixels contributing to the average.
     """
     from skimage.feature import structure_tensor
 
     img = np.asarray(image, dtype=float)
+    if img.ndim != 2:
+        raise ValueError(f"orientation_anisotropy expects a 2D (Y, X) image, got shape "
+                         f"{img.shape}; project a stack first (e.g. its maximum over z)")
     if mask is not None:
         sel = np.asarray(mask) > 0
     else:
@@ -61,7 +67,11 @@ def orientation_anisotropy(
     denom = jxx + jyy
     coherence = float(np.hypot(jxx - jyy, 2.0 * jxy) / denom) if denom > 0 else 0.0
     orient = 0.5 * np.arctan2(2.0 * jxy, jxx - jyy)          # radians, principal axis
-    orient_deg = float(np.degrees(orient) % 180.0)
+    # Reported in the skimage regionprops convention (objects.object_shape_metrics):
+    # the structure tensor's angle runs the opposite way, hence the sign flip.
+    orient_deg = float(-np.degrees(orient) % 180.0)
+    if orient_deg > 180.0 - 1e-9:                            # float % can return 180.0
+        orient_deg = 0.0
     return {"coherence": min(coherence, 1.0),
             "dominant_orientation_deg": orient_deg,
             "n_pixels": int(sel.sum())}

@@ -3,15 +3,21 @@
 Turns a set of Live/Dead z-stacks (grouped by condition, e.g. culture day) into
 the quantitative viability readouts the library exposes, from one JSON config:
 
-  - **area / coverage** (``viability.live_dead_fractions`` on the surface MIP):
-    live and dead area fraction and area-based viability;
-  - **counts** (``viability.live_dead_by_count``, ``method="all"``): connected-
-    component / watershed / maxima cell counts, their consensus viability and
-    spread (disagreement flags a crowded regime the counting choice matters in);
+  - **area / coverage** (``viability.live_dead_fractions`` on the intensity MIP:
+    each channel is max-projected over z, then segmented): live and dead area
+    fraction and area-based viability;
+  - **counts** (``viability.live_dead_by_count``, ``method="all"`` by default):
+    connected-component / watershed / maxima cell counts, their consensus viability
+    and spread (disagreement flags a crowded regime the counting choice matters in).
+    Every ``count_method`` writes the same columns (NaN / empty for what it did not
+    compute; the spread is NaN when only one method ran);
   - **regime** (``viability.choose_count_method``): SNR + crowding + the method
     the heuristic would auto-pick, so the choice is transparent;
   - **2D-vs-3D bias** (``viability.viability_2d_vs_3d``): how much a MIP overstates
-    coverage relative to the full volume.
+    coverage relative to the full volume. Its MIP is the projection of the 3D
+    MASK (the stack is segmented in 3D, then max-projected), so ``live_frac_mip``
+    is not ``live_cov_pct / 100``, which segments the intensity MIP. Both are kept;
+    `MIP_COLUMNS` (also written to run_config.json) states which column is which.
 
 Everything is scale-aware: cells are counted on the surface maximum-intensity
 projection (surface culture is a quasi-monolayer), and a per-FOV cell density is
@@ -30,10 +36,13 @@ Manifest schema (all fields except groups/stacks optional)::
     {
       "title": "...",
       "live_channel": 0,          # channel index of the live (e.g. Calcein/AF488) signal
-      "dead_channel": 1,          # channel index of the dead (e.g. PI) signal
+      "dead_channel": 1,          # channel index of the dead (e.g. PI) signal; when
+                                  # omitted, each is found from the file's channel
+                                  # names (viability.live_dead_channels), else 0 / 1
+                                  # with a warning. The names used are written to
+                                  # live_channel_name / dead_channel_name.
       "seg": {"method": "otsu", "min_size": 32},   # segment.binarize kwargs: method,
-                                  # min_size, threshold_scale. Cell counts always
-                                  # threshold with otsu (recorded in run_config.json).
+                                  # min_size, threshold_scale (see "Segmentation").
       "count_method": "all",      # live_dead_by_count method: all | cc | watershed | maxima | auto
       "output_dir": "viability_out",
       "groups": [
@@ -41,6 +50,20 @@ Manifest schema (all fields except groups/stacks optional)::
         {"name": "Day 5", "stacks": [...]}
       ]
     }
+
+Stack labels must be unique within a group; a group ``background`` is rejected
+(viability runs subtract no background).
+
+Segmentation: ``seg.method`` thresholds everything, the cell counts included
+(``count_seg_method`` in run_config.json). ``min_size`` differs by readout:
+
+  - area / coverage and the 2D-vs-3D bias use ``seg.min_size``, or
+    `viability.AREA_MIN_SIZE` when the ``seg`` block gives none;
+  - the counts use ``seg.min_size`` when given (so the default ``seg`` block's 32
+    applies to them too), else `viability.COUNT_MIN_SIZE`; the ``cc`` count then
+    also drops labelled objects below `viability.COUNT_MIN_SIZE`;
+  - the regime estimate (``regime_*`` columns, and ``auto``'s choice) always uses
+    `viability.COUNT_MIN_SIZE`, whatever ``seg.min_size`` is.
 """
 
 from __future__ import annotations
@@ -59,6 +82,16 @@ from . import segment
 from . import viability as viab
 
 DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE}
+# The two maximum-intensity-projection definitions in the per-stack table.
+MIP_COLUMNS = {
+    "live_cov_pct": "percent of the intensity MIP segmented live: each channel is "
+                    "max-projected over z, then thresholded (likewise dead_cov_pct, "
+                    "viability_area and the cell counts)",
+    "live_frac_mip": "fraction of the MIP of the 3D live mask: the stack is "
+                     "thresholded in 3D, then the mask is max-projected "
+                     "(viability.viability_2d_vs_3d; overestimate_mip = live_frac_mip "
+                     "/ live_frac_3d)",
+}
 # Viability runs analyse every stack; there is no auxiliary stack role.
 _ROLES = ("primary",)
 
@@ -68,8 +101,8 @@ def load_manifest(path: Path) -> dict:
     m = json.loads(Path(path).read_text())
     if "groups" not in m or not m["groups"]:
         raise ValueError("manifest needs a non-empty 'groups' list")
-    m.setdefault("live_channel", 0)
-    m.setdefault("dead_channel", 1)
+    m.setdefault("live_channel", None)         # None: resolved from channel names
+    m.setdefault("dead_channel", None)
     m.setdefault("seg", dict(DEFAULT_SEG))
     m.setdefault("count_method", "all")
     m.setdefault("output_dir", "viability_out")
@@ -81,15 +114,23 @@ def _validate(m: dict) -> None:
     """Check a viability manifest before any image is loaded; raise listing every problem."""
     problems = []
     for key in ("live_channel", "dead_channel"):
-        if not isinstance(m[key], int) or isinstance(m[key], bool) or m[key] < 0:
-            problems.append(f"{key} must be a non-negative integer, got {m[key]!r}")
-    if m["live_channel"] == m["dead_channel"]:
+        v = m[key]
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v < 0):
+            problems.append(f"{key} must be a non-negative integer, got {v!r}")
+    if m["live_channel"] is not None and m["live_channel"] == m["dead_channel"]:
         problems.append(f"live_channel and dead_channel are both {m['live_channel']}")
     methods = ("all", "auto", *viab.COUNT_METHODS)
     if m["count_method"] not in methods:
         problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
     problems += _check_seg(m["seg"])
     problems += check_groups(m["groups"], roles=_ROLES)
+    for grp in m["groups"]:
+        name = grp.get("name")
+        if "background" in grp:
+            problems.append(f"group {name!r}: 'background' is not used by viability runs")
+        labels = [st.get("label") for st in grp.get("stacks", [])]
+        for lab in sorted({lb for lb in labels if lb is not None and labels.count(lb) > 1}):
+            problems.append(f"group {name!r}: label {lab!r} is used by more than one stack")
     if problems:
         raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
 
@@ -113,10 +154,13 @@ def _check_seg(seg) -> list[str]:
     return problems
 
 
-def _counts(by_method: dict, m: str) -> tuple[float, float, float]:
-    """(n_live, n_dead, viability) for one method from a live_dead_by_count 'all' result."""
-    d = by_method.get(m, {})
-    return d.get("n_live", float("nan")), d.get("n_dead", float("nan")), d.get("viability", float("nan"))
+# `live_dead_by_count` keys written under another column name; every other key is
+# written as is, except ``viability`` (equals ``consensus``, not repeated) and the
+# deprecated nested ``by_method`` (its values are the per-method keys).
+_COUNT_COLUMNS = {"consensus": "viability_count_consensus",
+                  "spread": "viability_count_spread",
+                  "method_live": "count_method_live", "method_dead": "count_method_dead",
+                  "reason_live": "count_reason_live", "reason_dead": "count_reason_dead"}
 
 
 def analyse_stack(path: Path, cfg: dict) -> dict:
@@ -124,8 +168,10 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     vol, meta = load_volume(Path(path))                 # (C, Z, Y, X)
     if vol.ndim != 4:  # pragma: no cover — load_volume always canonicalises to (C,Z,Y,X)
         raise ValueError(f"{path.name}: expected 4D (C,Z,Y,X), got shape {vol.shape}")
-    live = vol[cfg["live_channel"]].astype(np.float32)   # (Z, Y, X)
-    dead = vol[cfg["dead_channel"]].astype(np.float32)
+    names = meta["channel_names"]
+    li, di = viab.live_dead_channels(names, cfg["live_channel"], cfg["dead_channel"])
+    live = vol[li].astype(np.float32)   # (Z, Y, X)
+    dead = vol[di].astype(np.float32)
     seg = cfg["seg"]
 
     # surface culture -> analyse the maximum-intensity projection (quasi-monolayer)
@@ -144,12 +190,13 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     bias = viab.viability_2d_vs_3d(live, **seg)                    # MIP vs full 3D
 
     row = {
+        "live_channel_name": names[li], "dead_channel_name": names[di],
         "px_um": px, "voxel_size_source": meta.get("voxel_size_source", ""), "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
-        # area / coverage on the surface MIP
+        # area / coverage on the intensity MIP (segment the projection; MIP_COLUMNS)
         "live_cov_pct": 100.0 * area["live_fraction"],
         "dead_cov_pct": 100.0 * area["dead_fraction"],
         "viability_area": area["viability"],
-        # 2D (MIP) vs full-3D coverage bias
+        # 2D vs full-3D coverage bias; this MIP projects the 3D mask (MIP_COLUMNS)
         "live_frac_mip": bias["live_fraction_mip"],
         "live_frac_3d": bias["live_fraction_3d"],
         "overestimate_mip": bias["overestimate_mip"],
@@ -158,22 +205,10 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "regime_crowding": regime["crowding"],
         "regime_method": regime["method"],
     }
-    if cfg["count_method"] == "all":
-        bm = counts["by_method"]
-        for m in viab.COUNT_METHODS:
-            nl, nd, v = _counts(bm, m)
-            row[f"n_live_{m}"] = nl
-            row[f"n_dead_{m}"] = nd
-            row[f"viability_{m}"] = v
-        row["viability_count_consensus"] = counts["consensus"]
-        row["viability_count_spread"] = counts["spread"]
-        n_live_ref = bm.get("cc", {}).get("n_live", float("nan"))   # CC = robust count
-    else:
-        row["n_live"] = counts["n_live"]
-        row["n_dead"] = counts["n_dead"]
-        row["viability_count_consensus"] = counts["viability"]
-        row["viability_count_spread"] = 0.0
-        n_live_ref = counts["n_live"]
+    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items()
+                if k not in ("viability", "by_method")})
+    # density from the single count, or (method "all": no single count) the CC count
+    n_live_ref = counts["n_live"] if counts["n_live"] == counts["n_live"] else counts["n_live_cc"]
     row["live_density_permm2"] = n_live_ref / fov_mm2 if fov_mm2 > 0 else float("nan")
     return row
 
@@ -191,7 +226,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)   # counts use seg.method too
     report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
-                            nested={"resolved": m})
+                            nested={"resolved": m, "mip_columns": MIP_COLUMNS})
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
@@ -210,8 +245,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         w.writerows(rows)
 
     # group summary CSV (mean +/- SEM for the numeric metrics)
-    metrics = [k for k in fields
-               if k not in ("group", "stack", "voxel_size_source", "regime_method")]
+    metrics = [k for k in fields if k not in ("group", "stack")
+               and not isinstance(rows[0][k], str)]      # numeric columns only
     groups = [g["name"] for g in m["groups"]]
     with open(out / "viability_group_summary.csv", "w", newline="") as f:
         sw = csv.writer(f)

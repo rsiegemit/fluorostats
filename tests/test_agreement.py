@@ -53,3 +53,11 @@ def test_report_keys():
 def test_agreement_too_few_points():
     assert np.isnan(agreement.lins_ccc(np.array([1.0]), np.array([1.0])))   # size < 2
     assert np.isnan(agreement.icc(np.array([1.0]), np.array([1.0])))        # n < 2
+
+
+def test_bland_altman_single_pair_has_no_spread():
+    # One pair: the bias is measured, the SD of differences is not (NaN, as in
+    # stats.describe), so the limits of agreement are NaN rather than bias +/- 0.
+    r = bland_altman([1.0], [3.0])
+    assert r["n"] == 1 and r["bias"] == -2.0
+    assert np.isnan(r["sd_diff"]) and np.isnan(r["loa_lower"]) and np.isnan(r["loa_upper"])

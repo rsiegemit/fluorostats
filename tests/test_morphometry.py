@@ -73,11 +73,32 @@ def test_depth_span_empty_volume():
 
 
 def test_depth_centroid_returns_um():
+    # Slice keys are always slices; the _um keys carry micrometres.
     vol = np.zeros((10, 4, 4), dtype=np.float32)
     vol[5] = 1.0
     res = depth_centroid(vol, voxel_size_um=(2.0, 1.0, 1.0))
-    assert res["z_centroid"] == pytest.approx(10.0)
-    assert res["z_p50"] == pytest.approx(10.0)
+    assert res["z_centroid"] == pytest.approx(5.0) and res["z_p50"] == pytest.approx(5.0)
+    assert res["z_centroid_um"] == pytest.approx(10.0)
+    assert res["z_p50_um"] == pytest.approx(10.0)
+    uncal = depth_centroid(vol)
+    assert uncal["z_centroid"] == pytest.approx(5.0) and np.isnan(uncal["z_centroid_um"])
+
+
+def test_depth_metrics_use_the_z_voxel_size_on_any_z_axis():
+    # voxel_size_um is (vz, vy, vx) whatever axis holds z: z_axis=2 still uses vz.
+    vol = np.zeros((4, 4, 10), dtype=np.float32)
+    vol[:, :, 2:7] = 1.0
+    span = depth_span(vol, voxel_size_um=(5.0, 0.5, 0.5), z_axis=2)
+    assert span["span_slices"] == 5 and span["span_um"] == pytest.approx(25.0)
+    cen = depth_centroid(vol, voxel_size_um=(5.0, 0.5, 0.5), z_axis=2)
+    assert cen["z_centroid_um"] == pytest.approx(5.0 * cen["z_centroid"])
+
+
+def test_depth_span_uncalibrated_um_is_nan():
+    vol = np.zeros((6, 4, 4), dtype=np.float32)
+    vol[1:3] = 1.0
+    assert np.isnan(depth_span(vol)["span_um"])
+    assert np.isnan(depth_span(np.zeros((3, 4, 4)))["span_um"])
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +163,8 @@ def test_lateral_homogeneity_uses_every_pixel_on_uneven_fields():
     assert res["n_tiles"] == 16
     assert res["lateral_gini"] == pytest.approx(stats.gini(tiles))
     assert res["lateral_gini"] > 0            # cropping would have seen a flat field
+
+
+def test_lateral_homogeneity_refuses_a_2d_image():
+    with pytest.raises(ValueError, match=r"3D \(Z, Y, X\) volume"):
+        morphometry.lateral_homogeneity(np.ones((16, 16)))

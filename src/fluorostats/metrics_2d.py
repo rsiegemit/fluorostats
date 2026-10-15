@@ -36,6 +36,7 @@ def coverage_metrics(
         largest_component_fraction : float
             Fraction of total foreground in the largest cluster.
             Near 1.0 = one confluent sheet; low = scattered patches.
+            NaN for an empty mask, as are the cluster areas below.
         mean_cluster_area_px : float
             Average cluster size in pixels.
         median_cluster_area_px : float
@@ -50,14 +51,15 @@ def coverage_metrics(
     total_fg = mask.sum()
 
     if n_comp == 0 or total_fg == 0:
+        # no clusters: their sizes and the largest one's share are undefined (NaN)
         return {
             "area_fraction": af,
             "n_components": 0,
-            "largest_component_fraction": 0.0,
-            "mean_cluster_area_px": 0.0,
-            "median_cluster_area_px": 0.0,
-            "mean_cluster_area_um2": 0.0,
-            "median_cluster_area_um2": 0.0,
+            "largest_component_fraction": float("nan"),
+            "mean_cluster_area_px": float("nan"),
+            "median_cluster_area_px": float("nan"),
+            "mean_cluster_area_um2": float("nan"),
+            "median_cluster_area_um2": float("nan"),
         }
 
     component_sizes: np.ndarray = np.bincount(labeled.ravel())

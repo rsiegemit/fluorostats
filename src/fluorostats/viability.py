@@ -21,6 +21,9 @@ boolean masks, or raw channels plus a ``threshold``/``method`` to segment here.
 
 from __future__ import annotations
 
+import re
+import warnings
+
 import numpy as np
 
 from .objects import count_local_maxima, label_3d, watershed_split
@@ -32,6 +35,14 @@ DEFAULT_SEG_METHOD = "otsu"
 AREA_MIN_SIZE = 32
 # Smallest object (voxels) kept when counting cells: counting keeps small real cells.
 COUNT_MIN_SIZE = 5
+# `choose_count_method`'s regime thresholds: SNR at or above CLEAN_SNR is clean, below
+# LOW_SNR is noisy; peaks per connected component above CROWDED is crowded. Hand-set
+# heuristics (v0.6), checked only on the synthetic regimes in tests/test_viability.py;
+# no benchmark table chose them, hence "auto" escalates to maxima only when an image
+# is both clearly clean and clearly crowded.
+CLEAN_SNR = 8.0
+LOW_SNR = 3.0
+CROWDED = 1.5
 
 
 def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None,
@@ -60,6 +71,45 @@ def _count_maxima(ch, sig, cseg, min_distance, threshold_rel) -> int:
 # reports them (and `viability_batch` writes their columns).
 _COUNTERS = {"cc": _count_cc, "watershed": _count_watershed, "maxima": _count_maxima}
 COUNT_METHODS = tuple(_COUNTERS)
+
+
+# Well-known Live/Dead dyes, matched in channel names when a run does not give its
+# channel indices. Live: calcein, FITC, GFP, Alexa Fluor 488. Dead: propidium iodide,
+# ethidium homodimer. Other dyes (e.g. DAPI, far-red labels) are never guessed.
+LIVE_DYES = re.compile(r"calcein|fitc|gfp|alexa.*488|af\s*488", re.IGNORECASE)
+DEAD_DYES = re.compile(r"propidium|\bpi\b|ethd|ethidium", re.IGNORECASE)
+
+
+def live_dead_channels(channel_names: list[str], live: int | None = None,
+                       dead: int | None = None) -> tuple[int, int]:
+    """Indices ``(live, dead)`` of the live and dead channels among ``channel_names``.
+
+    An index given explicitly is used as is. Otherwise the first channel whose name
+    matches `LIVE_DYES` / `DEAD_DYES` is chosen; with no match the channel is a guess
+    (live 0, dead 1), announced with a RuntimeWarning. Raises ValueError if both
+    resolve to one channel or an index is past the channel count.
+    """
+    def pick(given, pattern, default, role):
+        if given is not None:
+            return given
+        for i, name in enumerate(channel_names):
+            if pattern.search(name):
+                return i
+        warnings.warn(f"no channel name identifies the {role} channel among "
+                      f"{channel_names}; using channel {default} by position. Set "
+                      f"{role}_channel in the manifest if that is wrong.",
+                      RuntimeWarning, stacklevel=3)
+        return default
+
+    li = pick(live, LIVE_DYES, 0, "live")
+    di = pick(dead, DEAD_DYES, 1, "dead")
+    if li == di:
+        raise ValueError(f"live and dead are both channel {li} of {channel_names}; set "
+                         "live_channel and dead_channel explicitly")
+    if max(li, di) >= len(channel_names):
+        raise ValueError(f"channel {max(li, di)} requested but the file has "
+                         f"{len(channel_names)} channels {channel_names}")
+    return li, di
 
 
 def live_ratio(n_live: float | np.integer, n_dead: float | np.integer) -> float:
@@ -105,8 +155,9 @@ def _estimate_regime(channel: np.ndarray, **seg) -> dict:
     """
     seg = {**seg, "min_size": COUNT_MIN_SIZE}   # never let a large min_size hide cells
     mask = _mask(channel, **seg)
-    if not mask.any():
-        return {"radius": 0.0, "snr": 0.0, "crowding": 1.0, "n_cc": 0}
+    if not mask.any():                          # no cells: nothing was measured
+        return {"radius": float("nan"), "snr": float("nan"), "crowding": float("nan"),
+                "n_cc": 0}
     ch = np.asarray(channel, float)
     fg, bg = ch[mask], ch[~mask]
     snr = float((fg.mean() - bg.mean()) / (bg.std() + 1e-9))
@@ -126,11 +177,11 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
 
     Transparent heuristic (returns its reasoning; always overridable):
 
-    - low SNR (< 3): ``"cc"`` — connected-component counting is the most
+    - low SNR (< `LOW_SNR`): ``"cc"`` — connected-component counting is the most
       noise-robust; peak finding would count noise.
-    - crowded touching cells (peak count exceeds connected-components by >50%,
-      crowding > 1.5) with adequate SNR: ``"maxima"`` (with auto ``smooth_sigma`` ≈ radius/1.5) — peaks
-      separate overlapping cells that CC merges.
+    - crowded touching cells (crowding = peaks / connected components > `CROWDED`)
+      with a clean image (SNR >= `CLEAN_SNR`): ``"maxima"`` (with auto
+      ``smooth_sigma`` ≈ radius/1.5) — peaks separate overlapping cells that CC merges.
     - otherwise (well-separated): ``"cc"`` — exact and robust.
 
     NOTE: ``"maxima"`` is the mode validated against the published Fiji Live/Dead macro
@@ -138,8 +189,9 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
     crowded regime above, so to reproduce that headline pass ``method="maxima"`` explicitly
     to ``live_dead_by_count`` rather than relying on the regime default.
 
-    Returns dict: method, smooth_sigma, and the estimated regime metrics. The
-    radius and smooth_sigma are in voxels (isotropic voxels assumed).
+    Returns dict: method, smooth_sigma, and the estimated regime metrics (radius,
+    snr, crowding: NaN when no cell is segmented; n_cc). The radius and
+    smooth_sigma are in voxels (isotropic voxels assumed).
     """
     r = _estimate_regime(channel, **seg)
     # Conservative: default to the noise-robust method (CC), escalate to maxima
@@ -148,10 +200,10 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
     # so we bias toward the safe method and avoid firing maxima on noisy data.
     if r["n_cc"] == 0:
         method, reason = "cc", "no cells detected"
-    elif r["snr"] >= 8.0 and r["crowding"] > 1.5:
+    elif r["snr"] >= CLEAN_SNR and r["crowding"] > CROWDED:
         method, reason = "maxima", (
             f"clean (SNR {r['snr']:.1f}) and crowded (peaks/CC {r['crowding']:.2f})")
-    elif r["snr"] < 3.0:
+    elif r["snr"] < LOW_SNR:
         method, reason = "cc", f"low SNR ({r['snr']:.1f}) — CC is noise-robust"
     else:
         method, reason = "cc", (
@@ -196,11 +248,21 @@ def live_dead_by_count(
     is the counting mode); other ``seg`` keys (``min_size``, ``threshold_scale``)
     pass through to it.
 
-    No single mode is universally best. Every mode returns n_live, n_dead and
-    viability, plus (auto) the chosen method + reasoning, or (all) per-method
-    counts and viabilities (``by_method``), ``consensus`` and ``spread``; for
-    ``all`` the top-level counts are NaN (no single count) and ``viability`` is
-    the consensus.
+    No single mode is universally best. Every mode returns the same flat keys
+    (what a mode does not compute is NaN, or "" for text):
+
+    - ``n_live``, ``n_dead``, ``viability`` — the counts and their ratio (NaN
+      counts for ``all``: there is no single count; its viability is the consensus);
+    - ``consensus`` — median viability over the methods run (equals ``viability``);
+      ``spread`` — max − min of those viabilities, NaN when only one method ran;
+    - ``method_live``, ``method_dead``, ``reason_live``, ``reason_dead`` — the
+      method used on each channel and (``auto``) why ("" for ``all``);
+    - ``n_live_<m>``, ``n_dead_<m>``, ``viability_<m>`` for every ``m`` in
+      `COUNT_METHODS` — the per-method counts that were computed.
+
+    Deprecated: ``method="all"`` also returns ``by_method`` (``{m: {n_live, n_dead,
+    viability}}``), the v0.8.2 nested form of the per-method keys; it will be
+    removed in a later release, so read ``n_live_<m>`` etc. instead.
     """
     methods = ("auto", "all", *COUNT_METHODS)
     if method not in methods:
@@ -211,37 +273,48 @@ def live_dead_by_count(
     def _count_one(ch, m, sig):
         return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
 
+    nan = float("nan")
+    out: dict = {"n_live": nan, "n_dead": nan, "viability": nan, "consensus": nan,
+                 "spread": nan, "method_live": "", "method_dead": "",
+                 "reason_live": "", "reason_dead": ""}
+    for m in COUNT_METHODS:
+        out.update({f"n_live_{m}": nan, f"n_dead_{m}": nan, f"viability_{m}": nan})
+
     if method == "all":
-        modes = COUNT_METHODS
         # auto-smooth the maxima channel from each channel's estimated radius
-        sig_l = choose_count_method(live, **rseg)["radius"] / 1.5
-        sig_d = choose_count_method(dead, **rseg)["radius"] / 1.5
-        per = {}
-        for m in modes:
+        # (no cells -> radius NaN -> no smoothing)
+        sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
+        sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
+        for m in COUNT_METHODS:
             nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)
             nd = _count_one(dead, m, sig_d if m == "maxima" else 0.0)
-            per[m] = {"n_live": nl, "n_dead": nd, "viability": live_ratio(nl, nd)}
-        vals = [p["viability"] for p in per.values() if p["viability"] == p["viability"]]
-        consensus = float(np.median(vals)) if vals else float("nan")
-        spread = float(max(vals) - min(vals)) if vals else float("nan")
-        return {"n_live": float("nan"), "n_dead": float("nan"), "viability": consensus,
-                "by_method": per, "consensus": consensus, "spread": spread}
+            out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd,
+                        f"viability_{m}": live_ratio(nl, nd)})
+        vals = [out[f"viability_{m}"] for m in COUNT_METHODS
+                if out[f"viability_{m}"] == out[f"viability_{m}"]]
+        if vals:
+            out["consensus"] = out["viability"] = float(np.median(vals))
+            out["spread"] = float(max(vals) - min(vals))
+        # deprecated v0.8.2 nested form of the per-method keys
+        out["by_method"] = {m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")}
+                            for m in COUNT_METHODS}
+        return out
 
     def _count(ch):
-        m, sig = method, smooth_sigma
-        info = None
+        m, sig, reason = method, smooth_sigma, ""
         if method == "auto":
             info = choose_count_method(ch, **rseg)
-            m, sig = info["method"], info["smooth_sigma"]
-        n = _count_one(ch, m, sig)
-        return n, (info["method"] if info else m), (info["reason"] if info else "")
+            m, sig, reason = info["method"], info["smooth_sigma"], info["reason"]
+        return _count_one(ch, m, sig), m, reason
 
     n_live, ml, rl = _count(live)
     n_dead, md, rd = _count(dead)
-    out = {"n_live": n_live, "n_dead": n_dead, "viability": live_ratio(n_live, n_dead)}
-    if method == "auto":
-        out.update({"method_live": ml, "method_dead": md,
-                    "reason_live": rl, "reason_dead": rd})
+    v = live_ratio(n_live, n_dead)
+    out.update({"n_live": n_live, "n_dead": n_dead, "viability": v, "consensus": v,
+                "method_live": ml, "method_dead": md, "reason_live": rl, "reason_dead": rd,
+                f"n_live_{ml}": n_live, f"n_dead_{md}": n_dead})
+    if ml == md:
+        out[f"viability_{ml}"] = v
     return out
 
 
@@ -288,6 +361,13 @@ def viability_2d_vs_3d(
     Returns dict: live_fraction_midplane, live_fraction_mip, live_fraction_3d,
     overestimate_mip = mip / 3d (>1 means the 2D MIP overstates coverage), and
     overestimate_midplane = midplane / 3d.
+
+    Projection: the MIP here is the maximum projection of the 3D live MASK (the
+    volume is segmented once in 3D, then projected), so a voxel counts as covered
+    if any slice above it is foreground. Segmenting the intensity MIP instead
+    (``live_dead_fractions(live.max(z_axis))``, as `viability_batch`'s
+    ``live_cov_pct`` does) thresholds the projected intensities and generally
+    gives a different fraction.
     """
     lm = _mask(live, live_mask, **seg)
     nz = lm.shape[z_axis]
@@ -341,6 +421,7 @@ def attenuation_correct(
 
 
 __all__ = [
+    "live_dead_channels",
     "live_ratio",
     "live_dead_fractions",
     "live_dead_by_count",

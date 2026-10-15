@@ -23,9 +23,10 @@ from .deprecation import renamed_keyword
 
 
 # The result of `skeleton_metrics` for an empty skeleton: the one definition of
-# its keys, also used by the CLI when skeletons are skipped.
+# its keys, also used by the CLI when skeletons are skipped. Counts and length are
+# a measured zero; the mean length of zero branches is undefined (NaN).
 EMPTY_METRICS = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
-                 "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
+                 "n_junction_nodes": 0, "mean_branch_length_um": float("nan")}
 # The result when the skeleton could not be measured: NaN, not a measured zero.
 UNMEASURED_METRICS = {k: float("nan") for k in EMPTY_METRICS}
 
@@ -45,7 +46,8 @@ def _has_branches(s: np.ndarray) -> bool:
 
 def n_junction_nodes(skel: np.ndarray) -> int:
     """Number of skeleton junction NODES (skeleton voxels with >= 3 skeleton
-    neighbours), with adjacent junction voxels merged into a single node.
+    neighbours), with adjacent junction voxels (full connectivity: faces, edges
+    and corners, as for the neighbour count) merged into a single node.
 
     Matches the "branchpoint / junction" definition used by AngioTool, REAVER,
     and Fiji's AnalyzeSkeleton — distinct from ``skeleton_metrics``'
@@ -57,10 +59,10 @@ def n_junction_nodes(skel: np.ndarray) -> int:
     """
     s = skel > 0
     junction_vox = s & (_neighbour_counts(s) >= 3)
-    return int(label(junction_vox)[1])
+    # merge with the same full connectivity the neighbour count uses
+    return int(label(junction_vox, structure=np.ones((3,) * s.ndim))[1])
 
 
-@renamed_keyword("spacing", "voxel_size_um")
 @renamed_keyword("min_branch_length_px", "min_branch_length")
 def prune_skeleton(
     skel: np.ndarray,
@@ -119,6 +121,10 @@ def skeleton_metrics(
 
     Parameters
     ----------
+    mask : 2D or 3D bool array
+    voxel_size_um : (vz, vy, vx)
+        Voxel size in µm (a 2D mask uses the trailing ``(vy, vx)``). The default
+        ``(1, 1, 1)`` is uncalibrated: lengths are then in voxel units, not µm.
     prune : bool, default False
         If True, remove short spur branches before measuring (see
         :func:`prune_skeleton`). Default False preserves the original,
@@ -134,8 +140,8 @@ def skeleton_metrics(
         total_length_um, n_branches, n_junctions (junction-to-junction
         branches), n_junction_nodes (degree>=3 nodes; field-standard
         branchpoint count), mean_branch_length_um. Zeros for an empty
-        skeleton; NaN, with a RuntimeWarning, if the skeleton cannot be
-        measured.
+        skeleton (mean_branch_length_um NaN: there is no branch to average);
+        all NaN, with a RuntimeWarning, if the skeleton cannot be measured.
     """
     try:
         skel = skeletonize(mask)

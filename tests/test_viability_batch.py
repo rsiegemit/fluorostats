@@ -73,6 +73,15 @@ def test_single_count_method_path(tmp_path):
     import csv
     rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
     assert all("n_live" in r for r in rows)     # single-method path emits n_live
+    # the same columns as count_method="all"; what cc did not compute is NaN
+    (tmp_path / "a").mkdir()
+    all_rows = list(csv.DictReader(open(viability_batch.run(_manifest(tmp_path / "a"))
+                                        / "viability_per_stack.csv")))
+    assert list(rows[0]) == list(all_rows[0])
+    assert all(r["viability_count_spread"] == "nan" for r in rows)     # one method ran
+    assert all(r["n_live_watershed"] == "nan" and r["n_live_cc"] == r["n_live"]
+               for r in rows)
+    assert all(r["count_method_live"] == "cc" for r in rows)
 
 
 def test_viability_batch_manifest_errors(tmp_path):
@@ -99,7 +108,8 @@ def _cfg(**kw):
 def test_fov_area_uses_y_and_x_pixel_sizes(monkeypatch):
     """Non-square pixels: the field of view is (dx * nx) * (dy * ny)."""
     vol = _blob_stack(5, 5)[:, :, :, :80]                      # ny = 96, nx = 80
-    meta = {"voxel_size_um": (2.0, 0.5, 1.0), "voxel_size_source": "file"}
+    meta = {"voxel_size_um": (2.0, 0.5, 1.0), "voxel_size_source": "file",
+            "channel_names": ["Ch1", "Ch2"]}
     monkeypatch.setattr(viability_batch, "load_volume", lambda p: (vol, meta))
     row = viability_batch.analyse_stack(Path("x.npy"), _cfg())
     assert row["fov_mm2"] == pytest.approx((1.0 * 80) * (0.5 * 96) / 1e6)
@@ -191,3 +201,71 @@ def test_single_stack_group_has_no_sem(tmp_path, capsys):
     assert rows and all(r["sem"] == "nan" for r in rows)
     assert {r["n"] for r in rows} <= {"0", "1"} and any(r["n"] == "1" for r in rows)
     assert "±nan (n=1)" in capsys.readouterr().out
+
+
+def test_the_two_mip_columns_are_the_documented_definitions(tmp_path):
+    # live_cov_pct segments the intensity MIP; live_frac_mip projects the 3D mask.
+    import csv
+    from fluorostats import viability
+    from fluorostats.segment import binarize
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    row = next(csv.DictReader(open(out / "viability_per_stack.csv")))
+    vol = _blob_stack(3, 3)
+    seg = viability_batch.DEFAULT_SEG
+    live = vol[0].astype(np.float32)
+    intensity_mip = viability.live_dead_fractions(live.max(0), **seg)["live_fraction"]
+    mask_mip = binarize(live, **seg).max(0).mean()
+    assert float(row["live_cov_pct"]) == pytest.approx(100 * intensity_mip)
+    assert float(row["live_frac_mip"]) == pytest.approx(mask_mip)
+    cfg = json.loads((out / "run_config.json").read_text())
+    assert cfg["mip_columns"] == viability_batch.MIP_COLUMNS
+
+
+def test_channels_resolved_from_names_and_recorded(tmp_path, monkeypatch):
+    # No channels in the manifest: the live/dead dyes are found by name (here in
+    # reverse order) and both names are written to the table.
+    import csv
+    real = viability_batch.load_volume
+
+    def swapped(path):
+        vol, meta = real(path)
+        return vol[::-1], {**meta, "channel_names": ["PI", "Calcein-AM"]}
+
+    monkeypatch.setattr(viability_batch, "load_volume", swapped)
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text())
+    del man["live_channel"], man["dead_channel"]
+    mp.write_text(json.dumps(man))
+    out = viability_batch.run(mp)
+    row = next(csv.DictReader(open(out / "viability_per_stack.csv")))
+    assert (row["live_channel_name"], row["dead_channel_name"]) == ("Calcein-AM", "PI")
+    monkeypatch.setattr(viability_batch, "load_volume", real)
+    (tmp_path / "r").mkdir()
+    ref_out = viability_batch.run(_one_stack_manifest(tmp_path / "r"))
+    ref = next(csv.DictReader(open(ref_out / "viability_per_stack.csv")))
+    assert row["live_cov_pct"] == ref["live_cov_pct"]       # the same live signal measured
+
+
+def test_unnamed_channels_fall_back_to_0_1_with_a_warning(tmp_path):
+    import csv
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text())
+    del man["live_channel"], man["dead_channel"]
+    mp.write_text(json.dumps(man))
+    with pytest.warns(RuntimeWarning, match="no channel name identifies the live"):
+        out = viability_batch.run(mp)
+    row = next(csv.DictReader(open(out / "viability_per_stack.csv")))
+    assert (row["live_channel_name"], row["dead_channel_name"]) == ("Ch1", "Ch2")
+
+
+def test_manifest_rejects_duplicate_labels_and_background(tmp_path):
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text())
+    st = man["groups"][0]["stacks"][0]
+    man["groups"][0]["stacks"].append(dict(st))
+    man["groups"][0]["background"] = st["path"]
+    mp.write_text(json.dumps(man))
+    with pytest.raises(ValueError) as err:
+        viability_batch.load_manifest(mp)
+    assert "label 's' is used by more than one stack" in str(err.value)
+    assert "'background' is not used by viability" in str(err.value)

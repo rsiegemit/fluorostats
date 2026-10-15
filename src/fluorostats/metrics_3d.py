@@ -14,8 +14,9 @@ import numpy as np
 from scipy.ndimage import label
 from skimage.measure import euler_number
 
-# Skeleton morphometry lives in its own module (fluorostats.skeleton); it is
-# re-exported here for backwards compatibility.
+# Deprecated re-exports: skeleton morphometry lives in fluorostats.skeleton; these
+# names stay here for backwards compatibility only (the CLI still calls
+# metrics_3d.skeleton_metrics) and are to be removed once callers import skeleton.
 from .skeleton import skeleton_metrics, prune_skeleton, n_junction_nodes  # noqa: F401
 
 
@@ -38,6 +39,7 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
         largest_component_fraction : float
             Fraction of total foreground volume in the largest component.
             Near 1.0 = one dominant connected network; low = fragmented.
+            NaN for an empty mask.
     """
     # Dual-connectivity pairing (intentional, not a mismatch): foreground components
     # are counted under 6-connectivity (scipy.ndimage.label default, face-adjacency),
@@ -51,7 +53,7 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
     # Largest component fraction
     total_fg = mask.sum()
     if total_fg == 0 or n_comp == 0:
-        lcf = 0.0
+        lcf = float("nan")                  # no component: undefined, not 0
     else:
         component_sizes: np.ndarray = np.bincount(labeled.ravel())
         # Index 0 is background, skip it

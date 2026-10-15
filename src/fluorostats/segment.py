@@ -18,9 +18,9 @@ from skimage.filters import (
 from skimage.morphology import (
     ball,
     disk,
-    opening,
     remove_small_objects,
 )
+from skimage.morphology import opening as binary_opening
 
 from .preprocess import background_subtract, denoise
 
@@ -38,6 +38,23 @@ THRESHOLD_METHODS: dict[str, Callable[..., Any]] = {
 # meta-methods that choose among them. The CLI builds its --threshold choices here.
 METHODS = (*THRESHOLD_METHODS, "auto", "consensus")
 
+# `choose_threshold_method`'s rule: Otsu has missed a dim, sparse foreground when it
+# keeps under AUTO_OTSU_MIN_FRACTION of the pixels while Li keeps more than
+# AUTO_LI_RATIO times as much. Hand-set heuristics (v0.7), checked only on the
+# synthetic sparse-signal case in tests/test_segment.py; no benchmark table chose them.
+AUTO_OTSU_MIN_FRACTION = 0.01
+AUTO_LI_RATIO = 3.0
+
+# Salt-noise opening applied after thresholding, by name: the footprint for a mask
+# of the given ndim, or None for no opening. "ball" (3x3x3 cross in 3D, disk(1) in
+# 2D) removes any structure thinner than 3 z-slices; "disk" opens each z-slice in
+# 2D only, so thin sheets/vessels that span 1-2 slices survive.
+OPENINGS: dict[str, Callable[[int], np.ndarray | None]] = {
+    "ball": lambda ndim: ball(1) if ndim == 3 else disk(1),
+    "disk": lambda ndim: disk(1)[None] if ndim == 3 else disk(1),
+    "none": lambda ndim: None,
+}
+
 
 def segment_channel(
     img: np.ndarray,
@@ -47,16 +64,18 @@ def segment_channel(
     threshold_scale: float = 1.0,
     sigma: float = 1.0,
     bg_radius: int = 0,
+    opening: str = "ball",
 ) -> tuple[np.ndarray, np.ndarray]:
     """The full single-channel segmentation the CLI runs: Gaussian denoise,
     optional white-top-hat background subtraction (``bg_radius > 0``), then
-    `binarize`. Returns ``(preprocessed_image, mask)``.
+    `binarize` (``opening`` as there: the default 3D opening erases structures
+    thinner than 3 z-slices). Returns ``(preprocessed_image, mask)``.
     """
     img = denoise(img, sigma=sigma)
     if bg_radius > 0:
         img = background_subtract(img, radius=bg_radius)
     return img, binarize(img, method=method, min_size=min_size,
-                         threshold_scale=threshold_scale)
+                         threshold_scale=threshold_scale, opening=opening)
 
 
 def choose_threshold_method(arr: np.ndarray) -> dict:
@@ -84,11 +103,14 @@ def choose_threshold_method(arr: np.ndarray) -> dict:
     for name, fn in THRESHOLD_METHODS.items():
         try:
             fracs[name] = float((a > fn(a)).mean())
-        except Exception:
+        except (ValueError, IndexError) as exc:   # non-finite or degenerate histogram
+            warnings.warn(f"choose_threshold_method: {name} failed ({type(exc).__name__}: "
+                          f"{exc}); its foreground fraction is NaN.",
+                          RuntimeWarning, stacklevel=2)
             fracs[name] = float("nan")
     otsu_f = fracs.get("otsu", 0.0)
     li_f = fracs.get("li", 0.0)
-    if otsu_f < 0.01 and li_f > 3 * otsu_f:
+    if otsu_f < AUTO_OTSU_MIN_FRACTION and li_f > AUTO_LI_RATIO * otsu_f:
         method, reason = "li", (
             f"Otsu keeps only {otsu_f:.4f} of pixels while Li finds {li_f:.4f} "
             f"— dim/sparse foreground Otsu misses")
@@ -103,6 +125,7 @@ def binarize(
     method: str = "otsu",
     min_size: int = 64,
     threshold_scale: float = 1.0,
+    opening: str = "ball",
 ) -> np.ndarray:
     """Segment fluorescence signal into a binary mask.
 
@@ -120,6 +143,12 @@ def binarize(
     threshold_scale : float
         Multiply the computed threshold by this factor. Values < 1.0
         capture more dim signal; values > 1.0 are more conservative.
+    opening : {"ball", "disk", "none"}
+        Salt-noise opening after thresholding (see `OPENINGS`). The default
+        ``"ball"`` opens 3D masks with a 3x3x3 cross, which erases any structure
+        thinner than 3 z-slices (thin sheets, monolayers, vessels on a coarse
+        z-step); ``"disk"`` opens each z-slice in 2D and keeps them; ``"none"``
+        skips the opening. 2D masks: ``"ball"`` and ``"disk"`` are both disk(1).
 
     Returns
     -------
@@ -149,12 +178,11 @@ def binarize(
         thresh = THRESHOLD_METHODS[method](arr_float) * threshold_scale
         mask = arr_float > thresh
 
-    # Morphological opening to remove salt noise
-    if arr.ndim == 3:
-        selem = ball(1)
-    else:
-        selem = disk(1)
-    mask = opening(mask, footprint=selem)
+    if opening not in OPENINGS:
+        raise ValueError(f"Unknown opening: {opening!r}; choose from {sorted(OPENINGS)}")
+    footprint = OPENINGS[opening](arr.ndim)
+    if footprint is not None:
+        mask = binary_opening(mask, footprint=footprint)
 
     return remove_small(mask, min_size)
 

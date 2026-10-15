@@ -130,9 +130,12 @@ def test_choose_count_method_no_cells():
 def test_live_dead_by_count_method_all_reports_consensus():
     live, dead = _two_channel_stack()
     out = viability.live_dead_by_count(live, dead, method="all")
-    assert set(out["by_method"]) == {"cc", "watershed", "maxima"}
-    assert "consensus" in out and "spread" in out
+    per = [out[f"viability_{m}"] for m in viability.COUNT_METHODS]
+    per = [v for v in per if v == v]                     # methods that found cells
+    assert out["consensus"] == np.median(per)
+    assert out["spread"] == max(per) - min(per)
     assert out["viability"] == out["consensus"]
+    assert out["method_live"] == out["method_dead"] == ""
 
 
 def test_live_dead_by_count_auto_reports_reasoning():
@@ -238,3 +241,80 @@ def test_count_all_has_the_same_top_level_keys():
     assert {"n_live", "n_dead", "viability"} <= set(out)
     assert np.isnan(out["n_live"]) and np.isnan(out["n_dead"])
     assert out["viability"] == out["consensus"]
+
+
+def test_regime_without_cells_is_nan_not_zero():
+    # Nothing segmented: SNR, crowding and radius were never measured -> NaN.
+    out = viability.choose_count_method(np.zeros((16, 16), np.float32))
+    assert out["n_cc"] == 0 and out["method"] == "cc"
+    assert np.isnan(out["snr"]) and np.isnan(out["crowding"]) and np.isnan(out["radius"])
+
+
+_FLAT_KEYS = {"n_live", "n_dead", "viability", "consensus", "spread", "method_live",
+              "method_dead", "reason_live", "reason_dead",
+              *(f"{k}_{m}" for m in viability.COUNT_METHODS
+                for k in ("n_live", "n_dead", "viability"))}
+
+
+@pytest.mark.parametrize("method", ["all", "auto", *viability.COUNT_METHODS])
+def test_live_dead_by_count_has_one_flat_contract(method):
+    # Every mode returns the same flat keys of scalars/strings (MOD-5); what a mode
+    # did not compute is NaN or "".
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method=method)
+    by_method = out.pop("by_method", None)              # deprecated, "all" only
+    assert (by_method is not None) == (method == "all")
+    assert set(out) == _FLAT_KEYS
+    assert all(isinstance(v, (int, float, str, np.integer, np.floating)) for v in out.values())
+    if method in viability.COUNT_METHODS:
+        assert (out["method_live"], out["method_dead"]) == (method, method)
+        assert out[f"n_live_{method}"] == out["n_live"]
+        assert out[f"viability_{method}"] == out["viability"] == out["consensus"]
+        assert np.isnan(out["spread"])                    # one method: no spread
+        others = [m for m in viability.COUNT_METHODS if m != method]
+        assert all(np.isnan(out[f"n_live_{m}"]) for m in others)
+
+
+def test_live_dead_by_count_auto_fills_the_chosen_methods_columns():
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method="auto")
+    ml, md = out["method_live"], out["method_dead"]
+    assert out[f"n_live_{ml}"] == out["n_live"] and out[f"n_dead_{md}"] == out["n_dead"]
+    assert out["reason_live"] and out["reason_dead"]
+    assert out["consensus"] == out["viability"] and np.isnan(out["spread"])
+
+
+@pytest.mark.parametrize("names,expected", [
+    (["Calcein AM", "PI"], (0, 1)),
+    (["Propidium iodide", "Alexa Fluor 488"], (1, 0)),
+    (["DAPI", "FITC", "EthD-1"], (1, 2)),
+    (["GFP", "ethidium homodimer"], (0, 1)),
+])
+def test_live_dead_channels_from_dye_names(names, expected):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert viability.live_dead_channels(names) == expected
+
+
+def test_live_dead_channels_explicit_and_fallback():
+    assert viability.live_dead_channels(["PI", "Calcein"], live=0, dead=1) == (0, 1)
+    with pytest.warns(RuntimeWarning, match="no channel name identifies the live"):
+        assert viability.live_dead_channels(["DAPI", "AF647"], dead=1) == (0, 1)
+    with pytest.warns(RuntimeWarning, match="dead channel"):
+        assert viability.live_dead_channels(["Ch1", "Ch2"], live=0) == (0, 1)
+    with pytest.raises(ValueError, match="both channel 1"):
+        viability.live_dead_channels(["Ch1", "Calcein"], live=None, dead=None)
+    with pytest.raises(ValueError, match="has 2 channels"):
+        viability.live_dead_channels(["a", "b"], live=0, dead=2)
+
+
+def test_count_all_keeps_the_deprecated_by_method():
+    # v0.8.2 callers read out["by_method"][m]: kept (deprecated) with the same values
+    # as the flat per-method keys.
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method="all")
+    assert set(out["by_method"]) == set(viability.COUNT_METHODS)
+    for m, d in out["by_method"].items():
+        assert set(d) == {"n_live", "n_dead", "viability"}
+        assert all(d[k] == out[f"{k}_{m}"] for k in d)

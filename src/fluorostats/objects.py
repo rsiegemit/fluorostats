@@ -8,12 +8,13 @@ checks (complementary to intensity-based `morphometry.lateral_homogeneity`).
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy import ndimage as ndi
 from skimage.morphology import local_maxima, reconstruction
-from skimage.segmentation import watershed
+from skimage.segmentation import clear_border, watershed
 
-from .deprecation import ignored_keyword
 from .metrics_3d import density_per_mm3
 from .spatial import tile_point_density
 from .stats import coefficient_of_variation, gini
@@ -54,11 +55,11 @@ def _drop_small(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
     return remap[labels], int(keep.sum())
 
 
-@ignored_keyword("footprint_size")
 def watershed_split(
     mask: np.ndarray,
     min_size: int = 0,
     min_distance: int = 5,
+    footprint_size: int | None = None,
 ) -> tuple[np.ndarray, int]:
     """Split touching convex objects via a distance-transform watershed.
 
@@ -87,9 +88,15 @@ def watershed_split(
         About the smallest object radius, in pixels/voxels: the neck-depth
         criterion above (seed dynamics >= ``min_distance / 2``). Larger means
         fewer splits.
+    footprint_size : deprecated
+        Retired (the seeding uses no footprint); accepted, by keyword or as the
+        v0.8.2 fourth positional argument, with a DeprecationWarning and ignored.
 
     Returns (labels, n).
     """
+    if footprint_size is not None:
+        warnings.warn("watershed_split(): 'footprint_size' no longer has an effect and "
+                      "is ignored", DeprecationWarning, stacklevel=2)
     m = mask > 0
     if not m.any():
         return np.zeros(m.shape, int), 0
@@ -173,7 +180,6 @@ def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
     Useful for count endpoints where partial edge objects bias the total
     (e.g. BBBC039 ground truth excludes border nuclei). Returns (labels, n).
     """
-    from skimage.segmentation import clear_border
     cleared = clear_border(labels)
     return label_3d(cleared > 0, min_size=0)
 
@@ -281,7 +287,9 @@ def nearest_neighbor_stats(
     dict with keys:
         mean_nn_dist, median_nn_dist — nearest-neighbour distance.
         clark_evans_R — observed / CSR-expected mean NN (<1 clustered, ≈1 random,
-            >1 dispersed/regular); NaN if D not in {2, 3}.
+            >1 dispersed/regular), using the 2D or 3D CSR formula for the number
+            of axes with non-zero range (a constant axis is dropped); NaN if that
+            number is not 2 or 3 (with a warning when it is below 2).
         pattern — "clustered" | "random" | "dispersed" from ``clark_evans_R``.
         n — number of points.
     """
@@ -297,13 +305,18 @@ def nearest_neighbor_stats(
     nn = cKDTree(xy).query(xy, k=2)[0][:, 1]      # distance to nearest other point
     mean_nn = float(nn.mean())
     ranges = xy.max(0) - xy.min(0)
-    vol = float(np.prod(ranges[ranges > 0]))
-    lam = n / vol if vol > 0 else 0.0
-    if lam > 0 and d == 2:
+    # The pattern's dimension is the number of axes the points actually span: 3D
+    # centroids in one z-plane are a 2D pattern and take the 2D CSR constant.
+    d_eff = int((ranges > 0).sum())
+    lam = n / float(np.prod(ranges[ranges > 0]))
+    if d_eff == 2:
         expected = 0.5 / np.sqrt(lam)
-    elif lam > 0 and d == 3:
+    elif d_eff == 3:
         expected = 0.55396 / lam ** (1.0 / 3.0)
     else:
+        if d_eff < 2:
+            warnings.warn(f"nearest_neighbor_stats: the points span fewer than 2 axes "
+                          f"({d_eff}); clark_evans_R is NaN.", RuntimeWarning, stacklevel=2)
         expected = float("nan")
     R = mean_nn / expected if expected and expected == expected else float("nan")
     pattern = "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")

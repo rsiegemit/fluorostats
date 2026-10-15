@@ -68,3 +68,8 @@ def test_ring_spacing_scales_area():
     a1 = ring.ring_morphometry(m, voxel_size_um=(1.0, 1.0))["outer_area"]
     a2 = ring.ring_morphometry(m, voxel_size_um=(2.0, 2.0))["outer_area"]
     assert a2 == pytest.approx(4 * a1, rel=1e-6)
+
+
+def test_ring_morphometry_refuses_a_3d_mask():
+    with pytest.raises(ValueError, match=r"2D \(Y, X\) cross-section"):
+        ring.ring_morphometry(np.ones((3, 16, 16), bool))

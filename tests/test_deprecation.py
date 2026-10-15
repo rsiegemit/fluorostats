@@ -28,7 +28,6 @@ def test_both_names_is_an_error():
     (metrics_2d.coverage_metrics, (np.eye(5, dtype=bool),), {"pixel_size_um": 1.0}),
     (depth.intensity_depth_profile, (np.ones((3, 4, 4)),), {"voxel_size_z_um": 1.0}),
     (skeleton.prune_skeleton, (np.eye(5, dtype=bool),), {"min_branch_length_px": 1.0}),
-    (skeleton.prune_skeleton, (np.eye(5, dtype=bool),), {"spacing": (1.0, 1.0)}),
 ])
 def test_renamed_spacing_arguments_still_work(func, args, old):
     """MOD-5: the old names keep working, with a DeprecationWarning, for one cycle."""
@@ -43,5 +42,8 @@ def test_watershed_footprint_size_is_accepted_and_ignored():
     m[5:15, 5:15] = True
     with pytest.warns(DeprecationWarning, match="'footprint_size' no longer has an effect"):
         old = watershed_split(m, min_distance=3, footprint_size=7)
+    with pytest.warns(DeprecationWarning, match="'footprint_size' no longer has an effect"):
+        positional = watershed_split(m, 0, 3, 7)            # v0.8.2 positional form
     new = watershed_split(m, min_distance=3)
-    assert old[1] == new[1] and (old[0] == new[0]).all()
+    for res in (old, positional):
+        assert res[1] == new[1] and (res[0] == new[0]).all()
