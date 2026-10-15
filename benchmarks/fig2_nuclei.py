@@ -1,6 +1,7 @@
 """Figure 2 — Nucleus segmentation and the deep-learning boundary (a-f)."""
 import sys
 import glob
+import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -19,17 +20,31 @@ outline = F.outline
 
 # ---------- data ----------
 # mean F1 + 95% bootstrap CI per method: subset "first100" (the 9 per-image methods and
-# the DL tools on the same 100 images, so panel a uses the n=100 values, not the n=200
-# Table-1 numbers) and "all200" (DL tools, panel b). Derived tables are read with
+# the DL tools on the same 100 images, so panel a uses the first-100 values, not the
+# all-image numbers) and "all200" (DL tools, panel b). Derived tables are read with
 # round_trip so every float is the one the producer wrote.
 nci = pd.read_csv(R / "b2_nuclei_ci.csv", float_precision="round_trip").set_index(["subset", "method"])
+
+
+def run_params(stem):
+    """The ``params`` the producer of ``results/<stem>.csv`` recorded in its run.json."""
+    return json.loads((R / f"{stem}.run.json").read_text())["params"]
+
+
+PERIMAGE = run_params("b2_nuclei_methods_perimage")   # BBBC039 min_size, IoU threshold
+CLUSTER = run_params("b_clustering_curve")            # BBBC024 min_size, volumes per level
+N_BOOT = run_params("b2_nuclei_ci")["n_boot"]
+IOU = PERIMAGE["iou_threshold"]
+# DL reference level of panel (d): typed, not measured here (no DL results table
+# exists for the BBBC024 crowding sets)
+DL_REF_F1 = 0.96
 
 
 def ci_of(subset, method):
     r = nci.loc[(subset, method)]
     return r.mean_F1, r.CI_low, r.CI_high
 # ---------- layout ----------
-# Authored at the true manuscript text width (F.TW = 5.147 in) so
+# Authored at the text width (F.TW = 5.147 in) so
 # \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt on the
 # page. The narrower canvas is re-fit as a TALLER 4-row stack: (a) the busy
 # 12-row unification dot-plot gets a full-width row of its own, (b) the forest plot
@@ -46,10 +61,10 @@ gs = gridspec.GridSpec(4, 6, figure=fig, height_ratios=[1.72, 0.66, 0.92, 1.02],
 # (a) the fluorostats "unification" panel. Otsu / Li / Isodata / Triangle / Yen /
 # Mean / Minimum / watershed are NOT rival tools: they are fluorostats threshold
 # CONFIGURATIONS. So the panel shows ONE designated default (fluorostats Otsu+CC,
-# solid blue, the Table-1 / abstract 0.890 headline) dominant; the other thresholds
+# solid blue, the headline row) dominant; the other thresholds
 # as the SAME blue at reduced opacity (the "tuning envelope", a range-of-a-knob);
 # and the three trained DL tools (StarDist orange, Cellpose vermillion, Omnipose
-# purple) as the genuine external comparison, plotted at their n=100 values.
+# purple) as the genuine external comparison, plotted at their first-100 values.
 # Dot + 95% bootstrap CI (F.lollipop-style) instead of bars: the top pack all hugs
 # ~0.8-0.91, so full bars would waste ink.
 axa = fig.add_subplot(gs[0, :])
@@ -80,7 +95,7 @@ for lab, key, kind in fam:
         c = BLUE
     rows.append(dict(lab=lab, mean=mean, lo=lo, hi=hi, kind=kind, c=c))
 rows.sort(key=lambda d: d["mean"])                # worst -> best (bottom -> top)
-lo_x = 0.20                                        # zoom floor just below the min (Yen ~0.28)
+lo_x = 0.20                                        # zoom floor just below the lowest row
 hi_x = 1.06                                         # headroom for value labels
 for row, d in enumerate(rows):
     default = d["kind"] == "default"
@@ -113,7 +128,8 @@ for tick, lc, r in zip(axa.get_yticklabels(), labcols, rows):
 axa.set_xlim(lo_x, hi_x)
 axa.set_ylim(-0.6, len(rows) - 0.4)
 axa.set_xticks([0.2, 0.4, 0.6, 0.8, 1.0])
-axa.set_xlabel("instance F1 @ IoU 0.5   (BBBC039, n = 100)")
+N_A = int(nci.loc[("first100", F.RAW_OTSU_CC), "n_images"])
+axa.set_xlabel(f"instance F1 @ IoU {IOU}   (BBBC039, n = {N_A})")
 # legend explaining the family
 axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=6, label="fluorostats default")
 axa.plot([], [], "o", mfc="white", mec=BLUE, mew=1.1, ms=5.5, label="envelope")
@@ -126,11 +142,11 @@ axa.plot([], [], "o", mfc="0.35", mec="0.2", mew=0.6, ms=5.5, label="trained DL"
 axa.legend(loc="lower right", bbox_to_anchor=(1.0, 1.005), ncol=3,
            fontsize=F.FS["legend"], handletextpad=0.25, borderpad=0.2,
            columnspacing=1.1, frameon=False)
-panel(axa, "a", "one tool, one default knob (n = 100)", xanchor=0.0315)   # row-leader
+panel(axa, "a", f"one tool, one default knob (n = {N_A})", xanchor=0.0315)   # row-leader
 
-# (b) forest vs DL — the n=200 FULL test set (Table 1 / Results), NOT panel (a)'s
-# n=100 envelope split. fluorostats mean+CI from b_dl_ci.csv (0.896 [0.873, 0.916]);
-# the three DL tools from b2_nuclei_ci.csv (all 200 images). Panel (a) stays at n=100.
+# (b) forest vs DL — every BBBC039 image, NOT panel (a)'s first-100 envelope split.
+# fluorostats mean+CI from b_dl_ci.csv; the three DL tools from b2_nuclei_ci.csv
+# (subset all200).
 axb = fig.add_subplot(gs[1, :])
 ci = pd.read_csv(R/"b_dl_ci.csv").set_index("method")
 FS = F.DENOISED_OTSU_CC   # the n=200 fluorostats row, plotted as "fluorostats"
@@ -146,7 +162,8 @@ for i, m in enumerate(fo):
                  color=c, ecolor="black", capsize=2.5, ms=6, mec="black", mew=0.5, elinewidth=0.9)
 axb.set_yticks(range(len(fo)))
 axb.set_yticklabels(fo, fontsize=6.0)
-axb.set_xlabel("mean F1  (95% CI, n = 200)")
+N_B = int(nci.loc[("all200", "StarDist"), "n_images"])
+axb.set_xlabel(f"mean F1  (95% CI, n = {N_B})")
 axb.set_xlim(0.78, 0.955)
 # whether both paired-difference CIs exclude 0, as the producer recorded it
 diffs_sig = all(str(ci.loc[f"{FS} - {t}", "diff_significant"]).startswith("YES") for t in ("StarDist", "Cellpose"))
@@ -154,9 +171,11 @@ axb.text(0.97, 0.06, f"paired Δ {'excludes 0' if diffs_sig else 'CI spans 0'}:\
          f"−StarDist {ci.loc[f'{FS} - StarDist', 'mean_F1']:+.3f}\n"
          f"−Cellpose {ci.loc[f'{FS} - Cellpose', 'mean_F1']:+.3f}",
          transform=axb.transAxes, fontsize=5.0, color="#333", va="bottom", ha="right")
-panel(axb, "b", "vs trained deep learning (n = 200)", xanchor=0.0315)   # row-leader
+panel(axb, "b", f"vs trained deep learning (n = {N_B})", xanchor=0.0315)   # row-leader
 
 # (c) qualitative overlay: raw / GT / fluorostats, 3 crops
+# exception DAT-3: an overlay shows the segmentation on the image itself, so the
+# display masks are computed here, with the min_size the producers recorded.
 def gt_inst(stem):
     return F.bbbc039_gt_instances(DL/"BBBC039/masks/masks"/f"{stem}.png")
 imgs = sorted(glob.glob(str(F.require(DL/"BBBC039")/"images/images/*.tif")))
@@ -180,7 +199,7 @@ labs = ["raw", "expert GT", "fluorostats"]
 # 2x3 image grid via nested gridspec
 gs_c = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[2, :], hspace=0.06, wspace=0.06)
 for row, (im, gt, stem) in enumerate(crops):
-    fs = F.raw_otsu_cc(im, 20)
+    fs = F.raw_otsu_cc(im, PERIMAGE["min_size"])
     p = F.imnorm(im)
     for col, (lab, arr) in enumerate(zip(labs, [None, gt, fs])):
         ax = fig.add_subplot(gs_c[row, col])
@@ -193,33 +212,33 @@ for row, (im, gt, stem) in enumerate(crops):
         if col == 0 and row == 0:
             F.scalebar(ax, round(20 / F.BBBC039_UM_PER_PX), "20 µm")
             panel(ax, "c", xanchor=0.0315)   # row-leader
-# (d) crossover — two directly-labelled line groups: fluorostats (blue) and the
-# classical-threshold envelope (grey), both collapsing under overlap while the DL
-# reference (dashed) holds ~0.96.
+# (d) F1 vs crowding — the fluorostats default (Otsu+CC) and the fluorostats watershed
+# split as two labelled lines, the classical thresholds grey, and the DL reference
+# line (dashed). Line labels carry the c00 -> c75 values read from the table.
 axd = fig.add_subplot(gs[3, :2])
-cc = pd.read_csv(R/"b_clustering_curve.csv")
-x = [0,25,50,75]
-for _, r in cc.iterrows():
-    isf = "fluorostats" in r["method"]
-    if not isf and r[["c00","c25","c50","c75"]].sum() == 0:   # skip empty Triangle row
+cc = pd.read_csv(R/"b_clustering_curve.csv").set_index("method")
+LEVELS = ["c00", "c25", "c50", "c75"]
+x = [int(lv[1:]) for lv in LEVELS]
+FS_LINES = {F.RAW_OTSU_CC: ("fluorostats\ndefault", OKABE["blue"], "-", "o"),
+            "fluorostats_watershed": ("fluorostats\nwatershed", OKABE["sky"], "--", "s")}
+for m, r in cc.iterrows():
+    if m in FS_LINES or r[LEVELS].sum() == 0:   # fluorostats drawn below; skip an all-zero row
         continue
-    axd.plot(x, [r.c00,r.c25,r.c50,r.c75], marker="o" if isf else ".", ms=4 if isf else 3,
-             color=OKABE["blue"] if isf else GREY, lw=2.0 if isf else 0.8, alpha=1 if isf else 0.6,
-             zorder=3 if isf else 1)
-axd.axhline(0.96, ls="--", color=OKABE["black"], lw=1.0)
-axd.text(74, 0.955, "DL holds $\\approx$0.96", fontsize=5.0, color="black",
+    axd.plot(x, r[LEVELS], marker=".", ms=3, color=GREY, lw=0.8, alpha=0.6, zorder=1)
+for i, (m, (lab, col, ls, mk)) in enumerate(FS_LINES.items()):
+    y = cc.loc[m, LEVELS]
+    axd.plot(x, y, marker=mk, ms=4, color=col, lw=1.6, ls=ls, zorder=3 + i, label=lab)
+axd.axhline(DL_REF_F1, ls="--", color=OKABE["black"], lw=1.0)
+axd.text(74, DL_REF_F1 - 0.10, f"DL reference $\\approx${DL_REF_F1}", fontsize=5.0, color="black",
          ha="right", va="top")
-axd.axvspan(50, 75, color=OKABE["vermillion"], alpha=0.08)
-axd.text(63, 0.42, "DL wins", fontsize=6, color=OKABE["vermillion"], ha="center")
-# direct labels on the two line groups (in the clear triangle below both curves)
-axd.text(2, 0.735, "fluorostats", fontsize=6.0, color=OKABE["blue"], fontweight="bold",
-         ha="left", va="bottom",
-         bbox=dict(facecolor="white", edgecolor="none", pad=0.5, alpha=0.85))
-axd.text(2, 0.14, "classical envelope", fontsize=5.0, color=GREY, ha="left", va="center")
+axd.plot([], [], marker=".", ms=3, color=GREY, lw=0.8, label="classical")
+# short labels keep the legend in the empty lower-left corner, clear of the curves
+axd.legend(fontsize=4.5, loc="lower left", frameon=False, handlelength=1.4, labelspacing=0.3,
+           borderaxespad=0.2)
 axd.set_xlabel("nuclear overlap (%)")
 axd.set_ylabel("instance F1")
 axd.set_ylim(0,1.02)
-panel(axd, "d", "crowding crossover", xanchor=0.0315)   # row-leader
+panel(axd, "d", "F1 vs crowding", xanchor=0.0315)   # row-leader
 
 # (e) separated vs crowded fields
 gs_e = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[3, 2:4], wspace=0.06)
@@ -230,7 +249,7 @@ for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separat
     ax = fig.add_subplot(gs_e[i])
     ax.imshow(F.imnorm(sl), cmap="gray")
     F.image_axes(ax)
-    fsm = F.raw_otsu_cc(sl, 15)
+    fsm = F.raw_otsu_cc(sl, CLUSTER["min_size"])
     outline(ax, fsm, (0.0,0.45,0.70), width=2)
     ax.set_title(ttl, fontsize=7)
     if i == 0:
@@ -254,23 +273,41 @@ panel(axf, "f", "when to use which")
 # caption numbers derived from the same per-image data the panels plot (never hand-typed)
 sd_m, cp_m, om_m = (ci_of("first100", k)[0] for k in ("StarDist", "Cellpose", "Omnipose"))
 def_m = ci_of("first100", F.RAW_OTSU_CC)[0]
-_env = [ci_of("first100", c)[0] for c in
-        ("Li (1993)", "Isodata (1978)", "Watershed (1991)", "Otsu (1979)", "Mean",
-         "Triangle (1977)", "Minimum", "Yen (1995)")]
+ENV = ("Li (1993)", "Isodata (1978)", "Watershed (1991)", "Otsu (1979)", "Mean",
+       "Triangle (1977)", "Minimum", "Yen (1995)")
+_env = [ci_of("first100", c)[0] for c in ENV]
 env_lo, env_hi = min(_env), max(_env)
+# rows scored on fewer images than the default (a threshold that failed on some images)
+short_n = [f"{c} n={int(nci.loc[('first100', c), 'n_images'])}" for c in ENV
+           if nci.loc[("first100", c), "n_images"] < N_A]
+short_txt = f" ({'; '.join(short_n)}: images where the threshold failed are not scored)" if short_n else ""
+
+
+def change(m):
+    """'falls from a to b' / 'rises from a to b' for a panel (d) row between c00 and c75."""
+    a, b = cc.loc[m, "c00"], cc.loc[m, "c75"]
+    return f"{'falls' if b < a else 'rises' if b > a else 'stays'} from {a:.2f} to {b:.2f}"
+
+
+classical = cc.drop(index=list(FS_LINES))
+classical = classical[classical[LEVELS].sum(axis=1) > 0]   # the rows panel (d) draws
 cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
- "(a) Instance F1 (IoU 0.5) on BBBC039 (n=100 images), dots with 95% bootstrap CIs "
- "(10,000 resamples of per-image scores). The eight classical thresholds (Otsu, Li, "
+ f"(a) Instance F1 (IoU {IOU}) on BBBC039 (n={N_A} images), dots with 95% bootstrap CIs "
+ f"({N_BOOT:,} resamples of per-image scores){short_txt}. The eight classical thresholds (Otsu, Li, "
  "Isodata, Triangle, Yen, Mean, Minimum, watershed) are fluorostats CONFIGURATIONS, not "
  f"rival tools: the designated default (fluorostats Otsu+CC, solid blue, F1 {def_m:.3f}) is the "
  "headline; the remaining thresholds (open blue circles) trace the tuning envelope "
  f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
- f"learning at n=100 values (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
- "purple). (b) Forest plot on the full n=200 test set (Table 1) vs validated DL (StarDist, Cellpose, "
+ f"learning on the same {N_A} images (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
+ f"purple). (b) Forest plot on all n={N_B} images vs validated DL (StarDist, Cellpose, "
  f"Omnipose): fluorostats {ci.loc[FS, 'mean_F1']:.3f} [{ci.loc[FS, 'CI_low']:.3f}, {ci.loc[FS, 'CI_high']:.3f}]; paired differences {'exclude zero' if diffs_sig else 'do not all exclude zero'}. (c) Representative BBBC039 crops: raw, expert ground "
  f"truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~{F.BBBC039_UM_PER_PX} µm/px). "
- "(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75): all non-DL methods (grey; fluorostats blue) "
- "collapse while DL (dashed) holds ~0.96; red band = DL advantage. (e) fluorostats overlay on a "
+ f"(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75, {CLUSTER['n_volumes']} volumes per level): from no overlap "
+ f"to 75% overlap the fluorostats default (Otsu+CC, blue) {change(F.RAW_OTSU_CC)} and the fluorostats "
+ f"watershed split (light blue, dashed) {change('fluorostats_watershed')}; the watershed seeding parameters "
+ f"were chosen on BBBC024. Classical thresholds (grey) reach {classical['c75'].min():.2f}-"
+ f"{classical['c75'].max():.2f} at 75% overlap; the dashed line is a DL reference level of {DL_REF_F1}. "
+ "(e) fluorostats overlay on a "
  "well-separated (c00) and a crowded (c75) field, showing connected-component merging under overlap. "
  "(f) Data-anchored scope map: fluorostats is at parity with trained segmenters up to ~40% crowding "
  "(green), beyond which a trained instance segmenter is preferred (red).")
