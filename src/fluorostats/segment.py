@@ -160,9 +160,14 @@ def binarize(
     Returns
     -------
     ndarray[bool]
-        Binary mask, same shape as input.
+        Binary mask, same shape as input. A NaN or infinite pixel raises
+        ValueError (the thresholds are undefined on non-finite data).
     """
     arr_float = arr.astype(np.float64)
+    if not np.isfinite(arr_float).all():
+        raise ValueError(
+            "binarize: the image has NaN or infinite pixels; thresholds need finite data"
+        )
 
     # Global threshold
     if method == "consensus":

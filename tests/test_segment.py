@@ -249,3 +249,13 @@ def test_remove_small_labels_keeps_touching_objects_apart():
     assert n == 1 and out.dtype == labels.dtype
     np.testing.assert_array_equal(out[1], [0, 0, 1, 1, 1, 1])
     assert segment.remove_small_labels(labels, 10)[1] == 0
+
+
+@pytest.mark.parametrize("method", ["mean", "consensus", "li", "otsu"])
+def test_binarize_rejects_non_finite_input(method):
+    """One NaN pixel gave an empty mask for some methods and a crash for others."""
+    a = np.zeros((20, 20))
+    a[10:14, 10:14] = 100
+    a[5, 5] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        binarize(a, method=method, min_size=0, opening="none")
