@@ -112,7 +112,13 @@ def canonicalize_volume(
     index_axes = index_axes or {}
     axes = _unlabelled_as_z(axes, arr.shape, index_axes) if axes else None
     named = _by_axis_names(arr, axes, index_axes) if axes else None
-    arr = named if named is not None else _checked(_volume_by_shape(arr))
+    if named is None:
+        arr, notes = _volume_by_shape(arr, _layout_advice(meta))
+        _checked(arr, meta)
+        for note in notes:  # announced only once the guess is accepted
+            warnings.warn(note, RuntimeWarning, stacklevel=2)
+    else:
+        arr = named
     if named is not None and arr.shape[1] == 1 and arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
         warnings.warn(
             f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
@@ -130,51 +136,59 @@ _MAX_GUESSED_CHANNELS = 10
 _MIN_GUESSED_WIDTH = 5
 
 
-def _checked(arr: np.ndarray) -> np.ndarray:
+def _layout_advice(meta: dict) -> str:
+    """How to make a file's layout explicit, for its format: a NumPy array has no
+    axis names, so it is saved in canonical order instead."""
+    if meta.get("format") == "numpy":
+        return "save the array in (C, Z, Y, X) order"
+    return "save it with its axes named (OME-TIFF, or an ImageJ hyperstack)"
+
+
+def _checked(arr: np.ndarray, meta: dict) -> np.ndarray:
     """The shape rule's (C, Z, Y, X) ``arr``, or a ValueError when it is implausible."""
     n_c, n_x = arr.shape[0], arr.shape[-1]
     if n_c > _MAX_GUESSED_CHANNELS or n_x < _MIN_GUESSED_WIDTH:
+        advice = _layout_advice(meta)
         raise ValueError(
             f"the file names no usable axes, and its shape read as (C, Z, Y, X) = {arr.shape} "
-            f"gives {n_c} channels and X = {n_x}, which is not a plausible layout. Save it "
-            "with its axes named (OME-TIFF, or an ImageJ hyperstack)."
+            f"gives {n_c} channels and X = {n_x}, which is not a plausible layout. "
+            f"{advice[0].upper()}{advice[1:]}."
         )
     return arr
 
 
-def _volume_by_shape(arr: np.ndarray) -> np.ndarray:
-    """(C, Z, Y, X) guessed from the array shape alone (no axis labels)."""
-    ndim = arr.ndim
+def _volume_by_shape(arr: np.ndarray, advice: str) -> tuple[np.ndarray, list[str]]:
+    """(C, Z, Y, X) guessed from the array shape alone (no axis labels), and the
+    warnings that announce the guess (``advice`` says how to avoid it)."""
+    ndim, notes = arr.ndim, []
     if ndim == 3:
         arr = arr[np.newaxis]
     elif ndim == 4:
-        # Axis-order heuristic: a leading axis longer than any channel count is far more
-        # likely to be Z than C, so the array is taken as channel-LAST. Either way the
+        # Axis-order heuristic: a leading axis longer than any channel count, or a
+        # short last axis after a leading axis longer than any colour count, is far
+        # more likely Z than C, so the array is taken as channel-LAST. Either way the
         # layout is a guess, and it is announced.
-        if arr.shape[0] > _MAX_GUESSED_CHANNELS:
-            warnings.warn(
-                f"4D array leading axis = {arr.shape[0]} (> {_MAX_GUESSED_CHANNELS}); "
-                "assuming channel-last and transposing to (C, Z, Y, X).",
-                RuntimeWarning,
-                stacklevel=3,
+        n_first, n_last = arr.shape[0], arr.shape[-1]
+        if n_first > _MAX_GUESSED_CHANNELS or (n_last <= _MAX_PLAUSIBLE_CHANNELS < n_first):
+            why = (
+                f"leading axis = {n_first} (> {_MAX_GUESSED_CHANNELS})"
+                if n_first > _MAX_GUESSED_CHANNELS
+                else f"last axis = {n_last} (<= {_MAX_PLAUSIBLE_CHANNELS}) after a leading "
+                f"axis of {n_first}"
             )
+            notes.append(f"4D array {why}; assuming channel-last and transposing to (C, Z, Y, X).")
             arr = np.moveaxis(arr, -1, 0)
-        elif arr.shape[0] > 1:
-            warnings.warn(
+        elif n_first > 1:
+            notes.append(
                 f"4D array of shape {arr.shape} has no axis labels; read as "
-                f"(C, Z, Y, X) with {arr.shape[0]} channels. If it is (Z, Y, X, C) "
-                "or (Z, C, Y, X), save it with its axes named (OME-TIFF, or an "
-                "ImageJ hyperstack) to avoid the guess.",
-                RuntimeWarning,
-                stacklevel=3,
+                f"(C, Z, Y, X) with {n_first} channels. If it is (Z, Y, X, C) "
+                f"or (Z, C, Y, X), {advice} to avoid the guess."
             )
     elif ndim == 5:
         if arr.shape[0] > 1:
-            warnings.warn(
+            notes.append(
                 f"5D array of shape {arr.shape}: keeping only the first of "
-                f"{arr.shape[0]} entries along the leading axis (e.g. time point).",
-                RuntimeWarning,
-                stacklevel=3,
+                f"{arr.shape[0]} entries along the leading axis (e.g. time point)."
             )
         arr = arr[0]
     elif ndim == 2:
@@ -182,10 +196,10 @@ def _volume_by_shape(arr: np.ndarray) -> np.ndarray:
     elif ndim > 5:
         arr = squeeze_singleton_dims(arr)
         if arr.ndim != 4:  # pragma: no cover - squeeze always yields 4D
-            return _volume_by_shape(arr)
+            return _volume_by_shape(arr, advice)
     else:
         raise ValueError(f"Unexpected array shape {arr.shape} with {ndim} dims")
-    return arr
+    return arr, notes
 
 
 def canonicalize_image(
