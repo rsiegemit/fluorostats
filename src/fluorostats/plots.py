@@ -495,22 +495,27 @@ def condition_strip(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     if hue_col and len(hue_levels) > 1:
-        from matplotlib.lines import Line2D
-
-        handles = [
-            Line2D(
-                [0],
-                [0],
-                marker="o",
-                color="w",
-                markerfacecolor=palette[h],
-                markersize=8,
-                label=str(h),
-            )
-            for h in hue_levels
-        ]
-        ax.legend(handles=handles, loc="best", frameon=False)
+        _hue_legend(ax, hue_levels, palette)
     return ax
+
+
+def _hue_legend(ax: plt.Axes, hue_levels: list, palette: dict) -> None:
+    """One round marker per hue level, coloured from ``palette``."""
+    from matplotlib.lines import Line2D
+
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=palette[h],
+            markersize=8,
+            label=str(h),
+        )
+        for h in hue_levels
+    ]
+    ax.legend(handles=handles, loc="best", frameon=False)
 
 
 def modality_panel(

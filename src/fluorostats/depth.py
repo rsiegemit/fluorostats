@@ -297,6 +297,19 @@ def _fit_exponential(z, y, offset: bool, i0_guess: float, lam_guess: float):
     return _exp_decay(z, *popt), float(popt[0]), float(popt[1]), None
 
 
+def _fit_quality(y: np.ndarray, model: np.ndarray) -> tuple[float, float]:
+    """(R², RMSE) of a fitted ``model`` against the profile ``y``."""
+    resid = y - model
+    ss_res = float(np.sum(resid**2))
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    # A profile with no spread has no R² (0/0): NaN, which also fails the threshold.
+    # Test the spread itself: rounding in the mean makes ss_tot a tiny positive number
+    # for a constant profile, which would give an R² of about -1e20.
+    r_squared = 1.0 - ss_res / ss_tot if np.ptp(y) > 0 else float("nan")
+    rmse = float(np.sqrt(np.mean(resid**2)))
+    return r_squared, rmse
+
+
 # Default minimum R² for an accepted λ fit (see `fit_penetration_depth`).
 FIT_R2_THRESHOLD = 0.85
 
@@ -370,14 +383,7 @@ def fit_penetration_depth(
             fit_ok=False,
         )
 
-    resid = y - model
-    ss_res = float(np.sum(resid**2))
-    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-    # A profile with no spread has no R² (0/0): NaN, which also fails the threshold.
-    # Test the spread itself: rounding in the mean makes ss_tot a tiny positive number
-    # for a constant profile, which would give an R² of about -1e20.
-    r_squared = 1.0 - ss_res / ss_tot if np.ptp(y) > 0 else float("nan")
-    rmse = float(np.sqrt(np.mean(resid**2)))
+    r_squared, rmse = _fit_quality(y, model)
 
     # A decay length longer than the acquired depth is NOT constrained by the
     # data: over the measured window the profile is essentially flat, so λ is an

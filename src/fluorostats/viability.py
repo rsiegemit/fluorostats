@@ -230,6 +230,52 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
     return {"method": method, "smooth_sigma": smooth, "reason": reason, **r}
 
 
+def _count_record() -> dict:
+    """The flat `live_dead_by_count` result with nothing computed yet (NaN, or "" for text)."""
+    nan = float("nan")
+    out: dict = {
+        "n_live": nan,
+        "n_dead": nan,
+        "viability": nan,
+        "consensus": nan,
+        "spread": nan,
+        "method_live": "",
+        "method_dead": "",
+        "reason_live": "",
+        "reason_dead": "",
+    }
+    for m in COUNT_METHODS:
+        out.update({f"n_live_{m}": nan, f"n_dead_{m}": nan, f"viability_{m}": nan})
+    return out
+
+
+def _count_every_method(live: np.ndarray, dead: np.ndarray, count_one, rseg: dict) -> dict:
+    """``method="all"`` of `live_dead_by_count`: every count method on both channels,
+    their median consensus and spread, and the deprecated nested ``by_method``."""
+    out = _count_record()
+    # auto-smooth the maxima channel from each channel's estimated radius
+    # (no cells -> radius NaN -> no smoothing)
+    sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
+    sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
+    for m in COUNT_METHODS:
+        nl = count_one(live, m, sig_l if m == "maxima" else 0.0)
+        nd = count_one(dead, m, sig_d if m == "maxima" else 0.0)
+        out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd, f"viability_{m}": live_ratio(nl, nd)})
+    vals = [
+        out[f"viability_{m}"]
+        for m in COUNT_METHODS
+        if out[f"viability_{m}"] == out[f"viability_{m}"]
+    ]
+    if vals:
+        out["consensus"] = out["viability"] = float(np.median(vals))
+        out["spread"] = float(max(vals) - min(vals))
+    # deprecated v0.8.2 nested form of the per-method keys
+    out["by_method"] = {
+        m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")} for m in COUNT_METHODS
+    }
+    return out
+
+
 def live_dead_by_count(
     live: np.ndarray,
     dead: np.ndarray,
@@ -291,44 +337,10 @@ def live_dead_by_count(
     def _count_one(ch, m, sig):
         return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
 
-    nan = float("nan")
-    out: dict = {
-        "n_live": nan,
-        "n_dead": nan,
-        "viability": nan,
-        "consensus": nan,
-        "spread": nan,
-        "method_live": "",
-        "method_dead": "",
-        "reason_live": "",
-        "reason_dead": "",
-    }
-    for m in COUNT_METHODS:
-        out.update({f"n_live_{m}": nan, f"n_dead_{m}": nan, f"viability_{m}": nan})
-
     if method == "all":
-        # auto-smooth the maxima channel from each channel's estimated radius
-        # (no cells -> radius NaN -> no smoothing)
-        sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
-        sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
-        for m in COUNT_METHODS:
-            nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)
-            nd = _count_one(dead, m, sig_d if m == "maxima" else 0.0)
-            out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd, f"viability_{m}": live_ratio(nl, nd)})
-        vals = [
-            out[f"viability_{m}"]
-            for m in COUNT_METHODS
-            if out[f"viability_{m}"] == out[f"viability_{m}"]
-        ]
-        if vals:
-            out["consensus"] = out["viability"] = float(np.median(vals))
-            out["spread"] = float(max(vals) - min(vals))
-        # deprecated v0.8.2 nested form of the per-method keys
-        out["by_method"] = {
-            m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")}
-            for m in COUNT_METHODS
-        }
-        return out
+        return _count_every_method(live, dead, _count_one, rseg)
+
+    out = _count_record()
 
     def _count(ch):
         m, sig, reason = method, smooth_sigma, ""
