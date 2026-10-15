@@ -359,7 +359,8 @@ def object_mask_association(
     ----------
     centroids : (N, >=mask.ndim) array of object positions in voxel coordinates.
     mask : bool array — the reference structure to measure distance to.
-    voxel_size_um : optional per-axis size for physical distances (else pixels).
+    voxel_size_um : optional per-axis size for physical distances (else pixels);
+        its last ``mask.ndim`` entries are used, so a (z, y, x) size suits a 2D mask.
     max_dist_um : "within" threshold for the co-localised fraction; defaults to
         one voxel step (objects effectively on the structure).
 
@@ -377,7 +378,7 @@ def object_mask_association(
             "frac_within": float("nan"),
             "n": int(pts.shape[0]),
         }
-    sampling = voxel_size_um if voxel_size_um is not None else (1.0,) * m.ndim
+    sampling = tuple(voxel_size_um)[-m.ndim :] if voxel_size_um is not None else (1.0,) * m.ndim
     dt = ndi.distance_transform_edt(~m, sampling=sampling)
     idx = np.round(pts[:, -m.ndim :]).astype(int)
     for ax in range(m.ndim):

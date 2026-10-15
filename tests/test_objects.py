@@ -502,3 +502,14 @@ def test_object_centroids_one_row_per_present_label():
     np.testing.assert_allclose(c, [[0, 31, 31], [0, 36, 36]])
     assert centroid_homogeneity(c, lab.shape, tiles=4)["n_objects"] == 2
     assert objects.nearest_neighbor_stats(c)["n"] == 2
+
+
+def test_object_mask_association_3d_voxel_size_on_a_2d_mask():
+    """The stack's (z, y, x) voxel size works against a 2D projection mask: its
+    trailing (y, x) entries are used, like the centroid columns."""
+    mask2d = np.zeros((40, 40), bool)
+    mask2d[20, :] = True
+    cents = np.array([[3.0, 10.0, 10.0]])
+    r = objects.object_mask_association(cents, mask2d, voxel_size_um=(2.0, 0.5, 0.5))
+    assert r["median_distance"] == pytest.approx(5.0)  # 10 px * 0.5 um
+    assert r["frac_within"] == 0.0
