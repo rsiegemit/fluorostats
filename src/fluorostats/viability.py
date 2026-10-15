@@ -326,7 +326,8 @@ def live_dead_by_count(
 
     Deprecated: ``method="all"`` also returns ``by_method`` (``{m: {n_live, n_dead,
     viability}}``), the v0.8.2 nested form of the per-method keys; it will be
-    removed in a later release, so read ``n_live_<m>`` etc. instead.
+    removed in a later release, so read ``n_live_<m>`` etc. instead. Reading it
+    gives no DeprecationWarning (a plain dict key cannot warn when read).
     """
     methods = ("auto", "all", *COUNT_METHODS)
     if method not in methods:

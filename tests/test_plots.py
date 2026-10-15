@@ -413,7 +413,7 @@ def test_summary_stars_follow_the_corrected_table(tmp_path):
     # figure must agree with compute_pvalues, which stars the corrected q.
     import matplotlib.pyplot as plt
 
-    from fluorostats import plots
+    from fluorostats import plots, stats
 
     df = pd.DataFrame(
         {
@@ -421,7 +421,7 @@ def test_summary_stars_follow_the_corrected_table(tmp_path):
             "m": [1, 2, 3, 4, 1, 6, 9, 14, 11, 12, 13, 14],
         }
     )
-    table = plots.compute_pvalues(df, ["m"])
+    table = stats.compute_pvalues(df, ["m"])
     ac = table[(table.condition_a == "A") & (table.condition_b == "C")].iloc[0]
     assert ac.p_value < 0.05 and ac.significance == "ns"
 
@@ -440,7 +440,7 @@ def test_summary_stars_follow_the_corrected_table(tmp_path):
         assert drawn["stars"] == []
         # and where the corrected table does call pairs significant, they are drawn
         sig = df.assign(m=[1, 2, 3, 4, 2, 3, 4, 5, 11, 12, 13, 14])
-        sig_table = plots.compute_pvalues(sig, ["m"])
+        sig_table = stats.compute_pvalues(sig, ["m"])
         plots.summary_panel(sig, ["m"], tmp_path / "s3.png", show_pvalues=True, pvalues=sig_table)
         assert drawn["stars"] == [s for s in sig_table.significance if s != "ns"] == ["*", "*"]
     finally:
@@ -490,7 +490,10 @@ def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
 
 
 def test_plots_compute_pvalues_is_the_stats_function():
-    """Moved to stats; the plots name stays for existing callers."""
+    """Moved to stats; the plots name stays for existing callers, with a warning."""
     from fluorostats import plots, stats
 
-    assert plots.compute_pvalues is stats.compute_pvalues
+    with pytest.warns(DeprecationWarning, match="plots.compute_pvalues is deprecated"):
+        assert plots.compute_pvalues is stats.compute_pvalues
+    with pytest.raises(AttributeError, match="no attribute 'nope'"):
+        plots.nope

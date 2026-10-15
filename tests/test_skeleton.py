@@ -54,11 +54,17 @@ def test_plus_has_one_junction_node_and_four_branches():
     assert m["n_junction_nodes"] == 1
 
 
-def test_reexport_matches_module():
-    """metrics_3d.skeleton_metrics is the same object as skeleton.skeleton_metrics."""
-    assert metrics_3d.skeleton_metrics is skeleton_metrics
-    assert metrics_3d.prune_skeleton is prune_skeleton
-    assert metrics_3d.n_junction_nodes is n_junction_nodes
+def test_reexport_matches_module_and_warns():
+    """metrics_3d.skeleton_metrics is skeleton.skeleton_metrics, with a DeprecationWarning."""
+    for name, func in (
+        ("skeleton_metrics", skeleton_metrics),
+        ("prune_skeleton", prune_skeleton),
+        ("n_junction_nodes", n_junction_nodes),
+    ):
+        with pytest.warns(DeprecationWarning, match=f"metrics_3d.{name} is deprecated"):
+            assert getattr(metrics_3d, name) is func
+    with pytest.raises(AttributeError, match="no attribute 'nope'"):
+        metrics_3d.nope
 
 
 # ---------------------------------------------------------------------------

@@ -40,9 +40,9 @@ from fluorostats.io import load_volume
 from fluorostats.preprocess import select_green_channel
 from fluorostats.segment import segment_channel
 from fluorostats.metrics_3d import (
-    volume_fraction, connectivity_metrics, skeleton_metrics,
-    normalise_skeleton_metrics,
+    volume_fraction, connectivity_metrics, normalise_skeleton_metrics,
 )
+from fluorostats.skeleton import skeleton_metrics
 from fluorostats.morphometry import lateral_homogeneity, depth_span
 from fluorostats.stats import (
     stratified_mann_whitney, bootstrap_fold_change_ci,
