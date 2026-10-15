@@ -33,6 +33,7 @@ def test_figure_and_driver_modules_load_on_first_use():
     assert fluorostats.pubfig is pubfig
     for name in (
         "render3d",
+        "projections",
         "depth_figures",
         "depth_contrasts",
         "depth_batch",

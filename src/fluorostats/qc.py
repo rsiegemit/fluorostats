@@ -65,7 +65,7 @@ def overlay_rgb(
     """A 2D image stretched min-max to grey, with ``mask`` blended in ``color``.
 
     Returns a ``uint8`` (Y, X, 3) image; a flat image is black. The one overlay
-    rule shared by the QC PNGs and `render3d.mip_overlay`.
+    rule shared by the QC PNGs and `projections.mip_overlay`.
     """
     intensity = np.asarray(intensity, dtype=np.float64)
     vmin, vmax = intensity.min(), intensity.max()

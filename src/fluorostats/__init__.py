@@ -45,9 +45,10 @@ Public API surface, grouped by module:
     BH-FDR, Cliff's delta, bootstrap fold-change CIs, Stouffer pooling,
     Scheirer-Ray-Hare 2-way non-parametric ANOVA.
   - ``power`` — bootstrap power and power curves.
-  - ``render3d`` — isosurface mesh (light/dark, smoothed, shaded), voxel
-    cloud, two-channel live/dead MIP, MIP grid, depth-coded MIP, and
-    top/bottom layer split for image panels.
+  - ``render3d`` — isosurface mesh (light/dark, smoothed, shaded) and voxel
+    cloud (re-exports the ``projections`` panels).
+  - ``projections`` — 2D MIP panels: grey MIP with mask overlay, two-channel
+    live/dead MIP, MIP grid, depth-coded MIP, and top/bottom layer split.
   - ``plots`` — bar/box/strip plots, summary panels, effect-size heatmaps,
     forest plots, modality panels.
   - ``pubfig`` — the one figure style: named rcParams themes (compact, house),
@@ -92,6 +93,7 @@ _LAZY = {
     "depth_figures",
     "viability_batch",
     "render3d",
+    "projections",
     "plots",
     "pubfig",
     "style",
