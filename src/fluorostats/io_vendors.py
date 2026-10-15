@@ -431,19 +431,17 @@ def _tiff_volume_meta(tif: tifffile.TiffFile) -> dict:
 
 
 def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
-    """TIFF -> ((C, Y, X), meta), series 0; ImageJ y/x pixel size is read when the
-    file names a length unit."""
+    """TIFF -> ((C, Y, X), meta), series 0; the y/x pixel size and channel names
+    are read as `load_tiff_volume` reads them (OME-XML first, then ImageJ)."""
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
-        xy = _imagej_xy_um(tif, tif.imagej_metadata) if tif.imagej_metadata else None
-    meta: dict = {"voxel_size_um": (1.0, 1.0), "channel_names": [], "format": "tiff"}
-    if xy:
-        meta = {
-            **meta,
-            "voxel_size_um": (xy["y"][0], xy["x"][0]),
-            "_read_axes": set(xy),
-            "_axis_source": {a: s for a, (_, s) in xy.items() if s != "file"},
-        }
+        volume_meta = _tiff_volume_meta(tif)
+    meta = {
+        **volume_meta,
+        "voxel_size_um": volume_meta["voxel_size_um"][1:],
+        "_read_axes": volume_meta.get("_read_axes", set()) - {"z"},
+        "_axis_source": {a: s for a, s in volume_meta.get("_axis_source", {}).items() if a != "z"},
+    }
     data = canonicalize_image(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 

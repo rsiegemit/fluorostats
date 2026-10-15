@@ -1,6 +1,7 @@
 """TIFF metadata parser tests: OME-XML and ImageJ calibration."""
 
 import types
+import warnings
 
 import numpy as np
 import pytest
@@ -111,3 +112,32 @@ def test_ome_unnamed_channel_keeps_its_position(tmp_path):
         arr, meta = io.load_volume(p)
     assert meta["channel_names"] == ["Ch1", "GFP"]
     assert arr[meta["channel_names"].index("GFP")].max() == 5
+
+
+def test_2d_ome_tiff_reads_calibration_and_channel_names(tmp_path):
+    # Regression: the 2D reader read only ImageJ y/x, so a 2D OME-TIFF loaded with
+    # 1.0 µm pixels and positional names while load_auto gave the file's values.
+    p = tmp_path / "cyx.ome.tif"
+    data = np.zeros((2, 8, 8), np.uint16)
+    data[1] = 5
+    tifffile.imwrite(
+        p,
+        data,
+        ome=True,
+        metadata={
+            "axes": "CYX",
+            "PhysicalSizeX": 0.25,
+            "PhysicalSizeY": 0.25,
+            "Channel": {"Name": ["DAPI", "GFP"]},
+        },
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # fully calibrated in y/x: no warning
+        arr, meta = io.load_image(p)
+    assert meta["voxel_size_um"] == (0.25, 0.25)
+    assert meta["voxel_size_source"] == "y:file,x:file"
+    assert meta["channel_names"] == ["DAPI", "GFP"]
+    assert meta["format"] == "ome_tiff"
+    assert arr[meta["channel_names"].index("GFP")].max() == 5
+    _, auto_meta = io.load_auto(p)
+    assert {k: auto_meta[k] for k in meta} == meta
