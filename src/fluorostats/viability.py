@@ -198,11 +198,17 @@ def live_dead_by_count(
     is the counting mode); other ``seg`` keys (``min_size``, ``threshold_scale``)
     pass through to it.
 
-    No single mode is universally best. Every mode returns n_live, n_dead and
-    viability, plus (auto) the chosen method + reasoning, or (all) per-method
-    counts and viabilities (``by_method``), ``consensus`` and ``spread``; for
-    ``all`` the top-level counts are NaN (no single count) and ``viability`` is
-    the consensus.
+    No single mode is universally best. Every mode returns the same flat keys
+    (what a mode does not compute is NaN, or "" for text):
+
+    - ``n_live``, ``n_dead``, ``viability`` — the counts and their ratio (NaN
+      counts for ``all``: there is no single count; its viability is the consensus);
+    - ``consensus`` — median viability over the methods run (equals ``viability``);
+      ``spread`` — max − min of those viabilities, NaN when only one method ran;
+    - ``method_live``, ``method_dead``, ``reason_live``, ``reason_dead`` — the
+      method used on each channel and (``auto``) why ("" for ``all``);
+    - ``n_live_<m>``, ``n_dead_<m>``, ``viability_<m>`` for every ``m`` in
+      `COUNT_METHODS` — the per-method counts that were computed.
     """
     methods = ("auto", "all", *COUNT_METHODS)
     if method not in methods:
@@ -213,38 +219,45 @@ def live_dead_by_count(
     def _count_one(ch, m, sig):
         return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
 
+    nan = float("nan")
+    out: dict = {"n_live": nan, "n_dead": nan, "viability": nan, "consensus": nan,
+                 "spread": nan, "method_live": "", "method_dead": "",
+                 "reason_live": "", "reason_dead": ""}
+    for m in COUNT_METHODS:
+        out.update({f"n_live_{m}": nan, f"n_dead_{m}": nan, f"viability_{m}": nan})
+
     if method == "all":
-        modes = COUNT_METHODS
         # auto-smooth the maxima channel from each channel's estimated radius
         # (no cells -> radius NaN -> no smoothing)
         sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
         sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
-        per = {}
-        for m in modes:
+        for m in COUNT_METHODS:
             nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)
             nd = _count_one(dead, m, sig_d if m == "maxima" else 0.0)
-            per[m] = {"n_live": nl, "n_dead": nd, "viability": live_ratio(nl, nd)}
-        vals = [p["viability"] for p in per.values() if p["viability"] == p["viability"]]
-        consensus = float(np.median(vals)) if vals else float("nan")
-        spread = float(max(vals) - min(vals)) if vals else float("nan")
-        return {"n_live": float("nan"), "n_dead": float("nan"), "viability": consensus,
-                "by_method": per, "consensus": consensus, "spread": spread}
+            out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd,
+                        f"viability_{m}": live_ratio(nl, nd)})
+        vals = [out[f"viability_{m}"] for m in COUNT_METHODS
+                if out[f"viability_{m}"] == out[f"viability_{m}"]]
+        if vals:
+            out["consensus"] = out["viability"] = float(np.median(vals))
+            out["spread"] = float(max(vals) - min(vals))
+        return out
 
     def _count(ch):
-        m, sig = method, smooth_sigma
-        info = None
+        m, sig, reason = method, smooth_sigma, ""
         if method == "auto":
             info = choose_count_method(ch, **rseg)
-            m, sig = info["method"], info["smooth_sigma"]
-        n = _count_one(ch, m, sig)
-        return n, (info["method"] if info else m), (info["reason"] if info else "")
+            m, sig, reason = info["method"], info["smooth_sigma"], info["reason"]
+        return _count_one(ch, m, sig), m, reason
 
     n_live, ml, rl = _count(live)
     n_dead, md, rd = _count(dead)
-    out = {"n_live": n_live, "n_dead": n_dead, "viability": live_ratio(n_live, n_dead)}
-    if method == "auto":
-        out.update({"method_live": ml, "method_dead": md,
-                    "reason_live": rl, "reason_dead": rd})
+    v = live_ratio(n_live, n_dead)
+    out.update({"n_live": n_live, "n_dead": n_dead, "viability": v, "consensus": v,
+                "method_live": ml, "method_dead": md, "reason_live": rl, "reason_dead": rd,
+                f"n_live_{ml}": n_live, f"n_dead_{md}": n_dead})
+    if ml == md:
+        out[f"viability_{ml}"] = v
     return out
 
 

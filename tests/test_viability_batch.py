@@ -73,6 +73,15 @@ def test_single_count_method_path(tmp_path):
     import csv
     rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
     assert all("n_live" in r for r in rows)     # single-method path emits n_live
+    # the same columns as count_method="all"; what cc did not compute is NaN
+    (tmp_path / "a").mkdir()
+    all_rows = list(csv.DictReader(open(viability_batch.run(_manifest(tmp_path / "a"))
+                                        / "viability_per_stack.csv")))
+    assert list(rows[0]) == list(all_rows[0])
+    assert all(r["viability_count_spread"] == "nan" for r in rows)     # one method ran
+    assert all(r["n_live_watershed"] == "nan" and r["n_live_cc"] == r["n_live"]
+               for r in rows)
+    assert all(r["count_method_live"] == "cc" for r in rows)
 
 
 def test_viability_batch_manifest_errors(tmp_path):

@@ -130,9 +130,12 @@ def test_choose_count_method_no_cells():
 def test_live_dead_by_count_method_all_reports_consensus():
     live, dead = _two_channel_stack()
     out = viability.live_dead_by_count(live, dead, method="all")
-    assert set(out["by_method"]) == {"cc", "watershed", "maxima"}
-    assert "consensus" in out and "spread" in out
+    per = [out[f"viability_{m}"] for m in viability.COUNT_METHODS]
+    per = [v for v in per if v == v]                     # methods that found cells
+    assert out["consensus"] == np.median(per)
+    assert out["spread"] == max(per) - min(per)
     assert out["viability"] == out["consensus"]
+    assert out["method_live"] == out["method_dead"] == ""
 
 
 def test_live_dead_by_count_auto_reports_reasoning():
@@ -245,3 +248,35 @@ def test_regime_without_cells_is_nan_not_zero():
     out = viability.choose_count_method(np.zeros((16, 16), np.float32))
     assert out["n_cc"] == 0 and out["method"] == "cc"
     assert np.isnan(out["snr"]) and np.isnan(out["crowding"]) and np.isnan(out["radius"])
+
+
+_FLAT_KEYS = {"n_live", "n_dead", "viability", "consensus", "spread", "method_live",
+              "method_dead", "reason_live", "reason_dead",
+              *(f"{k}_{m}" for m in viability.COUNT_METHODS
+                for k in ("n_live", "n_dead", "viability"))}
+
+
+@pytest.mark.parametrize("method", ["all", "auto", *viability.COUNT_METHODS])
+def test_live_dead_by_count_has_one_flat_contract(method):
+    # Every mode returns the same flat keys of scalars/strings (MOD-5); what a mode
+    # did not compute is NaN or "".
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method=method)
+    assert set(out) == _FLAT_KEYS
+    assert all(isinstance(v, (int, float, str, np.integer, np.floating)) for v in out.values())
+    if method in viability.COUNT_METHODS:
+        assert (out["method_live"], out["method_dead"]) == (method, method)
+        assert out[f"n_live_{method}"] == out["n_live"]
+        assert out[f"viability_{method}"] == out["viability"] == out["consensus"]
+        assert np.isnan(out["spread"])                    # one method: no spread
+        others = [m for m in viability.COUNT_METHODS if m != method]
+        assert all(np.isnan(out[f"n_live_{m}"]) for m in others)
+
+
+def test_live_dead_by_count_auto_fills_the_chosen_methods_columns():
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method="auto")
+    ml, md = out["method_live"], out["method_dead"]
+    assert out[f"n_live_{ml}"] == out["n_live"] and out[f"n_dead_{md}"] == out["n_dead"]
+    assert out["reason_live"] and out["reason_dead"]
+    assert out["consensus"] == out["viability"] and np.isnan(out["spread"])

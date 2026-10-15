@@ -5,9 +5,11 @@ the quantitative viability readouts the library exposes, from one JSON config:
 
   - **area / coverage** (``viability.live_dead_fractions`` on the surface MIP):
     live and dead area fraction and area-based viability;
-  - **counts** (``viability.live_dead_by_count``, ``method="all"``): connected-
-    component / watershed / maxima cell counts, their consensus viability and
-    spread (disagreement flags a crowded regime the counting choice matters in);
+  - **counts** (``viability.live_dead_by_count``, ``method="all"`` by default):
+    connected-component / watershed / maxima cell counts, their consensus viability
+    and spread (disagreement flags a crowded regime the counting choice matters in).
+    Every ``count_method`` writes the same columns (NaN / empty for what it did not
+    compute; the spread is NaN when only one method ran);
   - **regime** (``viability.choose_count_method``): SNR + crowding + the method
     the heuristic would auto-pick, so the choice is transparent;
   - **2D-vs-3D bias** (``viability.viability_2d_vs_3d``): how much a MIP overstates
@@ -113,10 +115,12 @@ def _check_seg(seg) -> list[str]:
     return problems
 
 
-def _counts(by_method: dict, m: str) -> tuple[float, float, float]:
-    """(n_live, n_dead, viability) for one method from a live_dead_by_count 'all' result."""
-    d = by_method.get(m, {})
-    return d.get("n_live", float("nan")), d.get("n_dead", float("nan")), d.get("viability", float("nan"))
+# `live_dead_by_count` keys written under another column name; every other key is
+# written as is, and its ``viability`` equals ``consensus`` so it is not repeated.
+_COUNT_COLUMNS = {"consensus": "viability_count_consensus",
+                  "spread": "viability_count_spread",
+                  "method_live": "count_method_live", "method_dead": "count_method_dead",
+                  "reason_live": "count_reason_live", "reason_dead": "count_reason_dead"}
 
 
 def analyse_stack(path: Path, cfg: dict) -> dict:
@@ -158,22 +162,9 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "regime_crowding": regime["crowding"],
         "regime_method": regime["method"],
     }
-    if cfg["count_method"] == "all":
-        bm = counts["by_method"]
-        for m in viab.COUNT_METHODS:
-            nl, nd, v = _counts(bm, m)
-            row[f"n_live_{m}"] = nl
-            row[f"n_dead_{m}"] = nd
-            row[f"viability_{m}"] = v
-        row["viability_count_consensus"] = counts["consensus"]
-        row["viability_count_spread"] = counts["spread"]
-        n_live_ref = bm.get("cc", {}).get("n_live", float("nan"))   # CC = robust count
-    else:
-        row["n_live"] = counts["n_live"]
-        row["n_dead"] = counts["n_dead"]
-        row["viability_count_consensus"] = counts["viability"]
-        row["viability_count_spread"] = 0.0
-        n_live_ref = counts["n_live"]
+    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items() if k != "viability"})
+    # density from the single count, or (method "all": no single count) the CC count
+    n_live_ref = counts["n_live"] if counts["n_live"] == counts["n_live"] else counts["n_live_cc"]
     row["live_density_permm2"] = n_live_ref / fov_mm2 if fov_mm2 > 0 else float("nan")
     return row
 
@@ -210,8 +201,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         w.writerows(rows)
 
     # group summary CSV (mean +/- SEM for the numeric metrics)
-    metrics = [k for k in fields
-               if k not in ("group", "stack", "voxel_size_source", "regime_method")]
+    metrics = [k for k in fields if k not in ("group", "stack")
+               and not isinstance(rows[0][k], str)]      # numeric columns only
     groups = [g["name"] for g in m["groups"]]
     with open(out / "viability_group_summary.csv", "w", newline="") as f:
         sw = csv.writer(f)
