@@ -207,13 +207,15 @@ Open, each needing an owner decision:
 - [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default
   (existing manifests rely on it); `examples/keyence_tube_analysis.py` and
   `multi_condition_pipeline.py` are dataset-specific and could become manifest runs.
-- [ ] MIN-2: deprecated names (they warn) to remove in a release that announces it:
+- [ ] MIN-2: deprecated names to remove in a release that announces it. These warn:
   `fluorostats.style` (use `pubfig`); the `render3d` MIP panels (use `projections`);
   the `depth_batch` window and figure helpers (use `depth`, `depth_figures`);
-  `pubfig.panel(dx=, dy=)`; the depth manifest's `auc_window_um`;
+  `pubfig.panel(dx=, dy=)`; the depth manifest's `auc_window_um`; the renamed
+  voxel-size keywords; `watershed_split`'s `footprint_size`; the `metrics_3d`
+  skeleton re-exports; `plots.compute_pvalues`. These are plain dict keys or table
+  columns, kept for compatibility and documented as deprecated, but they cannot warn:
   `live_dead_by_count`'s `by_method`; Keyence `px_um`/`z_step_um`/`vox_*` keys; the
-  renamed voxel-size keywords; `watershed_split`'s `footprint_size`; the `metrics_3d`
-  skeleton re-exports; `plots.compute_pvalues`.
+  viability `*_cov_pct` columns.
 - [ ] GEN-1: defaults whose values cite no evidence (each is named once and
   documented as uncited): depth `FIT_R2_THRESHOLD` (0.85) and default window;
   quant3d `--threshold-scale 0.9` and `--min-branch-length 5`; quant2d `--threshold
