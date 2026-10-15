@@ -3,7 +3,7 @@
 `depth_batch` and `viability_batch` both describe their input as groups of
 stacks; `check_groups` validates that shared part before any image is loaded.
 `require_groups` checks a manifest's top-level shape first; `unknown_keys`,
-`is_int` and `is_number` are the field checks both use;
+`not_strings`, `is_int` and `is_number` are the field checks both use;
 `check_depth` checks the rest of a depth manifest.
 """
 
@@ -16,14 +16,22 @@ from .depth import parse_window, window_label
 from .stats import REDUCERS
 
 
-def is_int(v) -> bool:
+def is_int(v: object) -> bool:
     """An integer, not a bool (JSON true/false are ints to Python)."""
     return isinstance(v, int) and not isinstance(v, bool)
 
 
-def is_number(v) -> bool:
+def is_number(v: object) -> bool:
     """An int or float, not a bool."""
     return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def not_strings(m: dict, keys: Iterable[str]) -> list[str]:
+    """One problem per key of ``keys`` present in ``m`` whose value is not a string
+    (a number given as ``output_dir`` would otherwise fail only when the run writes)."""
+    return [
+        f"{k} must be a string, got {m[k]!r}" for k in keys if k in m and not isinstance(m[k], str)
+    ]
 
 
 def unknown_keys(where: str, d: dict, allowed: Iterable[str]) -> list[str]:
@@ -38,11 +46,14 @@ def unknown_keys(where: str, d: dict, allowed: Iterable[str]) -> list[str]:
 
 
 def _repeated(values: list) -> list:
-    """The values that occur more than once, each once, in first-seen order."""
-    return [v for i, v in enumerate(values) if v and v in values[i + 1 :] and v not in values[:i]]
+    """The values that occur more than once, each once, in first-seen order. A missing
+    value (None or "") is reported as missing elsewhere, so it is skipped here; a
+    numeric 0 is a value like any other."""
+    present = [v for v in values if v is not None and v != ""]
+    return [v for i, v in enumerate(present) if v in present[i + 1 :] and v not in present[:i]]
 
 
-def require_groups(m) -> None:
+def require_groups(m: object) -> None:
     """Raise ValueError unless ``m`` (a parsed manifest) is a JSON object with a
     non-empty ``groups`` list; the batch loaders call it before reading any field."""
     if not isinstance(m, dict):
@@ -183,6 +194,7 @@ def check_depth(m: dict) -> list[str]:
         for k in ("fit_offset", "parametric")
         if not isinstance(m[k], bool)
     ]
+    problems += not_strings(m, ("title", "signal_label", "output_dir"))
     r2 = m["fit_r2_threshold"]
     if not (is_number(r2) and 0 <= r2 <= 1):
         problems.append(f"fit_r2_threshold must be a number in [0, 1], got {r2!r}")

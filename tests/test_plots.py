@@ -198,15 +198,14 @@ def test_add_pvalue_annotations_all_nonsig_returns_early():
     plt.close(fig)
 
 
-def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
-    """Mock mannwhitneyu to raise ValueError → except branch (lines 222-223)."""
-    # separated n=10 groups: "***" unless the failed test is skipped
+def test_add_pvalue_annotations_skips_a_pair_whose_p_is_nan():
+    # separated n=10 groups: "***" unless the uncomputed test is skipped
     data = [np.arange(10.0), np.arange(10.0) + 100]
     x = np.arange(2)
     conditions = ["a", "b"]
     fig, ax = _make_ax_with_ylim()
     # stats.mann_whitney calls scipy.stats.mannwhitneyu, so that is the patch target.
-    with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
+    with patch("scipy.stats.mannwhitneyu", return_value=(0.0, float("nan"))):
         _add_pvalue_annotations(ax, data, x, conditions)
     assert len(ax.texts) == 0
     plt.close(fig)
@@ -402,11 +401,6 @@ def test_plots_many_conditions_get_distinct_colors(tmp_path, monkeypatch):
     plt.close(ax.figure)
 
 
-def test_condition_colors_unchanged_up_to_eight():
-    for n in (1, 2, 5, 8):
-        np.testing.assert_array_equal(plots._condition_colors(n), plt.cm.Set2(np.linspace(0, 1, n)))
-
-
 def test_summary_stars_follow_the_corrected_table(tmp_path):
     # A vs C: completely separated, n=4 each -> raw MWU p = 2/70 = 0.029 ("*"
     # uncorrected), but BH across the three pairs gives q = 0.086 ("ns"). The
@@ -497,3 +491,28 @@ def test_plots_compute_pvalues_is_the_stats_function():
         assert plots.compute_pvalues is stats.compute_pvalues
     with pytest.raises(AttributeError, match="no attribute 'nope'"):
         plots.nope
+
+
+@pytest.fixture
+def kept_figure(monkeypatch):
+    """Keep the figure a plot function saves open; yield a getter for it."""
+    monkeypatch.setattr(plt, "close", lambda fig=None: None)
+    yield plt.gcf
+    monkeypatch.undo()
+    plt.close("all")
+
+
+def test_plots_take_colours_and_type_from_the_theme(tmp_path, kept_figure):
+    # M6 (SIN-1): plots hard-coded Set2/hsv colours and bold font sizes, so CLI plots
+    # did not share the one figure style.
+    from fluorostats import pubfig
+
+    pubfig.apply_style("house")
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    assert list(plots._condition_colors(2)) == cycle[:2]
+    assert len(set(map(tuple, plots._condition_colors(len(cycle) + 2)))) == len(cycle) + 2
+    bar_mean_sem(_replicate_df(), "volume_fraction", tmp_path / "b.png")
+    ax = kept_figure().axes[0]
+    assert ax.yaxis.label.get_fontsize() == plt.rcParams["axes.labelsize"]
+    assert ax.title.get_fontweight() == plt.rcParams["axes.titleweight"]
+    plt.rcdefaults()

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -163,15 +164,19 @@ def _git_commit(package_dir: Path) -> str | None:
     return f"{sha}-dirty" if changed else sha
 
 
-def write_run_config(output_dir: Path, params: dict, nested: dict | None = None) -> Path:
+def write_run_config(
+    output_dir: Path, params: dict, nested: dict | None = None, tool: str | None = None
+) -> Path:
     """Write ``run_config.json``: the run's parameters plus `environment`, so an
     output folder says how it was produced.
 
-    From ``params`` only paths (as strings) and plain scalars are kept. ``nested``
-    adds structured values verbatim (e.g. a batch driver's resolved manifest);
-    anything not JSON-native in it is written as its string form.
+    ``tool`` (the command that ran, e.g. ``"depth"``) is the first key; it is how
+    `claim_output_dir` knows which tool's outputs a folder holds. From ``params``
+    only paths (as strings) and plain scalars are kept. ``nested`` adds structured
+    values verbatim (e.g. a batch driver's resolved manifest); anything not
+    JSON-native in it is written as its string form.
     """
-    config: dict = {}
+    config: dict = {} if tool is None else {"tool": tool}
     for k, v in params.items():
         if isinstance(v, Path):
             config[k] = str(v)
@@ -198,6 +203,59 @@ def remove_outputs(paths: Iterable[Path]) -> list[Path]:
     for path in removed:
         path.unlink()
     return removed
+
+
+def claim_output_dir(
+    out_dir: Path, tool: str, owned: Iterable[Path], overwrite: bool = False
+) -> list[Path]:
+    """Make ``out_dir`` ready for a run of ``tool``; return the earlier outputs removed.
+
+    ``owned`` are the paths the tool writes (``run_config.json`` among them). The
+    folder's ``run_config.json`` must name ``tool``: a folder another tool, or a run
+    that recorded no tool, wrote is refused, and so is one that holds any owned name
+    but no record (files the user put there, or a run that failed part-way). Then
+    `remove_outputs` deletes the owned files. ``overwrite`` replaces them anyway,
+    with a warning naming the files that were not this tool's. ValueError otherwise.
+    """
+    owned = list(owned)
+    record = Path(out_dir) / "run_config.json"
+    present = sorted(p.name for p in owned if p.exists() and p != record)
+    if record.exists():
+        recorded = _recorded_tool(record)
+        if recorded != tool:
+            who = f"written by fluorostats {recorded}" if recorded else "an unrecorded run"
+            return _foreign(out_dir, tool, owned, overwrite, f"holds {who} (run_config.json)")
+    elif present:
+        found = f"holds {', '.join(present)} but no run_config.json"
+        return _foreign(out_dir, tool, owned, overwrite, found)
+    return remove_outputs(owned)
+
+
+def _recorded_tool(record: Path) -> str | None:
+    """The ``tool`` a run_config.json names; None when it names none or is unreadable
+    (the caller then treats the folder as not this tool's)."""
+    try:
+        tool = json.loads(record.read_text()).get("tool")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return tool if isinstance(tool, str) else None
+
+
+def _foreign(out_dir: Path, tool: str, owned: list[Path], overwrite: bool, found: str):
+    """Refuse a folder whose files this tool did not write, or (``overwrite``) say
+    which are replaced and remove them."""
+    if not overwrite:
+        raise ValueError(
+            f"output folder {out_dir} {found}; fluorostats {tool} would replace files it "
+            "did not write. Choose another folder, or pass --overwrite (overwrite=True)."
+        )
+    names = ", ".join(sorted(p.name for p in owned if p.exists()))
+    warnings.warn(
+        f"{out_dir}: replacing {names}, not written by an earlier fluorostats {tool} run.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return remove_outputs(owned)
 
 
 def stale_notices(removed: list[Path]) -> list[str]:

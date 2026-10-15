@@ -15,7 +15,7 @@ from fluorostats.depth_figures import (
     plot_depth_curves,  # noqa: E402
     plot_retention_multiwindow,
 )
-from fluorostats.style import material_color  # noqa: E402
+from fluorostats.pubfig import material_color  # noqa: E402
 
 
 @pytest.fixture
@@ -36,6 +36,7 @@ def _auc_row(group, i, windows, norm, role="primary"):
             "normalized": norm * width,
             "absolute": 2 * norm * width,
             "width_um": width,
+            "covered_um": width,
         }
     return {
         "group": group,
@@ -253,3 +254,13 @@ def test_lambda_label_omits_the_sem_when_it_is_undefined(sem, expected):
     }
     fig, ax = plt.subplots()
     assert expected in _plot_lambda_model(ax, agg, 100 * np.exp(-z / 10), "#000", 1, 0.0)
+
+
+def test_retention_divides_by_the_covered_width_not_the_window(tmp_path, last_axes):
+    # Regression (M2): a stack covering 50 µm of a 0-100 µm window and keeping all its
+    # signal has a normalised AUC of 50; it was drawn as 0.5 retained, not 1.
+    windows = [parse_window([0, 100]), parse_window([0, 10])]
+    row = _auc_row("A", 0, windows, 1.0)
+    row["result"]["auc"]["0_100um"].update(normalized=50.0, covered_um=50.0)
+    plot_retention_multiwindow([row], {"A": "#3F6AB3"}, windows, tmp_path / "r", title="t")
+    assert [p.get_height() for p in last_axes().patches] == [1.0, 1.0]

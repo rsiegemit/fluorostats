@@ -139,12 +139,14 @@ def resample_to_depth(
     """Interpolate a profile's ``mean`` onto another depth axis.
 
     Depths outside the source range are held at the nearest endpoint
-    value (``np.interp`` default), which is appropriate for flat blanks.
+    value (``np.interp`` default), which is appropriate for flat blanks. The
+    source need not be in depth order (it is sorted first).
     """
+    order = np.argsort(source.depth_um, kind="stable")
     return np.interp(
         np.asarray(target_depth_um, dtype=np.float64),
-        source.depth_um,
-        source.mean,
+        source.depth_um[order],
+        source.mean[order],
     )
 
 
@@ -191,16 +193,17 @@ def normalize_to_surface(
 
     The reference is the average of the first ``n_surface`` slices. This
     removes per-stack gain/laser differences so that decay *shape* can be
-    compared across acquisitions. Requires a positive surface reference.
+    compared across acquisitions. Requires a positive surface reference (a
+    non-positive or NaN one is a ValueError).
     """
     if n_surface < 1:
         raise ValueError(f"n_surface must be >= 1, got {n_surface}")
     n = min(n_surface, profile.mean.shape[0])
     reference = float(np.mean(profile.mean[:n]))
-    if reference <= 0:
+    if not reference > 0:  # also refuses NaN (a NaN-masked surface slice)
         raise ValueError(
-            "near-surface reference is non-positive; cannot normalise "
-            "(check background subtraction / surface orientation)"
+            f"near-surface reference is {reference:g} (non-positive or NaN); cannot "
+            "normalise (check background subtraction / surface orientation)"
         )
     return replace(
         profile,
@@ -238,8 +241,10 @@ class PenetrationFit:
         Number of depth samples used in the fit.
     fit_ok:
         ``True`` only if the optimiser converged, ``r_squared`` clears the
-        acceptance threshold, AND λ falls within the acquired depth range
-        (a decay length longer than the stack is unmeasurable extrapolation).
+        acceptance threshold, AND λ lies between the smallest z-step and the
+        acquired depth range (a decay length longer than the stack is
+        unmeasurable extrapolation; one shorter than the sampling step is not
+        resolved: any such λ fits the samples equally well).
         A single-exponential is not guaranteed to describe a real profile —
         always check this before quoting λ. When λ is out of range the fit is
         degenerate: ``lambda_um`` / ``I0`` (and ``offset``, if fitted) are ``nan``.
@@ -280,21 +285,28 @@ def _initial_guess(z: np.ndarray, y: np.ndarray, n: int) -> tuple[float, float]:
 def _fit_exponential(z, y, offset: bool, i0_guess: float, lam_guess: float):
     """Bounded least-squares fit; returns (model, I0, λ, c or None).
 
-    With ``offset`` the tail floor c starts at min(y). Raises scipy's
-    RuntimeError/ValueError on non-convergence.
+    With ``offset`` the tail floor c starts at min(y). The fit runs on ``y / s``
+    (``s`` = max |y|) and I0 and c are scaled back: curve_fit's stopping
+    tolerances are absolute, so on small values (a 0-1 float image) it stopped
+    before λ had moved, and λ must not depend on the intensity scale. Raises
+    scipy's RuntimeError/ValueError on non-convergence.
     """
     from scipy.optimize import curve_fit
 
+    s = float(np.max(np.abs(y)))
+    s = s if np.isfinite(s) and s > 0 else 1.0  # NaN/inf: curve_fit refuses y itself
     if offset:
         c_guess = float(np.min(y))
-        p0 = [max(i0_guess - c_guess, i0_guess * 0.5), lam_guess, c_guess]
+        p0 = [max(i0_guess - c_guess, i0_guess * 0.5) / s, lam_guess, c_guess / s]
         bounds = ([0.0, 1e-9, -np.inf], [np.inf, np.inf, np.inf])
-        popt, _ = curve_fit(_exp_decay_offset, z, y, p0=p0, bounds=bounds, maxfev=20000)
-        return (_exp_decay_offset(z, *popt), float(popt[0]), float(popt[1]), float(popt[2]))
-    p0 = [i0_guess, lam_guess]
+        popt, _ = curve_fit(_exp_decay_offset, z, y / s, p0=p0, bounds=bounds, maxfev=20000)
+        i0, lam, c = float(popt[0]) * s, float(popt[1]), float(popt[2]) * s
+        return _exp_decay_offset(z, i0, lam, c), i0, lam, c
+    p0 = [i0_guess / s, lam_guess]
     bounds = ([0.0, 1e-9], [np.inf, np.inf])
-    popt, _ = curve_fit(_exp_decay, z, y, p0=p0, bounds=bounds, maxfev=20000)
-    return _exp_decay(z, *popt), float(popt[0]), float(popt[1]), None
+    popt, _ = curve_fit(_exp_decay, z, y / s, p0=p0, bounds=bounds, maxfev=20000)
+    i0, lam = float(popt[0]) * s, float(popt[1])
+    return _exp_decay(z, i0, lam), i0, lam, None
 
 
 def _fit_quality(y: np.ndarray, model: np.ndarray) -> tuple[float, float]:
@@ -310,7 +322,9 @@ def _fit_quality(y: np.ndarray, model: np.ndarray) -> tuple[float, float]:
     return r_squared, rmse
 
 
-# Default minimum R² for an accepted λ fit (see `fit_penetration_depth`).
+# Default minimum R² for an accepted λ fit (see `fit_penetration_depth`). Chosen on
+# collaborator hydrogel profiles; no committed benchmark table records that choice
+# yet (REU-5, an open item).
 FIT_R2_THRESHOLD = 0.85
 
 
@@ -341,16 +355,17 @@ def fit_penetration_depth(
         Fit the 3-parameter model with an additive floor ``c``.
     r2_threshold:
         Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default
-        :data:`FIT_R2_THRESHOLD` = 0.85, tuned against real hydrogel profiles:
-        clean single-exponential decays clear it, near-flat/non-exponential
-        profiles do not; the depth manifest's ``fit_r2_threshold``).
+        :data:`FIT_R2_THRESHOLD`: clean single-exponential decays clear it,
+        near-flat/non-exponential profiles do not; the depth manifest's
+        ``fit_r2_threshold``).
         An honest flag, not a hard gate: λ is always returned, but a poor
         fit means "single-exponential does not hold; use AUC".
 
     Returns
     -------
     PenetrationFit. On non-convergence, or when the fitted λ exceeds the
-    acquired depth range (degenerate near-flat profile), ``fit_ok`` is
+    acquired depth range (degenerate near-flat profile) or is shorter than the
+    smallest z-step (not resolved by the sampling), ``fit_ok`` is
     ``False`` and ``lambda_um`` / ``I0`` (and ``offset``, if fitted) are
     ``nan`` — a bad or unmeasurable λ is never silently reported.
     """
@@ -389,10 +404,14 @@ def fit_penetration_depth(
     # data: over the measured window the profile is essentially flat, so λ is an
     # extrapolation past the stack, not a measurement — and a near-flat model
     # fitting a near-flat profile can still post a high R², so R² alone cannot
-    # catch it. Reject such degenerate fits and NaN the unreliable parameters
+    # catch it. Likewise a decay length shorter than the sampling step: any such λ
+    # fits the samples equally well (a lone bright surface slice), so it is not
+    # measured either. Reject such degenerate fits and NaN the unreliable parameters
     # (r_squared/rmse are kept so callers can see a fit was attempted).
     depth_range_um = float(z[-1] - z[0])
-    lambda_in_range = bool(np.isfinite(lam_fit) and 0.0 < lam_fit <= depth_range_um)
+    steps = np.diff(z)
+    min_step_um = float(steps[steps > 0].min(initial=np.inf))
+    lambda_in_range = bool(np.isfinite(lam_fit) and min_step_um <= lam_fit <= depth_range_um)
     fit_ok = bool(lambda_in_range and r_squared >= r2_threshold)
     if not lambda_in_range:
         lam_fit = float("nan")
@@ -486,8 +505,11 @@ def parse_window(w: str | Sequence[float]) -> tuple:
 
 
 def window_label(w: tuple) -> str:
-    """Column/file-name label for a window: ``"full"`` or ``"0_100um"``."""
-    return "full" if w == ("full",) else f"{w[0]:g}_{w[1]:g}um"
+    """Column/file-name label for a window: ``"full"`` or ``"0_100um"``.
+
+    15 significant digits, so windows that differ in a typed digit get distinct
+    labels (``%g``'s six merged ``[0, 1234567]`` and ``[0, 1234568]``)."""
+    return "full" if w == ("full",) else f"{w[0]:.15g}_{w[1]:.15g}um"
 
 
 def window_title(w: tuple) -> str:

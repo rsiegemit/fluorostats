@@ -34,7 +34,7 @@ Manifest schema (all fields except groups/stacks are optional)::
       "reducer": "mean",           # "mean" | "median" (per-slice spatial stat)
       "n_surface": 3,              # slices averaged for surface normalisation
       "fit_offset": false,         # true → 3-parameter exp fit with additive floor
-      "fit_r2_threshold": 0.85,    # minimum R² for an accepted λ fit (fit_ok)
+      "fit_r2_threshold": 0.85,    # minimum R² for fit_ok (default depth.FIT_R2_THRESHOLD)
       "parametric": false,         # true → also print Welch t-tests (Mann-Whitney always)
       "auc_windows_um": [[0, 100], [0, 200], "full"],  # one or more windows
       "output_dir": "results/permeability",
@@ -54,7 +54,7 @@ Manifest schema (all fields except groups/stacks are optional)::
 
 ``auc_windows_um`` accepts ``[z0, z1]`` pairs and/or the string ``"full"``
 (each stack's entire acquired range); the singular ``auc_window_um`` is
-still accepted for back-compat. ``role`` defaults to ``"primary"``; ``aux``
+deprecated (still read, with a FutureWarning). ``role`` defaults to ``"primary"``; ``aux``
 stacks are exported and drawn faintly but excluded from the group mean/SEM
 curves and AUC statistics, so short or differently-acquired stacks can ride
 along without biasing the matched comparison.
@@ -70,16 +70,13 @@ from pathlib import Path
 import numpy as np
 from matplotlib.colors import is_color_like
 
-from . import depth, stats
-from .depth import parse_window, window_bounds, window_label, window_title
-from .depth_figures import group_color, plot_auc, plot_depth_curves, plot_retention_multiwindow
+from . import depth, depth_figures, stats
+from .deprecation import moved_names
 from .io import load_volume
 from .manifest import check_depth, require_groups
 from . import pubfig, report
 from .depth_contrasts import contrasts, print_auc_summary, print_lambda_summary, write_contrasts_csv
 
-# Window helpers and figures live in `depth` / `depth_figures`; re-exported here
-# so ``from fluorostats.depth_batch import plot_auc, parse_window`` keeps working.
 __all__ = [
     "load_manifest",
     "analyse_stack",
@@ -88,14 +85,24 @@ __all__ = [
     "write_profiles_csv",
     "write_auc_csv",
     "write_group_summary_csv",
-    "parse_window",
-    "window_label",
-    "window_title",
-    "window_bounds",
-    "plot_depth_curves",
-    "plot_auc",
-    "plot_retention_multiwindow",
 ]
+
+# The window helpers and figures live in `depth` / `depth_figures`; the names still
+# resolve here for one release, with a DeprecationWarning (STY-4).
+_moved_windows = moved_names(
+    __name__, ("parse_window", "window_label", "window_title", "window_bounds"), depth
+)
+_moved_figures = moved_names(
+    __name__, ("plot_depth_curves", "plot_auc", "plot_retention_multiwindow"), depth_figures
+)
+
+
+def __getattr__(name: str):
+    """A moved window helper or figure function, with its DeprecationWarning."""
+    try:
+        return _moved_windows(name)
+    except AttributeError:
+        return _moved_figures(name)
 
 
 # ---------------------------------------------------------------------------
@@ -116,12 +123,17 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("fit_offset", False)
     m.setdefault("fit_r2_threshold", depth.FIT_R2_THRESHOLD)
     m.setdefault("parametric", False)
-    # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`; a
+    # Accept the deprecated singular `auc_window_um` or plural `auc_windows_um`; a
     # manifest giving both keeps both, and validation refuses it.
-    if "auc_windows_um" not in m:
+    if "auc_window_um" in m:
+        # exception STY-4: a FutureWarning, which is shown by default, because the
+        # people who write manifests run the CLI and never see a DeprecationWarning.
+        msg = "depth manifest: 'auc_window_um' is deprecated; use 'auc_windows_um': [[z0, z1]]"
+        warnings.warn(msg, FutureWarning, stacklevel=2)
+    if "auc_windows_um" not in m:  # default [0, 100] µm: no benchmark chose it (REU-5, open)
         m["auc_windows_um"] = [m.pop("auc_window_um", [0.0, 100.0])]
     _validate(m)
-    m["windows"] = [parse_window(w) for w in m["auc_windows_um"]]
+    m["windows"] = [depth.parse_window(w) for w in m["auc_windows_um"]]
     return m
 
 
@@ -177,17 +189,17 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     max_depth = float(raw.depth_um[-1])
     auc = {}
     for w in cfg["windows"]:
-        z0, z1 = window_bounds(w, max_depth)
+        z0, z1 = depth.window_bounds(w, max_depth)
         covered = max(min(z1, max_depth) - z0, 0.0)
         if z1 > max_depth:
             warnings.warn(
-                f"{Path(path).name}: AUC window {window_title(w)} reaches past the "
+                f"{Path(path).name}: AUC window {depth.window_title(w)} reaches past the "
                 f"stack's {max_depth:g} µm; only {covered:g} µm of it "
                 "is covered (see window_covered_um).",
                 RuntimeWarning,
                 stacklevel=2,
             )
-        auc[window_label(w)] = {
+        auc[depth.window_label(w)] = {
             "absolute": depth.auc_depth(raw.depth_um, subtracted.mean, z_min=z0, z_max=z1),
             "normalized": depth.auc_depth(raw.depth_um, norm_curve, z_min=z0, z_max=z1),
             "covered_um": float(covered),
@@ -298,9 +310,11 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
 
 
 def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
-    """One row per stack: acquisition, λ fit, absolute/normalised AUC per window, and
-    ``voxel_size_source`` (which voxel axes were read from the file vs defaulted)."""
-    labels = [window_label(w) for w in windows]
+    """One row per stack: acquisition, λ fit, absolute/normalised AUC per window,
+    ``voxel_size_source`` (which voxel axes were read from the file vs defaulted) and
+    ``window_complete_<window>`` (1 when the stack covers the whole window, 0 when
+    its AUC is over only ``window_covered_um`` of it)."""
+    labels = [depth.window_label(w) for w in windows]
     header = [
         "group",
         "stack",
@@ -318,7 +332,8 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
     ]
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}", f"window_covered_um_{lab}"]
-    header.append("voxel_size_source")  # appended last so existing column positions hold
+    # appended last so existing column positions hold
+    header += ["voxel_size_source"] + [f"window_complete_{lab}" for lab in labels]
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(header)
@@ -343,7 +358,10 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
             for lab in labels:
                 a = res["auc"][lab]
                 row += [f"{a['absolute']:.6g}", f"{a['normalized']:.6g}", f"{a['covered_um']:.4g}"]
-            w.writerow(row + [res["voxel_size_source"]])
+            complete = [
+                int(res["auc"][lab]["covered_um"] >= res["auc"][lab]["width_um"]) for lab in labels
+            ]
+            w.writerow(row + [res["voxel_size_source"], *complete])
 
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:
@@ -396,12 +414,16 @@ def write_group_summary_csv(out: Path, aggregates: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run(manifest_path: Path, output_override: str | None = None) -> Path:
-    """Analyse every stack in a manifest; write CSVs, figures and a console report."""
+def run(manifest_path: Path, output_override: str | None = None, overwrite: bool = False) -> Path:
+    """Analyse every stack in a manifest; write CSVs, figures and a console report.
+
+    The output folder must be new or hold an earlier depth run
+    (`report.claim_output_dir`); ``overwrite`` replaces another run's files anyway.
+    """
     m = load_manifest(manifest_path)
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
     out_dir.mkdir(parents=True, exist_ok=True)
-    previous = report.remove_outputs(_owned_outputs(out_dir))
+    previous = report.claim_output_dir(out_dir, "depth", _owned_outputs(out_dir), overwrite)
     pubfig.apply_style("house")
 
     cfg = {
@@ -422,7 +444,9 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     print_auc_summary(rows, windows, m["parametric"], tests)
     print_lambda_summary(rows, m["parametric"], tests)
     # Written last, so only a completed run leaves a record claiming the folder.
-    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
+    report.write_run_config(
+        out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m}, tool="depth"
+    )
     for line in report.stale_notices(previous):
         print(line)
     print(f"\nOutputs written to {out_dir}/")
@@ -430,8 +454,9 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
 
 def _owned_outputs(out_dir: Path) -> list[Path]:
-    """The files an earlier run may have left that this run rewrites or must not keep:
-    every figure name `_write_figures` can write (any window) and ``run_config.json``."""
+    """Every file a run writes, which an earlier run may have left: the CSVs, every
+    figure name `_write_figures` can write (any window) and ``run_config.json``."""
+    tables = ("depth_profiles_long", "auc_per_stack", "group_depth_summary", "contrasts")
     figs = [
         out_dir / f"{stem}.{ext}"
         for ext in ("png", "pdf")
@@ -440,7 +465,7 @@ def _owned_outputs(out_dir: Path) -> list[Path]:
     for kind in ("normalized", "absolute"):
         figs += out_dir.glob(f"fig_auc_{kind}_*.png")
         figs += out_dir.glob(f"fig_auc_{kind}_*.pdf")
-    return [*figs, out_dir / "run_config.json"]
+    return [*(out_dir / f"{t}.csv" for t in tables), *figs, out_dir / "run_config.json"]
 
 
 def _analyse_groups(groups: list[dict], cfg: dict):
@@ -450,7 +475,7 @@ def _analyse_groups(groups: list[dict], cfg: dict):
     per_group_primary: dict[str, list[dict]] = {}
     for grp in groups:
         gname = grp["name"]
-        colors[gname] = group_color(gname, grp.get("color"))
+        colors[gname] = depth_figures.group_color(gname, grp.get("color"))
         bg = grp.get("background")
         blank = _load_blank(bg, cfg) if bg else None
         per_group_primary.setdefault(gname, [])
@@ -471,17 +496,21 @@ def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
     shortest replicate, with the across-replicate SEM. Every slice whose mean is
     <= 0 (empty or truncated; trailing or mid-stack) is then dropped, so the
     background is interpolated across mid-stack gaps and held at its last value
-    past the end. Both are announced with counts.
+    past the end. Both are announced with counts; a blank with no slice left is a
+    ValueError naming it.
     """
     bg_paths = [bg] if isinstance(bg, str) else list(bg)
     profs = [_load_profile(Path(bp), cfg)[0] for bp in bg_paths]
     blank = profs[0] if len(profs) == 1 else _average_blanks(profs)
     valid = blank.mean > 0
+    names = ", ".join(Path(bp).name for bp in bg_paths)
+    if not valid.any():
+        raise ValueError(f"blank {names}: no slice has a mean > 0, so there is no background")
     if not valid.all():
         n_drop = int((~valid).sum())
-        trailing = int(np.argmax(valid[::-1])) if valid.any() else n_drop
+        trailing = int(np.argmax(valid[::-1]))
         warnings.warn(
-            f"blank {', '.join(Path(bp).name for bp in bg_paths)}: dropped {n_drop} "
+            f"blank {names}: dropped {n_drop} "
             f"of {valid.size} slices with mean <= 0 ({n_drop - trailing} mid-stack, "
             f"{trailing} trailing).",
             RuntimeWarning,
@@ -523,7 +552,7 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
     fixed = [w for w in windows if w != ("full",)]
     shade_window = min(fixed, key=lambda w: w[1]) if fixed else None
     model = {"n_surface": cfg["n_surface"], "fit_offset": cfg["fit_offset"]}
-    plot_depth_curves(
+    depth_figures.plot_depth_curves(
         rows,
         aggregates,
         colors,
@@ -534,7 +563,7 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
         auc_window=shade_window,
         **model,
     )
-    plot_depth_curves(
+    depth_figures.plot_depth_curves(
         rows,
         aggregates,
         colors,
@@ -546,11 +575,15 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
         **model,
     )
     for w in windows:
-        lab = window_label(w)
-        plot_auc(rows, colors, w, out_dir / f"fig_auc_normalized_{lab}", use_normalized=True)
-        plot_auc(rows, colors, w, out_dir / f"fig_auc_absolute_{lab}", use_normalized=False)
+        lab = depth.window_label(w)
+        out_norm, out_abs = (
+            out_dir / f"fig_auc_normalized_{lab}",
+            out_dir / f"fig_auc_absolute_{lab}",
+        )
+        depth_figures.plot_auc(rows, colors, w, out_norm, use_normalized=True)
+        depth_figures.plot_auc(rows, colors, w, out_abs, use_normalized=False)
     if len(windows) > 1:
-        plot_retention_multiwindow(
+        depth_figures.plot_retention_multiwindow(
             rows,
             colors,
             windows,

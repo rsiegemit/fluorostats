@@ -24,19 +24,6 @@ def test_apply_style_sets_compact_rcparams():
     plt.rcdefaults()
 
 
-def test_house_theme_is_the_style_modules_look():
-    from fluorostats import style
-
-    style.apply_style(font_scale=1.5)
-    via_style = dict(plt.rcParams)
-    plt.rcdefaults()
-    pubfig.apply_style("house", font_scale=1.5)
-    assert dict(plt.rcParams) == via_style
-    assert plt.rcParams["font.size"] == 16.5 and plt.rcParams["axes.grid"] is True
-    assert style.PALETTE is pubfig.PALETTE and style.lighten is pubfig.lighten
-    plt.rcdefaults()
-
-
 def test_unknown_theme_is_refused():
     with pytest.raises(ValueError, match="theme must be one of \\('compact', 'house'\\)"):
         pubfig.apply_style("poster")
@@ -150,3 +137,60 @@ def test_bland_altman_panel_matches_agreement(annotate):
 @pytest.mark.parametrize("x,expected", [(382.6, 380), (14.8, 15), (0, 0.0), (-7.77, -7.8)])
 def test_round_sig(x, expected):
     assert pubfig.round_sig(x) == expected
+
+
+def test_palette_keys():
+    for k in ["primary", "accent", "ink", "paper", "grid"]:
+        assert pubfig.PALETTE[k].startswith("#")
+    assert {"mesh", "background"} <= set(pubfig.DARK_PALETTE)
+
+
+def test_material_color_exact_substring_and_fallback():
+    assert pubfig.material_color("GelMA") == pubfig.MATERIAL_COLORS["GelMA"]
+    assert pubfig.material_color("my GelMA sample") == pubfig.MATERIAL_COLORS["GelMA"]
+    assert pubfig.material_color("totally unknown") == pubfig.PALETTE["muted"]
+
+
+def test_darken_and_lighten_move_away_from_the_colour():
+    assert pubfig.darken("#888888", 0.2) != "#888888" != pubfig.lighten("#888888", 0.2)
+
+
+def test_panel_dx_dy_are_ignored_with_a_warning():
+    # STY-4: retired keywords were accepted and ignored silently.
+    fig, ax = plt.subplots()
+    with pytest.warns(DeprecationWarning, match="panel\\(\\): 'dx' and 'dy' are deprecated"):
+        pubfig.panel(ax, "a", dx=3.0)
+    assert [t.get_text() for t in ax.texts] == ["a"]
+
+
+@pytest.mark.parametrize("k, coverage", [(1.96, "95%"), (2.576, "99%"), (1.0, "68%")])
+def test_bland_altman_names_the_coverage_of_its_limits(k, coverage):
+    # Regression (L8): the label said "95% LoA" whatever loa_k was.
+    fig, ax = plt.subplots()
+    pubfig.bland_altman(ax, [1.0, 2.0, 3.0, 4.0], [1.1, 2.3, 2.8, 4.2], loa_k=k)
+    assert f"({coverage} LoA)" in ax.texts[0].get_text()
+
+
+def test_text_sizes_come_from_the_one_font_scale():
+    # L8: FS said "never hardcode sizes" while 5.6 and 6 were typed at the call sites.
+    fig, ax = plt.subplots()
+    pubfig.lollipop(ax, ["a", "b"], [0.9, 0.95])
+    pubfig.scalebar(ax, 0.01, "1 µm")
+    sizes = {t.get_fontsize() for t in ax.texts}
+    assert sizes == {pubfig.FS["value"], pubfig.FS["annot"]}
+    assert {t.get_fontsize() for t in ax.get_yticklabels()} == {pubfig.FS["tick"]}
+
+
+def test_composite2ch_colours_gamma_and_background_are_parameters():
+    rng = np.random.default_rng(3)
+    live, dead = rng.random((2, 16, 16))
+    default = pubfig.composite2ch(live, dead)
+    g, r = pubfig.imnorm(live), pubfig.imnorm(dead)
+    np.testing.assert_array_equal(default, np.clip(np.dstack([r + 0.1 * g, g, r]), 0, 1))
+    bg = np.array([0.2, 0.2, 0.2])
+    rgb = pubfig.composite2ch(
+        live, None, live_rgb=(0.0, 1.0, 0.0), clip=(0, 100), gamma=0.5, background=bg
+    )
+    n = pubfig.imnorm(live, 0, 100) ** 0.5
+    np.testing.assert_allclose(rgb[..., 1], np.clip(n + (1 - n) * 0.2, 0, 1))
+    np.testing.assert_allclose(rgb[..., 0], (1 - n) * 0.2)

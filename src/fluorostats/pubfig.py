@@ -4,14 +4,15 @@ Two rcParams themes chosen by name (:func:`apply_style`): ``"compact"`` — a
 5-7 pt type scale on white for multi-panel figures, with the Okabe-Ito
 colourblind-safe palette — and ``"house"`` — the 11 pt look with a light grid
 and the :data:`PALETTE` colours that the CLI, depth and render figures use
-(`fluorostats.style` keeps its names as a thin layer over this). Plus bold
+(the deprecated `fluorostats.style` re-exports its names). Plus bold
 lowercase panel letters, image-panel helpers (percentile normalisation,
 outlines, fills, scale bars), dot/lollipop and Bland-Altman panels,
 :func:`save_figure` (the one writer every figure goes through) and :func:`save`,
 which writes a vector PDF plus a 600-dpi PNG at the figure's exact authored size.
 
-Dataset-specific settings (text width, data roots, tool colour identities)
-belong to the scripts that use this kit, not here. Usage::
+Dataset-specific settings (data roots, tool colour identities) belong to the
+scripts that use this kit, not here; :data:`TEXT_WIDTH_IN` is the one shared
+authoring width. Usage::
 
     from fluorostats import pubfig as F
     F.apply_style()
@@ -23,9 +24,11 @@ belong to the scripts that use this kit, not here. Usage::
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
+from math import erf, sqrt
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -51,8 +54,9 @@ OKABE = {
 }
 
 # One font scale for every compact figure (points): 5-7 pt for body text, with 8 pt
-# bold panel letters. Reference these, never hardcode sizes.
-FS = {"title": 7, "label": 7, "tick": 6, "legend": 6, "annot": 6, "small": 5, "panel": 8}
+# bold panel letters ("value": numbers printed beside data marks). Reference these,
+# never hardcode sizes.
+FS = dict(title=7, label=7, tick=6, legend=6, annot=6, value=5.6, small=5, panel=8)
 
 # The house palette (the "house" theme and the CLI / depth / render figures).
 PALETTE = {
@@ -272,13 +276,16 @@ def panel(
     axis top-left, plus an optional short roman descriptor beside it.
 
     Offset points keep labels identical across figures and never expand the saved
-    bbox. ``dx``/``dy`` are accepted for backward compatibility and ignored.
+    bbox. ``dx``/``dy`` are deprecated and ignored (a DeprecationWarning); use ``pad``.
 
     ``xanchor``: None (default) anchors the letter to the axes frame. A float
     places the letter x at that FIGURE-fraction position (y still from the axes'
     top edge and ``pad[1]``), so row-leading letters across panels with different
     tick-label widths share one page x instead of drifting with each axes frame.
     """
+    if dx is not None or dy is not None:
+        msg = "panel(): 'dx' and 'dy' are deprecated and ignored; use 'pad'"
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
     if xanchor is None:
         ax.annotate(
             label,
@@ -368,12 +375,26 @@ def outline(ax: plt.Axes, labels: np.ndarray, rgb: Sequence[float], width: int =
 
 
 def composite2ch(
-    live: np.ndarray, dead: np.ndarray, live_gain: float = 1.0, dead_gain: float = 1.0
+    live: np.ndarray,
+    dead: np.ndarray | None,
+    live_gain: float = 1.0,
+    dead_gain: float = 1.0,
+    *,
+    live_rgb: ArrayLike = (0.1, 1.0, 0.0),
+    dead_rgb: ArrayLike = (1.0, 0.0, 1.0),
+    clip: tuple[float, float] = (1, 99.5),
+    gamma: float = 1.0,
+    background: ArrayLike = (0.0, 0.0, 0.0),
 ) -> np.ndarray:
-    """Green (live) / magenta (dead) two-channel RGB composite, colourblind-safe."""
-    g = imnorm(live) * live_gain
-    r = imnorm(dead) * dead_gain
-    return np.clip(np.dstack([r + 0.1 * g, g, r]), 0, 1)
+    """Two-channel RGB composite in [0, 1], the one live/dead composite: each channel
+    `imnorm`-ed (percentiles ``clip``), raised to ``gamma``, scaled by its gain and
+    added in its colour (RGB in [0, 1]); live is blended over ``background``. The
+    default green (live) / magenta (dead) is colourblind-safe; ``dead`` may be None."""
+    g = (imnorm(live, *clip) ** gamma * live_gain)[..., None]
+    rgb = g * np.asarray(live_rgb) + (1 - g) * np.asarray(background)
+    if dead is not None:
+        rgb = rgb + (imnorm(dead, *clip) ** gamma * dead_gain)[..., None] * np.asarray(dead_rgb)
+    return np.clip(rgb, 0, 1)
 
 
 def fill_mask(ax: plt.Axes, mask: np.ndarray, rgb: Sequence[float], alpha: float = 0.85) -> None:
@@ -411,9 +432,10 @@ def scalebar(
         tx, tha = xr + length_px / 2, "center"
     else:
         tx, tha = (xr + length_px if right else xr), ("right" if right else "left")
-    ax.text(
-        tx, yb - 0.02 * H, label, color=color, ha=tha, va="bottom", fontsize=6, fontweight="bold"
+    text_style: dict[str, Any] = dict(
+        color=color, ha=tha, va="bottom", fontsize=FS["annot"], fontweight="bold"
     )
+    ax.text(tx, yb - 0.02 * H, label, **text_style)
 
 
 # ---- export ----
@@ -473,8 +495,8 @@ def lollipop(
     his: Sequence[float] | None = None,
     ascending: bool = False,
     fmt: str = "{:.3f}",
-    label_fs: float = 6,
-    value_fs: float = 5.6,
+    label_fs: float = FS["tick"],
+    value_fs: float = FS["value"],
     highlight: str | None = "fluorostats",
 ) -> list[str]:
     """Horizontal dot/lollipop plot with a zoomed x-axis for near-max values
@@ -493,15 +515,8 @@ def lollipop(
     lo_x = floor if floor is not None else max(0.0, min(values) - 0.03)
     hi_x = max(values) + (max(values) - lo_x) * 0.14
     for row, i in enumerate(idx):
-        c = (
-            colors[i]
-            if colors
-            else (
-                OKABE["blue"]
-                if highlight and highlight in str(labels[i]).lower()
-                else OKABE["grey"]
-            )
-        )
+        hit = highlight and highlight in str(labels[i]).lower()
+        c = colors[i] if colors else OKABE["blue" if hit else "grey"]
         ax.plot(
             [lo_x, values[i]],
             [row, row],
@@ -546,8 +561,8 @@ def bland_altman(
     """Bland-Altman agreement panel: points, bias line and +/- limits of agreement.
 
     Numbers come from `fluorostats.agreement.bland_altman` (difference = a - b,
-    NaN pairs dropped); ``loa_k`` scales the SD of the differences. Returns
-    ``(bias, loa)``.
+    NaN pairs dropped); ``loa_k`` scales the SD of the differences, and the label
+    names the normal coverage of those limits (1.96 -> 95%). Returns ``(bias, loa)``.
     """
     color = color or OKABE["blue"]
     ba = agreement.bland_altman(a, b)
@@ -564,10 +579,10 @@ def bland_altman(
         ax.text(
             0.02,
             0.96,
-            f"bias {bias:+.3f}\n±{loa:.3f} (95% LoA){label}",
+            f"bias {bias:+.3f}\n±{loa:.3f} ({100 * erf(loa_k / sqrt(2)):.0f}% LoA){label}",
             transform=ax.transAxes,
             va="top",
-            fontsize=5.6,
+            fontsize=FS["value"],
             color="#333",
         )
     return bias, loa

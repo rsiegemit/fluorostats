@@ -1,4 +1,9 @@
-"""Comparison plots grouped by experimental condition, with replicate support."""
+"""Comparison plots grouped by experimental condition, with replicate support.
+
+Type, colours and frames come from the active `pubfig` theme (the CLI draws in
+``pubfig.apply_style("house")``), so these plots share the one figure style;
+nothing here sets a font size or weight of its own.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,7 @@ import pandas as pd
 
 from . import stats
 from .deprecation import moved_names
-from .pubfig import save_figure
+from .pubfig import PALETTE, save_figure
 
 
 # ---------------------------------------------------------------------------
@@ -38,13 +43,19 @@ def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     return data, means, sems
 
 
+def _jitter(rng: np.random.Generator, n: int) -> np.ndarray:
+    """``n`` horizontal offsets in ±0.05, the one jitter of every strip of points."""
+    return rng.uniform(-0.05, 0.05, n)
+
+
 def _jittered_points(ax, x, data) -> None:
     """Each condition's values as black dots spread ±0.05 around its ``x`` (seeded, so
     a rerun draws the same figure)."""
     rng = np.random.default_rng(42)
     for xi, d in zip(x, data):
-        jitter = 0.1 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), xi) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+        ax.scatter(
+            np.full(len(d), xi) + _jitter(rng, len(d)), d, color="k", s=20, alpha=0.7, zorder=3
+        )
 
 
 def _bars_with_points(ax, x, data, means, sems, colors) -> None:
@@ -64,12 +75,13 @@ def _bars_with_points(ax, x, data, means, sems, colors) -> None:
     _jittered_points(ax, x, data)
 
 
-def _condition_colors(n: int) -> np.ndarray:
-    """``n`` distinct RGBA colours: Set2 for up to its 8 colours, else ``n`` evenly
-    spaced hues (Set2 would repeat colours past 8)."""
-    if n <= 8:
-        return matplotlib.colormaps["Set2"](np.linspace(0, 1, n))
-    return matplotlib.colormaps["hsv"](np.linspace(0, 1, n, endpoint=False))
+def _condition_colors(n: int) -> list:
+    """``n`` distinct colours: the active theme's colour cycle while it has ``n``, else
+    ``n`` evenly spaced hues (the cycle would repeat colours)."""
+    cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    if n <= len(cycle):
+        return cycle[:n]
+    return list(matplotlib.colormaps["hsv"](np.linspace(0, 1, n, endpoint=False)))
 
 
 # ---------------------------------------------------------------------------
@@ -102,8 +114,6 @@ def boxplot_by_condition(
 
     ax.set_ylabel(ylabel or _label_for(metric))
     ax.set_title(f"{_label_for(metric)} by Condition")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
 
     fig.tight_layout()
     save_figure(fig, {out_path: 150})
@@ -141,10 +151,8 @@ def bar_mean_sem(
 
     ax.set_xticks(x)
     ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0)
-    ax.set_ylabel(ylabel or _label_for(metric), fontsize=11, fontweight="bold")
-    ax.set_title(f"{_label_for(metric)} by Condition", fontsize=12, fontweight="bold")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.set_ylabel(ylabel or _label_for(metric))
+    ax.set_title(f"{_label_for(metric)} by Condition")
 
     fig.tight_layout()
     save_figure(fig, {out_path: 200})
@@ -195,16 +203,14 @@ def summary_panel(
             _add_pvalue_annotations(ax, data, x, conditions, q_lookup=_q_lookup(pvalues, metric))
 
         ax.set_xticks(x)
-        ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0, fontsize=9)
-        ax.set_ylabel(_label_for(metric), fontsize=10, fontweight="bold")
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
+        ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0)
+        ax.set_ylabel(_label_for(metric))
 
     # Hide unused axes
     for idx in range(n, nrows * ncols):
         axes[idx].set_visible(False)
 
-    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.suptitle(title)
     fig.tight_layout()
     save_figure(fig, {out_path: 200}, bbox_inches="tight")
 
@@ -246,9 +252,7 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
 
     # Test the pairs, correct for multiplicity, keep the significant ones
     tested = []
-    for i, j in pairs:
-        if len(data[i]) < 2 or len(data[j]) < 2:
-            continue
+    for i, j in pairs:  # mann_whitney leaves a pair under stats.MIN_N untested (NaN)
         p = stats.mann_whitney(data[i], data[j])["p"]
         if not np.isnan(p):
             tested.append((i, j, p))
@@ -284,7 +288,7 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
             color="black",
             linewidth=0.8,
         )
-        ax.text((x[i] + x[j]) / 2, y, stars, ha="center", va="bottom", fontsize=9)
+        ax.text((x[i] + x[j]) / 2, y, stars, ha="center", va="bottom")
 
     # Extend y-axis just enough for drawn brackets
     new_max = y_max + offset + len(sig_pairs) * step + step * 0.5
@@ -379,13 +383,12 @@ def effect_size_heatmap(
                     txt,
                     ha="center",
                     va="center",
-                    fontsize=8,
                     color="white" if abs(v) > 0.6 else "black",
                 )
     cbar = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
-    cbar.set_label(value_col, fontsize=10)
+    cbar.set_label(value_col)
     if title:
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title)
     fig.tight_layout()
     if out_path is not None:
         save_figure(fig, {out_path: 200}, bbox_inches="tight")
@@ -402,7 +405,7 @@ def forest_plot(
     hi_col: str = "ci_high",
     reference: float = 1.0,
     log_scale: bool = True,
-    color: str = "#d62728",
+    color: str = PALETTE["accent"],
     title: str | None = None,
     xlabel: str | None = None,
     figsize: tuple[float, float] | None = None,
@@ -420,12 +423,10 @@ def forest_plot(
     if log_scale:
         ax.set_xscale("log")
     ax.set_yticks(y)
-    ax.set_yticklabels(df[label_col].tolist(), fontsize=9)
+    ax.set_yticklabels(df[label_col].tolist())
     ax.set_xlabel(xlabel or f"{center_col} (95% CI)")
     if title:
-        ax.set_title(title, fontsize=11)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+        ax.set_title(title)
     fig.tight_layout()
     if out_path is not None:
         save_figure(fig, {out_path: 200}, bbox_inches="tight")
@@ -472,7 +473,7 @@ def condition_strip(
                 if vals.size == 0:
                     continue
                 offset = (hi - (n_hue - 1) / 2) * 0.25
-                x = xi + offset + rng.uniform(-0.05, 0.05, vals.size)
+                x = xi + offset + _jitter(rng, vals.size)
                 ax.scatter(
                     x,
                     vals,
@@ -493,8 +494,6 @@ def condition_strip(
     ax.set_xticks(range(len(x_levels)))
     ax.set_xticklabels(x_levels)
     ax.set_ylabel(_label_for(y_col))
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
     if hue_col and len(hue_levels) > 1:
         _hue_legend(ax, hue_levels, palette)
     return ax
@@ -547,13 +546,13 @@ def modality_panel(
                 continue
             condition_strip(sub, group_col, metric, ax=ax)
             if j == 0:
-                ax.set_ylabel(f"{mod}\n{_label_for(metric)}", fontsize=9, fontweight="bold")
+                ax.set_ylabel(f"{mod}\n{_label_for(metric)}")
             else:
-                ax.set_ylabel(_label_for(metric), fontsize=9)
+                ax.set_ylabel(_label_for(metric))
             if i < nrows - 1:
                 ax.set_xticklabels([])
     if title:
-        fig.suptitle(title, fontsize=12, fontweight="bold")
+        fig.suptitle(title)
     fig.tight_layout()
     if out_path is not None:
         save_figure(fig, {out_path: 200}, bbox_inches="tight")

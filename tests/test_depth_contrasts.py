@@ -7,7 +7,7 @@ from fluorostats import depth_contrasts, stats
 from fluorostats.depth import PenetrationFit
 
 
-def _row(group, i, auc, lam, role="primary", fit_ok=True):
+def _row(group, i, auc, lam, role="primary", fit_ok=True, covered=10.0):
     fit = PenetrationFit(
         lambda_um=lam, I0=1.0, offset=None, r_squared=0.99, rmse=0.0, n_points=10, fit_ok=fit_ok
     )
@@ -16,7 +16,10 @@ def _row(group, i, auc, lam, role="primary", fit_ok=True):
         "stack": f"{group}{i}",
         "role": role,
         "result": {
-            "auc": {"0_10um": {"normalized": auc}, "full": {"normalized": 2 * auc}},
+            "auc": {
+                "0_10um": {"normalized": auc, "covered_um": covered, "width_um": 10.0},
+                "full": {"normalized": 2 * auc, "covered_um": 20.0, "width_um": 20.0},
+            },
             "fit": fit,
         },
     }
@@ -61,7 +64,10 @@ def test_write_contrasts_csv_formats_floats_and_keeps_text(tmp_path):
     out = tmp_path / "c.csv"
     depth_contrasts.write_contrasts_csv(out, depth_contrasts.contrasts(ROWS, WINDOWS))
     lines = out.read_text().splitlines()
-    assert lines[0] == "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction"
+    assert (
+        lines[0]
+        == "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction,reason,n_partial"
+    )
     assert lines[1].startswith("auc_normalized,0_10um,a,b,4,3,0,")
     assert lines[3].startswith("lambda_um,,a,b,3,3,")
 
@@ -115,3 +121,23 @@ def test_correction_label_counts_only_the_tested_p_values():
     rows = depth_contrasts.mann_whitney_contrasts(entries, across="windows")
     assert np.isnan(rows[2]["p"]) and np.isnan(rows[2]["q"])
     assert {r["correction"] for r in rows} == {"Benjamini-Hochberg FDR across 2 windows"}
+
+
+def test_a_group_of_one_is_reported_untested_with_the_reason():
+    # Regression (M3): one accepted λ per group gave p = 1.0, reported as tested.
+    rows = [_row("a", 0, 1.0, 5.0), _row("b", 0, 2.0, 6.0), _row("b", 1, 3.0, 7.0)]
+    tests = depth_contrasts.contrasts(rows, WINDOWS)
+    assert all(np.isnan(c["p"]) and np.isnan(c["q"]) and c["reason"] == "n<2" for c in tests)
+    assert tests[0]["correction"] == "Benjamini-Hochberg FDR across 0 windows"
+
+
+def test_contrasts_count_the_stacks_that_cover_a_window_only_partly(capsys):
+    # Regression (M2): a stack shorter than the window entered the test with its
+    # clamped AUC, and contrasts.csv did not say so.
+    rows = ROWS + [_row("b", 5, 7.0, 9.0, covered=6.0), _row("a", 5, np.nan, 9.0, covered=0.0)]
+    tests = depth_contrasts.contrasts(rows, WINDOWS)
+    assert [c["n_partial"] for c in tests] == [1, 0, 0]
+    assert [c["n_partial"] for c in depth_contrasts.contrasts(ROWS, WINDOWS)] == [0, 0, 0]
+    depth_contrasts.print_auc_summary(rows, WINDOWS, False, tests)
+    out = capsys.readouterr().out
+    assert out.count("1 stack(s) cover only part of it; see window_covered_um") == 1

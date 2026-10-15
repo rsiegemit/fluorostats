@@ -510,3 +510,13 @@ def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monke
     res = CliRunner().invoke(cli, args)
     assert isinstance(res.exception, RuntimeError)
     assert not (out / "run_config.json").exists()
+
+
+def test_cli_plots_are_drawn_in_the_house_theme(tmp_path, monkeypatch):
+    from fluorostats import cli
+
+    themes = []
+    monkeypatch.setattr(cli.pubfig, "apply_style", lambda theme, **kw: themes.append(theme))
+    df = pd.DataFrame({"condition": ["a", "a", "b", "b"], "volume_fraction": [1.0, 2, 3, 4]})
+    cli._draw_plots_and_pvalues(df, ["volume_fraction"], tmp_path, "t")
+    assert themes == ["house"]
