@@ -1,12 +1,17 @@
-"""Publication-figure kit: one visual system for multi-panel journal figures.
+"""Figure kit: the one figure style of fluorostats, for every figure it draws.
 
-Okabe-Ito colourblind-safe palette, a 5-7 pt type scale, bold lowercase panel
-letters, image-panel helpers (percentile normalisation, outlines, fills, scale
-bars), dot/lollipop and Bland-Altman panels, and an exporter that writes a
-vector PDF plus a 600-dpi PNG at the figure's exact authored size.
+Two rcParams themes chosen by name (:func:`apply_style`): ``"compact"`` — a
+5-7 pt type scale on white for multi-panel figures, with the Okabe-Ito
+colourblind-safe palette — and ``"house"`` — the 11 pt look with a light grid
+and the :data:`PALETTE` colours that the CLI, depth and render figures use
+(`fluorostats.style` keeps its names as a thin layer over this). Plus bold
+lowercase panel letters, image-panel helpers (percentile normalisation,
+outlines, fills, scale bars), dot/lollipop and Bland-Altman panels,
+:func:`save_figure` (the one writer every figure goes through) and :func:`save`,
+which writes a vector PDF plus a 600-dpi PNG at the figure's exact authored size.
 
-Dataset- and manuscript-specific settings (text width, data roots, tool colour
-identities) belong to the scripts that use this kit, not here. Usage::
+Dataset-specific settings (text width, data roots, tool colour identities)
+belong to the scripts that use this kit, not here. Usage::
 
     from fluorostats import pubfig as F
     F.apply_style()
@@ -17,12 +22,15 @@ identities) belong to the scripts that use this kit, not here. Usage::
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Sequence
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import numpy as np
+from matplotlib.rcsetup import cycler
 from numpy.typing import ArrayLike
 
 from . import agreement
@@ -34,24 +42,53 @@ OKABE = {
     "grey": "#999999", "lgrey": "#C4C9D0",
 }
 
-# One font scale for every figure (points): the 5-7 pt journal window for body text,
-# with 8 pt bold panel letters. Reference these, never hardcode sizes.
+# One font scale for every compact figure (points): 5-7 pt for body text, with 8 pt
+# bold panel letters. Reference these, never hardcode sizes.
 FS = {"title": 7, "label": 7, "tick": 6, "legend": 6, "annot": 6, "small": 5, "panel": 8}
+
+# The house palette (the "house" theme and the CLI / depth / render figures).
+PALETTE = {
+    "primary":   "#3F6AB3",  # cool slate blue
+    "accent":    "#E25C5C",  # warm coral red
+    "highlight": "#E8A946",  # soft amber
+    "muted":     "#9AA4B0",  # cool grey
+    "ink":       "#1F2937",  # deep blue-grey for text
+    "paper":     "#FCFCFA",  # off-white background
+    "grid":      "#E5E7EB",  # very light grey gridlines
+    "background": "#FCFCFA",
+    "panel":     "#FFFFFF",
+}
+
+MATERIAL_COLORS = {
+    "GelMA": PALETTE["primary"],
+    "Hybrid": PALETTE["accent"],
+    "Control": PALETTE["muted"],
+}
+
+# Dark render palette (presentation slides)
+DARK_PALETTE = {
+    "background": "#000000",
+    "mesh":       "#F5C518",   # rich yellow
+    "grid":       "#3A3A3A",
+    "ink":        "#FFFFFF",
+    "scalebar":   "#FFFFFF",
+}
 
 # Full text width in inches (372 pt = 130.74 mm). A figure authored at the width
 # it is placed at is not rescaled, so the FS point sizes print at their size.
 TEXT_WIDTH_IN = 5.147
 
 
-def apply_style() -> None:
-    """Set global rcParams for a clean sans-serif journal look on white.
+def _compact_rc(font_scale: float) -> dict:
+    """The "compact" theme: small sans-serif type on white, despined, no grid.
 
     Font is DejaVu Sans: one bundled family with full coverage of the glyphs used
     on figures (arrows, checkmarks, ±, µ, Greek, minus), so no text renders as a
     missing-glyph box whatever fonts the host machine has.
     """
     fam = "DejaVu Sans"
-    plt.rcParams.update({
+    fs = {k: v * font_scale for k, v in FS.items()}
+    return {
         # dpi: preview at 200, export raster fallback at 600 (safe for small insets)
         "figure.dpi": 200, "savefig.dpi": 600,
         "pdf.fonttype": 42, "ps.fonttype": 42,   # embed TrueType, no Type-3, text stays selectable
@@ -61,9 +98,9 @@ def apply_style() -> None:
         # a real U+2212 minus on negative tick labels, matching body text
         "axes.unicode_minus": True,
         # 5-7 pt window: ticks 6, axis/panel titles 7, legend/annot 6
-        "font.size": FS["tick"],
-        "axes.titlesize": FS["title"], "axes.labelsize": FS["label"],
-        "xtick.labelsize": FS["tick"], "ytick.labelsize": FS["tick"], "legend.fontsize": FS["legend"],
+        "font.size": fs["tick"],
+        "axes.titlesize": fs["title"], "axes.labelsize": fs["label"],
+        "xtick.labelsize": fs["tick"], "ytick.labelsize": fs["tick"], "legend.fontsize": fs["legend"],
         "lines.linewidth": 1.2, "lines.markersize": 4,
         "axes.linewidth": 0.6, "axes.edgecolor": "#333333", "axes.titlepad": 4.0,
         "axes.titlelocation": "left", "axes.titleweight": "regular",
@@ -74,7 +111,90 @@ def apply_style() -> None:
         "xtick.major.pad": 1.8, "ytick.major.pad": 1.8,
         "axes.grid": False, "figure.facecolor": "white", "axes.facecolor": "white",
         "savefig.facecolor": "white", "legend.frameon": False, "lines.solid_capstyle": "round",
-    })
+    }
+
+
+# The "house" theme's settings other than font sizes.
+_HOUSE_RC = {
+    # Figure
+    "figure.facecolor": PALETTE["paper"], "figure.edgecolor": PALETTE["paper"],
+    "figure.dpi": 110, "savefig.dpi": 220, "savefig.bbox": "tight",
+    "savefig.facecolor": PALETTE["paper"], "savefig.edgecolor": "none",
+    # Axes
+    "axes.facecolor": PALETTE["panel"], "axes.edgecolor": PALETTE["ink"],
+    "axes.labelcolor": PALETTE["ink"], "axes.titlecolor": PALETTE["ink"],
+    "axes.titleweight": "semibold", "axes.titlepad": 10, "axes.labelpad": 6,
+    "axes.linewidth": 0.9, "axes.spines.top": False, "axes.spines.right": False,
+    "axes.grid": True, "axes.grid.axis": "y", "axes.axisbelow": True,
+    "axes.prop_cycle": cycler(color=[PALETTE["primary"], PALETTE["accent"],
+                                     PALETTE["highlight"], PALETTE["muted"],
+                                     "#6BAA75", "#9A6FB0"]),
+    # Grid
+    "grid.color": PALETTE["grid"], "grid.linewidth": 0.7, "grid.linestyle": "-",
+    # Ticks
+    "xtick.color": PALETTE["ink"], "ytick.color": PALETTE["ink"],
+    "xtick.direction": "out", "ytick.direction": "out",
+    "xtick.major.size": 4, "ytick.major.size": 4,
+    "xtick.major.width": 0.8, "ytick.major.width": 0.8,
+    # Typography (sizes come from the font scale)
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
+    "figure.titleweight": "semibold",
+    # Legend
+    "legend.frameon": False, "legend.handlelength": 1.6, "legend.handletextpad": 0.6,
+    "legend.borderpad": 0.4,
+    # Lines / markers
+    "lines.linewidth": 1.8, "lines.markersize": 6, "lines.markeredgewidth": 0.6,
+    "patch.linewidth": 0.6, "patch.edgecolor": PALETTE["ink"],
+    # Image
+    "image.cmap": "viridis",
+}
+
+
+def _house_rc(font_scale: float) -> dict:
+    """The "house" theme: 11 pt type (times ``font_scale``), PALETTE colours, y grid."""
+    base = 11.0 * font_scale
+    return {**_HOUSE_RC,
+            "font.size": base, "axes.titlesize": base * 1.15, "axes.labelsize": base * 1.0,
+            "xtick.labelsize": base * 0.85, "ytick.labelsize": base * 0.85,
+            "legend.fontsize": base * 0.9, "figure.titlesize": base * 1.4}
+
+
+# Figure themes by name: each maps a font scale to the rcParams it sets.
+THEMES: dict[str, Callable[[float], dict]] = {"compact": _compact_rc, "house": _house_rc}
+
+
+def apply_style(theme: str = "compact", font_scale: float = 1.0) -> None:
+    """Set the global rcParams of a figure theme (see :data:`THEMES`).
+
+    ``font_scale`` multiplies every font size (e.g. talks vs print). Idempotent —
+    safe to call multiple times.
+    """
+    if theme not in THEMES:
+        raise ValueError(f"theme must be one of {tuple(THEMES)}, got {theme!r}")
+    plt.rcParams.update(THEMES[theme](font_scale))
+
+
+def material_color(name: str, fallback: str | None = None) -> str:
+    """Look up the canonical color for a condition/material label."""
+    if name in MATERIAL_COLORS:
+        return MATERIAL_COLORS[name]
+    for key, color in MATERIAL_COLORS.items():
+        if key.lower() in str(name).lower():
+            return color
+    return fallback or PALETTE["muted"]
+
+
+def darken(color: str, amount: float = 0.2) -> str:
+    """Return a slightly darker version of a hex color."""
+    r, g, b = mcolors.to_rgb(color)
+    return mcolors.to_hex((max(0, r - amount), max(0, g - amount), max(0, b - amount)))
+
+
+def lighten(color: str, amount: float = 0.2) -> str:
+    """Return a slightly lighter version of a hex color."""
+    r, g, b = mcolors.to_rgb(color)
+    return mcolors.to_hex((min(1, r + amount), min(1, g + amount), min(1, b + amount)))
 
 
 def panel(ax: plt.Axes, label: str, title: str | None = None, dx: float | None = None,
@@ -188,6 +308,19 @@ def scalebar(ax: plt.Axes, length_px: float, label: str, loc: str = "lower right
 
 # ---- export ----
 
+def save_figure(fig: plt.Figure, outputs: dict, bbox_inches: str | None = None) -> None:
+    """Write ``fig`` to each path of ``outputs`` (``{path: dpi}``; dpi None = the
+    ``savefig.dpi`` rcParam), creating parent folders, then close it.
+
+    The one writer behind every figure the library saves; layout (tight_layout or a
+    constrained engine) is the caller's, so each keeps its own.
+    """
+    for path, dpi in outputs.items():
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(path), dpi=dpi, bbox_inches=bbox_inches)
+    plt.close(fig)
+
+
 def save(fig: plt.Figure, name: str, folder: str | Path, tight: bool = True, pad: float = 0.4) -> None:
     """Export an editable vector PDF + 600-dpi PNG at the figure's exact size.
 
@@ -196,16 +329,13 @@ def save(fig: plt.Figure, name: str, folder: str | Path, tight: bool = True, pad
     figures pass ``tight=False``: the constrained engine already spaces everything.
     If an element clips, fix the layout rather than cropping.
     """
-    folder = Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
     engine = fig.get_layout_engine()
     is_constrained = engine is not None and type(engine).__name__.lower().startswith("constrained")
     if tight and not is_constrained:
         fig.tight_layout(pad=pad)
-    stem = folder / name
-    fig.savefig(f"{stem}.pdf")                 # vector, exact figsize -> uniform column width
-    fig.savefig(f"{stem}.png", dpi=600)        # 600-dpi raster fallback / preview
-    plt.close(fig)
+    stem = Path(folder) / name
+    # vector PDF at the exact figsize (uniform column width) + 600-dpi raster fallback
+    save_figure(fig, {f"{stem}.pdf": None, f"{stem}.png": 600})
     print("saved", f"{stem}.pdf / .png (%.2fx%.2f in)" % tuple(fig.get_size_inches()))
 
 
@@ -284,7 +414,7 @@ def bland_altman(ax: plt.Axes, a: ArrayLike, b: ArrayLike, *, color: str | None 
 
 def round_sig(x: float, n: int = 2) -> float:
     """Round ``x`` to ``n`` significant figures (382.6 -> 380, 14.8 -> 15), so an
-    annotation can be derived from data yet match a manuscript's rounding."""
+    annotation can be derived from data yet match the rounding of reported text."""
     from math import floor, log10
 
     if not x:

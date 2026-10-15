@@ -22,7 +22,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import marching_cubes
 
 from .qc import overlay_rgb
-from .style import DARK_PALETTE, PALETTE
+from .pubfig import DARK_PALETTE, PALETTE, save_figure
 
 
 # ---------------------------------------------------------------------------
@@ -545,10 +545,8 @@ def save_isosurface(
     fig = plt.figure(figsize=(6, 5))
     ax = fig.add_subplot(111, projection="3d")
     render_isosurface(mask, voxel_size_um=voxel_size_um, ax=ax, **kwargs)
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    save_figure(fig, {out_path: 180}, bbox_inches="tight")
 
 
 __all__ = [

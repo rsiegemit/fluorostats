@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from . import stats
+from .pubfig import save_figure
 
 
 # ---------------------------------------------------------------------------
@@ -71,9 +72,6 @@ def boxplot_by_condition(
     ylabel: str | None = None,
 ) -> None:
     """Boxplot of *metric* grouped by condition, with individual data points."""
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     conditions = sorted(df["condition"].unique())
     data = [df.loc[df["condition"] == c, metric].dropna().values for c in conditions]
 
@@ -96,8 +94,7 @@ def boxplot_by_condition(
     ax.spines["right"].set_visible(False)
 
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=150)
-    plt.close(fig)
+    save_figure(fig, {out_path: 150})
 
 
 def bar_mean_sem(
@@ -116,9 +113,6 @@ def bar_mean_sem(
     `compute_pvalues` returns, so the figure matches it) when given, else
     corrected across the pairs drawn in this panel.
     """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     conditions = sorted(df["condition"].unique())
     data, means, sems = _group_stats(df, metric, conditions)
 
@@ -141,8 +135,7 @@ def bar_mean_sem(
     ax.spines["right"].set_visible(False)
 
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=200)
-    plt.close(fig)
+    save_figure(fig, {out_path: 200})
 
 
 # ---------------------------------------------------------------------------
@@ -164,9 +157,6 @@ def summary_panel(
     P-value brackets are off by default; set show_pvalues=True to draw them.
     Stars use BH q-values, from ``pvalues`` when given (see `bar_mean_sem`).
     """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     available = [m for m in metrics if m in df.columns and df[m].notna().any()]
     n = len(available)
     if n == 0:
@@ -204,8 +194,7 @@ def summary_panel(
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    save_figure(fig, {out_path: 200}, bbox_inches="tight")
 
 
 # ---------------------------------------------------------------------------
@@ -436,9 +425,7 @@ def effect_size_heatmap(
         ax.set_title(title, fontsize=11)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
 
 
@@ -479,9 +466,7 @@ def forest_plot(
     ax.spines["right"].set_visible(False)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
 
 
@@ -585,7 +570,5 @@ def modality_panel(
         fig.suptitle(title, fontsize=12, fontweight="bold")
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig

@@ -14,7 +14,7 @@ import numpy as np
 
 from . import stats
 from .depth import window_label, window_title
-from .style import PALETTE, lighten, material_color
+from .pubfig import PALETTE, lighten, material_color, save_figure
 
 
 def group_color(name: str, override: str | None) -> str:
@@ -170,6 +170,5 @@ def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows
 def _save(fig, out_base: Path) -> None:
     # Append, not with_suffix: a fractional window label ("0.5_100um") has a dot.
     fig.tight_layout()
-    fig.savefig(out_base.parent / f"{out_base.name}.png", dpi=300)
-    fig.savefig(out_base.parent / f"{out_base.name}.pdf")
-    plt.close(fig)
+    save_figure(fig, {out_base.parent / f"{out_base.name}.png": 300,
+                      out_base.parent / f"{out_base.name}.pdf": None})

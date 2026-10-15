@@ -14,12 +14,45 @@ def _close_figures():
     plt.close("all")
 
 
-def test_apply_style_sets_journal_rcparams():
+def test_apply_style_sets_compact_rcparams():
     pubfig.apply_style()
     assert plt.rcParams["pdf.fonttype"] == 42
     assert plt.rcParams["axes.labelsize"] == pubfig.FS["label"]
     assert plt.rcParams["axes.spines.top"] is False
+    pubfig.apply_style(font_scale=2.0)
+    assert plt.rcParams["axes.labelsize"] == 2 * pubfig.FS["label"]
     plt.rcdefaults()
+
+
+def test_house_theme_is_the_style_modules_look():
+    from fluorostats import style
+
+    style.apply_style(font_scale=1.5)
+    via_style = dict(plt.rcParams)
+    plt.rcdefaults()
+    pubfig.apply_style("house", font_scale=1.5)
+    assert dict(plt.rcParams) == via_style
+    assert plt.rcParams["font.size"] == 16.5 and plt.rcParams["axes.grid"] is True
+    assert style.PALETTE is pubfig.PALETTE and style.lighten is pubfig.lighten
+    plt.rcdefaults()
+
+
+def test_unknown_theme_is_refused():
+    with pytest.raises(ValueError, match="theme must be one of \\('compact', 'house'\\)"):
+        pubfig.apply_style("poster")
+
+
+def test_save_figure_writes_each_path_at_its_dpi_and_closes(tmp_path):
+    from PIL import Image
+
+    fig = plt.figure(figsize=(1, 1))
+    out = tmp_path / "new" / "f"
+    pubfig.save_figure(fig, {out.with_suffix(".png"): 50, tmp_path / "f2.png": 100,
+                             out.with_suffix(".pdf"): None})
+    assert Image.open(out.with_suffix(".png")).size == (50, 50)
+    assert Image.open(tmp_path / "f2.png").size == (100, 100)
+    assert out.with_suffix(".pdf").exists()
+    assert not plt.fignum_exists(fig.number)
 
 
 @pytest.mark.parametrize("xanchor", [None, 0.03])

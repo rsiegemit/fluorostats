@@ -72,8 +72,7 @@ from .depth_figures import (group_color, plot_auc, plot_depth_curves,
                             plot_retention_multiwindow)
 from .io import load_volume
 from .manifest import check_groups
-from . import report
-from .style import apply_style
+from . import pubfig, report
 
 # Window helpers and figures live in `depth` / `depth_figures`; re-exported here
 # so ``from fluorostats.depth_batch import plot_auc, parse_window`` keeps working.
@@ -355,7 +354,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
     out_dir.mkdir(parents=True, exist_ok=True)
     previous = report.remove_outputs(_owned_outputs(out_dir))
-    apply_style()
+    pubfig.apply_style("house")
 
     cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}
     windows = cfg["windows"]
