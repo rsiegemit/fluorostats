@@ -21,6 +21,7 @@ from pathlib import Path
 from types import ModuleType
 
 import numpy as np
+import tifffile
 
 from .io_canonical import canonicalize_volume, squeeze_singleton_dims
 
@@ -78,18 +79,61 @@ def positional_names(names: list[str | None]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+# An Olympus image is one TIFF per plane, named by its axis indices
+# (``s_C001Z002T003.tif``). The pattern is anchored at the end of the name: a
+# file prefix can hold letter-digit runs (``y2_40X_2_C001Z001.tif``) that
+# oiffile's own pattern takes for axes, and its axis order does not describe
+# ``OifFile.asarray()`` either.
+_OLYMPUS_INDEX = r"_?(?:([CZTLAP])(\d{1,4}))?"
+_OLYMPUS_PLANE_NAME = r"(?i)_?([CZTLAP])(\d{1,4})" + _OLYMPUS_INDEX * 5 + r"\.tif$"
+# Olympus axes reduced to their first index, announced.
+_OLYMPUS_INDEX_AXES = {"T": "time point", "L": "lambda step"}
+
+
 def load_olympus_volume(path: Path) -> tuple[np.ndarray, dict]:
-    """Olympus .oib/.oif -> ((C, Z, Y, X), meta); z step from the axis section (nm or µm)."""
+    """Olympus .oib/.oif -> ((C, Z, Y, X), meta), ordered by the axis letters in
+    the plane file names; z step from the axis section (nm or µm)."""
     oiffile = _reader("oiffile")
-
-    oif = oiffile.OifFile(str(path))
-    arr = oif.asarray()
-
-    meta = _parse_olympus_metadata(oif)
+    with oiffile.OifFile(str(path)) as oif:
+        files = list(oif.series[0])
+        planes = tifffile.TiffSequence(files, imread=oif.asarray, pattern=_OLYMPUS_PLANE_NAME)
+        arr, axes = planes.asarray(), planes.axes.upper()
+        sizes = _olympus_axis_sizes(oif.mainfile)
+        meta = _parse_olympus_metadata(oif)
+    _check_olympus_planes(dict(zip(axes, planes.shape)), len(files), sizes, path)
     meta["format"] = "olympus"
-    arr, meta = canonicalize_volume(arr, meta)
-    oif.close()
-    return arr, meta
+    return canonicalize_volume(arr, meta, axes + "YX", _OLYMPUS_INDEX_AXES)
+
+
+def _olympus_axis_sizes(mainfile) -> dict[str, int]:
+    """``{axis code: MaxSize}`` of the mainfile's axes other than X and Y that the
+    image has (an absent axis is listed with MaxSize 0)."""
+    sizes = {}
+    for name, section in mainfile.items():
+        code = _section_get(section, "AxisCode")
+        n = int(_safe_float(_section_get(section, "MaxSize"), 0))
+        if "Axis" in str(name) and "Parameters Common" in str(name) and code not in "XY" and n:
+            sizes[code] = n
+    return sizes
+
+
+def _check_olympus_planes(
+    found: dict[str, int], n_files: int, expected: dict[str, int], path: Path
+) -> None:
+    """Raise when the plane files do not make the image the mainfile describes,
+    rather than return a stack with planes missing or out of place."""
+    wrong = [
+        f"{a}: {found.get(a, 0)} planes, mainfile {n}"
+        for a, n in expected.items()
+        if found.get(a, 1 if n == 1 else 0) != n
+    ]
+    if n_files != int(np.prod(list(found.values()))):
+        wrong.append(f"{n_files} plane files for {found}")
+    if wrong:
+        raise ValueError(
+            f"{path.name}: the plane files do not match the image the file describes "
+            f"({'; '.join(wrong)}), so it is not read."
+        )
 
 
 def _parse_olympus_metadata(oif) -> dict:
@@ -132,10 +176,13 @@ def _parse_olympus_metadata(oif) -> dict:
 
 
 def _olympus_z_um(section) -> float | None:
-    """Z step (µm) from an Olympus axis section; None unless it is a Z axis with
-    a positive interval."""
-    if _section_get(section, "AxisCode") != "Z":
-        return None
+    """Z step (µm) from an Olympus axis section; None unless it is a Z axis of
+    more than one slice with a positive interval."""
+    if (
+        _section_get(section, "AxisCode") != "Z"
+        or _safe_float(_section_get(section, "MaxSize"), 0) <= 1
+    ):
+        return None  # not z, or a z axis the image does not have (MaxSize 0 or 1)
     interval = _safe_float(_section_get(section, "Interval"), 0.0)
     pix_unit = _section_get(section, "PixUnit") or ""
     if interval <= 0:
