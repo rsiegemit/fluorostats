@@ -95,6 +95,9 @@ def viability_cmd(manifest, output_dir):
 @click.option("--min-size", type=click.IntRange(min=0), default=64, show_default=True, help="Remove objects smaller than this, in voxels (CAN AFFECT RESULTS)")
 @click.option("--sigma", type=click.FloatRange(min=0), default=1.0, show_default=True, help="Gaussian blur sigma in pixels, in-plane per z-slice (CAN AFFECT RESULTS)")
 @click.option("--bg-radius", type=click.IntRange(min=0), default=0, show_default=True, help="Background subtraction disk radius in pixels (0=off; enabling is recommended for confocal; CAN AFFECT RESULTS)")
+@click.option("--opening", type=click.Choice(list(segment.OPENINGS)), default="ball", show_default=True,
+              help="Salt-noise opening after thresholding: ball (3x3x3; erases structures thinner "
+                   "than 3 z-slices), disk (per z-slice), none (CAN AFFECT RESULTS)")
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
 @click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster); skeleton columns are left blank")
@@ -113,6 +116,7 @@ def quant3d(
     min_size,
     sigma,
     bg_radius,
+    opening,
     no_overlays,
     no_plots,
     no_skeleton,
@@ -139,7 +143,7 @@ def quant3d(
 
     measure = functools.partial(
         _measure_volume, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
-        threshold=threshold, threshold_scale=threshold_scale, min_size=min_size,
+        opening=opening, threshold=threshold, threshold_scale=threshold_scale, min_size=min_size,
         no_skeleton=no_skeleton, prune=prune, min_branch_length=min_branch_length,
         overlay_dir=None if no_overlays else output_path / "overlays", input_root=input_path)
     rows = _quantify_files(files, condition_from, "Processing volumes", measure)
@@ -230,11 +234,13 @@ def _quantify_files(files, condition_from, label, measure) -> list[dict]:
     return rows
 
 
-def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size):
-    """The CLI's options mapped onto `segment.segment_channel`."""
+def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size,
+             opening="ball"):
+    """The CLI's options mapped onto `segment.segment_channel` (quant2d has no
+    --opening: its 2D opening is disk(1) for every choice but "none")."""
     return segment.segment_channel(img, method=threshold, min_size=min_size,
                                    threshold_scale=threshold_scale, sigma=sigma,
-                                   bg_radius=bg_radius)
+                                   bg_radius=bg_radius, opening=opening)
 
 
 def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length,

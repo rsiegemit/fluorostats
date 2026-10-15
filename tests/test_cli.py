@@ -610,3 +610,33 @@ def test_condition_modes_come_from_one_registry(cmd):
     option = next(p for p in cli.commands[cmd].params if p.name == "condition_from")
     assert list(option.type.choices) == list(CONDITION_FROM) == ["parent", "grandparent",
                                                                  "filename"]
+
+
+@pytest.mark.parametrize("args, expected", [([], "ball"), (["--opening", "disk"], "disk"),
+                                            (["--opening", "none"], "none")])
+def test_quant3d_opening_reaches_segmentation(tmp_path, monkeypatch, args, expected):
+    """--opening picks segment_channel's salt-noise opening (default ball) and is recorded."""
+    from fluorostats import segment
+    seen = []
+    real = segment.segment_channel
+    monkeypatch.setattr(segment, "segment_channel",
+                        lambda img, **k: seen.append(k["opening"]) or real(img, **k))
+    d = tmp_path / "in" / "cond"
+    d.mkdir(parents=True)
+    tifffile.imwrite(d / "s0.tif", _blob_3d(0))
+    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"),
+                                   "--output", str(tmp_path / "out"), "--no-skeleton",
+                                   "--no-plots", "--no-overlays", *args])
+    assert res.exit_code == 0, res.output
+    assert seen == [expected]
+    assert json.loads((tmp_path / "out" / "run_config.json").read_text())["opening"] == expected
+
+
+def test_quant3d_opening_choices_and_help():
+    from fluorostats.segment import OPENINGS
+    res = CliRunner().invoke(cli, ["quant3d", "--help"])
+    text = " ".join(res.output.split())
+    assert "--opening" in text and "CAN AFFECT RESULTS" in text.split("--opening")[1]
+    assert all(name in text.split("--opening")[1][:400] for name in OPENINGS)
+    bad = CliRunner().invoke(cli, ["quant3d", "--input", ".", "--output", "o", "--opening", "cube"])
+    assert bad.exit_code == 2
