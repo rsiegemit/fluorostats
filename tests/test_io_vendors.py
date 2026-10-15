@@ -168,6 +168,23 @@ def test_olympus_planes_that_disagree_with_the_mainfile_raise(monkeypatch, tmp_p
         _load_olympus(monkeypatch, tmp_path, _axis_sections(C=2, Z=3), files[:2] + files[3:])
 
 
+def test_olympus_comma_decimal_pixel_size_is_read(monkeypatch, tmp_path):
+    # Regression: '0,207.0' (0.207 written under a comma-decimal locale) failed to
+    # parse and was reported as "no y/x calibration found in the file".
+    mainfile = {
+        "Reference Image Parameter": {
+            "WidthConvertValue": "0,207.0",
+            "HeightConvertValue": "0,207.0",
+        },
+        **_axis_sections(C=2, Z=4),
+    }
+    with pytest.warns(RuntimeWarning, match=r"'0,207.0' read as 0.207 µm") as rec:
+        _, meta = _load_olympus(monkeypatch, tmp_path, mainfile)
+    assert meta["voxel_size_um"] == (2.0, 0.207, 0.207)
+    assert meta["voxel_size_source"] == "z:file,y:file,x:file"
+    assert not [w for w in rec if "calibration found" in str(w.message)]
+
+
 def test_olympus_unnamed_channel_keeps_its_position(monkeypatch, tmp_path):
     mainfile = {
         "Channel 1 Parameters": {"DyeName": "(null)"},

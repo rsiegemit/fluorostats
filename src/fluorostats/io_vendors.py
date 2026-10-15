@@ -156,8 +156,8 @@ def _parse_olympus_metadata(oif) -> dict:
 
         if section_str == "Reference Image Parameter":
             wx, hy = (
-                _section_get(section, "WidthConvertValue"),
-                _section_get(section, "HeightConvertValue"),
+                _comma_decimal(_section_get(section, "WidthConvertValue")),
+                _comma_decimal(_section_get(section, "HeightConvertValue")),
             )
             voxel_x = _safe_float(wx, voxel_x)
             voxel_y = _safe_float(hy, voxel_y)
@@ -173,6 +173,22 @@ def _parse_olympus_metadata(oif) -> dict:
     meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
     meta["_read_axes"] = read
     return meta
+
+
+def _comma_decimal(value):
+    """``value`` written with a comma decimal separator (``'0,207.0'``: 0.207 µm
+    saved under a comma-decimal locale) as ``'0.207'``, announced; any other
+    value unchanged."""
+    m = re.fullmatch(r"(\d+),(\d+)(\.0+)?", value) if isinstance(value, str) else None
+    if m is None:
+        return value
+    fixed = f"{m.group(1)}.{m.group(2)}"
+    warnings.warn(
+        f"Olympus pixel size {value!r} read as {fixed} µm (a comma decimal separator).",
+        RuntimeWarning,
+        stacklevel=4,
+    )
+    return fixed
 
 
 def _olympus_z_um(section) -> float | None:
