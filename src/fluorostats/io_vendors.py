@@ -188,7 +188,7 @@ def _czi_axes(czi) -> str | None:
     return axes.translate(_LEGACY_CZI_LETTERS) if axes else None
 
 
-def _czi_voxel_um(root):
+def _czi_voxel_um(root: ET.Element) -> tuple[tuple[float, float, float], set[str]]:
     """(z, y, x) voxel size in µm from CZI ``Distance`` elements (metres), and the
     set of axes it found."""
     size = {"X": 1.0, "Y": 1.0, "Z": 1.0}
@@ -207,7 +207,7 @@ def _czi_voxel_um(root):
     return (size["Z"], size["Y"], size["X"]), read
 
 
-def _czi_channel_names(root) -> list[str]:
+def _czi_channel_names(root: ET.Element) -> list[str]:
     """Names of the image's channels (``Information/Image/Dimensions/Channels``;
     the experiment tracks and display settings also hold ``Channel`` elements,
     acquired or not) from ``Channel@Name``, falling back to their ``DyeName``."""
