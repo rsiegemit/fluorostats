@@ -75,6 +75,7 @@ class TestLoadImage:
 
     def test_png_rgb_canonicalized(self, tmp_path):
         import imageio.v3 as iio
+
         rgb = np.random.default_rng(42).integers(0, 255, (48, 64, 3), dtype=np.uint8)
         path = tmp_path / "test.png"
         iio.imwrite(str(path), rgb)
@@ -117,6 +118,7 @@ class TestNpyVolume:
 class TestLoadAuto:
     def test_load_auto_png_goes_2d(self, tmp_path):
         import imageio.v3 as iio
+
         rgb = np.random.default_rng(1).integers(0, 255, (24, 32, 3), dtype=np.uint8)
         path = tmp_path / "auto.png"
         iio.imwrite(str(path), rgb)
@@ -144,9 +146,17 @@ class TestTiffMetadata:
     def test_ome_tiff_physical_sizes_parsed(self, tmp_path):
         arr = np.random.default_rng(0).integers(0, 4095, (2, 3, 16, 16), dtype=np.uint16)
         path = tmp_path / "ome.ome.tif"
-        tifffile.imwrite(str(path), arr, ome=True,
-                         metadata={"axes": "CZYX", "PhysicalSizeX": 0.5,
-                                   "PhysicalSizeY": 0.5, "PhysicalSizeZ": 2.0})
+        tifffile.imwrite(
+            str(path),
+            arr,
+            ome=True,
+            metadata={
+                "axes": "CZYX",
+                "PhysicalSizeX": 0.5,
+                "PhysicalSizeY": 0.5,
+                "PhysicalSizeZ": 2.0,
+            },
+        )
         _, meta = load_volume(path)
         assert meta["format"] == "ome_tiff"
         assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
@@ -155,8 +165,7 @@ class TestTiffMetadata:
     def test_imagej_tiff_spacing_parsed(self, tmp_path):
         arr = np.random.default_rng(0).integers(0, 4095, (4, 16, 16), dtype=np.uint16)
         path = tmp_path / "ij.tif"
-        tifffile.imwrite(str(path), arr, imagej=True,
-                         metadata={"spacing": 3.0, "unit": "um"})
+        tifffile.imwrite(str(path), arr, imagej=True, metadata={"spacing": 3.0, "unit": "um"})
         _, meta = load_volume(path)
         assert meta["format"] == "imagej_tiff"
         # z spacing picked up from the ImageJ metadata
@@ -211,7 +220,7 @@ def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
     import tifffile
 
     p = tmp_path / "plain.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), photometric="minisblack")   # 3 slices
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), photometric="minisblack")  # 3 slices
     with pytest.warns(RuntimeWarning, match="no z/y/x calibration"):
         arr, meta = load_volume(p)
     assert arr.shape == (1, 3, 8, 8)
@@ -219,11 +228,14 @@ def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
     ome = tmp_path / "ome.tif"
-    tifffile.imwrite(ome, np.zeros((3, 8, 8), np.uint16), ome=True,
-                     metadata={"axes": "ZYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5,
-                               "PhysicalSizeZ": 2.0})
+    tifffile.imwrite(
+        ome,
+        np.zeros((3, 8, 8), np.uint16),
+        ome=True,
+        metadata={"axes": "ZYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5, "PhysicalSizeZ": 2.0},
+    )
     with warnings.catch_warnings():
-        warnings.simplefilter("error")          # fully calibrated: no warning
+        warnings.simplefilter("error")  # fully calibrated: no warning
         _, meta2 = load_volume(ome)
     assert meta2["voxel_size_source"] == "z:file,y:file,x:file"
 
@@ -244,7 +256,7 @@ def test_loaders_announce_discarded_axes(tmp_path):
     import tifffile
 
     p5 = tmp_path / "t5.npy"
-    np.save(p5, np.zeros((2, 1, 3, 8, 8), np.float32))          # (T, C, Z, Y, X)
+    np.save(p5, np.zeros((2, 1, 3, 8, 8), np.float32))  # (T, C, Z, Y, X)
     with pytest.warns(RuntimeWarning, match="first of 2 entries"):
         arr, _ = load_volume(p5)
     assert arr.shape == (1, 3, 8, 8)
@@ -265,6 +277,7 @@ def test_loaders_announce_discarded_axes(tmp_path):
 # ---------------------------------------------------------------------------
 # Axis order comes from the file's axis labels, not from the array shape
 # ---------------------------------------------------------------------------
+
 
 def _two_channel(order: str, n_z: int, value: int = 7) -> np.ndarray:
     """A (Z, C, Y, X) or (C, Z, Y, X) stack whose channel 0 is 0 and channel 1 is `value`."""
@@ -303,8 +316,12 @@ def test_ome_time_series_keeps_first_time_point_by_name(tmp_path):
 
 def test_ome_single_plane_multichannel_is_channels_not_z(tmp_path):
     p = tmp_path / "c.ome.tif"
-    tifffile.imwrite(p, np.stack([np.full((16, 16), v, np.uint16) for v in (1, 2, 3)]),
-                     ome=True, metadata={"axes": "CYX"})
+    tifffile.imwrite(
+        p,
+        np.stack([np.full((16, 16), v, np.uint16) for v in (1, 2, 3)]),
+        ome=True,
+        metadata={"axes": "CYX"},
+    )
     vol, _ = load_volume(p)
     assert vol.shape == (3, 1, 16, 16)
     arr, meta = load_auto(p)
@@ -339,25 +356,34 @@ def test_unlabelled_tiff_keeps_shape_heuristic(tmp_path):
 # Physical-size units are converted to µm; unknown units are kept and flagged
 # ---------------------------------------------------------------------------
 
+
 def _ome_with_units(tmp_path, **sizes_and_units):
     p = tmp_path / "u.ome.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), ome=True,
-                     metadata={"axes": "ZYX", **sizes_and_units})
+    tifffile.imwrite(
+        p, np.zeros((3, 8, 8), np.uint16), ome=True, metadata={"axes": "ZYX", **sizes_and_units}
+    )
     return p
 
 
 def test_ome_physical_size_units_converted_to_um(tmp_path):
-    p = _ome_with_units(tmp_path, PhysicalSizeX=500, PhysicalSizeXUnit="nm",
-                        PhysicalSizeY=500, PhysicalSizeYUnit="nm",
-                        PhysicalSizeZ=0.002, PhysicalSizeZUnit="mm")
+    p = _ome_with_units(
+        tmp_path,
+        PhysicalSizeX=500,
+        PhysicalSizeXUnit="nm",
+        PhysicalSizeY=500,
+        PhysicalSizeYUnit="nm",
+        PhysicalSizeZ=0.002,
+        PhysicalSizeZUnit="mm",
+    )
     _, meta = load_volume(p)
     assert meta["voxel_size_um"] == pytest.approx((2.0, 0.5, 0.5))
     assert meta["voxel_size_source"] == "z:file,y:file,x:file"
 
 
 def test_ome_unknown_unit_kept_flagged_and_warned(tmp_path):
-    p = _ome_with_units(tmp_path, PhysicalSizeX=0.5, PhysicalSizeY=0.5,
-                        PhysicalSizeZ=3.0, PhysicalSizeZUnit="pixel")
+    p = _ome_with_units(
+        tmp_path, PhysicalSizeX=0.5, PhysicalSizeY=0.5, PhysicalSizeZ=3.0, PhysicalSizeZUnit="pixel"
+    )
     with pytest.warns(RuntimeWarning, match="length unit 'pixel', which is not recognised"):
         _, meta = load_volume(p)
     assert meta["voxel_size_um"] == (3.0, 0.5, 0.5)
@@ -365,12 +391,17 @@ def test_ome_unknown_unit_kept_flagged_and_warned(tmp_path):
 
 
 # ImageJ descriptions are ASCII: Fiji writes µm as the escape "\\u00B5m" or as "micron".
-@pytest.mark.parametrize("unit, z_um", [("nm", 2.0), ("micron", 2000.0), ("\\u00B5m", 2000.0),
-                                        ("mm", 2e6)])
+@pytest.mark.parametrize(
+    "unit, z_um", [("nm", 2.0), ("micron", 2000.0), ("\\u00B5m", 2000.0), ("mm", 2e6)]
+)
 def test_imagej_spacing_unit_converted_to_um(tmp_path, unit, z_um):
     p = tmp_path / "ij.tif"
-    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
-                     metadata={"spacing": 2000.0, "unit": unit, "axes": "ZCYX"})
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 1, 8, 8), np.uint16),
+        imagej=True,
+        metadata={"spacing": 2000.0, "unit": unit, "axes": "ZCYX"},
+    )
     _, meta = load_volume(p)
     assert meta["voxel_size_um"][0] == pytest.approx(z_um)
     assert meta["voxel_size_source"].startswith("z:file,")
@@ -379,8 +410,12 @@ def test_imagej_spacing_unit_converted_to_um(tmp_path, unit, z_um):
 @pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "inch"}, "'inch'")])
 def test_imagej_spacing_without_known_unit_is_flagged(tmp_path, extra, said):
     p = tmp_path / "ij.tif"
-    tifffile.imwrite(p, np.zeros((3, 1, 8, 8), np.uint16), imagej=True,
-                     metadata={"spacing": 2.0, "axes": "ZCYX", **extra})
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 1, 8, 8), np.uint16),
+        imagej=True,
+        metadata={"spacing": 2.0, "axes": "ZCYX", **extra},
+    )
     with pytest.warns(RuntimeWarning, match=said):
         _, meta = load_volume(p)
     assert meta["voxel_size_um"][0] == 2.0
@@ -391,10 +426,14 @@ def test_load_auto_single_plane_drops_z_from_calibration_record(tmp_path):
     import warnings
 
     p = tmp_path / "c.ome.tif"
-    tifffile.imwrite(p, np.zeros((2, 8, 8), np.uint16), ome=True,
-                     metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5})
+    tifffile.imwrite(
+        p,
+        np.zeros((2, 8, 8), np.uint16),
+        ome=True,
+        metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5},
+    )
     with warnings.catch_warnings():
-        warnings.simplefilter("error")        # x/y calibrated, z irrelevant: no warning
+        warnings.simplefilter("error")  # x/y calibrated, z irrelevant: no warning
         arr, meta = load_auto(p)
     assert arr.shape == (2, 8, 8)
     assert meta["voxel_size_um"] == (0.5, 0.5)
@@ -444,9 +483,12 @@ def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
     import warnings
 
     p = tmp_path / "c3.ome.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), ome=True,
-                     metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5,
-                               "PhysicalSizeZ": 1.0})
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 8, 8), np.uint16),
+        ome=True,
+        metadata={"axes": "CYX", "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5, "PhysicalSizeZ": 1.0},
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         arr, _ = load_volume(p)
@@ -456,6 +498,7 @@ def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
 # ---------------------------------------------------------------------------
 # read_voxel_size: the calibration load_volume records, without the pixels
 # ---------------------------------------------------------------------------
+
 
 def _no_pixel_reads(monkeypatch):
     def refuse(*a, **k):
@@ -469,12 +512,25 @@ def test_read_voxel_size_matches_load_volume_without_reading_pixels(tmp_path, mo
     p = tmp_path / f"{kind}.tif"
     data = np.zeros((3, 8, 8), np.uint16)
     if kind == "imagej":
-        tifffile.imwrite(p, data, imagej=True, resolution=(2.0, 4.0),
-                         metadata={"axes": "ZYX", "spacing": 3.0, "unit": "micron"})
+        tifffile.imwrite(
+            p,
+            data,
+            imagej=True,
+            resolution=(2.0, 4.0),
+            metadata={"axes": "ZYX", "spacing": 3.0, "unit": "micron"},
+        )
     else:
-        tifffile.imwrite(p, data, ome=True, metadata={"axes": "ZYX", "PhysicalSizeX": 0.5,
-                                                      "PhysicalSizeY": 0.25,
-                                                      "PhysicalSizeZ": 3.0})
+        tifffile.imwrite(
+            p,
+            data,
+            ome=True,
+            metadata={
+                "axes": "ZYX",
+                "PhysicalSizeX": 0.5,
+                "PhysicalSizeY": 0.25,
+                "PhysicalSizeZ": 3.0,
+            },
+        )
     _, meta = load_volume(p)
     _no_pixel_reads(monkeypatch)
     size, source = io.read_voxel_size(p)

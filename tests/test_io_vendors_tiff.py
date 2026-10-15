@@ -29,13 +29,13 @@ def test_ome_metadata_channel_name_append():
         '<Image><Pixels PhysicalSizeX="0.5" PhysicalSizeY="0.5" PhysicalSizeZ="2.0">'
         '<Channel Name="EGFP"/>'
         '<Channel Fluor="mCherry"/>'
-        '</Pixels></Image></OME>'
+        "</Pixels></Image></OME>"
     )
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
     out = io_vendors._parse_ome_metadata(ome_xml, meta)
     assert out["channel_names"] == ["EGFP", "mCherry"]
     assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
-    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}   # not mutated
+    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}  # not mutated
 
 
 def test_ome_metadata_without_pixels_returns_meta_unchanged():
@@ -51,13 +51,17 @@ def test_imagej_metadata_returns_new_dict():
     assert io_vendors._parse_imagej_metadata({}, meta) is meta
 
 
-
 @pytest.mark.parametrize("unit, scale", [("micron", 1.0), ("nm", 1e-3)])
 def test_imagej_xy_resolution_is_read_with_its_unit(tmp_path, unit, scale):
     """ImageJ stores x/y pixel size as resolution tags (pixels per `unit`)."""
     p = tmp_path / "ij.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), imagej=True, resolution=(2.0, 4.0),
-                     metadata={"axes": "ZYX", "spacing": 3.0, "unit": unit})
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 8, 8), np.uint16),
+        imagej=True,
+        resolution=(2.0, 4.0),
+        metadata={"axes": "ZYX", "spacing": 3.0, "unit": unit},
+    )
     vol, meta = io.load_volume(p)
     assert meta["voxel_size_um"] == pytest.approx((3.0 * scale, 0.25 * scale, 0.5 * scale))
     assert meta["voxel_size_source"] == "z:file,y:file,x:file"
@@ -69,15 +73,28 @@ def test_imagej_xy_resolution_is_read_with_its_unit(tmp_path, unit, scale):
 def test_imagej_resolution_without_a_unit_is_not_calibration(tmp_path):
     """No unit is ImageJ's uncalibrated 'pixel': the tags say nothing about µm."""
     p = tmp_path / "ij.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), imagej=True, resolution=(2.0, 4.0),
-                     metadata={"axes": "ZYX"})
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 8, 8), np.uint16),
+        imagej=True,
+        resolution=(2.0, 4.0),
+        metadata={"axes": "ZYX"},
+    )
     with pytest.warns(RuntimeWarning, match="no y/x calibration"):
         img, imeta = io.load_image(p)
     assert imeta["voxel_size_um"] == (1.0, 1.0)
 
 
-@pytest.mark.parametrize("tags", [{}, {"XResolution": types.SimpleNamespace(value=(0, 1)),
-                                       "YResolution": types.SimpleNamespace(value=(0, 1))}])
+@pytest.mark.parametrize(
+    "tags",
+    [
+        {},
+        {
+            "XResolution": types.SimpleNamespace(value=(0, 1)),
+            "YResolution": types.SimpleNamespace(value=(0, 1)),
+        },
+    ],
+)
 def test_imagej_xy_missing_or_zero_resolution_is_not_calibration(tags):
     tif = types.SimpleNamespace(pages=[types.SimpleNamespace(tags=tags)])
     assert io_vendors._imagej_xy_um(tif, {"unit": "micron"}) is None

@@ -1,4 +1,5 @@
 """Smoke + behaviour tests for the manifest-driven Live/Dead viability driver."""
+
 import json
 from pathlib import Path
 
@@ -13,21 +14,25 @@ def _blob_stack(n_live, n_dead, z=4, size=96, seed=0):
     rng = np.random.default_rng(seed)
     vol = np.zeros((2, z, size, size), np.float32)
     yy, xx = np.mgrid[0:size, 0:size]
+
     def stamp(ch, n):
         for _ in range(n):
             cy, cx = rng.integers(8, size - 8, 2)
-            blob = np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 3.0 ** 2))
+            blob = np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 3.0**2))
             vol[ch, z // 2] += 4000 * blob
-    stamp(0, n_live)   # live channel
-    stamp(1, n_dead)   # dead channel
-    vol += rng.normal(30, 5, vol.shape)          # mild background
+
+    stamp(0, n_live)  # live channel
+    stamp(1, n_dead)  # dead channel
+    vol += rng.normal(30, 5, vol.shape)  # mild background
     return np.clip(vol, 0, None)
 
 
 def _manifest(tmp: Path) -> Path:
     groups = []
-    specs = {"sparse": [(5, 5, 1), (6, 4, 2), (4, 6, 3)],
-             "dense": [(40, 5, 4), (44, 6, 5), (38, 4, 6)]}
+    specs = {
+        "sparse": [(5, 5, 1), (6, 4, 2), (4, 6, 3)],
+        "dense": [(40, 5, 4), (44, 6, 5), (38, 4, 6)],
+    }
     for gname, stacks in specs.items():
         entries = []
         for nl, nd, seed in stacks:
@@ -35,9 +40,15 @@ def _manifest(tmp: Path) -> Path:
             np.save(p, _blob_stack(nl, nd, seed=seed))
             entries.append({"label": f"{gname} #{seed}", "path": str(p)})
         groups.append({"name": gname, "stacks": entries})
-    man = {"title": "synthetic", "live_channel": 0, "dead_channel": 1,
-           "seg": {"method": "otsu", "min_size": 5}, "count_method": "all",
-           "output_dir": str(tmp / "out"), "groups": groups}
+    man = {
+        "title": "synthetic",
+        "live_channel": 0,
+        "dead_channel": 1,
+        "seg": {"method": "otsu", "min_size": 5},
+        "count_method": "all",
+        "output_dir": str(tmp / "out"),
+        "groups": groups,
+    }
     mp = tmp / "manifest.json"
     mp.write_text(json.dumps(man))
     return mp
@@ -50,6 +61,7 @@ def test_viability_batch_runs_and_recovers_coverage_gradient(tmp_path):
     assert per.exists() and summ.exists()
 
     import csv
+
     rows = list(csv.DictReader(open(per)))
     assert len(rows) == 6
     sparse = np.mean([float(r["live_cov_pct"]) for r in rows if r["group"] == "sparse"])
@@ -71,16 +83,19 @@ def test_single_count_method_path(tmp_path):
     mp.write_text(json.dumps(man))
     out = viability_batch.run(mp)
     import csv
+
     rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
-    assert all("n_live" in r for r in rows)     # single-method path emits n_live
+    assert all("n_live" in r for r in rows)  # single-method path emits n_live
     # the same columns as count_method="all"; what cc did not compute is NaN
     (tmp_path / "a").mkdir()
-    all_rows = list(csv.DictReader(open(viability_batch.run(_manifest(tmp_path / "a"))
-                                        / "viability_per_stack.csv")))
+    all_rows = list(
+        csv.DictReader(
+            open(viability_batch.run(_manifest(tmp_path / "a")) / "viability_per_stack.csv")
+        )
+    )
     assert list(rows[0]) == list(all_rows[0])
-    assert all(r["viability_count_spread"] == "nan" for r in rows)     # one method ran
-    assert all(r["n_live_watershed"] == "nan" and r["n_live_cc"] == r["n_live"]
-               for r in rows)
+    assert all(r["viability_count_spread"] == "nan" for r in rows)  # one method ran
+    assert all(r["n_live_watershed"] == "nan" and r["n_live_cc"] == r["n_live"] for r in rows)
     assert all(r["count_method_live"] == "cc" for r in rows)
 
 
@@ -90,26 +105,40 @@ def test_viability_batch_manifest_errors(tmp_path):
         mp.write_text(json.dumps(man))
         return viability_batch.run(mp)
 
-    base = {"live_channel": 0, "dead_channel": 1, "seg": {"method": "otsu", "min_size": 3},
-            "count_method": "cc"}
-    with pytest.raises(ValueError):                      # empty groups (guard)
+    base = {
+        "live_channel": 0,
+        "dead_channel": 1,
+        "seg": {"method": "otsu", "min_size": 3},
+        "count_method": "cc",
+    }
+    with pytest.raises(ValueError):  # empty groups (guard)
         run_man({**base, "groups": []}, "empty")
 
-    with pytest.raises(ValueError, match="has no stacks"):   # rejected by load_manifest
-        run_man({**base, "output_dir": str(tmp_path / "o2"),
-                 "groups": [{"name": "g", "stacks": []}]}, "nostacks")
+    with pytest.raises(ValueError, match="has no stacks"):  # rejected by load_manifest
+        run_man(
+            {**base, "output_dir": str(tmp_path / "o2"), "groups": [{"name": "g", "stacks": []}]},
+            "nostacks",
+        )
 
 
 def _cfg(**kw):
-    return {"live_channel": 0, "dead_channel": 1, "seg": {"method": "otsu", "min_size": 5},
-            "count_method": "cc", **kw}
+    return {
+        "live_channel": 0,
+        "dead_channel": 1,
+        "seg": {"method": "otsu", "min_size": 5},
+        "count_method": "cc",
+        **kw,
+    }
 
 
 def test_fov_area_uses_y_and_x_pixel_sizes(monkeypatch):
     """Non-square pixels: the field of view is (dx * nx) * (dy * ny)."""
-    vol = _blob_stack(5, 5)[:, :, :, :80]                      # ny = 96, nx = 80
-    meta = {"voxel_size_um": (2.0, 0.5, 1.0), "voxel_size_source": "file",
-            "channel_names": ["Ch1", "Ch2"]}
+    vol = _blob_stack(5, 5)[:, :, :, :80]  # ny = 96, nx = 80
+    meta = {
+        "voxel_size_um": (2.0, 0.5, 1.0),
+        "voxel_size_source": "file",
+        "channel_names": ["Ch1", "Ch2"],
+    }
     monkeypatch.setattr(viability_batch, "load_volume", lambda p: (vol, meta))
     row = viability_batch.analyse_stack(Path("x.npy"), _cfg())
     assert row["fov_mm2"] == pytest.approx((1.0 * 80) * (0.5 * 96) / 1e6)
@@ -118,9 +147,14 @@ def test_fov_area_uses_y_and_x_pixel_sizes(monkeypatch):
 def _one_stack_manifest(tmp_path, **over):
     p = tmp_path / "s.npy"
     np.save(p, _blob_stack(3, 3))
-    man = {"live_channel": 0, "dead_channel": 1, "count_method": "cc",
-           "output_dir": str(tmp_path / "o"),
-           "groups": [{"name": "g", "stacks": [{"label": "s", "path": str(p)}]}], **over}
+    man = {
+        "live_channel": 0,
+        "dead_channel": 1,
+        "count_method": "cc",
+        "output_dir": str(tmp_path / "o"),
+        "groups": [{"name": "g", "stacks": [{"label": "s", "path": str(p)}]}],
+        **over,
+    }
     mp = tmp_path / "m.json"
     mp.write_text(json.dumps(man))
     return mp
@@ -135,14 +169,17 @@ def test_manifest_rejects_aux_role(tmp_path):
         viability_batch.load_manifest(mp)
 
 
-@pytest.mark.parametrize("seg, msg", [
-    ({"method": "bogus"}, "seg.method must be one of"),
-    ({"min_size": -1}, "seg.min_size must be a non-negative integer"),
-    ({"min_size": 2.5}, "seg.min_size must be a non-negative integer"),
-    ({"threshold_scale": 0}, "seg.threshold_scale must be a positive number"),
-    ({"sigma": 1.0}, "seg: unknown field 'sigma'"),
-    ("otsu", "seg must be an object"),
-])
+@pytest.mark.parametrize(
+    "seg, msg",
+    [
+        ({"method": "bogus"}, "seg.method must be one of"),
+        ({"min_size": -1}, "seg.min_size must be a non-negative integer"),
+        ({"min_size": 2.5}, "seg.min_size must be a non-negative integer"),
+        ({"threshold_scale": 0}, "seg.threshold_scale must be a positive number"),
+        ({"sigma": 1.0}, "seg: unknown field 'sigma'"),
+        ("otsu", "seg must be an object"),
+    ],
+)
 def test_manifest_rejects_bad_seg_block(tmp_path, seg, msg):
     with pytest.raises(ValueError, match=msg):
         viability_batch.load_manifest(_one_stack_manifest(tmp_path, seg=seg))
@@ -155,6 +192,7 @@ def test_manifest_accepts_full_seg_block(tmp_path):
 
 def test_per_stack_csv_records_voxel_size_source(tmp_path):
     import csv
+
     out = viability_batch.run(_one_stack_manifest(tmp_path))
     rows = list(csv.DictReader(open(out / "viability_per_stack.csv")))
     assert rows[0]["voxel_size_source"] == "z:default,y:default,x:default"
@@ -166,8 +204,11 @@ def test_count_segmentation_follows_seg_method(tmp_path, monkeypatch):
     """seg.method thresholds the cell counts too (it used to be dropped for counts)."""
     seen = []
     real = viability_batch.viab.live_dead_by_count
-    monkeypatch.setattr(viability_batch.viab, "live_dead_by_count",
-                        lambda *a, **k: seen.append(k.get("threshold")) or real(*a, **k))
+    monkeypatch.setattr(
+        viability_batch.viab,
+        "live_dead_by_count",
+        lambda *a, **k: seen.append(k.get("threshold")) or real(*a, **k),
+    )
     out = viability_batch.run(_one_stack_manifest(tmp_path, seg={"method": "li", "min_size": 5}))
     cfg = json.loads((out / "run_config.json").read_text())
     assert seen == ["li"] and cfg["count_seg_method"] == "li"
@@ -196,6 +237,7 @@ def test_manifest_rejects_bool_channel(tmp_path):
 def test_single_stack_group_has_no_sem(tmp_path, capsys):
     """One stack has no measured spread: the group SEM is NaN, not 0."""
     import csv
+
     out = viability_batch.run(_one_stack_manifest(tmp_path))
     rows = list(csv.DictReader(open(out / "viability_group_summary.csv")))
     assert rows and all(r["sem"] == "nan" for r in rows)
@@ -208,6 +250,7 @@ def test_the_two_mip_columns_are_the_documented_definitions(tmp_path):
     import csv
     from fluorostats import viability
     from fluorostats.segment import binarize
+
     out = viability_batch.run(_one_stack_manifest(tmp_path))
     row = next(csv.DictReader(open(out / "viability_per_stack.csv")))
     vol = _blob_stack(3, 3)
@@ -225,6 +268,7 @@ def test_channels_resolved_from_names_and_recorded(tmp_path, monkeypatch):
     # No channels in the manifest: the live/dead dyes are found by name (here in
     # reverse order) and both names are written to the table.
     import csv
+
     real = viability_batch.load_volume
 
     def swapped(path):
@@ -243,11 +287,12 @@ def test_channels_resolved_from_names_and_recorded(tmp_path, monkeypatch):
     (tmp_path / "r").mkdir()
     ref_out = viability_batch.run(_one_stack_manifest(tmp_path / "r"))
     ref = next(csv.DictReader(open(ref_out / "viability_per_stack.csv")))
-    assert row["live_cov_pct"] == ref["live_cov_pct"]       # the same live signal measured
+    assert row["live_cov_pct"] == ref["live_cov_pct"]  # the same live signal measured
 
 
 def test_unnamed_channels_fall_back_to_0_1_with_a_warning(tmp_path):
     import csv
+
     mp = _one_stack_manifest(tmp_path)
     man = json.loads(mp.read_text())
     del man["live_channel"], man["dead_channel"]
@@ -281,14 +326,14 @@ def test_contrasts_csv_has_the_depth_columns(tmp_path):
     from fluorostats import stats
     from fluorostats.depth_batch import write_contrasts_csv
     import csv
+
     out = viability_batch.run(_manifest(tmp_path))
     rows = list(csv.DictReader(open(out / "contrasts.csv")))
     per = list(csv.DictReader(open(out / "viability_per_stack.csv")))
-    hdr = (tmp_path / "hdr.csv")
+    hdr = tmp_path / "hdr.csv"
     write_contrasts_csv(hdr, [])
     assert list(rows[0]) == hdr.read_text().strip().split(",")
-    assert [r["metric"] for r in rows] == ["live_cov_pct", "live_density_permm2",
-                                           "viability_area"]
+    assert [r["metric"] for r in rows] == ["live_cov_pct", "live_density_permm2", "viability_area"]
     ps = []
     for r in rows:
         a = [float(p[r["metric"]]) for p in per if p["group"] == "sparse"]
@@ -313,8 +358,12 @@ def test_a_failed_rerun_leaves_no_earlier_outputs_or_run_config(tmp_path, monkey
     # so a run that fails part-way leaves no record claiming the folder.
     mp = _one_stack_manifest(tmp_path)
     out = viability_batch.run(mp)
-    names = ("viability_per_stack.csv", "viability_group_summary.csv", "contrasts.csv",
-             "run_config.json")
+    names = (
+        "viability_per_stack.csv",
+        "viability_group_summary.csv",
+        "contrasts.csv",
+        "run_config.json",
+    )
     assert all((out / n).exists() for n in names)
 
     def boom(path, cfg):

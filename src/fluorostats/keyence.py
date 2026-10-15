@@ -17,6 +17,7 @@ is given) plus a metadata dict with ``voxel_size_um``, channel names/exposures.
 Note: Keyence stores ``System.Double`` values as the raw little-endian Int64 bit
 pattern of the IEEE-754 double, and lengths in nanometres; both are decoded here.
 """
+
 from __future__ import annotations
 
 import glob
@@ -59,7 +60,10 @@ def parse_gci(gci_path: str | Path) -> dict:
     """
     gci_path = Path(gci_path)
     meta: dict = {
-        "px_um": None, "z_step_um": None, "n_slices": None, "objective": None,
+        "px_um": None,
+        "z_step_um": None,
+        "n_slices": None,
+        "objective": None,
         "channels": {},
         "z_step_note": "Stack/Pitch read as 0.1-µm units; confirm against the acquisition GUI.",
     }
@@ -69,18 +73,22 @@ def parse_gci(gci_path: str | Path) -> dict:
             if handler is not None:
                 meta = handler(name, z.read(name).decode("utf-8", "ignore"), meta)
     if meta["z_step_um"] is not None:
-        warnings.warn(f"{gci_path.name}: Stack/Pitch read as 0.1-µm units (z step "
-                      f"{meta['z_step_um']} µm); confirm against the acquisition GUI.",
-                      RuntimeWarning, stacklevel=2)
+        warnings.warn(
+            f"{gci_path.name}: Stack/Pitch read as 0.1-µm units (z step "
+            f"{meta['z_step_um']} µm); confirm against the acquisition GUI.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     return meta
 
 
 # Each .gci entry handler returns ``meta`` updated with what the entry holds, as a new dict.
 
+
 def _gci_pixel_size(name: str, text: str, meta: dict) -> dict:
     m = re.search(r'Calibration Type="System.Double">(-?\d+)', text)
     nm = _int64_to_double(m.group(1)) if m else None
-    return {**meta, "px_um": round(nm / 1000.0, 5)} if nm else meta      # nm -> µm
+    return {**meta, "px_um": round(nm / 1000.0, 5)} if nm else meta  # nm -> µm
 
 
 def _gci_objective(name: str, text: str, meta: dict) -> dict:
@@ -91,9 +99,11 @@ def _gci_objective(name: str, text: str, meta: dict) -> dict:
 def _gci_stack(name: str, text: str, meta: dict) -> dict:
     tn = re.search(r"TotalNumber[^>]*>(\d+)", text)
     pitch = re.search(r"Pitch[^>]*>(\d+)", text)
-    return {**meta,
-            **({"n_slices": int(tn.group(1))} if tn else {}),
-            **({"z_step_um": int(pitch.group(1)) / 10.0} if pitch else {})}
+    return {
+        **meta,
+        **({"n_slices": int(tn.group(1))} if tn else {}),
+        **({"z_step_um": int(pitch.group(1)) / 10.0} if pitch else {}),
+    }
 
 
 def _with_channel(meta: dict, idx: str, **fields) -> dict:
@@ -146,16 +156,23 @@ def _warn_z_gaps(indices: list[int], folder: Path) -> None:
     assembled in index order from the files present, so z positions shift."""
     missing = sorted(set(range(min(indices), max(indices) + 1)) - set(indices))
     duplicated = sorted({i for i in indices if indices.count(i) > 1})
-    problems = [f"{what} z slice(s): {found}"
-                for what, found in (("missing", missing), ("duplicated", duplicated)) if found]
+    problems = [
+        f"{what} z slice(s): {found}"
+        for what, found in (("missing", missing), ("duplicated", duplicated))
+        if found
+    ]
     if problems:
-        warnings.warn(f"{folder.name}: {'; '.join(problems)}. The stack is built from the files "
-                      "present in z-index order, so z positions after this are shifted.",
-                      RuntimeWarning, stacklevel=3)
+        warnings.warn(
+            f"{folder.name}: {'; '.join(problems)}. The stack is built from the files "
+            "present in z-index order, so z positions after this are shifted.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
 
 
-def load_keyence_stack(folder: str | Path, downsample: int = 1,
-                       channel: int | None = None) -> tuple[np.ndarray, dict]:
+def load_keyence_stack(
+    folder: str | Path, downsample: int = 1, channel: int | None = None
+) -> tuple[np.ndarray, dict]:
     """Assemble the raw z-stack from a Keyence BZ-X export folder.
 
     Parameters
@@ -182,15 +199,16 @@ def load_keyence_stack(folder: str | Path, downsample: int = 1,
     folder = Path(folder)
     files = sorted(glob.glob(str(folder / "*_CHF*.tif")), key=_z_index)
     if not files:  # fall back to any per-slice tif with a _Z index
-        files = sorted((f for f in glob.glob(str(folder / "*.tif")) if re.search(r"_Z\d+", f)),
-                       key=_z_index)
+        files = sorted(
+            (f for f in glob.glob(str(folder / "*.tif")) if re.search(r"_Z\d+", f)), key=_z_index
+        )
     if not files:
         raise FileNotFoundError(f"no Keyence per-slice TIFFs (*_CHF*.tif) in {folder}")
     _warn_z_gaps([_z_index(f) for f in files], folder)
 
     planes = []
     for f in files:
-        a = tifffile.imread(f)                      # (C, Y, X) or (Y, X)
+        a = tifffile.imread(f)  # (C, Y, X) or (Y, X)
         if a.ndim == 2:
             a = a[None]
         a = a[:, ::downsample, ::downsample]

@@ -22,13 +22,13 @@ def test_ring_annulus_geometry():
     assert r["outer_diam"] == pytest.approx(120, abs=4)
     assert r["inner_diam"] == pytest.approx(60, abs=4)
     assert r["lumen_circularity"] == pytest.approx(1.0, abs=0.15)
-    assert r["concentricity"] == pytest.approx(1.0, abs=0.05)     # centred lumen
+    assert r["concentricity"] == pytest.approx(1.0, abs=0.05)  # centred lumen
     assert r["wall_coverage_frac"] == pytest.approx(1.0, abs=0.05)  # solid wall
     assert r["wall_thickness_mean"] == pytest.approx(30, abs=6)
 
 
 def test_ring_offcentre_lumen_lowers_concentricity():
-    m = _annulus(cy=100, cx=100, r_in=0, r_out=60)          # solid disk
+    m = _annulus(cy=100, cx=100, r_in=0, r_out=60)  # solid disk
     # carve an off-centre hole fully enclosed by the disk
     yy, xx = np.mgrid[0:200, 0:200]
     hole = np.hypot(yy - 118, xx - 118) <= 15
@@ -49,16 +49,16 @@ def test_ring_solid_disk_has_no_lumen():
 
 def test_ring_tiny_hole_below_floor_is_not_lumen():
     m = np.ones((60, 60), bool)
-    m[30:32, 30:32] = False                                  # 4 px enclosed speck
+    m[30:32, 30:32] = False  # 4 px enclosed speck
     r = ring.ring_morphometry(m, min_lumen_frac=0.05)
     assert not r["lumen_present"]
 
 
 def test_ring_second_object_ignored_and_empty_mask():
     m = _annulus()
-    m[5:10, 5:10] = True                                     # stray blob -> 2 CCs
+    m[5:10, 5:10] = True  # stray blob -> 2 CCs
     r = ring.ring_morphometry(m)
-    assert r["lumen_present"]                                # largest object used
+    assert r["lumen_present"]  # largest object used
     empty = ring.ring_morphometry(np.zeros((20, 20), bool))
     assert np.isnan(empty["outer_area"]) and not empty["lumen_present"]
 

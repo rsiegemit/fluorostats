@@ -1,4 +1,5 @@
 """Tests for fluorostats.depth_contrasts (the depth driver's two-group statistics)."""
+
 import pytest
 
 from fluorostats import depth_contrasts, stats
@@ -6,25 +7,37 @@ from fluorostats.depth import PenetrationFit
 
 
 def _row(group, i, auc, lam, role="primary", fit_ok=True):
-    fit = PenetrationFit(lambda_um=lam, I0=1.0, offset=None, r_squared=0.99, rmse=0.0,
-                         n_points=10, fit_ok=fit_ok)
-    return {"group": group, "stack": f"{group}{i}", "role": role,
-            "result": {"auc": {"0_10um": {"normalized": auc}, "full": {"normalized": 2 * auc}},
-                       "fit": fit}}
+    fit = PenetrationFit(
+        lambda_um=lam, I0=1.0, offset=None, r_squared=0.99, rmse=0.0, n_points=10, fit_ok=fit_ok
+    )
+    return {
+        "group": group,
+        "stack": f"{group}{i}",
+        "role": role,
+        "result": {
+            "auc": {"0_10um": {"normalized": auc}, "full": {"normalized": 2 * auc}},
+            "fit": fit,
+        },
+    }
 
 
 WINDOWS = [(0.0, 10.0), ("full",)]
-ROWS = ([_row("a", i, v, 5.0 + i) for i, v in enumerate((1.0, 2.0, 3.0))]
-        + [_row("b", i, v, 9.0 + i) for i, v in enumerate((4.0, 5.0, 6.0))]
-        + [_row("b", 9, 100.0, 1.0, role="aux")]                   # aux: never tested
-        + [_row("a", 9, 0.5, 50.0, fit_ok=False)])                 # rejected fit: no λ
+ROWS = (
+    [_row("a", i, v, 5.0 + i) for i, v in enumerate((1.0, 2.0, 3.0))]
+    + [_row("b", i, v, 9.0 + i) for i, v in enumerate((4.0, 5.0, 6.0))]
+    + [_row("b", 9, 100.0, 1.0, role="aux")]  # aux: never tested
+    + [_row("a", 9, 0.5, 50.0, fit_ok=False)]
+)  # rejected fit: no λ
 
 
 def test_contrasts_are_the_library_tests_with_bh_across_windows():
     tests = depth_contrasts.contrasts(ROWS, WINDOWS)
     assert [(c["metric"], c["window"]) for c in tests] == [
-        ("auc_normalized", "0_10um"), ("auc_normalized", "full"), ("lambda_um", "")]
-    a0 = [0.5, 1.0, 2.0, 3.0]                                      # group a's primary AUCs
+        ("auc_normalized", "0_10um"),
+        ("auc_normalized", "full"),
+        ("lambda_um", ""),
+    ]
+    a0 = [0.5, 1.0, 2.0, 3.0]  # group a's primary AUCs
     ref = stats.mann_whitney(a0, [4.0, 5.0, 6.0])
     c = tests[0]
     assert (c["group_a"], c["group_b"], c["n_a"], c["n_b"]) == ("a", "b", 4, 3)
@@ -58,8 +71,10 @@ def test_printed_summary_is_the_contrasts_rows(capsys):
     depth_contrasts.print_lambda_summary(ROWS, True, tests)
     text = capsys.readouterr().out
     c = tests[0]
-    assert (f"Mann-Whitney a vs b: U={c['U']:.1f}, p={c['p']:.4f}, Cliff's δ="
-            f"{c['cliffs_delta']:+.2f}, BH q={c['q']:.4f} across 2 windows (n=4,3)") in text
+    assert (
+        f"Mann-Whitney a vs b: U={c['U']:.1f}, p={c['p']:.4f}, Cliff's δ="
+        f"{c['cliffs_delta']:+.2f}, BH q={c['q']:.4f} across 2 windows (n=4,3)"
+    ) in text
     assert text.count("Welch") == 1 and "Welch t-test (parametric, requested) on λ," in text
     assert "[a/primary] a9: λ=  50.00 µm  R²=0.9900  [fit_ok=False]" in text
 
@@ -76,9 +91,11 @@ def test_summary_says_why_contrasts_are_skipped(capsys, n_groups, which):
 
 def test_mann_whitney_contrasts_serve_any_driver():
     # e.g. a viability run: one family of metrics, BH across them; untestable entries skipped
-    entries = [("viability", "", {"d1": [0.9, 0.8, 0.85], "d5": [0.5, 0.6, 0.55]}),
-               ("density", "", {"d1": [10.0, 12.0, 11.0], "d5": [10.5, 12.5, 9.0]}),
-               ("only_one_group", "", {"d1": [1.0, 2.0]})]
+    entries = [
+        ("viability", "", {"d1": [0.9, 0.8, 0.85], "d5": [0.5, 0.6, 0.55]}),
+        ("density", "", {"d1": [10.0, 12.0, 11.0], "d5": [10.5, 12.5, 9.0]}),
+        ("only_one_group", "", {"d1": [1.0, 2.0]}),
+    ]
     rows = depth_contrasts.mann_whitney_contrasts(entries, across="metrics")
     assert [r["metric"] for r in rows] == ["viability", "density"]
     assert [r["q"] for r in rows] == list(stats.bh_fdr([r["p"] for r in rows]))

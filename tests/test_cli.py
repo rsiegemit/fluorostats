@@ -2,6 +2,7 @@
 
 These drive io -> preprocess -> segment -> metrics -> report -> qc -> plots in
 one pass, so they guard the whole command path (previously 0% covered)."""
+
 import json
 
 import numpy as np
@@ -15,15 +16,15 @@ from fluorostats.cli import cli, _get_condition, _parse_channel
 
 def _blob_2d(seed):
     img = np.random.default_rng(seed).integers(0, 40, (64, 64)).astype(np.uint8)
-    side = 26 + 2 * (seed % 5)                  # replicates differ, so tests have data
-    img[16:16 + side, 16:16 + side] = 220       # bright foreground patch
+    side = 26 + 2 * (seed % 5)  # replicates differ, so tests have data
+    img[16 : 16 + side, 16 : 16 + side] = 220  # bright foreground patch
     return img
 
 
 def _blob_3d(seed):
     vol = np.random.default_rng(seed).integers(0, 40, (8, 48, 48)).astype(np.uint16)
     side = 20 + 2 * (seed % 5)
-    vol[2:6, 12:12 + side, 12:12 + side] = 900
+    vol[2:6, 12 : 12 + side, 12 : 12 + side] = 900
     return vol
 
 
@@ -31,31 +32,44 @@ def _make_dataset(root, maker):
     for ci, cond in enumerate(("GelMA", "Hybrid")):
         d = root / cond
         d.mkdir(parents=True)
-        for i in range(3):                      # 3 replicates -> plots + p-values run
+        for i in range(3):  # 3 replicates -> plots + p-values run
             tifffile.imwrite(d / f"s{i}.tif", maker(10 * ci + i))
 
 
 def test_cli_quant2d(tmp_path):
     _make_dataset(tmp_path / "in", _blob_2d)
-    res = CliRunner().invoke(cli, ["quant2d", "--input", str(tmp_path / "in"),
-                                   "--output", str(tmp_path / "out")])
+    res = CliRunner().invoke(
+        cli, ["quant2d", "--input", str(tmp_path / "in"), "--output", str(tmp_path / "out")]
+    )
     assert res.exit_code == 0, res.output
     df = pd.read_csv(tmp_path / "out" / "per_file.csv")
     assert len(df) == 6 and df["area_fraction"].between(0, 1).all()
-    assert set(pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"]) == {"GelMA", "Hybrid"}
+    assert set(pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"]) == {
+        "GelMA",
+        "Hybrid",
+    }
     assert (tmp_path / "out" / "plots" / "pvalues.csv").exists()
 
 
 def test_cli_quant3d(tmp_path):
     _make_dataset(tmp_path / "in", _blob_3d)
-    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"),
-                                   "--output", str(tmp_path / "out"), "--no-skeleton"])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-skeleton",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert list((tmp_path / "out").rglob("*.csv"))
     # each row records which channel was measured and where its calibration came from
     df = pd.read_csv(tmp_path / "out" / "per_file.csv")
     assert {"voxel_size_source", "channel_used"} <= set(df.columns)
-    assert df["voxel_size_source"].str.contains("default").all()   # synthetic TIFFs
+    assert df["voxel_size_source"].str.contains("default").all()  # synthetic TIFFs
     assert df["channel_used"].iloc[0].startswith("0")
 
 
@@ -69,12 +83,11 @@ def test_cli_formats():
 # Helpers for the depth and viability commands
 # ---------------------------------------------------------------------------
 
+
 def _decay_stack(path, lam=20.0, n_z=16, yx=8, bg=5.0, i0=150.0):
     """Write a synthetic z-stack whose per-slice mean is i0*exp(-z/lam)+bg."""
     z = np.arange(n_z)[:, None, None]
-    vol = np.broadcast_to(
-        (i0 * np.exp(-z / lam) + bg).astype(np.float32), (n_z, yx, yx)
-    )
+    vol = np.broadcast_to((i0 * np.exp(-z / lam) + bg).astype(np.float32), (n_z, yx, yx))
     tifffile.imwrite(path, np.ascontiguousarray(vol))
 
 
@@ -87,7 +100,7 @@ def _blob_stack_npy(path, n_live=5, n_dead=5, z=4, size=64, seed=0):
     def stamp(ch, n):
         for _ in range(n):
             cy, cx = rng.integers(8, size - 8, 2)
-            blob = np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 3.0 ** 2))
+            blob = np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 3.0**2))
             vol[ch, z // 2] += 4000 * blob
 
     stamp(0, n_live)
@@ -100,6 +113,7 @@ def _blob_stack_npy(path, n_live=5, n_dead=5, z=4, size=64, seed=0):
 # depth CLI command  (lines 47-49)
 # ---------------------------------------------------------------------------
 
+
 def test_cli_depth_cmd(tmp_path):
     """depth <manifest> should exit 0 and produce AUC csv."""
     blank = tmp_path / "blank.tif"
@@ -110,7 +124,9 @@ def test_cli_depth_cmd(tmp_path):
         _decay_stack(p)
         stacks.append({"label": f"s{i}", "path": str(p)})
     manifest = {
-        "channel": 0, "reducer": "mean", "n_surface": 2,
+        "channel": 0,
+        "reducer": "mean",
+        "n_surface": 2,
         "auc_windows_um": [[0, 8]],
         "output_dir": str(tmp_path / "depth_out"),
         "groups": [{"name": "A", "background": str(blank), "stacks": stacks}],
@@ -129,7 +145,9 @@ def test_cli_depth_cmd_output_override(tmp_path):
     _decay_stack(blank, lam=1e9, i0=0.0)
     stacks = [{"label": "s0", "path": str(blank)}]
     manifest = {
-        "channel": 0, "reducer": "mean", "n_surface": 2,
+        "channel": 0,
+        "reducer": "mean",
+        "n_surface": 2,
         "auc_windows_um": [[0, 8]],
         "output_dir": str(tmp_path / "ignored"),
         "groups": [{"name": "A", "stacks": stacks}],
@@ -148,6 +166,7 @@ def test_cli_depth_cmd_output_override(tmp_path):
 # viability CLI command  (lines 69-71)
 # ---------------------------------------------------------------------------
 
+
 def test_cli_viability_cmd(tmp_path):
     """viability <manifest> should exit 0 and produce per-stack csv."""
     groups = []
@@ -160,8 +179,11 @@ def test_cli_viability_cmd(tmp_path):
         groups.append({"name": gname, "stacks": entries})
 
     manifest = {
-        "title": "test", "live_channel": 0, "dead_channel": 1,
-        "seg": {"method": "otsu", "min_size": 5}, "count_method": "all",
+        "title": "test",
+        "live_channel": 0,
+        "dead_channel": 1,
+        "seg": {"method": "otsu", "min_size": 5},
+        "count_method": "all",
         "output_dir": str(tmp_path / "vout"),
         "groups": groups,
     }
@@ -178,8 +200,11 @@ def test_cli_viability_cmd_output_override(tmp_path):
     p = tmp_path / "s0.npy"
     _blob_stack_npy(p, seed=0)
     manifest = {
-        "title": "test", "live_channel": 0, "dead_channel": 1,
-        "seg": {"method": "otsu", "min_size": 5}, "count_method": "all",
+        "title": "test",
+        "live_channel": 0,
+        "dead_channel": 1,
+        "seg": {"method": "otsu", "min_size": 5},
+        "count_method": "all",
         "output_dir": str(tmp_path / "ignored"),
         "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(p)}]}],
     }
@@ -197,8 +222,10 @@ def test_cli_viability_cmd_output_override(tmp_path):
 # quant3d / quant2d: an input folder with nothing to measure is a usage error
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("cmd,message", [("quant3d", "No volume files found"),
-                                         ("quant2d", "No image files found")])
+
+@pytest.mark.parametrize(
+    "cmd,message", [("quant3d", "No volume files found"), ("quant2d", "No image files found")]
+)
 def test_empty_input_dir_is_a_usage_error_and_leaves_earlier_outputs(tmp_path, cmd, message):
     # Regression: an empty input exited 0, so a rerun "succeeded" next to the previous
     # run's tables.
@@ -218,19 +245,26 @@ def test_empty_input_dir_is_a_usage_error_and_leaves_earlier_outputs(tmp_path, c
 # quant3d with --bg-radius > 0  (line 144)
 # ---------------------------------------------------------------------------
 
+
 def test_quant3d_bg_radius(tmp_path):
     """quant3d with --bg-radius should run background_subtract and exit 0."""
     d = tmp_path / "in" / "cond"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_3d(0))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--bg-radius", "5",
-        "--no-skeleton",
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--bg-radius",
+            "5",
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert json.loads((tmp_path / "out" / "run_config.json").read_text())["bg_radius"] == 5
     assert len(pd.read_csv(tmp_path / "out" / "per_file.csv")) == 1
@@ -240,17 +274,23 @@ def test_quant3d_bg_radius(tmp_path):
 # quant3d without --no-skeleton  (line 155)
 # ---------------------------------------------------------------------------
 
+
 def test_quant3d_with_skeleton(tmp_path):
     """quant3d without --no-skeleton exercises the skeleton_metrics branch."""
     d = tmp_path / "in" / "cond"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_3d(1))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     row = pd.read_csv(tmp_path / "out" / "per_file.csv").iloc[0]
     # measured (a number, possibly 0), not left blank as with --no-skeleton
@@ -261,19 +301,25 @@ def test_quant3d_with_skeleton(tmp_path):
 # _write_plots_and_pvalues early return when single condition  (line 308)
 # ---------------------------------------------------------------------------
 
+
 def test_quant3d_single_condition_no_plots(tmp_path):
     """Single-condition run with --no-plots hits the early return in _write_plots_and_pvalues."""
     d = tmp_path / "in" / "GelMA"
     d.mkdir(parents=True)
     for i in range(3):
         tifffile.imwrite(d / f"s{i}.tif", _blob_3d(i))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--no-skeleton",
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert not (tmp_path / "out" / "plots").exists()
     assert pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"].tolist() == ["GelMA"]
@@ -284,12 +330,17 @@ def test_quant2d_single_condition_no_plots(tmp_path):
     d = tmp_path / "in" / "GelMA"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_2d(0))
-    res = CliRunner().invoke(cli, [
-        "quant2d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant2d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert not (tmp_path / "out" / "plots").exists()
     assert pd.read_csv(tmp_path / "out" / "per_condition.csv")["condition"].tolist() == ["GelMA"]
@@ -298,6 +349,7 @@ def test_quant2d_single_condition_no_plots(tmp_path):
 # ---------------------------------------------------------------------------
 # _get_condition: grandparent and filename modes  (lines 348-351)
 # ---------------------------------------------------------------------------
+
 
 def test_get_condition_grandparent(tmp_path):
     """grandparent mode returns parent.parent.name."""
@@ -321,14 +373,20 @@ def test_cli_quant3d_condition_from_grandparent(tmp_path):
     d = tmp_path / "in" / "cond_A" / "sub"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_3d(0))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--condition-from", "grandparent",
-        "--no-skeleton",
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--condition-from",
+            "grandparent",
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert pd.read_csv(tmp_path / "out" / "per_file.csv")["condition"].tolist() == ["cond_A"]
 
@@ -338,14 +396,20 @@ def test_cli_quant3d_condition_from_filename(tmp_path):
     d = tmp_path / "in" / "sub"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "replicate01.tif", _blob_3d(2))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--condition-from", "filename",
-        "--no-skeleton",
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--condition-from",
+            "filename",
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert pd.read_csv(tmp_path / "out" / "per_file.csv")["condition"].tolist() == ["replicate01"]
 
@@ -353,6 +417,7 @@ def test_cli_quant3d_condition_from_filename(tmp_path):
 # ---------------------------------------------------------------------------
 # _parse_channel: None, int, str  (lines 368-371)
 # ---------------------------------------------------------------------------
+
 
 def test_parse_channel_none():
     assert _parse_channel(None) is None
@@ -374,14 +439,20 @@ def test_cli_quant3d_channel_int(tmp_path):
     d = tmp_path / "in" / "cond"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_3d(3))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--channel", "0",
-        "--no-skeleton",
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--channel",
+            "0",
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert pd.read_csv(tmp_path / "out" / "per_file.csv")["channel_used"].tolist() == ["0 (Ch1)"]
 
@@ -403,25 +474,34 @@ def test_cli_quant3d_channel_name(tmp_path):
     d = tmp_path / "in" / "cond"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_3d(4))
-    res = CliRunner().invoke(cli, [
-        "quant3d",
-        "--input", str(tmp_path / "in"),
-        "--output", str(tmp_path / "out"),
-        "--channel", "Ch1",   # matches the auto-named channel in a single-channel tiff
-        "--no-skeleton",
-        "--no-plots",
-    ])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--channel",
+            "Ch1",  # matches the auto-named channel in a single-channel tiff
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert pd.read_csv(tmp_path / "out" / "per_file.csv")["channel_used"].tolist() == ["0 (Ch1)"]
 
 
-@pytest.mark.parametrize("opt,val", [("--threshold-scale", "0"), ("--min-size", "-1"),
-                                     ("--sigma", "-0.5"), ("--bg-radius", "-3")])
+@pytest.mark.parametrize(
+    "opt,val",
+    [("--threshold-scale", "0"), ("--min-size", "-1"), ("--sigma", "-0.5"), ("--bg-radius", "-3")],
+)
 def test_cli_rejects_out_of_range_options(tmp_path, opt, val):
     (tmp_path / "in").mkdir()
     for cmd in ("quant2d", "quant3d"):
-        res = CliRunner().invoke(cli, [cmd, "--input", str(tmp_path / "in"),
-                                       "--output", str(tmp_path / "out"), opt, val])
+        res = CliRunner().invoke(
+            cli, [cmd, "--input", str(tmp_path / "in"), "--output", str(tmp_path / "out"), opt, val]
+        )
         assert res.exit_code == 2 and "Invalid value" in res.output
 
 
@@ -430,13 +510,27 @@ def test_no_skeleton_leaves_skeleton_columns_blank_not_zero(tmp_path):
     # summarised, plotted and Mann-Whitney-tested as if they had been measured.
 
     _make_dataset(tmp_path / "in", _blob_3d)
-    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"),
-                                   "--output", str(tmp_path / "out"), "--no-skeleton",
-                                   "--no-overlays"])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-skeleton",
+            "--no-overlays",
+        ],
+    )
     assert res.exit_code == 0, res.output
     df = pd.read_csv(tmp_path / "out" / "per_file.csv")
-    for col in ("total_length_um", "n_branches", "n_junctions", "n_junction_nodes",
-                "mean_branch_length_um"):
+    for col in (
+        "total_length_um",
+        "n_branches",
+        "n_junctions",
+        "n_junction_nodes",
+        "mean_branch_length_um",
+    ):
         assert df[col].isna().all()
     assert df["volume_fraction"].notna().all()
     plots_dir = tmp_path / "out" / "plots"
@@ -482,7 +576,7 @@ def test_rerun_removes_only_stale_outputs_it_owns(tmp_path):
     assert not list(plot_dir.glob("*_bar.png"))
     assert (plot_dir / "area_fraction_box.png").exists()
     assert "pvalues.csv" in res.output and "area_fraction_bar.png" in res.output
-    assert "area_fraction_box.png" not in res.output          # rewritten, not removed
+    assert "area_fraction_box.png" not in res.output  # rewritten, not removed
     assert (plot_dir / "my_notes.txt").exists() and (plot_dir / "custom.png").exists()
     assert len(pd.read_csv(out / "per_file.csv")) == 2
 
@@ -520,11 +614,18 @@ def test_quant2d_records_calibration_crop_box_and_um2_cluster_areas(tmp_path, mo
     assert (cal["voxel_size_source"] == "y:file,x:file").all()
     assert np.allclose(cal["mean_cluster_area_um2"], 0.25 * cal["mean_cluster_area_px"])
     assert np.allclose(cal["median_cluster_area_um2"], 0.25 * cal["median_cluster_area_px"])
-    assert cal["auto_crop_box"].isna().all()                       # not cropped
+    assert cal["auto_crop_box"].isna().all()  # not cropped
     # the existing columns keep their order; the record columns follow them
     from fluorostats import report
-    assert list(cal.columns[:-5]) == ["file", "condition", "replicate", "shape",
-                                      "channel_used", *report.METRICS_2D]
+
+    assert list(cal.columns[:-5]) == [
+        "file",
+        "condition",
+        "replicate",
+        "shape",
+        "channel_used",
+        *report.METRICS_2D,
+    ]
 
 
 @pytest.mark.parametrize("cmd,default", [("quant2d", "[default: 15"), ("quant3d", "[default: 0")])
@@ -536,16 +637,28 @@ def test_help_states_defaults_and_result_changing_options(cmd, default):
         assert "CAN AFFECT RESULTS" in help_line, opt
 
 
-@pytest.mark.parametrize("cmd,maker,extra", [("quant2d", _blob_2d, []),
-                                             ("quant3d", _blob_3d, ["--no-skeleton"])])
-def test_overlays_of_same_named_files_in_different_conditions_are_kept(tmp_path, cmd, maker,
-                                                                       extra):
+@pytest.mark.parametrize(
+    "cmd,maker,extra", [("quant2d", _blob_2d, []), ("quant3d", _blob_3d, ["--no-skeleton"])]
+)
+def test_overlays_of_same_named_files_in_different_conditions_are_kept(tmp_path, cmd, maker, extra):
     _make_dataset(tmp_path / "in", maker)
-    res = CliRunner().invoke(cli, [cmd, "--input", str(tmp_path / "in"), "--output",
-                                   str(tmp_path / "out"), "--no-plots", *extra])
+    res = CliRunner().invoke(
+        cli,
+        [
+            cmd,
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-plots",
+            *extra,
+        ],
+    )
     assert res.exit_code == 0, res.output
-    made = sorted(p.relative_to(tmp_path / "out" / "overlays").as_posix()
-                  for p in (tmp_path / "out" / "overlays").rglob("*.png"))
+    made = sorted(
+        p.relative_to(tmp_path / "out" / "overlays").as_posix()
+        for p in (tmp_path / "out" / "overlays").rglob("*.png")
+    )
     assert made == [f"{c}/s{i}_overlay.png" for c in ("GelMA", "Hybrid") for i in range(3)]
 
 
@@ -560,14 +673,14 @@ def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monke
     args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
     assert CliRunner().invoke(cli, args).exit_code == 0
     assert (out / "overlays" / "GelMA" / "s2_overlay.png").exists()
-    (out / "overlays" / "GelMA" / "notes.png").write_bytes(b"x")     # not the tool's
+    (out / "overlays" / "GelMA" / "notes.png").write_bytes(b"x")  # not the tool's
 
     (tmp_path / "in" / "GelMA" / "s2.tif").unlink()
     res = CliRunner().invoke(cli, args)
     assert res.exit_code == 0, res.output
     assert not (out / "overlays" / "GelMA" / "s2_overlay.png").exists()
     assert "s2_overlay.png (not produced by this run)" in res.output
-    assert "s1_overlay.png" not in res.output                         # rewritten, not removed
+    assert "s1_overlay.png" not in res.output  # rewritten, not removed
     assert (out / "overlays" / "GelMA" / "notes.png").exists()
     assert json.loads((out / "run_config.json").read_text())["threshold"] == "li"
 
@@ -589,16 +702,31 @@ def test_quant3d_measures_a_keyence_folder_as_one_volume(tmp_path):
             d.mkdir(parents=True)
             vol = _blob_3d(ti)
             for zi in range(vol.shape[0]):
-                tifffile.imwrite(d / f"Image_Z{zi + 1:03d}_CHF.bz.ome.tif",
-                                 np.stack([vol[zi], vol[zi] // 2]))
+                tifffile.imwrite(
+                    d / f"Image_Z{zi + 1:03d}_CHF.bz.ome.tif", np.stack([vol[zi], vol[zi] // 2])
+                )
     tifffile.imwrite(tmp_path / "in" / "Hybrid" / "plain.tif", _blob_3d(5))
-    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"), "--output",
-                                   str(tmp_path / "out"), "--no-skeleton", "--no-plots"])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-skeleton",
+            "--no-plots",
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert "Found 4 volume file(s)" in res.output
     df = pd.read_csv(tmp_path / "out" / "per_file.csv")
     assert df[["file", "condition"]].values.tolist() == [
-        ["tube1", "GelMA"], ["tube2", "GelMA"], ["plain.tif", "Hybrid"], ["tube3", "Hybrid"]]
+        ["tube1", "GelMA"],
+        ["tube2", "GelMA"],
+        ["plain.tif", "Hybrid"],
+        ["tube3", "Hybrid"],
+    ]
     assert (df.loc[df["file"] != "plain.tif", "shape"] == "(2, 8, 48, 48)").all()
     assert (tmp_path / "out" / "overlays" / "GelMA" / "tube1_overlay.png").exists()
 
@@ -608,25 +736,41 @@ def test_condition_modes_come_from_one_registry(cmd):
     from fluorostats.cli import CONDITION_FROM
 
     option = next(p for p in cli.commands[cmd].params if p.name == "condition_from")
-    assert list(option.type.choices) == list(CONDITION_FROM) == ["parent", "grandparent",
-                                                                 "filename"]
+    assert (
+        list(option.type.choices) == list(CONDITION_FROM) == ["parent", "grandparent", "filename"]
+    )
 
 
-@pytest.mark.parametrize("args, expected", [([], "ball"), (["--opening", "disk"], "disk"),
-                                            (["--opening", "none"], "none")])
+@pytest.mark.parametrize(
+    "args, expected",
+    [([], "ball"), (["--opening", "disk"], "disk"), (["--opening", "none"], "none")],
+)
 def test_quant3d_opening_reaches_segmentation(tmp_path, monkeypatch, args, expected):
     """--opening picks segment_channel's salt-noise opening (default ball) and is recorded."""
     from fluorostats import segment
+
     seen = []
     real = segment.segment_channel
-    monkeypatch.setattr(segment, "segment_channel",
-                        lambda img, **k: seen.append(k["opening"]) or real(img, **k))
+    monkeypatch.setattr(
+        segment, "segment_channel", lambda img, **k: seen.append(k["opening"]) or real(img, **k)
+    )
     d = tmp_path / "in" / "cond"
     d.mkdir(parents=True)
     tifffile.imwrite(d / "s0.tif", _blob_3d(0))
-    res = CliRunner().invoke(cli, ["quant3d", "--input", str(tmp_path / "in"),
-                                   "--output", str(tmp_path / "out"), "--no-skeleton",
-                                   "--no-plots", "--no-overlays", *args])
+    res = CliRunner().invoke(
+        cli,
+        [
+            "quant3d",
+            "--input",
+            str(tmp_path / "in"),
+            "--output",
+            str(tmp_path / "out"),
+            "--no-skeleton",
+            "--no-plots",
+            "--no-overlays",
+            *args,
+        ],
+    )
     assert res.exit_code == 0, res.output
     assert seen == [expected]
     assert json.loads((tmp_path / "out" / "run_config.json").read_text())["opening"] == expected
@@ -634,6 +778,7 @@ def test_quant3d_opening_reaches_segmentation(tmp_path, monkeypatch, args, expec
 
 def test_quant3d_opening_choices_and_help():
     from fluorostats.segment import OPENINGS
+
     res = CliRunner().invoke(cli, ["quant3d", "--help"])
     text = " ".join(res.output.split())
     assert "--opening" in text and "CAN AFFECT RESULTS" in text.split("--opening")[1]

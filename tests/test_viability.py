@@ -7,8 +7,11 @@ import pytest
 
 from fluorostats import viability
 from fluorostats.viability import (
-    live_dead_fractions, viability_depth_profile,
-    viability_2d_vs_3d, attenuation_correct, live_dead_by_count,
+    live_dead_fractions,
+    viability_depth_profile,
+    viability_2d_vs_3d,
+    attenuation_correct,
+    live_dead_by_count,
 )
 
 
@@ -21,9 +24,9 @@ def _two_channel_dots(n_live, n_dead, size=200, sep=9):
         g = int(np.ceil(np.sqrt(n)))
         xs = np.linspace(sep, size - sep, g)
         pts = [(y, x) for y in xs for x in xs][:n]
-        for (y, x) in pts:
+        for y, x in pts:
             yy, xx = int(y), int(x)
-            img[yy - 1:yy + 2, xx - 1:xx + 2] = 255.0
+            img[yy - 1 : yy + 2, xx - 1 : xx + 2] = 255.0
 
     place(live, n_live)
     place(dead, n_dead)
@@ -47,7 +50,7 @@ def test_live_dead_by_count_bad_method_raises():
 def _stack_with_depth_gradient(nz=20, size=32):
     """Live signal present only in the top half — a depth-death gradient."""
     live = np.zeros((nz, size, size), np.float32)
-    live[: nz // 2] = 100.0   # shallow slices bright, deep slices empty
+    live[: nz // 2] = 100.0  # shallow slices bright, deep slices empty
     return live
 
 
@@ -64,7 +67,7 @@ def test_live_dead_fractions_basic():
 def test_depth_profile_reveals_gradient():
     live = _stack_with_depth_gradient()
     prof = viability_depth_profile(live)["live_by_z"]
-    assert prof[:10].mean() > 0.5      # shallow slices have signal
+    assert prof[:10].mean() > 0.5  # shallow slices have signal
     assert prof[10:].mean() == pytest.approx(0.0, abs=1e-6)  # deep empty
 
 
@@ -90,10 +93,10 @@ def test_2d_overestimates_vs_3d():
 def test_attenuation_correct_equalises_slice_means():
     vol = np.ones((5, 8, 8), np.float32)
     for z in range(5):
-        vol[z] *= (1.0 - 0.15 * z)   # simulated depth decay
+        vol[z] *= 1.0 - 0.15 * z  # simulated depth decay
     corr = attenuation_correct(vol)
     means = corr.reshape(5, -1).mean(axis=1)
-    assert np.allclose(means, means[0], rtol=1e-4)   # all slices equalised
+    assert np.allclose(means, means[0], rtol=1e-4)  # all slices equalised
     assert not np.shares_memory(corr, vol)
 
 
@@ -108,9 +111,9 @@ def _two_channel_stack():
     live = np.zeros((4, 40, 40), np.float32)
     dead = np.zeros((4, 40, 40), np.float32)
     # a handful of bright blobs per channel
-    for (y, x) in [(10, 10), (10, 30), (30, 10)]:
-        live[:, y - 3:y + 3, x - 3:x + 3] = 200.0
-    dead[:, 30 - 3:30 + 3, 30 - 3:30 + 3] = 200.0
+    for y, x in [(10, 10), (10, 30), (30, 10)]:
+        live[:, y - 3 : y + 3, x - 3 : x + 3] = 200.0
+    dead[:, 30 - 3 : 30 + 3, 30 - 3 : 30 + 3] = 200.0
     return live, dead
 
 
@@ -131,7 +134,7 @@ def test_live_dead_by_count_method_all_reports_consensus():
     live, dead = _two_channel_stack()
     out = viability.live_dead_by_count(live, dead, method="all")
     per = [out[f"viability_{m}"] for m in viability.COUNT_METHODS]
-    per = [v for v in per if v == v]                     # methods that found cells
+    per = [v for v in per if v == v]  # methods that found cells
     assert out["consensus"] == np.median(per)
     assert out["spread"] == max(per) - min(per)
     assert out["viability"] == out["consensus"]
@@ -167,15 +170,22 @@ def test_viability_choose_count_method_regimes():
     clean = np.full((z, size, size), 5.0, np.float32)
     for cy in range(12, size - 12, 8):
         for cx in range(12, size - 12, 8):
-            clean[z // 2] += 5000 * np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 2.0 ** 2))
-    assert viability.choose_count_method(clean, method="otsu", min_size=3)["method"] in {"maxima", "cc"}
+            clean[z // 2] += 5000 * np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 2.0**2))
+    assert viability.choose_count_method(clean, method="otsu", min_size=3)["method"] in {
+        "maxima",
+        "cc",
+    }
     # low SNR -> cc
     noisy = np.random.default_rng(0).normal(100, 90, (z, size, size)).astype(np.float32)
     noisy[z // 2, 40:56, 40:56] += 120
     assert viability.choose_count_method(noisy, method="otsu", min_size=3)["method"] == "cc"
     # no cells -> cc
-    assert viability.choose_count_method(np.zeros((z, size, size), np.float32),
-                                         method="otsu", min_size=3)["method"] == "cc"
+    assert (
+        viability.choose_count_method(
+            np.zeros((z, size, size), np.float32), method="otsu", min_size=3
+        )["method"]
+        == "cc"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -191,9 +201,9 @@ def test_choose_count_method_maxima_branch():
     yy, xx = np.mgrid[0:h, 0:w]
     rng = np.random.default_rng(2)
     for row in range(20, h - 20, 30):
-        img += 3000.0 * np.exp(-((yy - row) ** 2) / (2 * 2.0 ** 2))  # continuous bar
+        img += 3000.0 * np.exp(-((yy - row) ** 2) / (2 * 2.0**2))  # continuous bar
         for cx in range(15, w - 15, 12):
-            img += 5000.0 * np.exp(-(((yy - row) ** 2 + (xx - cx) ** 2) / (2 * 1.2 ** 2)))
+            img += 5000.0 * np.exp(-(((yy - row) ** 2 + (xx - cx) ** 2) / (2 * 1.2**2)))
     img += rng.normal(0, 0.5, size=img.shape)  # tiny noise -> high SNR
     img = np.clip(img, 0, None)
     out = viability.choose_count_method(img)
@@ -227,6 +237,7 @@ def test_count_threshold_method_is_passed_to_segmentation():
     """`threshold` picks the binarize method for counting; `method` stays the count mode."""
     from fluorostats.objects import label_3d
     from fluorostats.segment import binarize
+
     live, dead = _two_channel_dots(12, 5)
     out = live_dead_by_count(live, dead, method="cc", threshold="li")
     assert out["n_live"] == label_3d(binarize(live, method="li", min_size=5), min_size=5)[1]
@@ -250,10 +261,18 @@ def test_regime_without_cells_is_nan_not_zero():
     assert np.isnan(out["snr"]) and np.isnan(out["crowding"]) and np.isnan(out["radius"])
 
 
-_FLAT_KEYS = {"n_live", "n_dead", "viability", "consensus", "spread", "method_live",
-              "method_dead", "reason_live", "reason_dead",
-              *(f"{k}_{m}" for m in viability.COUNT_METHODS
-                for k in ("n_live", "n_dead", "viability"))}
+_FLAT_KEYS = {
+    "n_live",
+    "n_dead",
+    "viability",
+    "consensus",
+    "spread",
+    "method_live",
+    "method_dead",
+    "reason_live",
+    "reason_dead",
+    *(f"{k}_{m}" for m in viability.COUNT_METHODS for k in ("n_live", "n_dead", "viability")),
+}
 
 
 @pytest.mark.parametrize("method", ["all", "auto", *viability.COUNT_METHODS])
@@ -262,7 +281,7 @@ def test_live_dead_by_count_has_one_flat_contract(method):
     # did not compute is NaN or "".
     live, dead = _two_channel_dots(12, 5)
     out = live_dead_by_count(live, dead, method=method)
-    by_method = out.pop("by_method", None)              # deprecated, "all" only
+    by_method = out.pop("by_method", None)  # deprecated, "all" only
     assert (by_method is not None) == (method == "all")
     assert set(out) == _FLAT_KEYS
     assert all(isinstance(v, (int, float, str, np.integer, np.floating)) for v in out.values())
@@ -270,7 +289,7 @@ def test_live_dead_by_count_has_one_flat_contract(method):
         assert (out["method_live"], out["method_dead"]) == (method, method)
         assert out[f"n_live_{method}"] == out["n_live"]
         assert out[f"viability_{method}"] == out["viability"] == out["consensus"]
-        assert np.isnan(out["spread"])                    # one method: no spread
+        assert np.isnan(out["spread"])  # one method: no spread
         others = [m for m in viability.COUNT_METHODS if m != method]
         assert all(np.isnan(out[f"n_live_{m}"]) for m in others)
 
@@ -284,14 +303,18 @@ def test_live_dead_by_count_auto_fills_the_chosen_methods_columns():
     assert out["consensus"] == out["viability"] and np.isnan(out["spread"])
 
 
-@pytest.mark.parametrize("names,expected", [
-    (["Calcein AM", "PI"], (0, 1)),
-    (["Propidium iodide", "Alexa Fluor 488"], (1, 0)),
-    (["DAPI", "FITC", "EthD-1"], (1, 2)),
-    (["GFP", "ethidium homodimer"], (0, 1)),
-])
+@pytest.mark.parametrize(
+    "names,expected",
+    [
+        (["Calcein AM", "PI"], (0, 1)),
+        (["Propidium iodide", "Alexa Fluor 488"], (1, 0)),
+        (["DAPI", "FITC", "EthD-1"], (1, 2)),
+        (["GFP", "ethidium homodimer"], (0, 1)),
+    ],
+)
 def test_live_dead_channels_from_dye_names(names, expected):
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert viability.live_dead_channels(names) == expected

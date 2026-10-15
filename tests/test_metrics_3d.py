@@ -64,8 +64,9 @@ def test_connectivity_dual_convention_pinned():
     pair — pin it so a refactor can't silently unify the two connectivities."""
     from scipy.ndimage import label
     from skimage.measure import euler_number
+
     m = np.zeros((10, 10, 20), bool)
-    m[2:8, 2:8, 2:8] = True          # two disjoint solid blobs (each chi = 1)
+    m[2:8, 2:8, 2:8] = True  # two disjoint solid blobs (each chi = 1)
     m[2:8, 2:8, 12:18] = True
     res = metrics_3d.connectivity_metrics(m)
     assert res["n_components"] == int(label(m)[1]) == 2
@@ -74,6 +75,7 @@ def test_connectivity_dual_convention_pinned():
 
 def test_density_zero_volume_is_nan_with_warning():
     from fluorostats.metrics_3d import density_per_mm3, normalise_skeleton_metrics
+
     with pytest.warns(RuntimeWarning, match="non-positive"):
         assert np.isnan(density_per_mm3(5, (0, 10, 10), (1.0, 1.0, 1.0)))
     with pytest.warns(RuntimeWarning, match="non-positive"):

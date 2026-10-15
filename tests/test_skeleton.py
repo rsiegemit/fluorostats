@@ -8,7 +8,9 @@ import numpy as np
 import pytest
 
 from fluorostats.skeleton import (
-    skeleton_metrics, prune_skeleton, n_junction_nodes,
+    skeleton_metrics,
+    prune_skeleton,
+    n_junction_nodes,
 )
 from fluorostats import metrics_3d, skeleton
 
@@ -17,8 +19,8 @@ def _plus(n=64, a=20):
     """2D plus/cross: 4 arms from a centre -> 1 junction node, 4 branches."""
     v = np.zeros((n, n), bool)
     c = n // 2
-    v[c, c - a:c + a + 1] = True
-    v[c - a:c + a + 1, c] = True
+    v[c, c - a : c + a + 1] = True
+    v[c - a : c + a + 1, c] = True
     return v
 
 
@@ -27,8 +29,8 @@ def _spurred_line(n=64, L=40, spur=3):
     that pruning should remove."""
     v = np.zeros((n, n), bool)
     c = n // 2
-    v[c, c - L // 2:c + L // 2] = True
-    v[c:c + spur, c] = True   # short perpendicular spur
+    v[c, c - L // 2 : c + L // 2] = True
+    v[c : c + spur, c] = True  # short perpendicular spur
     return v
 
 
@@ -36,11 +38,11 @@ def _spurred_line(n=64, L=40, spur=3):
 # Backward compatibility — prune=False must not change existing keys/values
 # ---------------------------------------------------------------------------
 
+
 def test_default_is_unpruned_and_keys_present():
     mask = _plus()
     m = skeleton_metrics(mask, voxel_size_um=(1, 1, 1))
-    for key in ("total_length_um", "n_branches", "n_junctions",
-                "mean_branch_length_um"):
+    for key in ("total_length_um", "n_branches", "n_junctions", "mean_branch_length_um"):
         assert key in m
     # new additive key
     assert "n_junction_nodes" in m
@@ -63,6 +65,7 @@ def test_reexport_matches_module():
 # Pruning
 # ---------------------------------------------------------------------------
 
+
 def test_prune_removes_spur_junction():
     mask = _spurred_line(spur=3)
     raw = skeleton_metrics(mask, prune=False)
@@ -81,10 +84,11 @@ def test_prune_preserves_main_length_roughly():
 
 def test_prune_skeleton_returns_new_array():
     from skimage.morphology import skeletonize
+
     skel = skeletonize(_spurred_line())
     before = skel.copy()
     out = prune_skeleton(skel, min_branch_length=10)
-    assert np.array_equal(skel, before)   # input not mutated
+    assert np.array_equal(skel, before)  # input not mutated
     assert out.dtype == bool
 
 
@@ -92,8 +96,10 @@ def test_prune_skeleton_returns_new_array():
 # Node counting
 # ---------------------------------------------------------------------------
 
+
 def test_n_junction_nodes_straight_line_is_zero():
     from skimage.morphology import skeletonize
+
     v = np.zeros((32, 32), bool)
     v[16, 4:28] = True
     assert n_junction_nodes(skeletonize(v)) == 0
@@ -101,6 +107,7 @@ def test_n_junction_nodes_straight_line_is_zero():
 
 def test_n_junction_nodes_plus_is_one():
     from skimage.morphology import skeletonize
+
     assert n_junction_nodes(skeletonize(_plus())) == 1
 
 
@@ -113,12 +120,18 @@ def test_empty_mask_returns_zeros():
 def test_skeleton_metrics_prune_true_runs():
     """prune=True path with an explicit micrometre spur threshold."""
     mask = np.zeros((40, 40), dtype=bool)
-    mask[20, 5:35] = True          # main line
-    mask[15:21, 20] = True         # short spur
-    out = skeleton.skeleton_metrics(mask, voxel_size_um=(1.0, 1.0),
-                                    prune=True, min_branch_length_um=8.0)
-    assert set(out) == {"total_length_um", "n_branches", "n_junctions",
-                        "n_junction_nodes", "mean_branch_length_um"}
+    mask[20, 5:35] = True  # main line
+    mask[15:21, 20] = True  # short spur
+    out = skeleton.skeleton_metrics(
+        mask, voxel_size_um=(1.0, 1.0), prune=True, min_branch_length_um=8.0
+    )
+    assert set(out) == {
+        "total_length_um",
+        "n_branches",
+        "n_junctions",
+        "n_junction_nodes",
+        "mean_branch_length_um",
+    }
     assert out["total_length_um"] > 0
 
 
@@ -130,8 +143,8 @@ def test_skeleton_metrics_empty_mask_returns_zeros():
 
 def test_skeleton_prune_spur_free_and_default_length():
     line = np.zeros((3, 30, 30), bool)
-    line[1, 15, 5:25] = True                     # a single straight branch, no spurs
-    m = skeleton.skeleton_metrics(line, (1.0, 1.0, 1.0), prune=True)   # default min length
+    line[1, 15, 5:25] = True  # a single straight branch, no spurs
+    m = skeleton.skeleton_metrics(line, (1.0, 1.0, 1.0), prune=True)  # default min length
     assert "total_length_um" in m
 
 
@@ -186,6 +199,7 @@ def test_prune_keeps_long_z_spur_on_anisotropic_stack():
 def test_skeleton_failure_returns_nan_and_warns(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("simulated skan failure")
+
     monkeypatch.setattr(skeleton.skan, "summarize", boom)
     with pytest.warns(RuntimeWarning, match="simulated skan failure"):
         m = skeleton_metrics(_plus())
@@ -208,7 +222,7 @@ def test_isolated_points_measure_zero_without_warning():
     assert m.keys() == skeleton.EMPTY_METRICS.keys()
     assert m["total_length_um"] == 0.0
     assert m["n_branches"] == m["n_junctions"] == m["n_junction_nodes"] == 0
-    assert np.isnan(m["mean_branch_length_um"])          # mean of zero branches
+    assert np.isnan(m["mean_branch_length_um"])  # mean of zero branches
     assert pruned.sum() == 3
 
 
@@ -216,7 +230,21 @@ def test_diagonally_touching_junction_voxels_are_one_node():
     # Two degree-3 voxels that touch only at a corner are adjacent under the full
     # connectivity the neighbour count uses, so they merge into one node.
     s = np.zeros((9, 9), bool)
-    for r, c in [(0, 0), (1, 1), (2, 2), (3, 3), (2, 4), (1, 5), (0, 6),   # junction (3, 3)
-                 (4, 4), (5, 3), (6, 2), (7, 1), (5, 5), (6, 6), (7, 7)]:  # junction (4, 4)
+    for r, c in [
+        (0, 0),
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (2, 4),
+        (1, 5),
+        (0, 6),  # junction (3, 3)
+        (4, 4),
+        (5, 3),
+        (6, 2),
+        (7, 1),
+        (5, 5),
+        (6, 6),
+        (7, 7),
+    ]:  # junction (4, 4)
         s[r, c] = True
     assert n_junction_nodes(s) == 1

@@ -13,6 +13,7 @@ from fluorostats import io, io_vendors
 # Zeiss .czi
 # ---------------------------------------------------------------------------
 
+
 def _make_fake_czifile(xml, arr):
     fake = types.ModuleType("czifile")
 
@@ -115,6 +116,7 @@ def test_czi_metadata_empty_string():
 # Readers that label their axes are reordered by name, not by shape
 # ---------------------------------------------------------------------------
 
+
 def _zc_stack(n_z=5, n_c=2):
     """(Z, C, Y, X) stack whose channel c holds the value c + 1."""
     return np.stack([np.full((n_z, 8, 8), c + 1, np.uint16) for c in range(n_c)], axis=1)
@@ -135,9 +137,9 @@ def test_czi_scene_axes_reorder_by_name(monkeypatch, tmp_path):
 
 def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
     # Older czifile labels the whole file: 'S' = scene, '0' = colour samples.
-    t0 = _zc_stack()[None, :, :, :, :, None]                     # (S, Z, C, Y, X, 0)
+    t0 = _zc_stack()[None, :, :, :, :, None]  # (S, Z, C, Y, X, 0)
     arr = np.stack([np.concatenate([t0, t0 + 10]), np.concatenate([t0, t0 + 10]) + 20], axis=1)
-    fake = _make_fake_czifile("", arr)                            # (S, T, Z, C, Y, X, 0)
+    fake = _make_fake_czifile("", arr)  # (S, T, Z, C, Y, X, 0)
     fake.CziFile.axes = "STZCYX0"
     monkeypatch.setitem(sys.modules, "czifile", fake)
     path = tmp_path / "old.czi"
@@ -149,13 +151,19 @@ def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
     assert (out[0].mean(), out[1].mean()) == (1, 2)
 
 
-_DIMS = "<root><Metadata><Information><Image><Dimensions><Channels>{}</Channels></Dimensions>" \
-        "</Image></Information></Metadata></root>"
+_DIMS = (
+    "<root><Metadata><Information><Image><Dimensions><Channels>{}</Channels></Dimensions>"
+    "</Image></Information></Metadata></root>"
+)
 
 
-@pytest.mark.parametrize("xml", [_DIMS.format('<Channel Name=""/><Channel Name="mCherry"/>'),
-                                 _DIMS.format("<Channel><DyeName/></Channel>"
-                                              "<Channel><DyeName>mCherry</DyeName></Channel>")])
+@pytest.mark.parametrize(
+    "xml",
+    [
+        _DIMS.format('<Channel Name=""/><Channel Name="mCherry"/>'),
+        _DIMS.format("<Channel><DyeName/></Channel><Channel><DyeName>mCherry</DyeName></Channel>"),
+    ],
+)
 def test_czi_unnamed_channel_keeps_its_position(xml):
     meta = io_vendors._parse_czi_metadata(types.SimpleNamespace(metadata=lambda: xml))
     assert meta["channel_names"] == ["Ch1", "mCherry"]

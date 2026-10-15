@@ -22,7 +22,7 @@ def test_count_local_maxima_counts_separated_dots():
     img = np.zeros((100, 100), np.float32)
     for y in (20, 50, 80):
         for x in (20, 50, 80):
-            img[y, x] = 100.0            # 9 well-separated peaks
+            img[y, x] = 100.0  # 9 well-separated peaks
     r = count_local_maxima(img, min_distance=5, threshold_rel=0.2)
     assert r["count"] == 9
     assert r["coords"].shape == (9, 2)
@@ -35,8 +35,8 @@ def test_count_local_maxima_empty_image():
 
 def _two_blobs() -> np.ndarray:
     mask = np.zeros((10, 20, 20), dtype=bool)
-    mask[1:4, 1:4, 1:4] = True       # 3x3x3 = 27 voxels
-    mask[5:9, 12:17, 12:17] = True   # 4x5x5 = 100 voxels
+    mask[1:4, 1:4, 1:4] = True  # 3x3x3 = 27 voxels
+    mask[5:9, 12:17, 12:17] = True  # 4x5x5 = 100 voxels
     return mask
 
 
@@ -65,8 +65,9 @@ def test_equivalent_diameters_um_uses_voxel_spacing():
     labels, _ = label_3d(mask)
     diams = equivalent_diameters_um(labels, voxel_size_um=(1.0, 1.0, 1.0))
     # equivalent sphere diameter for V=27 ≈ 3.722; V=100 ≈ 5.759
-    expected = sorted([2 * (3 * 27 / (4 * np.pi)) ** (1 / 3),
-                       2 * (3 * 100 / (4 * np.pi)) ** (1 / 3)])
+    expected = sorted(
+        [2 * (3 * 27 / (4 * np.pi)) ** (1 / 3), 2 * (3 * 100 / (4 * np.pi)) ** (1 / 3)]
+    )
     assert sorted(diams.tolist()) == pytest.approx(expected, rel=1e-6)
 
 
@@ -82,8 +83,7 @@ def test_object_centroids_have_expected_shape_and_position():
 
 def test_object_density_per_mm3_handles_microns():
     # FOV = 100x100x100 µm = 1e-3 mm³; 50 objects → 5e4 / mm³
-    d = object_density_per_mm3(50, shape_zyx=(100, 100, 100),
-                                voxel_size_um=(1.0, 1.0, 1.0))
+    d = object_density_per_mm3(50, shape_zyx=(100, 100, 100), voxel_size_um=(1.0, 1.0, 1.0))
     assert d == pytest.approx(5e4, rel=1e-6)
 
 
@@ -93,8 +93,7 @@ def test_centroid_homogeneity_uniform_is_low_and_clustered_is_high():
     for yi in range(8):
         for xi in range(8):
             centroids.append([0, (yi + 0.5) * 8, (xi + 0.5) * 8])
-    uniform = centroid_homogeneity(np.array(centroids),
-                                    shape_zyx=(1, 64, 64), tiles=8)
+    uniform = centroid_homogeneity(np.array(centroids), shape_zyx=(1, 64, 64), tiles=8)
     assert uniform["centroid_gini"] == pytest.approx(0.0, abs=1e-6)
 
     # 64 centroids — all in one tile → highly concentrated
@@ -114,8 +113,8 @@ def test_label_3d_min_size_removes_everything():
 
 def test_clear_border_labels_drops_edge_objects():
     labels = np.zeros((12, 12), dtype=int)
-    labels[0:3, 0:3] = 1     # touches border -> removed
-    labels[5:8, 5:8] = 2     # interior -> kept
+    labels[0:3, 0:3] = 1  # touches border -> removed
+    labels[5:8, 5:8] = 2  # interior -> kept
     cleared, n = objects.clear_border_labels(labels)
     assert n == 1
     assert cleared.max() == 1
@@ -130,8 +129,8 @@ def test_watershed_split_empty_mask_returns_zero():
 def test_watershed_split_min_size_filter():
     """Two convex blobs of different size; min_size drops the small one."""
     mask = np.zeros((6, 30, 30), dtype=bool)
-    mask[2:4, 2:5, 2:5] = True        # tiny
-    mask[1:5, 12:22, 12:22] = True    # large
+    mask[2:4, 2:5, 2:5] = True  # tiny
+    mask[1:5, 12:22, 12:22] = True  # large
     _, n = objects.watershed_split(mask, min_size=50, min_distance=1)
     assert n == 1
 
@@ -181,8 +180,9 @@ def test_watershed_split_neck_criterion():
 
     def pair(d):
         return (np.hypot(yy - 20, xx - 30) <= 10) | (np.hypot(yy - 20, xx - 30 - d) <= 10)
-    assert objects.watershed_split(pair(18), min_distance=8)[1] == 2   # neck w ~ 4.4 px
-    assert objects.watershed_split(pair(8), min_distance=8)[1] == 1    # neck w ~ 9.2 px
+
+    assert objects.watershed_split(pair(18), min_distance=8)[1] == 2  # neck w ~ 4.4 px
+    assert objects.watershed_split(pair(8), min_distance=8)[1] == 1  # neck w ~ 9.2 px
 
 
 def test_count_local_maxima_with_mask_and_smoothing():
@@ -191,8 +191,9 @@ def test_count_local_maxima_with_mask_and_smoothing():
     img[30, 30] = 100.0
     fg = np.zeros((40, 40), dtype=bool)
     fg[:20, :20] = True  # only the first peak is inside the mask
-    r = objects.count_local_maxima(img, min_distance=3, threshold_rel=0.2,
-                                   mask=fg, smooth_sigma=1.0)
+    r = objects.count_local_maxima(
+        img, min_distance=3, threshold_rel=0.2, mask=fg, smooth_sigma=1.0
+    )
     assert r["count"] == 1
 
 
@@ -249,9 +250,9 @@ def test_watershed_split_all_labels_below_min_size():
 # stats.gini / stats.coefficient_of_variation guards (empty / all-zero)
 # ---------------------------------------------------------------------------
 def test_objects_gini_cv_guards():
-    assert np.isnan(stats.gini(np.array([])))       # 248: size == 0
-    assert stats.gini(np.zeros(4)) == 0.0           # 251: sum == 0
-    assert np.isnan(stats.coefficient_of_variation(np.zeros(4)))          # 261: mean == 0
+    assert np.isnan(stats.gini(np.array([])))  # 248: size == 0
+    assert stats.gini(np.zeros(4)) == 0.0  # 251: sum == 0
+    assert np.isnan(stats.coefficient_of_variation(np.zeros(4)))  # 261: mean == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -261,7 +262,7 @@ def test_angular_homogeneity_uniform_vs_clustered():
     ang = np.linspace(0, 2 * np.pi, 60, endpoint=False)
     ring_pts = np.column_stack([100 + 50 * np.sin(ang), 100 + 50 * np.cos(ang)])
     uni = objects.angular_homogeneity(ring_pts, (100, 100))
-    arc = np.linspace(0, 0.4, 60)                            # tight arc
+    arc = np.linspace(0, 0.4, 60)  # tight arc
     clus = np.column_stack([100 + 50 * np.sin(arc), 100 + 50 * np.cos(arc)])
     cl = objects.angular_homogeneity(clus, (100, 100))
     assert uni["resultant_length"] < 0.1
@@ -289,8 +290,8 @@ def test_radial_distribution_shell_and_degenerate():
 # --------------------------------------------------------------------------- #
 def test_object_shape_metrics_elongation_and_scaling():
     lab = np.zeros((40, 40), int)
-    lab[5:8, 5:35] = 1          # long thin horizontal bar -> elongated
-    lab[20:30, 20:30] = 2       # square -> ~round
+    lab[5:8, 5:35] = 1  # long thin horizontal bar -> elongated
+    lab[20:30, 20:30] = 2  # square -> ~round
     s = objects.object_shape_metrics(lab)
     assert s["elongation"][0] > 3.0
     assert s["elongation"][1] < 1.5
@@ -313,9 +314,9 @@ def test_object_shape_metrics_empty_and_ndim_guard():
 # --------------------------------------------------------------------------- #
 def test_object_mask_association_on_and_off_structure():
     mask = np.zeros((50, 50), bool)
-    mask[25, :] = True                                  # a horizontal strand
-    on = np.array([[25.0, 10.0], [25.0, 40.0]])         # sit on the strand
-    off = np.array([[5.0, 10.0], [45.0, 40.0]])         # 20 px away
+    mask[25, :] = True  # a horizontal strand
+    on = np.array([[25.0, 10.0], [25.0, 40.0]])  # sit on the strand
+    off = np.array([[5.0, 10.0], [45.0, 40.0]])  # 20 px away
     r_on = objects.object_mask_association(on, mask)
     r_off = objects.object_mask_association(off, mask)
     assert r_on["median_distance"] == pytest.approx(0.0)
@@ -323,7 +324,7 @@ def test_object_mask_association_on_and_off_structure():
     assert r_off["median_distance"] > 15 and r_off["frac_within"] == 0.0
     # µm scaling + explicit threshold
     r = objects.object_mask_association(off, mask, voxel_size_um=(2.0, 2.0), max_dist_um=50.0)
-    assert r["frac_within"] == 1.0                       # 20 px * 2 µm = 40 µm < 50
+    assert r["frac_within"] == 1.0  # 20 px * 2 µm = 40 µm < 50
     # 3D centroids (z,y,x) against a 2D mask use the last two columns
     p3 = np.array([[7.0, 25.0, 10.0]])
     assert objects.object_mask_association(p3, mask)["median_distance"] == pytest.approx(0.0)
@@ -333,7 +334,7 @@ def test_object_mask_association_degenerate():
     r = objects.object_mask_association(np.zeros((0, 2)), np.ones((5, 5), bool))
     assert r["n"] == 0 and np.isnan(r["median_distance"])
     r2 = objects.object_mask_association(np.array([[1.0, 1.0]]), np.zeros((5, 5), bool))
-    assert np.isnan(r2["frac_within"])                   # empty mask
+    assert np.isnan(r2["frac_within"])  # empty mask
 
 
 # --------------------------------------------------------------------------- #
@@ -342,8 +343,7 @@ def test_object_mask_association_degenerate():
 def test_nearest_neighbor_clustered_vs_regular():
     rng = np.random.default_rng(0)
     # two tight clusters -> clustered (R < 1)
-    clus = np.vstack([rng.normal([10, 10], 1.0, (40, 2)),
-                      rng.normal([90, 90], 1.0, (40, 2))])
+    clus = np.vstack([rng.normal([10, 10], 1.0, (40, 2)), rng.normal([90, 90], 1.0, (40, 2))])
     # regular lattice -> dispersed (R > 1)
     gy, gx = np.mgrid[0:10, 0:10]
     grid = np.column_stack([gy.ravel() * 10.0, gx.ravel() * 10.0])
@@ -358,8 +358,8 @@ def test_nearest_neighbor_3d_and_degenerate():
     rng = np.random.default_rng(1)
     p3 = rng.uniform(0, 50, (60, 3))
     r = objects.nearest_neighbor_stats(p3, voxel_size_um=(2.0, 0.5, 0.5))
-    assert np.isfinite(r["clark_evans_R"]) and r["n"] == 60      # 3D branch
-    assert objects.nearest_neighbor_stats(np.zeros((1, 2)))["pattern"] == "n/a"   # <2 points
+    assert np.isfinite(r["clark_evans_R"]) and r["n"] == 60  # 3D branch
+    assert objects.nearest_neighbor_stats(np.zeros((1, 2)))["pattern"] == "n/a"  # <2 points
     # unsupported dimensionality -> R is NaN but spacing still returned
     r4 = objects.nearest_neighbor_stats(rng.uniform(0, 1, (5, 4)))
     assert np.isnan(r4["clark_evans_R"]) and r4["mean_nn_dist"] > 0
@@ -377,10 +377,13 @@ def test_nearest_neighbor_flat_axis_uses_the_matching_dimension():
     assert r3["pattern"] == r2["pattern"] == "random"
 
 
-@pytest.mark.parametrize("pts", [
-    np.column_stack([np.zeros(5), np.arange(5.0)]),       # collinear: one axis varies
-    np.ones((4, 3)),                                      # coincident: none varies
-])
+@pytest.mark.parametrize(
+    "pts",
+    [
+        np.column_stack([np.zeros(5), np.arange(5.0)]),  # collinear: one axis varies
+        np.ones((4, 3)),  # coincident: none varies
+    ],
+)
 def test_nearest_neighbor_fewer_than_two_varying_axes_is_nan(pts):
     with pytest.warns(RuntimeWarning, match="fewer than 2 axes"):
         r = objects.nearest_neighbor_stats(pts)
@@ -391,7 +394,7 @@ def test_nearest_neighbor_fewer_than_two_varying_axes_is_nan(pts):
 # Regression (release hardening): label gaps produced spurious zero-volume objects.
 def test_object_volumes_ignore_label_gaps():
     """Non-contiguous label images must not yield spurious zero-volume objects."""
-    labels = np.array([[0, 1, 1], [0, 3, 3]])           # label 2 missing
+    labels = np.array([[0, 1, 1], [0, 3, 3]])  # label 2 missing
     vols = objects.object_volumes_voxels(labels)
     assert sorted(vols.tolist()) == [2, 2]
     assert (vols > 0).all()
@@ -417,9 +420,9 @@ def test_centroid_homogeneity_accepts_2d_centroids():
 def test_centroid_homogeneity_is_gini_of_tile_point_density():
     """One point-binning rule: centroid_homogeneity summarises spatial.tile_point_density."""
     from fluorostats import spatial, stats
+
     pts = np.random.default_rng(5).uniform(0, 500, (60, 2))
     counts = spatial.tile_point_density(pts, (500, 500), grid=(8, 8)).ravel()
     res = centroid_homogeneity(pts, (500, 500), tiles=8)
     assert res["centroid_gini"] == pytest.approx(stats.gini(counts))
     assert res["centroid_cv"] == pytest.approx(stats.coefficient_of_variation(counts))
-

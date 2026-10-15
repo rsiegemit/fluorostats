@@ -48,16 +48,19 @@ def lateral_homogeneity(
     dict with keys: lateral_gini, lateral_cv, n_tiles.
     """
     if volume.ndim != 3:
-        raise ValueError(f"lateral_homogeneity expects a 3D (Z, Y, X) volume, got shape "
-                         f"{volume.shape}; add a z axis to a 2D image (image[None])")
+        raise ValueError(
+            f"lateral_homogeneity expects a 3D (Z, Y, X) volume, got shape "
+            f"{volume.shape}; add a z axis to a 2D image (image[None])"
+        )
     xy = volume.mean(axis=z_axis)
     ny, nx = xy.shape
     if ny < tiles or nx < tiles:
         return {"lateral_gini": float("nan"), "lateral_cv": float("nan"), "n_tiles": 0}
     # spatial.tile_bounds cells: every pixel counts, the last cell absorbing any
     # remainder; means accumulate in float64 so float32 input does not round them
-    tile_means = tile_reduce(xy, lambda t: float(t.mean(dtype=np.float64)),
-                             grid=(tiles, tiles)).ravel()
+    tile_means = tile_reduce(
+        xy, lambda t: float(t.mean(dtype=np.float64)), grid=(tiles, tiles)
+    ).ravel()
     return {
         "lateral_gini": float(gini(tile_means)),
         "lateral_cv": float(coefficient_of_variation(tile_means)),
@@ -117,8 +120,12 @@ def depth_span(
         return {"z_lo": 0, "z_hi": 0, "span_slices": 0, "span_um": 0.0 * vz}
     z_lo, z_hi = int(above[0]), int(above[-1])
     span_slices = z_hi - z_lo + 1
-    return {"z_lo": z_lo, "z_hi": z_hi, "span_slices": span_slices,
-            "span_um": float(span_slices * vz)}
+    return {
+        "z_lo": z_lo,
+        "z_hi": z_hi,
+        "span_slices": span_slices,
+        "span_um": float(span_slices * vz),
+    }
 
 
 def depth_centroid(
@@ -159,8 +166,11 @@ def depth_centroid(
             idx = int(np.searchsorted(cum, q / 100.0))
             return float(min(idx, profile.size - 1))
 
-        slices = {"z_centroid": float((z * profile).sum() / total),
-                  "z_p25": _percentile(25), "z_p50": _percentile(50),
-                  "z_p75": _percentile(75)}
+        slices = {
+            "z_centroid": float((z * profile).sum() / total),
+            "z_p25": _percentile(25),
+            "z_p50": _percentile(50),
+            "z_p75": _percentile(75),
+        }
     vz = _z_um(voxel_size_um)
     return {**slices, **{f"{k}_um": v * vz for k, v in slices.items()}}

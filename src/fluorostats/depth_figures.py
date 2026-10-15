@@ -22,10 +22,18 @@ def group_color(name: str, override: str | None) -> str:
     return override or material_color(name)
 
 
-def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
-                      colors: dict[str, str], ykey: str, ylabel: str, title: str,
-                      out_base: Path, auc_window: tuple[float, float] | None = None,
-                      n_surface: int = 3, fit_offset: bool = False) -> None:
+def plot_depth_curves(
+    rows: list[dict],
+    aggregates: dict[str, dict | None],
+    colors: dict[str, str],
+    ykey: str,
+    ylabel: str,
+    title: str,
+    out_base: Path,
+    auc_window: tuple[float, float] | None = None,
+    n_surface: int = 3,
+    fit_offset: bool = False,
+) -> None:
     """One line per group (mean ± SEM band) + faint individual stacks.
 
     On the absolute curves each group's λ model is overlaid, anchored at the mean of
@@ -34,8 +42,9 @@ def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
     """
     fig, ax = plt.subplots(figsize=(4.6, 3.6))
     if auc_window is not None:
-        ax.axvspan(auc_window[0], auc_window[1], color=PALETTE["highlight"],
-                   alpha=0.08, lw=0, zorder=0)
+        ax.axvspan(
+            auc_window[0], auc_window[1], color=PALETTE["highlight"], alpha=0.08, lw=0, zorder=0
+        )
         ax.axvline(auc_window[1], color=PALETTE["muted"], lw=0.8, ls=":", zorder=0)
     for g, agg in aggregates.items():
         c = colors[g]
@@ -45,15 +54,28 @@ def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
                 continue
             res = r["result"]
             faint = r["role"] != "primary"
-            ax.plot(res["depth_um"], res[ykey], color=c,
-                    lw=0.8, alpha=0.35,
-                    ls="--" if faint else "-", zorder=1)
+            ax.plot(
+                res["depth_um"],
+                res[ykey],
+                color=c,
+                lw=0.8,
+                alpha=0.35,
+                ls="--" if faint else "-",
+                zorder=1,
+            )
         if agg is None:
             continue
         mean = agg["sub_mean"] if ykey == "bg_subtracted" else agg["norm_mean"]
         sem = agg["sub_sem"] if ykey == "bg_subtracted" else agg["norm_sem"]
-        ax.fill_between(agg["depth_um"], mean - sem, mean + sem,
-                        color=lighten(c, 0.25), alpha=0.35, lw=0, zorder=2)
+        ax.fill_between(
+            agg["depth_um"],
+            mean - sem,
+            mean + sem,
+            color=lighten(c, 0.25),
+            alpha=0.35,
+            lw=0,
+            zorder=2,
+        )
         lab = f"{g} (n={agg['n']})"
         if ykey == "bg_subtracted" and np.isfinite(agg.get("lambda_mean_um", float("nan"))):
             floor = _group_floor(rows, g) if fit_offset else 0.0
@@ -69,31 +91,47 @@ def plot_depth_curves(rows: list[dict], aggregates: dict[str, dict | None],
 
 def _group_floor(rows: list[dict], group: str) -> float:
     """Mean fitted floor of a group's accepted primary fits (the fits behind its λ)."""
-    offs = [r["result"]["fit"].offset for r in rows
-            if r["group"] == group and r["role"] == "primary" and r["result"]["fit"].fit_ok]
+    offs = [
+        r["result"]["fit"].offset
+        for r in rows
+        if r["group"] == group and r["role"] == "primary" and r["result"]["fit"].fit_ok
+    ]
     return float(np.mean(offs))
 
 
-def _plot_lambda_model(ax, agg: dict, mean: np.ndarray, c: str, n_surface: int,
-                       floor: float) -> str:
+def _plot_lambda_model(
+    ax, agg: dict, mean: np.ndarray, c: str, n_surface: int, floor: float
+) -> str:
     """Overlay the group-λ single exponential; return the legend suffix."""
     # Anchored at the near-surface group mean: floor + (surface - floor)·exp(-z/λ).
     lam = agg["lambda_mean_um"]
     surface = float(np.mean(mean[:n_surface]))
     z = agg["depth_um"]
-    ax.plot(z, floor + (surface - floor) * np.exp(-z / lam),
-            color=c, lw=1.1, ls=(0, (4, 2)), alpha=0.9, zorder=4)
+    ax.plot(
+        z,
+        floor + (surface - floor) * np.exp(-z / lam),
+        color=c,
+        lw=1.1,
+        ls=(0, (4, 2)),
+        alpha=0.9,
+        zorder=4,
+    )
     # Show how many stacks yielded an in-range λ, so a single-stack or
     # partly-degenerate group λ is never read as a confident group value.
     lam_sem = agg.get("lambda_sem_um", float("nan"))
     r2 = agg.get("r_squared_mean", float("nan"))
     n_ok = agg.get("n_lambda_ok", 0)
-    spread = "" if np.isnan(lam_sem) else f"±{lam_sem:.0f}"   # no SEM from one fit
+    spread = "" if np.isnan(lam_sem) else f"±{lam_sem:.0f}"  # no SEM from one fit
     return f"\n  λ={lam:.0f}{spread} µm, R²={r2:.2f} ({n_ok}/{agg['n']} in range)"
 
 
-def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: Path,
-             use_normalized: bool = True) -> None:
+def plot_auc(
+    rows: list[dict],
+    colors: dict[str, str],
+    window: tuple,
+    out_base: Path,
+    use_normalized: bool = True,
+) -> None:
     """Dot + mean/SEM bar of AUC per group for one window (primary stacks)."""
     metric = "normalized" if use_normalized else "absolute"
     lab = window_label(window)
@@ -101,20 +139,24 @@ def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: 
     fig, ax = plt.subplots(figsize=(3.6, 3.8))
     xpos = {g: i for i, g in enumerate(groups)}
     for g in groups:
-        vals = [r["result"]["auc"][lab][metric] for r in rows
-                if r["group"] == g and r["role"] == "primary"]
+        vals = [
+            r["result"]["auc"][lab][metric]
+            for r in rows
+            if r["group"] == g and r["role"] == "primary"
+        ]
         if not vals:
             continue
         c = colors[g]
         x = xpos[g]
-        d = stats.describe(vals)   # NaN AUCs (window past the stack) are dropped
+        d = stats.describe(vals)  # NaN AUCs (window past the stack) are dropped
         m, sem = d["mean"], d["sem"]
         ax.bar(x, m, width=0.55, color=lighten(c, 0.28), edgecolor=c, lw=1.4, zorder=1)
-        if sem > 0:   # no whisker for an undefined (n < 2) or zero spread
+        if sem > 0:  # no whisker for an undefined (n < 2) or zero spread
             ax.errorbar(x, m, yerr=sem, color=c, capsize=4, lw=1.4, zorder=2)
         jitter = np.linspace(-0.12, 0.12, len(vals))
-        ax.scatter(np.full(len(vals), x) + jitter, vals, color=c,
-                   edgecolor="white", s=42, lw=0.8, zorder=3)
+        ax.scatter(
+            np.full(len(vals), x) + jitter, vals, color=c, edgecolor="white", s=42, lw=0.8, zorder=3
+        )
     ax.set_xticks(list(xpos.values()))
     ax.set_xticklabels(groups)
     unit = "normalised" if use_normalized else "absolute"
@@ -124,9 +166,13 @@ def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: 
     _save(fig, out_base)
 
 
-def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows: list[tuple],
-                               out_base: Path,
-                               title: str = "Signal retained vs depth window") -> None:
+def plot_retention_multiwindow(
+    rows: list[dict],
+    colors: dict[str, str],
+    windows: list[tuple],
+    out_base: Path,
+    title: str = "Signal retained vs depth window",
+) -> None:
     """Grouped bars: mean retained fraction (AUC_norm / window width) per window.
 
     Dividing normalised AUC by window width gives the average fraction of
@@ -145,17 +191,21 @@ def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows
         c = colors[g]
         means, sems, ptsx, ptsy = [], [], [], []
         for wi, lab in enumerate(labels):
-            fr = [r["result"]["auc"][lab]["normalized"] / r["result"]["auc"][lab]["width_um"]
-                  for r in rows if r["group"] == g and r["role"] == "primary"]
+            fr = [
+                r["result"]["auc"][lab]["normalized"] / r["result"]["auc"][lab]["width_um"]
+                for r in rows
+                if r["group"] == g and r["role"] == "primary"
+            ]
             xc = x[wi] + (gi - (len(groups) - 1) / 2) * width
-            d = stats.describe(fr)   # SEM NaN (no whisker) for a single stack
+            d = stats.describe(fr)  # SEM NaN (no whisker) for a single stack
             means.append(d["mean"])
             sems.append(d["sem"])
             ptsx += list(np.full(len(fr), xc) + np.linspace(-0.06, 0.06, len(fr)))
             ptsy += list(fr)
         xcs = x + (gi - (len(groups) - 1) / 2) * width
-        ax.bar(xcs, means, width=width, color=lighten(c, 0.28), edgecolor=c,
-               lw=1.3, label=g, zorder=1)
+        ax.bar(
+            xcs, means, width=width, color=lighten(c, 0.28), edgecolor=c, lw=1.3, label=g, zorder=1
+        )
         ax.errorbar(xcs, means, yerr=sems, fmt="none", ecolor=c, capsize=3, lw=1.2, zorder=2)
         ax.scatter(ptsx, ptsy, color=c, edgecolor="white", s=30, lw=0.7, zorder=3)
     ax.set_xticks(x)
@@ -170,5 +220,10 @@ def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows
 def _save(fig, out_base: Path) -> None:
     # Append, not with_suffix: a fractional window label ("0.5_100um") has a dot.
     fig.tight_layout()
-    save_figure(fig, {out_base.parent / f"{out_base.name}.png": 300,
-                      out_base.parent / f"{out_base.name}.pdf": None})
+    save_figure(
+        fig,
+        {
+            out_base.parent / f"{out_base.name}.png": 300,
+            out_base.parent / f"{out_base.name}.pdf": None,
+        },
+    )

@@ -18,6 +18,7 @@ from .pubfig import save_figure
 # Shared per-condition statistics
 # ---------------------------------------------------------------------------
 
+
 def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     """Per-condition (data, means, sems) for *metric*.
 
@@ -48,8 +49,17 @@ def _jittered_points(ax, x, data) -> None:
 def _bars_with_points(ax, x, data, means, sems, colors) -> None:
     """Mean ± SEM bars with every replicate value on top: the one bar style of
     `bar_mean_sem` and `summary_panel`."""
-    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-           linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
+    ax.bar(
+        x,
+        means,
+        yerr=sems,
+        width=0.6,
+        color=colors,
+        edgecolor="black",
+        linewidth=0.8,
+        capsize=4,
+        error_kw={"linewidth": 1.2},
+    )
     _jittered_points(ax, x, data)
 
 
@@ -65,6 +75,7 @@ def _condition_colors(n: int) -> np.ndarray:
 # Single-metric plots
 # ---------------------------------------------------------------------------
 
+
 def boxplot_by_condition(
     df: pd.DataFrame,
     metric: str,
@@ -79,7 +90,7 @@ def boxplot_by_condition(
 
     bp = ax.boxplot(data, patch_artist=True, widths=0.5, showfliers=False)
     ax.set_xticks(range(1, len(conditions) + 1))
-    ax.set_xticklabels(conditions)   # avoids the deprecated boxplot(labels=) kwarg
+    ax.set_xticklabels(conditions)  # avoids the deprecated boxplot(labels=) kwarg
 
     colors = _condition_colors(len(conditions))
     for patch, color in zip(bp["boxes"], colors):
@@ -142,6 +153,7 @@ def bar_mean_sem(
 # Multi-metric summary figure
 # ---------------------------------------------------------------------------
 
+
 def summary_panel(
     df: pd.DataFrame,
     metrics: list[str],
@@ -179,8 +191,7 @@ def summary_panel(
         _bars_with_points(ax, x, data, means, sems, colors)
 
         if show_pvalues and len(conditions) > 1:
-            _add_pvalue_annotations(ax, data, x, conditions,
-                                    q_lookup=_q_lookup(pvalues, metric))
+            _add_pvalue_annotations(ax, data, x, conditions, q_lookup=_q_lookup(pvalues, metric))
 
         ax.set_xticks(x)
         ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0, fontsize=9)
@@ -201,13 +212,16 @@ def summary_panel(
 # Statistical helpers
 # ---------------------------------------------------------------------------
 
+
 def _q_lookup(pvalues: pd.DataFrame | None, metric: str) -> dict | None:
     """``{frozenset({cond_a, cond_b}): q}`` for one metric of a `compute_pvalues` table."""
     if pvalues is None or pvalues.empty:
         return None
     rows = pvalues[pvalues["metric"] == metric]
-    return {frozenset((a, b)): q for a, b, q in
-            zip(rows["condition_a"], rows["condition_b"], rows["q_value"])}
+    return {
+        frozenset((a, b)): q
+        for a, b, q in zip(rows["condition_a"], rows["condition_b"], rows["q_value"])
+    }
 
 
 def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lookup=None):
@@ -239,12 +253,14 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
             tested.append((i, j, p))
     qs: list[float] | np.ndarray
     if q_lookup is not None:
-        qs = [q_lookup.get(frozenset((conditions[i], conditions[j])), np.nan)
-              for i, j, _ in tested]
+        qs = [q_lookup.get(frozenset((conditions[i], conditions[j])), np.nan) for i, j, _ in tested]
     else:
         qs = stats.bh_fdr(np.array([p for _, _, p in tested])) if tested else []
-    sig_pairs = [(i, j, stats.significance_stars(q), q) for (i, j, _), q in zip(tested, qs)
-                 if not np.isnan(q) and stats.significance_stars(q) != "ns"]
+    sig_pairs = [
+        (i, j, stats.significance_stars(q), q)
+        for (i, j, _), q in zip(tested, qs)
+        if not np.isnan(q) and stats.significance_stars(q) != "ns"
+    ]
 
     # Sort by significance (most significant first) and limit
     sig_pairs.sort(key=lambda t: t[3])
@@ -261,8 +277,12 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
 
     for drawn_idx, (i, j, stars, _) in enumerate(sig_pairs):
         y = y_max + offset + drawn_idx * step
-        ax.plot([x[i], x[i], x[j], x[j]], [y - step * 0.2, y, y, y - step * 0.2],
-                color="black", linewidth=0.8)
+        ax.plot(
+            [x[i], x[i], x[j], x[j]],
+            [y - step * 0.2, y, y, y - step * 0.2],
+            color="black",
+            linewidth=0.8,
+        )
         ax.text((x[i] + x[j]) / 2, y, stars, ha="center", va="bottom", fontsize=9)
 
     # Extend y-axis just enough for drawn brackets
@@ -302,6 +322,7 @@ def _label_for(metric: str) -> str:
 # Effect-size grids and forest plots
 # ---------------------------------------------------------------------------
 
+
 def effect_size_heatmap(
     stats_df: pd.DataFrame,
     out_path: Path | None = None,
@@ -327,11 +348,14 @@ def effect_size_heatmap(
     df = stats_df.copy()
     if col_col not in df.columns:
         df[col_col] = "all"
-    pivot = df.pivot_table(index=row_col, columns=col_col, values=value_col,
-                           aggfunc="first")
-    sig = (df.pivot_table(index=row_col, columns=col_col, values=sig_col,
-                          aggfunc="first").fillna(False).astype(bool)
-           if sig_col and sig_col in df.columns else None)
+    pivot = df.pivot_table(index=row_col, columns=col_col, values=value_col, aggfunc="first")
+    sig = (
+        df.pivot_table(index=row_col, columns=col_col, values=sig_col, aggfunc="first")
+        .fillna(False)
+        .astype(bool)
+        if sig_col and sig_col in df.columns
+        else None
+    )
 
     nrows, ncols = pivot.shape
     figsize = figsize or (max(4, ncols * 1.1), max(2, nrows * 0.5))
@@ -348,8 +372,15 @@ def effect_size_heatmap(
                 txt = f"{v:.2f}"
                 if sig is not None and sig.values[i, j]:
                     txt += "*"
-                ax.text(j, i, txt, ha="center", va="center", fontsize=8,
-                        color="white" if abs(v) > 0.6 else "black")
+                ax.text(
+                    j,
+                    i,
+                    txt,
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="white" if abs(v) > 0.6 else "black",
+                )
     cbar = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
     cbar.set_label(value_col, fontsize=10)
     if title:
@@ -382,8 +413,7 @@ def forest_plot(
     err = np.array([df[center_col] - df[lo_col], df[hi_col] - df[center_col]])
     figsize = figsize or (8, max(2, 0.4 * len(df)))
     fig, ax = plt.subplots(figsize=figsize)
-    ax.barh(y, df[center_col], xerr=err, color=color, alpha=0.65,
-            edgecolor="black", capsize=4)
+    ax.barh(y, df[center_col], xerr=err, color=color, alpha=0.65, edgecolor="black", capsize=4)
     if reference is not None:
         ax.axvline(reference, color="black", lw=0.7)
     if log_scale:
@@ -424,9 +454,9 @@ def condition_strip(
     x_levels = sorted(df[x_col].dropna().unique())
     hue_levels = sorted(df[hue_col].dropna().unique()) if hue_col else [None]
     marker_levels = sorted(df[marker_col].dropna().unique()) if marker_col else [None]
-    palette = palette or {h: c for h, c in zip(
-        hue_levels, _condition_colors(max(1, len(hue_levels)))
-    )}
+    palette = palette or {
+        h: c for h, c in zip(hue_levels, _condition_colors(max(1, len(hue_levels))))
+    }
     markers = markers or {m: ("^" if i % 2 else "o") for i, m in enumerate(marker_levels)}
     n_hue = max(1, len(hue_levels))
     for xi, xv in enumerate(x_levels):
@@ -442,13 +472,23 @@ def condition_strip(
                     continue
                 offset = (hi - (n_hue - 1) / 2) * 0.25
                 x = xi + offset + rng.uniform(-0.05, 0.05, vals.size)
-                ax.scatter(x, vals, color=palette.get(hv, "k"),
-                           marker=markers.get(mv, "o"),
-                           s=55, alpha=0.8, edgecolors="black", linewidths=0.4)
+                ax.scatter(
+                    x,
+                    vals,
+                    color=palette.get(hv, "k"),
+                    marker=markers.get(mv, "o"),
+                    s=55,
+                    alpha=0.8,
+                    edgecolors="black",
+                    linewidths=0.4,
+                )
                 if show_median:
-                    ax.plot([xi + offset - 0.13, xi + offset + 0.13],
-                            [np.median(vals)] * 2,
-                            color=palette.get(hv, "k"), linewidth=3)
+                    ax.plot(
+                        [xi + offset - 0.13, xi + offset + 0.13],
+                        [np.median(vals)] * 2,
+                        color=palette.get(hv, "k"),
+                        linewidth=3,
+                    )
     ax.set_xticks(range(len(x_levels)))
     ax.set_xticklabels(x_levels)
     ax.set_ylabel(_label_for(y_col))
@@ -456,9 +496,19 @@ def condition_strip(
     ax.spines["right"].set_visible(False)
     if hue_col and len(hue_levels) > 1:
         from matplotlib.lines import Line2D
-        handles = [Line2D([0], [0], marker="o", color="w",
-                          markerfacecolor=palette[h], markersize=8, label=str(h))
-                   for h in hue_levels]
+
+        handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor=palette[h],
+                markersize=8,
+                label=str(h),
+            )
+            for h in hue_levels
+        ]
         ax.legend(handles=handles, loc="best", frameon=False)
     return ax
 
@@ -491,8 +541,7 @@ def modality_panel(
                 continue
             condition_strip(sub, group_col, metric, ax=ax)
             if j == 0:
-                ax.set_ylabel(f"{mod}\n{_label_for(metric)}",
-                              fontsize=9, fontweight="bold")
+                ax.set_ylabel(f"{mod}\n{_label_for(metric)}", fontsize=9, fontweight="bold")
             else:
                 ax.set_ylabel(_label_for(metric), fontsize=9)
             if i < nrows - 1:

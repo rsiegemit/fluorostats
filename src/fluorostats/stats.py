@@ -35,6 +35,7 @@ from scipy import stats as sps
 # Descriptive summaries
 # ---------------------------------------------------------------------------
 
+
 def describe(values: ArrayLike, axis: int | None = None) -> dict:
     """``{"n", "mean", "sd", "sem"}`` of the non-NaN values; NaN where undefined.
 
@@ -53,8 +54,12 @@ def describe(values: ArrayLike, axis: int | None = None) -> dict:
     n = int(a.size)
     nan = float("nan")
     sd = float(a.std(ddof=1)) if n > 1 else nan
-    return {"n": n, "mean": float(a.mean()) if n else nan, "sd": sd,
-            "sem": sd / float(np.sqrt(n)) if n > 1 else nan}
+    return {
+        "n": n,
+        "mean": float(a.mean()) if n else nan,
+        "sd": sd,
+        "sem": sd / float(np.sqrt(n)) if n > 1 else nan,
+    }
 
 
 def _describe_along(a: np.ndarray, axis: int) -> dict:
@@ -62,10 +67,9 @@ def _describe_along(a: np.ndarray, axis: int) -> dict:
     valid = ~np.isnan(a)
     n = valid.sum(axis=axis)
     undefined = np.full(n.shape, np.nan)
-    mean = np.divide(np.where(valid, a, 0.0).sum(axis=axis), n, out=undefined.copy(),
-                     where=n > 0)
+    mean = np.divide(np.where(valid, a, 0.0).sum(axis=axis), n, out=undefined.copy(), where=n > 0)
     dev = np.where(valid, a - np.expand_dims(mean, axis), 0.0)
-    sd = np.sqrt(np.divide((dev ** 2).sum(axis=axis), n - 1, out=undefined.copy(), where=n > 1))
+    sd = np.sqrt(np.divide((dev**2).sum(axis=axis), n - 1, out=undefined.copy(), where=n > 1))
     sem = np.divide(sd, np.sqrt(n), out=undefined.copy(), where=n > 1)
     return {"n": n, "mean": mean, "sd": sd, "sem": sem}
 
@@ -87,6 +91,7 @@ def reducer(name: str, what: str = "reducer") -> Callable[..., Any]:
 # ---------------------------------------------------------------------------
 # Effect sizes
 # ---------------------------------------------------------------------------
+
 
 def gini(values: ArrayLike) -> float:
     """Gini coefficient of a 1D array (0 = perfectly even, -> 1 = concentrated).
@@ -140,6 +145,7 @@ def cliffs_delta(x: np.ndarray, y: np.ndarray) -> float:
 # Multiple-testing correction
 # ---------------------------------------------------------------------------
 
+
 def bh_fdr(p_values: ArrayLike) -> np.ndarray:
     """Benjamini-Hochberg adjusted q-values from a 1D array of p-values.
 
@@ -168,6 +174,7 @@ def bh_fdr(p_values: ArrayLike) -> np.ndarray:
 # Two-group comparisons
 # ---------------------------------------------------------------------------
 
+
 def welch_t(x: Sequence[float] | np.ndarray, y: Sequence[float] | np.ndarray) -> dict:
     """Welch's unequal-variance t-test, two-sided.
 
@@ -191,13 +198,18 @@ def mann_whitney(x: ArrayLike, y: ArrayLike, alternative: str = "two-sided") -> 
     xa = xa[~np.isnan(xa)]
     ya = ya[~np.isnan(ya)]
     if xa.size < 1 or ya.size < 1:
-        return {"u": float("nan"), "p": float("nan"),
-                "cliffs_delta": float("nan"), "n_x": int(xa.size), "n_y": int(ya.size)}
+        return {
+            "u": float("nan"),
+            "p": float("nan"),
+            "cliffs_delta": float("nan"),
+            "n_x": int(xa.size),
+            "n_y": int(ya.size),
+        }
     try:
         u, p = sps.mannwhitneyu(xa, ya, alternative=alternative)
     except ValueError:
         u, p = float("nan"), float("nan")
-    if np.ptp(np.concatenate([xa, ya])) == 0:   # all tied: no information
+    if np.ptp(np.concatenate([xa, ya])) == 0:  # all tied: no information
         p = float("nan")
     return {
         "u": float(u),
@@ -248,16 +260,18 @@ def stratified_mann_whitney(
             b = b_df[metric].dropna().values
             res = mann_whitney(a, b)
             row = {k: v for k, v in zip(strata, keys)}
-            row.update({
-                "metric": metric,
-                "n_a": res["n_x"],
-                "n_b": res["n_y"],
-                "median_a": float(np.median(a)) if a.size else float("nan"),
-                "median_b": float(np.median(b)) if b.size else float("nan"),
-                "cliffs_delta": res["cliffs_delta"],
-                "u": res["u"],
-                "p": res["p"],
-            })
+            row.update(
+                {
+                    "metric": metric,
+                    "n_a": res["n_x"],
+                    "n_b": res["n_y"],
+                    "median_a": float(np.median(a)) if a.size else float("nan"),
+                    "median_b": float(np.median(b)) if b.size else float("nan"),
+                    "cliffs_delta": res["cliffs_delta"],
+                    "u": res["u"],
+                    "p": res["p"],
+                }
+            )
             rows.append(row)
     out = pd.DataFrame(rows)
     if not out.empty:
@@ -306,20 +320,43 @@ def compute_pvalues(
         for i, j in combinations(range(len(conditions)), 2):
             a = df.loc[df["condition"] == conditions[i], metric].dropna().values
             b = df.loc[df["condition"] == conditions[j], metric].dropna().values
-            rows.append({"metric": metric, "condition_a": conditions[i],
-                         "condition_b": conditions[j], "n_a": len(a), "n_b": len(b),
-                         **_pair_test(a, b)})
+            rows.append(
+                {
+                    "metric": metric,
+                    "condition_a": conditions[i],
+                    "condition_b": conditions[j],
+                    "n_a": len(a),
+                    "n_b": len(b),
+                    **_pair_test(a, b),
+                }
+            )
 
     out = pd.DataFrame(rows)
     if not out.empty:
         out["q_value"] = bh_fdr(out["p_value"].values)
         # stars on the CORRECTED q; none for an untested pair
-        out["significance"] = [significance_stars(q) if not np.isnan(q) else "" for q in out["q_value"]]
+        out["significance"] = [
+            significance_stars(q) if not np.isnan(q) else "" for q in out["q_value"]
+        ]
         out["test"] = "Mann-Whitney U, two-sided"
         out["correction"] = "Benjamini-Hochberg FDR across all tested rows"
         # existing columns first, in their earlier order; the added ones last
-        out = out[["metric", "condition_a", "condition_b", "n_a", "n_b", "p_value",
-                   "q_value", "significance", "cliffs_delta", "test", "correction", "reason"]]
+        out = out[
+            [
+                "metric",
+                "condition_a",
+                "condition_b",
+                "n_a",
+                "n_b",
+                "p_value",
+                "q_value",
+                "significance",
+                "cliffs_delta",
+                "test",
+                "correction",
+                "reason",
+            ]
+        ]
     return out
 
 
@@ -330,7 +367,7 @@ def _pair_test(a: np.ndarray, b: np.ndarray) -> dict:
         return {"p_value": nan, "cliffs_delta": nan, "reason": "n<2"}
     res = mann_whitney(a, b)
     reason = ""
-    if np.isnan(res["p"]):      # the test could not be computed
+    if np.isnan(res["p"]):  # the test could not be computed
         tied = np.ptp(np.concatenate([a, b])) == 0
         reason = "all values tied" if tied else "test not computable"
     return {"p_value": res["p"], "cliffs_delta": res["cliffs_delta"], "reason": reason}
@@ -339,6 +376,7 @@ def _pair_test(a: np.ndarray, b: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 # Bootstrap confidence intervals
 # ---------------------------------------------------------------------------
+
 
 def bootstrap_fold_change_ci(
     x: np.ndarray,
@@ -362,8 +400,12 @@ def bootstrap_fold_change_ci(
     x = x[~np.isnan(x)]
     y = y[~np.isnan(y)]
     if x.size == 0 or y.size == 0:
-        return {"fold_change_median": float("nan"), "ci_low": float("nan"),
-                "ci_high": float("nan"), "n_boot": 0}
+        return {
+            "fold_change_median": float("nan"),
+            "ci_low": float("nan"),
+            "ci_high": float("nan"),
+            "n_boot": 0,
+        }
     rng = np.random.default_rng(seed)
     bx = rng.choice(x, size=(n_boot, x.size), replace=True)
     by = rng.choice(y, size=(n_boot, y.size), replace=True)
@@ -372,9 +414,13 @@ def bootstrap_fold_change_ci(
     eps = np.finfo(float).tiny
     n_zero = int((ax == 0).sum())
     if n_zero:
-        warnings.warn(f"bootstrap_fold_change_ci: agg(x) was 0 in {n_zero} of {n_boot} resamples; "
-                      "those ratios divide by the smallest float, so the interval is not "
-                      "meaningful.", RuntimeWarning, stacklevel=2)
+        warnings.warn(
+            f"bootstrap_fold_change_ci: agg(x) was 0 in {n_zero} of {n_boot} resamples; "
+            "those ratios divide by the smallest float, so the interval is not "
+            "meaningful.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     fc = ay / np.where(ax == 0, eps, ax)
     lo_q = (1 - ci) / 2
     hi_q = 1 - lo_q
@@ -386,8 +432,13 @@ def bootstrap_fold_change_ci(
     }
 
 
-def bootstrap_mean_ci(x: np.ndarray, n_boot: int = 10_000, ci: float = 0.95, seed: int = 0,
-                      rng: np.random.Generator | None = None) -> dict:
+def bootstrap_mean_ci(
+    x: np.ndarray,
+    n_boot: int = 10_000,
+    ci: float = 0.95,
+    seed: int = 0,
+    rng: np.random.Generator | None = None,
+) -> dict:
     """Mean with a percentile-bootstrap confidence interval.
 
     Resamples ``x`` with replacement ``n_boot`` times (all draws in one block, so
@@ -403,15 +454,18 @@ def bootstrap_mean_ci(x: np.ndarray, n_boot: int = 10_000, ci: float = 0.95, see
     rng = np.random.default_rng(seed) if rng is None else rng
     idx = rng.integers(0, len(x), (n_boot, len(x)))
     means = x[idx].mean(1)
-    lo = (100 - 100 * ci) / 2          # exactly 2.5 for ci=0.95
-    return {"mean": float(x.mean()),
-            "ci_low": float(np.percentile(means, lo)),
-            "ci_high": float(np.percentile(means, 100 - lo))}
+    lo = (100 - 100 * ci) / 2  # exactly 2.5 for ci=0.95
+    return {
+        "mean": float(x.mean()),
+        "ci_low": float(np.percentile(means, lo)),
+        "ci_high": float(np.percentile(means, 100 - lo)),
+    }
 
 
 # ---------------------------------------------------------------------------
 # Stouffer Z combination
 # ---------------------------------------------------------------------------
+
 
 def stouffer_combine(
     p_values: np.ndarray,
@@ -437,8 +491,10 @@ def stouffer_combine(
     if weights is None:
         z = z_individual.sum() / np.sqrt(p.size)
     else:
-        w = np.asarray(weights, dtype=float)[keep]   # align weights with surviving (non-NaN) p-values
-        z = (w * z_individual).sum() / np.sqrt((w ** 2).sum())
+        w = np.asarray(weights, dtype=float)[
+            keep
+        ]  # align weights with surviving (non-NaN) p-values
+        z = (w * z_individual).sum() / np.sqrt((w**2).sum())
     p_combined = float(sps.norm.sf(z) if one_sided else 2 * sps.norm.sf(abs(z)))
     return {"z": float(z), "p": p_combined, "n": int(p.size)}
 
@@ -446,6 +502,7 @@ def stouffer_combine(
 # ---------------------------------------------------------------------------
 # Scheirer-Ray-Hare (non-parametric 2-way ANOVA)
 # ---------------------------------------------------------------------------
+
 
 def scheirer_ray_hare(
     df: pd.DataFrame,
@@ -479,10 +536,14 @@ def scheirer_ray_hare(
     cell_sizes = sub.groupby([factor_a, factor_b])["_rank"].size()
     n_cells = sub[factor_a].nunique() * sub[factor_b].nunique()
     if cell_sizes.nunique() > 1 or len(cell_sizes) < n_cells:
-        warnings.warn(f"scheirer_ray_hare: the {factor_a} x {factor_b} design is unbalanced "
-                      f"({len(cell_sizes)} of {n_cells} cells observed, cell sizes "
-                      f"{cell_sizes.min()}-{cell_sizes.max()}); the interaction term assumes "
-                      "a balanced design.", RuntimeWarning, stacklevel=2)
+        warnings.warn(
+            f"scheirer_ray_hare: the {factor_a} x {factor_b} design is unbalanced "
+            f"({len(cell_sizes)} of {n_cells} cells observed, cell sizes "
+            f"{cell_sizes.min()}-{cell_sizes.max()}); the interaction term assumes "
+            "a balanced design.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     grand = sub["_rank"].mean()
     ss_cells = float((cell_sizes * (cell_means - grand) ** 2).sum())
     ss_a = _ss(factor_a)
@@ -496,14 +557,15 @@ def scheirer_ray_hare(
         if df_ <= 0 or ms_total <= 0:
             return {"source": name, "df": df_, "H": float("nan"), "p": float("nan")}
         H = ss / ms_total
-        return {"source": name, "df": int(df_), "H": float(H),
-                "p": float(sps.chi2.sf(H, df_))}
+        return {"source": name, "df": int(df_), "H": float(H), "p": float(sps.chi2.sf(H, df_))}
 
-    return pd.DataFrame([
-        _row(factor_a, ss_a, df_a),
-        _row(factor_b, ss_b, df_b),
-        _row(f"{factor_a}:{factor_b}", ss_ab, df_ab),
-    ])
+    return pd.DataFrame(
+        [
+            _row(factor_a, ss_a, df_a),
+            _row(factor_b, ss_b, df_b),
+            _row(f"{factor_a}:{factor_b}", ss_ab, df_ab),
+        ]
+    )
 
 
 __all__ = [

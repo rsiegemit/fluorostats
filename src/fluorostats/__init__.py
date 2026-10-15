@@ -86,8 +86,17 @@ from . import (  # noqa: F401
 
 # Figure and orchestration modules load on first use (PEP 562), so importing a
 # measurement module never imports matplotlib.pyplot or changes its backend.
-_LAZY = {"depth_batch", "depth_contrasts", "depth_figures", "viability_batch", "render3d", "plots",
-         "pubfig", "style", "report"}
+_LAZY = {
+    "depth_batch",
+    "depth_contrasts",
+    "depth_figures",
+    "viability_batch",
+    "render3d",
+    "plots",
+    "pubfig",
+    "style",
+    "report",
+}
 
 
 def __getattr__(name: str):

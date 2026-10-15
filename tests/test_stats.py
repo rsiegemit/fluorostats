@@ -25,6 +25,7 @@ from fluorostats.stats import (
 # Effect sizes
 # ---------------------------------------------------------------------------
 
+
 def test_cliffs_delta_full_separation():
     assert cliffs_delta([1, 2, 3], [10, 11, 12]) == pytest.approx(-1.0)
     assert cliffs_delta([10, 11, 12], [1, 2, 3]) == pytest.approx(1.0)
@@ -38,6 +39,7 @@ def test_cliffs_delta_identical_samples_zero():
 # ---------------------------------------------------------------------------
 # BH-FDR
 # ---------------------------------------------------------------------------
+
 
 def test_bh_fdr_matches_known_values():
     # p = [0.001, 0.008, 0.039, 0.041, 0.042], N=5
@@ -70,6 +72,7 @@ def test_bh_fdr_preserves_nans():
 # Mann-Whitney + stratified
 # ---------------------------------------------------------------------------
 
+
 def test_mann_whitney_returns_sample_sizes():
     res = mann_whitney([1, 2, 3], [10, 20, 30])
     assert res["n_x"] == 3 and res["n_y"] == 3
@@ -84,15 +87,21 @@ def test_stratified_mann_whitney_fdr_across_grid():
         for cond in ["A", "B"]:
             shift = 10 if (region == "mid" and cond == "B") else 0
             for _ in range(12):
-                rows.append({
-                    "region": region,
-                    "condition": cond,
-                    "v": rng.normal(loc=shift),
-                })
+                rows.append(
+                    {
+                        "region": region,
+                        "condition": cond,
+                        "v": rng.normal(loc=shift),
+                    }
+                )
     df = pd.DataFrame(rows)
     out = stratified_mann_whitney(
-        df, value_cols=["v"], group_col="condition",
-        group_a="A", group_b="B", strata=["region"],
+        df,
+        value_cols=["v"],
+        group_col="condition",
+        group_a="A",
+        group_b="B",
+        strata=["region"],
     )
     assert {"region", "metric", "p", "q", "sig_q05"}.issubset(out.columns)
     assert len(out) == 2
@@ -108,6 +117,7 @@ def test_stratified_mann_whitney_fdr_across_grid():
 # Bootstrap fold-change
 # ---------------------------------------------------------------------------
 
+
 def test_bootstrap_fold_change_ci_brackets_truth():
     rng = np.random.default_rng(0)
     a = rng.lognormal(mean=0.0, sigma=0.2, size=30)
@@ -121,6 +131,7 @@ def test_bootstrap_fold_change_ci_brackets_truth():
 # ---------------------------------------------------------------------------
 # Stouffer
 # ---------------------------------------------------------------------------
+
 
 def test_stouffer_combine_amplifies_consistent_signal():
     res = stouffer_combine([0.04, 0.05, 0.06])
@@ -136,6 +147,7 @@ def test_stouffer_combine_handles_single_p():
 # ---------------------------------------------------------------------------
 # Scheirer-Ray-Hare
 # ---------------------------------------------------------------------------
+
 
 def test_scheirer_ray_hare_detects_interaction():
     rng = np.random.default_rng(0)
@@ -156,6 +168,7 @@ def test_scheirer_ray_hare_detects_interaction():
 # cliffs_delta — line 38: empty array early return
 # ---------------------------------------------------------------------------
 
+
 def test_cliffs_delta_empty_x_returns_nan():
     result = cliffs_delta([], [1, 2, 3])
     assert np.isnan(result)
@@ -175,6 +188,7 @@ def test_cliffs_delta_both_empty_returns_nan():
 # bh_fdr — line 57: all-NaN input returns all-NaN
 # ---------------------------------------------------------------------------
 
+
 def test_bh_fdr_all_nan_returns_all_nan():
     p = np.array([np.nan, np.nan, np.nan])
     q = bh_fdr(p)
@@ -184,6 +198,7 @@ def test_bh_fdr_all_nan_returns_all_nan():
 # ---------------------------------------------------------------------------
 # mann_whitney — lines 83-84 (empty after NaN drop), 87-88 (ValueError)
 # ---------------------------------------------------------------------------
+
 
 def test_mann_whitney_empty_x_returns_nan():
     """x is all NaN → after drop size < 1 → early return (lines 83-84)."""
@@ -233,17 +248,24 @@ def test_mann_whitney_identical_single_values_valueerror_branch():
 # stratified_mann_whitney — single stratum column, missing metric
 # ---------------------------------------------------------------------------
 
+
 def test_stratified_mann_whitney_single_stratum_column_keeps_whole_key():
     """One stratum column: each row carries the full stratum value, not its first character."""
     rng = np.random.default_rng(7)
-    df = pd.DataFrame({
-        "region": np.repeat(["top", "mid"], 12),
-        "condition": np.tile(["A", "B"], 12),
-        "v": rng.normal(size=24),
-    })
+    df = pd.DataFrame(
+        {
+            "region": np.repeat(["top", "mid"], 12),
+            "condition": np.tile(["A", "B"], 12),
+            "v": rng.normal(size=24),
+        }
+    )
     out = stratified_mann_whitney(
-        df, value_cols=["v"], group_col="condition",
-        group_a="A", group_b="B", strata=["region"],
+        df,
+        value_cols=["v"],
+        group_col="condition",
+        group_a="A",
+        group_b="B",
+        strata=["region"],
     )
     assert sorted(out["region"]) == ["mid", "top"]
     assert (out[["n_a", "n_b"]] == 6).all().all()
@@ -252,14 +274,19 @@ def test_stratified_mann_whitney_single_stratum_column_keeps_whole_key():
 def test_stratified_mann_whitney_skips_missing_metric():
     """Metric not in sub.columns is skipped (line 135)."""
     rng = np.random.default_rng(9)
-    df = pd.DataFrame({
-        "condition": np.repeat(["A", "B"], 10),
-        "v": rng.normal(size=20),
-    })
+    df = pd.DataFrame(
+        {
+            "condition": np.repeat(["A", "B"], 10),
+            "v": rng.normal(size=20),
+        }
+    )
     # 'missing' is not in df → skipped → 1 row (only 'v')
     out = stratified_mann_whitney(
-        df, value_cols=["v", "missing"], group_col="condition",
-        group_a="A", group_b="B",
+        df,
+        value_cols=["v", "missing"],
+        group_col="condition",
+        group_a="A",
+        group_b="B",
     )
     assert set(out["metric"]) == {"v"}
 
@@ -267,6 +294,7 @@ def test_stratified_mann_whitney_skips_missing_metric():
 # ---------------------------------------------------------------------------
 # bootstrap_fold_change_ci — line 182: empty array early return
 # ---------------------------------------------------------------------------
+
 
 def test_bootstrap_fold_change_ci_empty_x_returns_nan():
     res = bootstrap_fold_change_ci([], [1.0, 2.0])
@@ -291,6 +319,7 @@ def test_bootstrap_fold_change_ci_all_nan_x_returns_nan():
 # stouffer_combine — line 221 (empty after NaN drop), line 224 (one_sided=True)
 # ---------------------------------------------------------------------------
 
+
 def test_stouffer_combine_all_nan_returns_nan():
     """All-NaN p-values → p.size == 0 after keep mask → early return (line 221)."""
     res = stouffer_combine([np.nan, np.nan])
@@ -308,7 +337,7 @@ def test_stouffer_combine_one_sided_true():
     # Sanity: one_sided returns a different (larger) p than two-sided for positive z
     # because sf(z) > 2*sf(|z|) only when z < 0; here z > 0 so one-sided > two-sided.
     res_two = stouffer_combine([0.04, 0.03, 0.02], one_sided=False)
-    assert res["p"] != res_two["p"]   # the two code paths produce different results
+    assert res["p"] != res_two["p"]  # the two code paths produce different results
 
 
 def test_stouffer_combine_with_weights_one_sided():
@@ -322,13 +351,16 @@ def test_stouffer_combine_with_weights_one_sided():
 # scheirer_ray_hare — line 253 (empty sub), line 277 (_row with df_ <= 0)
 # ---------------------------------------------------------------------------
 
+
 def test_scheirer_ray_hare_empty_df_returns_empty():
     """After dropna, sub is empty → early return pd.DataFrame() (line 253)."""
-    df = pd.DataFrame({
-        "v": [np.nan, np.nan],
-        "A": ["x", "y"],
-        "B": ["p", "q"],
-    })
+    df = pd.DataFrame(
+        {
+            "v": [np.nan, np.nan],
+            "A": ["x", "y"],
+            "B": ["p", "q"],
+        }
+    )
     out = scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
     assert out.empty
 
@@ -336,11 +368,13 @@ def test_scheirer_ray_hare_empty_df_returns_empty():
 def test_scheirer_ray_hare_single_level_factor_zero_df():
     """Factor with only one level has df_=0 → _row returns NaN H and p (line 277)."""
     # factor_a has 2 levels, factor_b has only 1 level → df_b = 0
-    df = pd.DataFrame({
-        "v": [1.0, 2.0, 3.0, 4.0],
-        "A": ["x", "x", "y", "y"],
-        "B": ["p", "p", "p", "p"],  # single level
-    })
+    df = pd.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.0, 4.0],
+            "A": ["x", "x", "y", "y"],
+            "B": ["p", "p", "p", "p"],  # single level
+        }
+    )
     out = scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
     assert len(out) == 3
     b_row = out[out["source"] == "B"].iloc[0]
@@ -384,9 +418,13 @@ def test_bootstrap_mean_ci_shared_rng_continues_one_stream():
 
 def test_all_lists_every_public_function():
     import inspect
-    public = {n for n, f in inspect.getmembers(stats, inspect.isfunction)
-              if f.__module__ == stats.__name__ and not n.startswith("_")}
-    assert set(stats.__all__) - {"REDUCERS"} == public   # plus the one registry
+
+    public = {
+        n
+        for n, f in inspect.getmembers(stats, inspect.isfunction)
+        if f.__module__ == stats.__name__ and not n.startswith("_")
+    }
+    assert set(stats.__all__) - {"REDUCERS"} == public  # plus the one registry
 
 
 def test_bootstrap_mean_ci_drops_nan_like_the_fold_change_bootstrap():
@@ -407,33 +445,48 @@ def test_bootstrap_fold_change_ci_warns_on_zero_denominator():
     y = np.array([1.0, 2.0, 3.0])
     with pytest.warns(RuntimeWarning, match=r"agg\(x\) was 0 in \d+ of 300 resamples"):
         res = stats.bootstrap_fold_change_ci(x, y, n_boot=300)
-    assert res["ci_high"] > 1e300                          # numbers unchanged: still the tiny-eps ratio
+    assert res["ci_high"] > 1e300  # numbers unchanged: still the tiny-eps ratio
 
 
 def test_scheirer_ray_hare_warns_on_unbalanced_design():
-    df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-                       "A": ["x", "x", "x", "y", "y", "x", "y"],
-                       "B": ["p", "q", "p", "q", "p", "q", "q"]})
-    with pytest.warns(RuntimeWarning, match=r"unbalanced \(4 of 4 cells observed, cell sizes 1-2\)"):
+    df = pd.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            "A": ["x", "x", "x", "y", "y", "x", "y"],
+            "B": ["p", "q", "p", "q", "p", "q", "q"],
+        }
+    )
+    with pytest.warns(
+        RuntimeWarning, match=r"unbalanced \(4 of 4 cells observed, cell sizes 1-2\)"
+    ):
         unbalanced = scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
     assert len(unbalanced) == 3
 
 
 def test_scheirer_ray_hare_warns_on_empty_cell():
-    df = pd.DataFrame({"v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-                       "A": ["x", "x", "y", "y", "x", "x"],
-                       "B": ["p", "p", "p", "p", "q", "q"]})   # (y, q) has no observations
-    with pytest.warns(RuntimeWarning, match=r"unbalanced \(3 of 4 cells observed, cell sizes 2-2\)"):
+    df = pd.DataFrame(
+        {
+            "v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "A": ["x", "x", "y", "y", "x", "x"],
+            "B": ["p", "p", "p", "p", "q", "q"],
+        }
+    )  # (y, q) has no observations
+    with pytest.warns(
+        RuntimeWarning, match=r"unbalanced \(3 of 4 cells observed, cell sizes 2-2\)"
+    ):
         scheirer_ray_hare(df, value_col="v", factor_a="A", factor_b="B")
 
 
-@pytest.mark.parametrize("values,n,mean,sd", [
-    ([2.0, 4.0, 6.0], 3, 4.0, 2.0),
-    ([2.0, np.nan, 6.0], 2, 4.0, np.sqrt(8.0)),
-    ([5.0], 1, 5.0, np.nan),
-    ([], 0, np.nan, np.nan),
-    ([np.nan], 0, np.nan, np.nan),
-])
+@pytest.mark.parametrize(
+    "values,n,mean,sd",
+    [
+        ([2.0, 4.0, 6.0], 3, 4.0, 2.0),
+        ([2.0, np.nan, 6.0], 2, 4.0, np.sqrt(8.0)),
+        ([5.0], 1, 5.0, np.nan),
+        ([], 0, np.nan, np.nan),
+        ([np.nan], 0, np.nan, np.nan),
+    ],
+)
 def test_describe_drops_nan_and_leaves_undefined_spread_nan(values, n, mean, sd):
     d = stats.describe(values)
     assert d["n"] == n
@@ -451,17 +504,15 @@ def test_mann_whitney_all_tied_is_undefined_on_every_scipy():
 
 
 def test_describe_along_an_axis_is_per_column_and_nan_aware():
-    a = np.array([[1.0, 2.0, np.nan, 7.0],
-                  [3.0, np.nan, np.nan, 7.0],
-                  [5.0, 4.0, np.nan, 7.0]])
+    a = np.array([[1.0, 2.0, np.nan, 7.0], [3.0, np.nan, np.nan, 7.0], [5.0, 4.0, np.nan, 7.0]])
     with warnings.catch_warnings():
-        warnings.simplefilter("error")              # no empty-slice / ddof warnings
+        warnings.simplefilter("error")  # no empty-slice / ddof warnings
         d = stats.describe(a, axis=0)
     np.testing.assert_array_equal(d["n"], [3, 2, 0, 3])
     np.testing.assert_allclose(d["mean"], [3.0, 3.0, np.nan, 7.0])
     np.testing.assert_allclose(d["sd"], [2.0, np.sqrt(2.0), np.nan, 0.0])
     np.testing.assert_allclose(d["sem"], [2.0 / np.sqrt(3), 1.0, np.nan, 0.0])
-    one = stats.describe(a[:1], axis=0)              # a single value has no spread
+    one = stats.describe(a[:1], axis=0)  # a single value has no spread
     assert np.isnan(one["sd"]).all() and np.isnan(one["sem"]).all()
     np.testing.assert_allclose(one["mean"], [1.0, 2.0, np.nan, 7.0])
     rows = stats.describe(a, axis=1)
@@ -476,6 +527,7 @@ def test_bootstrap_fold_change_ci_refuses_an_unknown_agg_by_name():
 
 def test_one_reducer_registry_serves_depth_and_the_bootstrap():
     from fluorostats import depth
+
     assert depth.REDUCERS is stats.REDUCERS
     assert stats.REDUCERS == {"mean": np.mean, "median": np.median}
 
@@ -485,11 +537,13 @@ def _two_condition_df():
     rng = np.random.default_rng(0)
     lo = rng.normal(1.0, 0.05, 6)
     hi = rng.normal(5.0, 0.05, 6)
-    return pd.DataFrame({
-        "condition": ["ctrl"] * 6 + ["treat"] * 6,
-        "volume_fraction": np.concatenate([lo, hi]),
-        "n_components": np.concatenate([lo * 10, hi * 10]),
-    })
+    return pd.DataFrame(
+        {
+            "condition": ["ctrl"] * 6 + ["treat"] * 6,
+            "volume_fraction": np.concatenate([lo, hi]),
+            "n_components": np.concatenate([lo * 10, hi * 10]),
+        }
+    )
 
 
 def test_compute_pvalues_flags_significance():
@@ -503,9 +557,20 @@ def test_compute_pvalues_names_test_correction_and_effect_size():
     df = _two_condition_df()
     df.loc[df.index[:3], "n_components"] = np.nan
     pvals = stats.compute_pvalues(df, ["volume_fraction", "n_components"])
-    assert list(pvals.columns) == ["metric", "condition_a", "condition_b", "n_a", "n_b",
-                                   "p_value", "q_value", "significance", "cliffs_delta",
-                                   "test", "correction", "reason"]
+    assert list(pvals.columns) == [
+        "metric",
+        "condition_a",
+        "condition_b",
+        "n_a",
+        "n_b",
+        "p_value",
+        "q_value",
+        "significance",
+        "cliffs_delta",
+        "test",
+        "correction",
+        "reason",
+    ]
     assert (pvals["reason"] == "").all()
     assert (pvals["test"] == "Mann-Whitney U, two-sided").all()
     assert (pvals["correction"] == "Benjamini-Hochberg FDR across all tested rows").all()
@@ -521,7 +586,7 @@ def test_compute_pvalues_names_test_correction_and_effect_size():
 def test_significance_stars_triple_and_double_star():
     # p < 0.001 → "***"; p in [0.001, 0.01) → "**"
     assert stats.significance_stars(0.0009) == "***"
-    assert stats.significance_stars(0.001) == "**"   # exactly at threshold: not < 0.001
+    assert stats.significance_stars(0.001) == "**"  # exactly at threshold: not < 0.001
     assert stats.significance_stars(0.005) == "**"
     assert stats.significance_stars(0.009) == "**"
 
@@ -542,13 +607,15 @@ def test_significance_stars_ns():
 def test_compute_pvalues_keeps_untestable_pairs_with_a_reason():
     # Regression: pairs that could not be tested were dropped silently, so pvalues.csv
     # did not show that a comparison had been attempted.
-    df = pd.DataFrame({
-        "condition": ["a", "b", "b", "b", "c", "c", "c", "d", "d"],
-        "metric": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 5.0, 6.0],
-    })
+    df = pd.DataFrame(
+        {
+            "condition": ["a", "b", "b", "b", "c", "c", "c", "d", "d"],
+            "metric": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 5.0, 6.0],
+        }
+    )
     result = stats.compute_pvalues(df, ["metric"])
     rows = {(r.condition_a, r.condition_b): r for r in result.itertuples()}
-    assert len(rows) == 6                                     # every pair is listed
+    assert len(rows) == 6  # every pair is listed
     assert rows[("a", "b")].reason == "n<2" and rows[("a", "b")].n_a == 1
     assert rows[("b", "c")].reason == "all values tied"
     for pair in (("a", "b"), ("b", "c")):
@@ -568,10 +635,12 @@ def test_compute_pvalues_skips_missing_metric():
 
 def test_compute_pvalues_mannwhitney_valueerror_via_mock():
     """Mock mannwhitneyu to raise ValueError → except continue (lines 294-295)."""
-    df = pd.DataFrame({
-        "condition": ["a", "a", "a", "b", "b", "b"],
-        "metric": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    })
+    df = pd.DataFrame(
+        {
+            "condition": ["a", "a", "a", "b", "b", "b"],
+            "metric": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
     with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
         result = stats.compute_pvalues(df, ["metric"])
     # ValueError was caught: the pair is kept, untested, with the reason

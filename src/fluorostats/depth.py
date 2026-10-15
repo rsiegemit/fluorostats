@@ -72,9 +72,7 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
     if arr.ndim == 4:
         arr = arr[channel]
     elif arr.ndim != 3:
-        raise ValueError(
-            f"expected 3D (Z,Y,X) or 4D (C,Z,Y,X) volume, got shape {arr.shape}"
-        )
+        raise ValueError(f"expected 3D (Z,Y,X) or 4D (C,Z,Y,X) volume, got shape {arr.shape}")
     return arr.astype(np.float64, copy=False)
 
 
@@ -291,16 +289,11 @@ def _fit_exponential(z, y, offset: bool, i0_guess: float, lam_guess: float):
         c_guess = float(np.min(y))
         p0 = [max(i0_guess - c_guess, i0_guess * 0.5), lam_guess, c_guess]
         bounds = ([0.0, 1e-9, -np.inf], [np.inf, np.inf, np.inf])
-        popt, _ = curve_fit(
-            _exp_decay_offset, z, y, p0=p0, bounds=bounds, maxfev=20000
-        )
-        return (_exp_decay_offset(z, *popt),
-                float(popt[0]), float(popt[1]), float(popt[2]))
+        popt, _ = curve_fit(_exp_decay_offset, z, y, p0=p0, bounds=bounds, maxfev=20000)
+        return (_exp_decay_offset(z, *popt), float(popt[0]), float(popt[1]), float(popt[2]))
     p0 = [i0_guess, lam_guess]
     bounds = ([0.0, 1e-9], [np.inf, np.inf])
-    popt, _ = curve_fit(
-        _exp_decay, z, y, p0=p0, bounds=bounds, maxfev=20000
-    )
+    popt, _ = curve_fit(_exp_decay, z, y, p0=p0, bounds=bounds, maxfev=20000)
     return _exp_decay(z, *popt), float(popt[0]), float(popt[1]), None
 
 
@@ -368,18 +361,23 @@ def fit_penetration_depth(
         model, i0_fit, lam_fit, c_fit = _fit_exponential(z, y, offset, i0_guess, lam_guess)
     except (RuntimeError, ValueError):
         return PenetrationFit(
-            lambda_um=float("nan"), I0=float("nan"), offset=None,
-            r_squared=float("nan"), rmse=float("nan"), n_points=n, fit_ok=False,
+            lambda_um=float("nan"),
+            I0=float("nan"),
+            offset=None,
+            r_squared=float("nan"),
+            rmse=float("nan"),
+            n_points=n,
+            fit_ok=False,
         )
 
     resid = y - model
-    ss_res = float(np.sum(resid ** 2))
+    ss_res = float(np.sum(resid**2))
     ss_tot = float(np.sum((y - np.mean(y)) ** 2))
     # A profile with no spread has no R² (0/0): NaN, which also fails the threshold.
     # Test the spread itself: rounding in the mean makes ss_tot a tiny positive number
     # for a constant profile, which would give an R² of about -1e20.
     r_squared = 1.0 - ss_res / ss_tot if np.ptp(y) > 0 else float("nan")
-    rmse = float(np.sqrt(np.mean(resid ** 2)))
+    rmse = float(np.sqrt(np.mean(resid**2)))
 
     # A decay length longer than the acquired depth is NOT constrained by the
     # data: over the measured window the profile is essentially flat, so λ is an
@@ -468,6 +466,7 @@ __all__ = [
 # physical ``(z0, z1)`` shared by every stack. Used by `depth_batch` and
 # `depth_figures`.
 # ---------------------------------------------------------------------------
+
 
 def parse_window(w: str | Sequence[float]) -> tuple:
     """Normalise an AUC window spec to ('full',) or (z0, z1) floats.

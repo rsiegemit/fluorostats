@@ -53,7 +53,7 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
     # Largest component fraction
     total_fg = mask.sum()
     if total_fg == 0 or n_comp == 0:
-        lcf = float("nan")                  # no component: undefined, not 0
+        lcf = float("nan")  # no component: undefined, not 0
     else:
         component_sizes: np.ndarray = np.bincount(labeled.ravel())
         # Index 0 is background, skip it
@@ -71,6 +71,7 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
 # FOV-normalised densities (voxel-size invariant)
 # ---------------------------------------------------------------------------
 
+
 def fov_volume_mm3(
     shape_zyx: tuple[int, int, int],
     voxel_size_um: tuple[float, float, float],
@@ -87,13 +88,15 @@ def _per_unit(count: float, volume: float) -> float:
     """``count / volume``; NaN, with a warning, for a non-positive volume."""
     if volume > 0:
         return float(count / volume)
-    warnings.warn(f"non-positive imaged volume ({volume} mm³); density is NaN",
-                  RuntimeWarning, stacklevel=3)
+    warnings.warn(
+        f"non-positive imaged volume ({volume} mm³); density is NaN", RuntimeWarning, stacklevel=3
+    )
     return float("nan")
 
 
-def density_per_mm3(count: float, shape_zyx: tuple[int, int, int],
-                    voxel_size_um: tuple[float, float, float]) -> float:
+def density_per_mm3(
+    count: float, shape_zyx: tuple[int, int, int], voxel_size_um: tuple[float, float, float]
+) -> float:
     """Convert a per-FOV count (or length in µm) to per-mm³ density.
 
     NaN, with a RuntimeWarning, when the imaged volume is zero (an empty shape

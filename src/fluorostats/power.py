@@ -86,10 +86,21 @@ def power_curve(
 
     Returns a DataFrame with columns ``n`` and ``power``.
     """
-    rows = [{"n": int(n), "power": bootstrap_power(
-                samples_a, samples_b, n=n, n_sims=n_sims, alpha=alpha,
-                n_tests_correction=n_tests_correction, seed=seed)}
-            for n in ns]
+    rows = [
+        {
+            "n": int(n),
+            "power": bootstrap_power(
+                samples_a,
+                samples_b,
+                n=n,
+                n_sims=n_sims,
+                alpha=alpha,
+                n_tests_correction=n_tests_correction,
+                seed=seed,
+            ),
+        }
+        for n in ns
+    ]
     return pd.DataFrame(rows)
 
 
@@ -115,10 +126,13 @@ def fdr_power_curve(
     metrics = list(samples_per_metric_a.keys())
     rows = []
     for n in ns:
-        sims = {m: _sim_pvalues(samples_per_metric_a[m], samples_per_metric_b[m],
-                                n, n_sims, seed) for m in metrics}
-        p = np.array([sims[m] if sims[m] is not None else np.full(n_sims, np.nan)
-                      for m in metrics])                   # (metric, simulation)
+        sims = {
+            m: _sim_pvalues(samples_per_metric_a[m], samples_per_metric_b[m], n, n_sims, seed)
+            for m in metrics
+        }
+        p = np.array(
+            [sims[m] if sims[m] is not None else np.full(n_sims, np.nan) for m in metrics]
+        )  # (metric, simulation)
         q = np.column_stack([bh_fdr(p[:, i]) for i in range(n_sims)])
         for m, qm in zip(metrics, q):
             power = float((qm < alpha).sum() / n_sims) if sims[m] is not None else float("nan")

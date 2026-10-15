@@ -47,8 +47,9 @@ def test_save_figure_writes_each_path_at_its_dpi_and_closes(tmp_path):
 
     fig = plt.figure(figsize=(1, 1))
     out = tmp_path / "new" / "f"
-    pubfig.save_figure(fig, {out.with_suffix(".png"): 50, tmp_path / "f2.png": 100,
-                             out.with_suffix(".pdf"): None})
+    pubfig.save_figure(
+        fig, {out.with_suffix(".png"): 50, tmp_path / "f2.png": 100, out.with_suffix(".pdf"): None}
+    )
     assert Image.open(out.with_suffix(".png")).size == (50, 50)
     assert Image.open(tmp_path / "f2.png").size == (100, 100)
     assert out.with_suffix(".pdf").exists()
@@ -61,7 +62,7 @@ def test_panel_draws_letter_and_title(xanchor):
     pubfig.panel(ax, "a", "recovery", xanchor=xanchor)
     texts = [t.get_text() for t in ax.texts]
     assert texts == ["a", "recovery"]
-    pubfig.panel(ax, "b", xanchor=xanchor)          # no title -> letter only
+    pubfig.panel(ax, "b", xanchor=xanchor)  # no title -> letter only
     assert [t.get_text() for t in ax.texts][-1] == "b"
 
 
@@ -96,8 +97,9 @@ def test_composite2ch_is_rgb_in_unit_range():
     assert rgb.min() >= 0.0 and rgb.max() <= 1.0
 
 
-@pytest.mark.parametrize("loc,center", [("lower right", False), ("upper left", False),
-                                        ("lower left", True)])
+@pytest.mark.parametrize(
+    "loc,center", [("lower right", False), ("upper left", False), ("lower left", True)]
+)
 def test_scalebar_label_stays_on_bar(loc, center):
     fig, ax = plt.subplots()
     ax.imshow(np.zeros((100, 200)))
@@ -119,11 +121,17 @@ def test_save_and_caption_write_into_new_folder(tmp_path, layout, tight):
 
 def test_lollipop_orders_and_highlights():
     fig, ax = plt.subplots()
-    order = pubfig.lollipop(ax, ["otsu", "fluorostats", "li"], [0.91, 0.95, 0.93],
-                            los=[0.9, 0.94, 0.92], his=[0.92, 0.96, 0.94])
+    order = pubfig.lollipop(
+        ax,
+        ["otsu", "fluorostats", "li"],
+        [0.91, 0.95, 0.93],
+        los=[0.9, 0.94, 0.92],
+        his=[0.92, 0.96, 0.94],
+    )
     assert order == ["fluorostats", "li", "otsu"]
-    order2 = pubfig.lollipop(ax, ["a", "b"], [0.5, 0.7], colors=["red", "blue"],
-                             floor=0.4, ascending=True)
+    order2 = pubfig.lollipop(
+        ax, ["a", "b"], [0.5, 0.7], colors=["red", "blue"], floor=0.4, ascending=True
+    )
     assert order2 == ["a", "b"]
 
 
@@ -142,4 +150,3 @@ def test_bland_altman_panel_matches_agreement(annotate):
 @pytest.mark.parametrize("x,expected", [(382.6, 380), (14.8, 15), (0, 0.0), (-7.77, -7.8)])
 def test_round_sig(x, expected):
     assert pubfig.round_sig(x) == expected
-

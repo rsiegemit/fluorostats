@@ -35,5 +35,12 @@ def apply_style(font_scale: float = 1.0) -> None:
     pubfig.apply_style("house", font_scale=font_scale)
 
 
-__all__ = ["apply_style", "PALETTE", "MATERIAL_COLORS", "DARK_PALETTE",
-           "material_color", "darken", "lighten"]
+__all__ = [
+    "apply_style",
+    "PALETTE",
+    "MATERIAL_COLORS",
+    "DARK_PALETTE",
+    "material_color",
+    "darken",
+    "lighten",
+]

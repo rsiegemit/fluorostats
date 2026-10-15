@@ -51,30 +51,37 @@ def orientation_anisotropy(
 
     img = np.asarray(image, dtype=float)
     if img.ndim != 2:
-        raise ValueError(f"orientation_anisotropy expects a 2D (Y, X) image, got shape "
-                         f"{img.shape}; project a stack first (e.g. its maximum over z)")
+        raise ValueError(
+            f"orientation_anisotropy expects a 2D (Y, X) image, got shape "
+            f"{img.shape}; project a stack first (e.g. its maximum over z)"
+        )
     if mask is not None:
         sel = np.asarray(mask) > 0
     else:
         sel = np.ones(img.shape, bool)
     if not sel.any() or np.ptp(img) == 0:
-        return {"coherence": 0.0, "dominant_orientation_deg": float("nan"),
-                "n_pixels": int(sel.sum())}
+        return {
+            "coherence": 0.0,
+            "dominant_orientation_deg": float("nan"),
+            "n_pixels": int(sel.sum()),
+        }
 
     axx, axy, ayy = structure_tensor(img, sigma=sigma, order="rc")
     # 'rc' order returns (Arr, Arc, Acc) = (Ayy, Axy, Axx) in image (y, x) axes.
     jyy, jxy, jxx = axx.mean(where=sel), axy.mean(where=sel), ayy.mean(where=sel)
     denom = jxx + jyy
     coherence = float(np.hypot(jxx - jyy, 2.0 * jxy) / denom) if denom > 0 else 0.0
-    orient = 0.5 * np.arctan2(2.0 * jxy, jxx - jyy)          # radians, principal axis
+    orient = 0.5 * np.arctan2(2.0 * jxy, jxx - jyy)  # radians, principal axis
     # Reported in the skimage regionprops convention (objects.object_shape_metrics):
     # the structure tensor's angle runs the opposite way, hence the sign flip.
     orient_deg = float(-np.degrees(orient) % 180.0)
-    if orient_deg > 180.0 - 1e-9:                            # float % can return 180.0
+    if orient_deg > 180.0 - 1e-9:  # float % can return 180.0
         orient_deg = 0.0
-    return {"coherence": min(coherence, 1.0),
-            "dominant_orientation_deg": orient_deg,
-            "n_pixels": int(sel.sum())}
+    return {
+        "coherence": min(coherence, 1.0),
+        "dominant_orientation_deg": orient_deg,
+        "n_pixels": int(sel.sum()),
+    }
 
 
 def orientation_order(
@@ -105,8 +112,12 @@ def orientation_order(
     """
     a = np.asarray(angles_deg, dtype=float).ravel()
     if a.size == 0:
-        return {"order": float("nan"), "mean_orientation_deg": float("nan"),
-                "alignment": float("nan"), "n": 0}
+        return {
+            "order": float("nan"),
+            "mean_orientation_deg": float("nan"),
+            "alignment": float("nan"),
+            "n": 0,
+        }
     th = np.deg2rad(a) * 2.0
     vec = np.mean(np.exp(1j * th))
     order = float(np.abs(vec))
@@ -116,8 +127,12 @@ def orientation_order(
     else:
         ref = np.deg2rad(float(reference_deg)) * 2.0
         alignment = float(np.mean(np.cos(th - ref)))
-    return {"order": order, "mean_orientation_deg": mean_deg,
-            "alignment": alignment, "n": int(a.size)}
+    return {
+        "order": order,
+        "mean_orientation_deg": mean_deg,
+        "alignment": alignment,
+        "n": int(a.size),
+    }
 
 
 @renamed_keyword("spacing", "voxel_size_um")

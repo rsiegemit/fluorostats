@@ -12,6 +12,7 @@ from fluorostats import preprocess
 # select_green_channel — name match, override (int/str), fallback heuristics
 # ---------------------------------------------------------------------------
 
+
 def test_select_green_channel_matches_name_pattern():
     arr = np.arange(3 * 4).reshape(3, 4)
     out = preprocess.select_green_channel(arr, ["DAPI", "Alexa 488", "PI"])
@@ -26,8 +27,7 @@ def test_select_green_channel_int_override():
 
 def test_select_green_channel_str_override():
     arr = np.arange(3 * 4).reshape(3, 4)
-    out = preprocess.select_green_channel(arr, ["red", "myGreenLabel", "blue"],
-                                          override="green")
+    out = preprocess.select_green_channel(arr, ["red", "myGreenLabel", "blue"], override="green")
     np.testing.assert_array_equal(out, arr[1])
 
 
@@ -46,28 +46,28 @@ def test_select_green_channel_str_override_no_match_raises():
 def test_select_green_channel_fallbacks_by_count():
     # No name match -> heuristic by channel count
     single = np.arange(4).reshape(1, 4)
-    np.testing.assert_array_equal(
-        preprocess.select_green_channel(single, ["x"]), single[0])
+    np.testing.assert_array_equal(preprocess.select_green_channel(single, ["x"]), single[0])
 
     rgb = np.arange(3 * 4).reshape(3, 4)
     np.testing.assert_array_equal(
-        preprocess.select_green_channel(rgb, ["x", "y", "z"]), rgb[1])  # index 1
+        preprocess.select_green_channel(rgb, ["x", "y", "z"]), rgb[1]
+    )  # index 1
 
     two = np.arange(2 * 4).reshape(2, 4)
-    np.testing.assert_array_equal(
-        preprocess.select_green_channel(two, ["x", "y"]), two[1])  # Ch2
+    np.testing.assert_array_equal(preprocess.select_green_channel(two, ["x", "y"]), two[1])  # Ch2
 
     four = np.arange(4 * 4).reshape(4, 4)
     np.testing.assert_array_equal(
-        preprocess.select_green_channel(four, ["a", "b", "c", "d"]), four[1])  # RGBA green
+        preprocess.select_green_channel(four, ["a", "b", "c", "d"]), four[1]
+    )  # RGBA green
     five = np.arange(20).reshape(5, 4)
-    np.testing.assert_array_equal(
-        preprocess.select_green_channel(five, list("abcde")), five[0])
+    np.testing.assert_array_equal(preprocess.select_green_channel(five, list("abcde")), five[0])
 
 
 # ---------------------------------------------------------------------------
 # denoise — 2D and 3D per-slice
 # ---------------------------------------------------------------------------
+
 
 def test_denoise_2d_preserves_shape_and_range():
     img = np.random.default_rng(0).random((16, 16)) * 100
@@ -88,6 +88,7 @@ def test_denoise_3d_blurs_each_slice():
 # background_subtract — 2D and 3D stack
 # ---------------------------------------------------------------------------
 
+
 def test_background_subtract_2d():
     img = np.zeros((32, 32), dtype=np.float64)
     img[14:18, 14:18] = 200.0
@@ -106,6 +107,7 @@ def test_background_subtract_3d_stack():
 # ---------------------------------------------------------------------------
 # auto_crop — multichannel input, and no-border passthrough
 # ---------------------------------------------------------------------------
+
 
 def test_auto_crop_multichannel_trims_border():
     # Build a (C, Y, X) image with a uniform gray frame and a textured centre.
@@ -132,8 +134,8 @@ def test_auto_crop_active_band_thinner_than_margin():
     # Mostly-uniform image with a thin active band of two adjacent rows.
     # margin large enough that active[0]+margin >= active[-1]-margin+1.
     img = np.zeros((20, 20), dtype=float)
-    img[10, :] = np.arange(20)          # one high-variance row
-    img[11, :] = np.arange(20)[::-1]    # a second adjacent high-variance row
+    img[10, :] = np.arange(20)  # one high-variance row
+    img[11, :] = np.arange(20)[::-1]  # a second adjacent high-variance row
     out, box = preprocess.auto_crop(img, margin=5)
     assert box == (0, 20, 0, 20)
     assert out.shape == img.shape
@@ -151,7 +153,7 @@ def test_auto_crop_leaves_borderless_image_untouched():
 # Regression (release hardening): the borderless fix must still trim a real flat border.
 def test_auto_crop_trims_a_real_border():
     img = np.zeros((50, 60), np.uint8)
-    img[10:40, 12:48] = 200                             # active interior, flat border
+    img[10:40, 12:48] = 200  # active interior, flat border
     out, _ = preprocess.auto_crop(img, margin=0)
     assert out.shape[0] < 50 and out.shape[1] < 60
 
@@ -170,13 +172,13 @@ def test_green_channel_index_warns_only_when_guessing_by_position():
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert green_channel_index(["DAPI", "Alexa 488"], 2) == 1   # named
-        assert green_channel_index([], 1) == 0                       # single channel
-        assert green_channel_index(["a", "b"], 2, override=0) == 0   # explicit
+        assert green_channel_index(["DAPI", "Alexa 488"], 2) == 1  # named
+        assert green_channel_index([], 1) == 0  # single channel
+        assert green_channel_index(["a", "b"], 2, override=0) == 0  # explicit
     with pytest.warns(RuntimeWarning, match="by position"):
         assert green_channel_index(["Ch1", "Ch2"], 2) == 1
     with pytest.warns(RuntimeWarning, match="by position"):
-        assert green_channel_index([], 4) == 1                       # RGBA -> green
+        assert green_channel_index([], 4) == 1  # RGBA -> green
     with pytest.warns(RuntimeWarning, match="by position"):
         assert green_channel_index([], 5) == 0
 

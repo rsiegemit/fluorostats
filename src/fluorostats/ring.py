@@ -49,16 +49,24 @@ def ring_morphometry(
     """
     m = np.asarray(mask) > 0
     if m.ndim != 2:
-        raise ValueError(f"ring_morphometry expects a 2D (Y, X) cross-section mask, got "
-                         f"shape {m.shape}")
+        raise ValueError(
+            f"ring_morphometry expects a 2D (Y, X) cross-section mask, got shape {m.shape}"
+        )
     dy, dx = float(voxel_size_um[0]), float(voxel_size_um[1])
     pix_area = dy * dx
     nan = float("nan")
     empty = {
-        "outer_area": nan, "lumen_area": nan, "wall_area": nan,
-        "wall_coverage_frac": nan, "outer_diam": nan, "inner_diam": nan,
-        "wall_thickness_mean": nan, "wall_thickness_cv": nan,
-        "lumen_circularity": nan, "concentricity": nan, "lumen_present": False,
+        "outer_area": nan,
+        "lumen_area": nan,
+        "wall_area": nan,
+        "wall_coverage_frac": nan,
+        "outer_diam": nan,
+        "inner_diam": nan,
+        "wall_thickness_mean": nan,
+        "wall_thickness_cv": nan,
+        "lumen_circularity": nan,
+        "concentricity": nan,
+        "lumen_present": False,
     }
     if not m.any():
         return empty
@@ -72,8 +80,9 @@ def ring_morphometry(
     lumen_present = bool(lumen.any())
 
     wall_area = outer_area - lumen_area
-    wall_coverage = float(np.clip(wall.sum() * pix_area / wall_area, 0.0, 1.0)) \
-        if wall_area > 0 else nan
+    wall_coverage = (
+        float(np.clip(wall.sum() * pix_area / wall_area, 0.0, 1.0)) if wall_area > 0 else nan
+    )
     outer_diam = 2.0 * np.sqrt(outer_area / np.pi) if outer_area > 0 else nan
     inner_diam = 2.0 * np.sqrt(lumen_area / np.pi) if lumen_area > 0 else 0.0
 
@@ -84,12 +93,16 @@ def ring_morphometry(
         concentricity = _concentricity(outer, lumen, outer_diam, dy, dx)
 
     return {
-        "outer_area": outer_area, "lumen_area": lumen_area, "wall_area": wall_area,
+        "outer_area": outer_area,
+        "lumen_area": lumen_area,
+        "wall_area": wall_area,
         "wall_coverage_frac": wall_coverage,
         "outer_diam": float(outer_diam) if outer_diam == outer_diam else nan,
         "inner_diam": float(inner_diam),
-        "wall_thickness_mean": wt_mean, "wall_thickness_cv": wt_cv,
-        "lumen_circularity": lumen_circularity, "concentricity": concentricity,
+        "wall_thickness_mean": wt_mean,
+        "wall_thickness_cv": wt_cv,
+        "lumen_circularity": lumen_circularity,
+        "concentricity": concentricity,
         "lumen_present": lumen_present,
     }
 
@@ -125,9 +138,11 @@ def _wall_thickness(band: np.ndarray, dy: float, dx: float) -> tuple[float, floa
     skel = skeletonize(band)
     if skel.any():
         th = 2.0 * dt[skel]
-        cv = coefficient_of_variation(th)   # thickness >= 0: NaN only for a zero mean
+        cv = coefficient_of_variation(th)  # thickness >= 0: NaN only for a zero mean
         return float(th.mean()), 0.0 if np.isnan(cv) else cv
-    return float("nan"), float("nan")  # pragma: no cover - a non-empty wall band always has a skeleton
+    return float("nan"), float(
+        "nan"
+    )  # pragma: no cover - a non-empty wall band always has a skeleton
 
 
 def _circularity(lumen: np.ndarray) -> float:
@@ -136,7 +151,7 @@ def _circularity(lumen: np.ndarray) -> float:
 
     props = regionprops(lumen.astype(np.uint8))[0]
     perim = props.perimeter
-    return float(4.0 * np.pi * props.area / (perim ** 2)) if perim > 0 else float("nan")
+    return float(4.0 * np.pi * props.area / (perim**2)) if perim > 0 else float("nan")
 
 
 def _concentricity(outer, lumen, outer_diam: float, dy: float, dx: float) -> float:

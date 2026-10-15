@@ -43,11 +43,30 @@ METRICS_2D = [
 # columns are written per file but not summarised, plotted or tested; the 2D ones
 # were added after the others, so they come last to keep earlier columns in place.
 _MODES = {
-    "3d": (["file", "condition", "replicate", "shape", "voxel_size_um",
-            "voxel_size_source", "channel_used"], METRICS_3D, []),
-    "2d": (["file", "condition", "replicate", "shape", "channel_used"], METRICS_2D,
-           ["voxel_size_um", "voxel_size_source", "auto_crop_box",
-            "mean_cluster_area_um2", "median_cluster_area_um2"]),
+    "3d": (
+        [
+            "file",
+            "condition",
+            "replicate",
+            "shape",
+            "voxel_size_um",
+            "voxel_size_source",
+            "channel_used",
+        ],
+        METRICS_3D,
+        [],
+    ),
+    "2d": (
+        ["file", "condition", "replicate", "shape", "channel_used"],
+        METRICS_2D,
+        [
+            "voxel_size_um",
+            "voxel_size_source",
+            "auto_crop_box",
+            "mean_cluster_area_um2",
+            "median_cluster_area_um2",
+        ],
+    ),
 }
 
 
@@ -82,10 +101,7 @@ def write_per_condition_csv(
     _, metrics, _ = _mode(mode)
     available = [c for c in metrics if c in df.columns]
 
-    summary = (
-        df.groupby("condition")[available]
-        .agg(["count", "mean", "std", "median"])
-    )
+    summary = df.groupby("condition")[available].agg(["count", "mean", "std", "median"])
 
     # Flatten multi-level column names
     summary.columns = ["_".join(col).strip() for col in summary.columns]
@@ -107,16 +123,22 @@ def environment() -> dict:
     import platform
 
     pkgs: dict[str, str | None] = {}
-    for p in ("fluorostats", "numpy", "scipy", "scikit-image", "tifffile",
-              "pandas", "matplotlib", "skan"):
+    for p in (
+        "fluorostats",
+        "numpy",
+        "scipy",
+        "scikit-image",
+        "tifffile",
+        "pandas",
+        "matplotlib",
+        "skan",
+    ):
         try:
             pkgs[p] = _im.version(p)
-        except _im.PackageNotFoundError:   # e.g. fluorostats run from source
+        except _im.PackageNotFoundError:  # e.g. fluorostats run from source
             pkgs[p] = None
-    readers = {r: _iu.find_spec(r) is not None
-               for r in OPTIONAL_READERS}
-    return {"python": platform.python_version(), "packages": pkgs,
-            "optional_readers": readers}
+    readers = {r: _iu.find_spec(r) is not None for r in OPTIONAL_READERS}
+    return {"python": platform.python_version(), "packages": pkgs, "optional_readers": readers}
 
 
 def write_run_config(output_dir: Path, params: dict, nested: dict | None = None) -> Path:

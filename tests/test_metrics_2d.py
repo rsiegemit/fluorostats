@@ -36,6 +36,11 @@ def test_coverage_metrics_empty_mask_is_nan_not_zero():
     # largest-cluster share are undefined, so NaN.
     m = metrics_2d.coverage_metrics(np.zeros((5, 5), bool), voxel_size_um=0.5)
     assert m["area_fraction"] == 0.0 and m["n_components"] == 0
-    for k in ("largest_component_fraction", "mean_cluster_area_px", "median_cluster_area_px",
-              "mean_cluster_area_um2", "median_cluster_area_um2"):
+    for k in (
+        "largest_component_fraction",
+        "mean_cluster_area_px",
+        "median_cluster_area_px",
+        "mean_cluster_area_um2",
+        "median_cluster_area_um2",
+    ):
         assert np.isnan(m[k]), k

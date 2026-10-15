@@ -1,4 +1,5 @@
 """Tests for fluorostats.spatial (tiling, slabbing, spatial heterogeneity)."""
+
 import numpy as np
 import pytest
 
@@ -9,7 +10,7 @@ def test_tile_bounds_partitions_fully():
     b = list(spatial.tile_bounds((10, 8), (2, 2)))
     assert len(b) == 4
     assert b[0] == (0, 5, 0, 4)
-    assert b[-1] == (5, 10, 4, 8)          # last cell reaches the edge
+    assert b[-1] == (5, 10, 4, 8)  # last cell reaches the edge
 
 
 def test_tile_reduce_values_and_nan():
@@ -23,7 +24,7 @@ def test_tile_reduce_values_and_nan():
 
 
 def test_tile_point_density_counts_and_area():
-    pts = np.array([[1.0, 1.0], [1.0, 2.0], [6.0, 6.0]])   # 2 in top-left, 1 bottom-right
+    pts = np.array([[1.0, 1.0], [1.0, 2.0], [6.0, 6.0]])  # 2 in top-left, 1 bottom-right
     counts = spatial.tile_point_density(pts, (8, 8), (2, 2))
     assert counts[0, 0] == 2 and counts[1, 1] == 1
     dens = spatial.tile_point_density(pts, (8, 8), (2, 2), per_area=True, pixel_area=1.0)
@@ -51,29 +52,29 @@ def test_slab_reduce_profile_and_empty_slabs():
 
 def test_morans_i_clustered_dispersed_uniform():
     clustered = np.array([[0.0, 0, 0], [0, 0, 0], [1, 1, 1]])  # smooth block
-    dispersed = np.indices((4, 4)).sum(0) % 2 * 1.0            # checkerboard
+    dispersed = np.indices((4, 4)).sum(0) % 2 * 1.0  # checkerboard
     assert spatial.morans_i(clustered) > 0
     assert spatial.morans_i(dispersed) < 0
     assert np.isfinite(spatial.morans_i(dispersed, connectivity="queen"))
-    assert np.isnan(spatial.morans_i(np.ones((3, 3))))         # zero variance
+    assert np.isnan(spatial.morans_i(np.ones((3, 3))))  # zero variance
     two = np.full((3, 3), np.nan)
     two[0, 0] = 1
     two[0, 1] = 2
-    assert np.isnan(spatial.morans_i(two))                     # <3 valid cells
+    assert np.isnan(spatial.morans_i(two))  # <3 valid cells
 
 
 def test_morans_i_no_adjacent_valid_pairs():
     g = np.full((3, 3), np.nan)
     for (i, j), v in zip([(0, 0), (0, 2), (2, 0), (2, 2)], [1.0, 2.0, 3.0, 4.0]):
-        g[i, j] = v                                            # corners only -> no rook neighbours
-    assert np.isnan(spatial.morans_i(g))                       # s0 == 0 branch
+        g[i, j] = v  # corners only -> no rook neighbours
+    assert np.isnan(spatial.morans_i(g))  # s0 == 0 branch
 
 
 def test_spatial_heterogeneity_summary():
     g = np.array([[1.0, 2.0], [3.0, 4.0]])
     h = spatial.spatial_heterogeneity(g)
     assert h["n"] == 4 and h["cv"] > 0 and np.isfinite(h["morans_i"])
-    assert spatial.spatial_heterogeneity(np.ones((2, 2)))["cv"] == 0.0       # uniform -> CV 0
+    assert spatial.spatial_heterogeneity(np.ones((2, 2)))["cv"] == 0.0  # uniform -> CV 0
 
 
 def test_morans_i_rejects_unknown_connectivity():
@@ -90,8 +91,9 @@ def test_tile_point_density_bins_points_on_exact_edges():
 
 
 def test_tile_point_density_per_area_uses_exact_tile_area():
-    grid = spatial.tile_point_density(np.array([[1.0, 1.0]]), (10, 10), grid=(4, 4),
-                                      per_area=True, pixel_area=2.0)
+    grid = spatial.tile_point_density(
+        np.array([[1.0, 1.0]]), (10, 10), grid=(4, 4), per_area=True, pixel_area=2.0
+    )
     assert grid[0, 0] == pytest.approx(1 / (2.5 * 2.5 * 2.0))
 
 
@@ -99,6 +101,7 @@ def test_tile_cv_is_the_population_cv_like_the_other_homogeneity_metrics():
     # The tiles are every tile of the image (a population, not a sample): ddof=0,
     # as morphometry.lateral_cv and objects.centroid_cv use.
     from fluorostats.stats import coefficient_of_variation
+
     grid = np.array([[1.0, 2.0], [3.0, np.nan]])
     v = np.array([1.0, 2.0, 3.0])
     assert spatial.spatial_heterogeneity(grid)["cv"] == pytest.approx(v.std() / v.mean())
@@ -106,4 +109,5 @@ def test_tile_cv_is_the_population_cv_like_the_other_homogeneity_metrics():
     mask[:5, :7] = True
     tiles = spatial.tile_reduce(mask.astype(float), lambda t: float(t.mean()), grid=(5, 5))
     assert spatial.coverage_heterogeneity(mask)["coverage_tile_cv"] == pytest.approx(
-        coefficient_of_variation(tiles))
+        coefficient_of_variation(tiles)
+    )

@@ -28,8 +28,10 @@ def test_auto_selects_and_consensus_runs():
 def test_auto_rule_is_self_consistent():
     # auto's returned method must match its own documented rule, whatever the image
     rng = np.random.default_rng(0)
-    for vol in [rng.normal(50, 10, (4, 64, 64)),
-                np.where(rng.random((4, 64, 64)) < 0.01, 200.0, 3.0)]:
+    for vol in [
+        rng.normal(50, 10, (4, 64, 64)),
+        np.where(rng.random((4, 64, 64)) < 0.01, 200.0, 3.0),
+    ]:
         info = choose_threshold_method(vol)
         of, lf = info["fractions"]["otsu"], info["fractions"]["li"]
         expected = "li" if (of < 0.01 and lf > 3 * of) else "otsu"
@@ -99,8 +101,8 @@ def test_choose_threshold_selects_li_for_sparse_signal():
     """A few saturating pixels drive Otsu's threshold sky-high so it keeps
     <1% of the image; the dim diffuse block is only recovered by Li."""
     img = np.zeros((128, 128), dtype=np.float64)
-    img[:2, :2] = 4000.0        # 4 extremely bright px -> Otsu split point
-    img[50:70, 50:70] = 20.0    # dim diffuse foreground Li catches
+    img[:2, :2] = 4000.0  # 4 extremely bright px -> Otsu split point
+    img[50:70, 50:70] = 20.0  # dim diffuse foreground Li catches
     out = segment.choose_threshold_method(img)
     assert out["method"] == "li"
     assert "fractions" in out and "otsu" in out["fractions"]
@@ -155,7 +157,7 @@ def test_consensus_announces_a_failed_method(monkeypatch):
     img[8:24, 8:24] = 100.0
     with pytest.warns(RuntimeWarning, match="yen failed"):
         mask = segment.binarize(img, method="consensus", min_size=1)
-    assert mask[16, 16] and not mask[0, 0]       # the other five still decide
+    assert mask[16, 16] and not mask[0, 0]  # the other five still decide
 
 
 def test_min_size_keeps_objects_of_exactly_that_size():
@@ -167,7 +169,7 @@ def test_min_size_keeps_objects_of_exactly_that_size():
     img = np.zeros((40, 40))
     img[5:12, 5:12] = 100.0
     img[20:32, 20:32] = 100.0
-    size = int(binarize(img, method="otsu", min_size=0)[:20, :20].sum())   # small object
+    size = int(binarize(img, method="otsu", min_size=0)[:20, :20].sum())  # small object
     kept = binarize(img, method="otsu", min_size=size)
     assert kept[8, 8] and kept[25, 25]
     assert not binarize(img, method="otsu", min_size=size + 1)[8, 8]
@@ -177,17 +179,18 @@ def test_min_size_keeps_objects_of_exactly_that_size():
 @pytest.mark.parametrize("bg_radius", [0, 3])
 def test_segment_channel_is_denoise_background_binarize(bg_radius):
     from fluorostats import preprocess
+
     rng = np.random.default_rng(4)
     img = rng.normal(10, 2, (4, 24, 24))
     img[:, 6:14, 6:14] += 25
-    out, mask = segment.segment_channel(img, method="li", min_size=8, sigma=1.2,
-                                        bg_radius=bg_radius, threshold_scale=0.9)
+    out, mask = segment.segment_channel(
+        img, method="li", min_size=8, sigma=1.2, bg_radius=bg_radius, threshold_scale=0.9
+    )
     ref = preprocess.denoise(img, sigma=1.2)
     if bg_radius:
         ref = preprocess.background_subtract(ref, radius=bg_radius)
     np.testing.assert_array_equal(out, ref)
-    np.testing.assert_array_equal(
-        mask, binarize(ref, method="li", min_size=8, threshold_scale=0.9))
+    np.testing.assert_array_equal(mask, binarize(ref, method="li", min_size=8, threshold_scale=0.9))
 
 
 @pytest.mark.parametrize("n,kept", [(4, True), (3, False)])
@@ -201,14 +204,14 @@ def test_remove_small_keeps_objects_of_exactly_min_size(n, kept):
 def _sheet(thickness):
     rng = np.random.default_rng(0)
     vol = rng.normal(10, 1, (10, 48, 48))
-    vol[4:4 + thickness] += 50
+    vol[4 : 4 + thickness] += 50
     return vol
 
 
 def test_ball_opening_erases_a_two_slice_sheet_disk_keeps_it():
     vol = _sheet(2)
     n_true = 2 * 48 * 48
-    assert binarize(vol, min_size=0).sum() < 0.2 * n_true            # default "ball"
+    assert binarize(vol, min_size=0).sum() < 0.2 * n_true  # default "ball"
     for opening in ("disk", "none"):
         assert binarize(vol, min_size=0, opening=opening).sum() >= 0.99 * n_true
     # a 3-slice sheet survives the default
@@ -218,7 +221,7 @@ def test_ball_opening_erases_a_two_slice_sheet_disk_keeps_it():
 def test_opening_options_and_2d():
     img = np.zeros((20, 20))
     img[5:15, 5:15] = 100.0
-    img[0, 0] = 100.0                                   # salt pixel
+    img[0, 0] = 100.0  # salt pixel
     assert not binarize(img, min_size=0)[0, 0]
     assert not binarize(img, min_size=0, opening="disk")[0, 0]
     assert binarize(img, min_size=0, opening="none")[0, 0]

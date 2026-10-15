@@ -45,14 +45,17 @@ LOW_SNR = 3.0
 CROWDED = 1.5
 
 
-def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None,
-          method: str = DEFAULT_SEG_METHOD,
-          threshold_scale: float = 1.0, min_size: int = AREA_MIN_SIZE) -> np.ndarray:
+def _mask(
+    channel: np.ndarray | None,
+    mask: np.ndarray | None = None,
+    method: str = DEFAULT_SEG_METHOD,
+    threshold_scale: float = 1.0,
+    min_size: int = AREA_MIN_SIZE,
+) -> np.ndarray:
     if mask is not None:
         return mask > 0
     assert channel is not None  # callers pass a channel whenever they pass no mask
-    return binarize(channel, method=method, threshold_scale=threshold_scale,
-                    min_size=min_size)
+    return binarize(channel, method=method, threshold_scale=threshold_scale, min_size=min_size)
 
 
 def _count_cc(ch, sig, cseg, min_distance, threshold_rel) -> int:
@@ -80,8 +83,9 @@ LIVE_DYES = re.compile(r"calcein|fitc|gfp|alexa.*488|af\s*488", re.IGNORECASE)
 DEAD_DYES = re.compile(r"propidium|\bpi\b|ethd|ethidium", re.IGNORECASE)
 
 
-def live_dead_channels(channel_names: list[str], live: int | None = None,
-                       dead: int | None = None) -> tuple[int, int]:
+def live_dead_channels(
+    channel_names: list[str], live: int | None = None, dead: int | None = None
+) -> tuple[int, int]:
     """Indices ``(live, dead)`` of the live and dead channels among ``channel_names``.
 
     An index given explicitly is used as is. Otherwise the first channel whose name
@@ -89,26 +93,34 @@ def live_dead_channels(channel_names: list[str], live: int | None = None,
     (live 0, dead 1), announced with a RuntimeWarning. Raises ValueError if both
     resolve to one channel or an index is past the channel count.
     """
+
     def pick(given, pattern, default, role):
         if given is not None:
             return given
         for i, name in enumerate(channel_names):
             if pattern.search(name):
                 return i
-        warnings.warn(f"no channel name identifies the {role} channel among "
-                      f"{channel_names}; using channel {default} by position. Set "
-                      f"{role}_channel in the manifest if that is wrong.",
-                      RuntimeWarning, stacklevel=3)
+        warnings.warn(
+            f"no channel name identifies the {role} channel among "
+            f"{channel_names}; using channel {default} by position. Set "
+            f"{role}_channel in the manifest if that is wrong.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
         return default
 
     li = pick(live, LIVE_DYES, 0, "live")
     di = pick(dead, DEAD_DYES, 1, "dead")
     if li == di:
-        raise ValueError(f"live and dead are both channel {li} of {channel_names}; set "
-                         "live_channel and dead_channel explicitly")
+        raise ValueError(
+            f"live and dead are both channel {li} of {channel_names}; set "
+            "live_channel and dead_channel explicitly"
+        )
     if max(li, di) >= len(channel_names):
-        raise ValueError(f"channel {max(li, di)} requested but the file has "
-                         f"{len(channel_names)} channels {channel_names}")
+        raise ValueError(
+            f"channel {max(li, di)} requested but the file has "
+            f"{len(channel_names)} channels {channel_names}"
+        )
     return li, di
 
 
@@ -153,11 +165,10 @@ def _estimate_regime(channel: np.ndarray, **seg) -> dict:
     The radius is in voxels, from the median object voxel count, so it assumes
     isotropic voxels (on anisotropic stacks it is a voxel-count equivalent).
     """
-    seg = {**seg, "min_size": COUNT_MIN_SIZE}   # never let a large min_size hide cells
+    seg = {**seg, "min_size": COUNT_MIN_SIZE}  # never let a large min_size hide cells
     mask = _mask(channel, **seg)
-    if not mask.any():                          # no cells: nothing was measured
-        return {"radius": float("nan"), "snr": float("nan"), "crowding": float("nan"),
-                "n_cc": 0}
+    if not mask.any():  # no cells: nothing was measured
+        return {"radius": float("nan"), "snr": float("nan"), "crowding": float("nan"), "n_cc": 0}
     ch = np.asarray(channel, float)
     fg, bg = ch[mask], ch[~mask]
     snr = float((fg.mean() - bg.mean()) / (bg.std() + 1e-9))
@@ -165,9 +176,12 @@ def _estimate_regime(channel: np.ndarray, **seg) -> dict:
     sizes = np.bincount(labels.ravel())[1:]
     med = float(np.median(sizes)) if sizes.size else 0.0
     radius = (med / np.pi) ** 0.5 if ch.ndim == 2 else (med * 0.75 / np.pi) ** (1 / 3)
-    n_pk = count_local_maxima(ch, min_distance=max(2, int(radius / 1.5)),
-                              threshold_rel=0.2,
-                              smooth_sigma=max(1.0, radius / 1.5))["count"]
+    n_pk = count_local_maxima(
+        ch,
+        min_distance=max(2, int(radius / 1.5)),
+        threshold_rel=0.2,
+        smooth_sigma=max(1.0, radius / 1.5),
+    )["count"]
     crowding = n_pk / max(n_cc, 1)
     return {"radius": radius, "snr": snr, "crowding": float(crowding), "n_cc": n_cc}
 
@@ -201,13 +215,17 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
     if r["n_cc"] == 0:
         method, reason = "cc", "no cells detected"
     elif r["snr"] >= CLEAN_SNR and r["crowding"] > CROWDED:
-        method, reason = "maxima", (
-            f"clean (SNR {r['snr']:.1f}) and crowded (peaks/CC {r['crowding']:.2f})")
+        method, reason = (
+            "maxima",
+            (f"clean (SNR {r['snr']:.1f}) and crowded (peaks/CC {r['crowding']:.2f})"),
+        )
     elif r["snr"] < LOW_SNR:
         method, reason = "cc", f"low SNR ({r['snr']:.1f}) — CC is noise-robust"
     else:
-        method, reason = "cc", (
-            f"defaulting to robust CC (SNR {r['snr']:.1f}, crowding {r['crowding']:.2f})")
+        method, reason = (
+            "cc",
+            (f"defaulting to robust CC (SNR {r['snr']:.1f}, crowding {r['crowding']:.2f})"),
+        )
     smooth = r["radius"] / 1.5 if method == "maxima" else 0.0
     return {"method": method, "smooth_sigma": smooth, "reason": reason, **r}
 
@@ -268,15 +286,23 @@ def live_dead_by_count(
     if method not in methods:
         raise ValueError(f"unknown method {method!r}; use one of {methods}")
     cseg = {"min_size": COUNT_MIN_SIZE, **seg, "method": threshold}
-    rseg = {**seg, "method": threshold}       # regime estimate, same segmentation
+    rseg = {**seg, "method": threshold}  # regime estimate, same segmentation
 
     def _count_one(ch, m, sig):
         return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
 
     nan = float("nan")
-    out: dict = {"n_live": nan, "n_dead": nan, "viability": nan, "consensus": nan,
-                 "spread": nan, "method_live": "", "method_dead": "",
-                 "reason_live": "", "reason_dead": ""}
+    out: dict = {
+        "n_live": nan,
+        "n_dead": nan,
+        "viability": nan,
+        "consensus": nan,
+        "spread": nan,
+        "method_live": "",
+        "method_dead": "",
+        "reason_live": "",
+        "reason_dead": "",
+    }
     for m in COUNT_METHODS:
         out.update({f"n_live_{m}": nan, f"n_dead_{m}": nan, f"viability_{m}": nan})
 
@@ -288,16 +314,20 @@ def live_dead_by_count(
         for m in COUNT_METHODS:
             nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)
             nd = _count_one(dead, m, sig_d if m == "maxima" else 0.0)
-            out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd,
-                        f"viability_{m}": live_ratio(nl, nd)})
-        vals = [out[f"viability_{m}"] for m in COUNT_METHODS
-                if out[f"viability_{m}"] == out[f"viability_{m}"]]
+            out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd, f"viability_{m}": live_ratio(nl, nd)})
+        vals = [
+            out[f"viability_{m}"]
+            for m in COUNT_METHODS
+            if out[f"viability_{m}"] == out[f"viability_{m}"]
+        ]
         if vals:
             out["consensus"] = out["viability"] = float(np.median(vals))
             out["spread"] = float(max(vals) - min(vals))
         # deprecated v0.8.2 nested form of the per-method keys
-        out["by_method"] = {m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")}
-                            for m in COUNT_METHODS}
+        out["by_method"] = {
+            m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")}
+            for m in COUNT_METHODS
+        }
         return out
 
     def _count(ch):
@@ -310,9 +340,20 @@ def live_dead_by_count(
     n_live, ml, rl = _count(live)
     n_dead, md, rd = _count(dead)
     v = live_ratio(n_live, n_dead)
-    out.update({"n_live": n_live, "n_dead": n_dead, "viability": v, "consensus": v,
-                "method_live": ml, "method_dead": md, "reason_live": rl, "reason_dead": rd,
-                f"n_live_{ml}": n_live, f"n_dead_{md}": n_dead})
+    out.update(
+        {
+            "n_live": n_live,
+            "n_dead": n_dead,
+            "viability": v,
+            "consensus": v,
+            "method_live": ml,
+            "method_dead": md,
+            "reason_live": rl,
+            "reason_dead": rd,
+            f"n_live_{ml}": n_live,
+            f"n_dead_{md}": n_dead,
+        }
+    )
     if ml == md:
         out[f"viability_{ml}"] = v
     return out
@@ -343,8 +384,7 @@ def viability_depth_profile(
         da = dm.sum(axis=axes).astype(float)
         denom = la + da
         out["dead_by_z"] = dead_by_z
-        out["viability_by_z"] = np.divide(la, denom, out=np.full_like(la, np.nan),
-                                          where=denom > 0)
+        out["viability_by_z"] = np.divide(la, denom, out=np.full_like(la, np.nan), where=denom > 0)
     return out
 
 
@@ -411,10 +451,9 @@ def attenuation_correct(
         ref = slice_means.max()
     elif reference == "first":
         ref = slice_means.flat[0]
-    else:                                   # "mean"
+    else:  # "mean"
         ref = slice_means.mean()
-    scale = np.divide(ref, slice_means, out=np.ones_like(slice_means),
-                      where=slice_means > 0)
+    scale = np.divide(ref, slice_means, out=np.ones_like(slice_means), where=slice_means > 0)
     shape = [1] * vol.ndim
     shape[z_axis] = -1
     return vol * scale.reshape(shape)

@@ -74,8 +74,9 @@ def segment_channel(
     img = denoise(img, sigma=sigma)
     if bg_radius > 0:
         img = background_subtract(img, radius=bg_radius)
-    return img, binarize(img, method=method, min_size=min_size,
-                         threshold_scale=threshold_scale, opening=opening)
+    return img, binarize(
+        img, method=method, min_size=min_size, threshold_scale=threshold_scale, opening=opening
+    )
 
 
 def choose_threshold_method(arr: np.ndarray) -> dict:
@@ -103,20 +104,26 @@ def choose_threshold_method(arr: np.ndarray) -> dict:
     for name, fn in THRESHOLD_METHODS.items():
         try:
             fracs[name] = float((a > fn(a)).mean())
-        except (ValueError, IndexError) as exc:   # non-finite or degenerate histogram
-            warnings.warn(f"choose_threshold_method: {name} failed ({type(exc).__name__}: "
-                          f"{exc}); its foreground fraction is NaN.",
-                          RuntimeWarning, stacklevel=2)
+        except (ValueError, IndexError) as exc:  # non-finite or degenerate histogram
+            warnings.warn(
+                f"choose_threshold_method: {name} failed ({type(exc).__name__}: "
+                f"{exc}); its foreground fraction is NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             fracs[name] = float("nan")
     otsu_f = fracs.get("otsu", 0.0)
     li_f = fracs.get("li", 0.0)
     if otsu_f < AUTO_OTSU_MIN_FRACTION and li_f > AUTO_LI_RATIO * otsu_f:
-        method, reason = "li", (
-            f"Otsu keeps only {otsu_f:.4f} of pixels while Li finds {li_f:.4f} "
-            f"— dim/sparse foreground Otsu misses")
+        method, reason = (
+            "li",
+            (
+                f"Otsu keeps only {otsu_f:.4f} of pixels while Li finds {li_f:.4f} "
+                f"— dim/sparse foreground Otsu misses"
+            ),
+        )
     else:
-        method, reason = "otsu", (
-            f"Otsu foreground {otsu_f:.4f} plausible (skew {skew:.1f})")
+        method, reason = "otsu", (f"Otsu foreground {otsu_f:.4f} plausible (skew {skew:.1f})")
     return {"method": method, "reason": reason, "skew": skew, "fractions": fracs}
 
 
@@ -166,9 +173,12 @@ def binarize(
             except Exception as exc:
                 # A failed method still counts toward the majority, i.e. it votes
                 # background everywhere; say so rather than skipping it silently.
-                warnings.warn(f"consensus threshold: {name} failed ({type(exc).__name__}: "
-                              f"{exc}); it counts as a background vote.",
-                              RuntimeWarning, stacklevel=2)
+                warnings.warn(
+                    f"consensus threshold: {name} failed ({type(exc).__name__}: "
+                    f"{exc}); it counts as a background vote.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         mask = votes >= (len(THRESHOLD_METHODS) // 2 + 1)
     else:
         if method == "auto":

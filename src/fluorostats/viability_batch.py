@@ -92,26 +92,29 @@ DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE
 # The two maximum-intensity-projection definitions in the per-stack table.
 MIP_COLUMNS = {
     "live_cov_pct": "percent of the intensity MIP segmented live: each channel is "
-                    "max-projected over z, then thresholded (likewise dead_cov_pct, "
-                    "viability_area and the cell counts)",
+    "max-projected over z, then thresholded (likewise dead_cov_pct, "
+    "viability_area and the cell counts)",
     "live_frac_mip": "fraction of the MIP of the 3D live mask: the stack is "
-                     "thresholded in 3D, then the mask is max-projected "
-                     "(viability.viability_2d_vs_3d; overestimate_mip = live_frac_mip "
-                     "/ live_frac_3d)",
+    "thresholded in 3D, then the mask is max-projected "
+    "(viability.viability_2d_vs_3d; overestimate_mip = live_frac_mip "
+    "/ live_frac_3d)",
 }
 # Viability runs analyse every stack; there is no auxiliary stack role.
 _ROLES = ("primary",)
 # Every field a manifest, group, stack and seg block may have (anything else is refused).
-_FIELDS = ("title", "live_channel", "dead_channel", "seg", "count_method", "output_dir",
-           "groups")
+_FIELDS = ("title", "live_channel", "dead_channel", "seg", "count_method", "output_dir", "groups")
 _GROUP_FIELDS = ("name", "stacks")
 _STACK_FIELDS = ("label", "path", "role")
 _SEG_FIELDS = ("method", "min_size", "threshold_scale")
 # The metrics of the two-group contrast (console and contrasts.csv).
 _CONTRAST_METRICS = ("live_cov_pct", "live_density_permm2", "viability_area")
 # Every file a run writes; an earlier run's copies are removed when a run starts.
-_OUTPUTS = ("viability_per_stack.csv", "viability_group_summary.csv", "contrasts.csv",
-            "run_config.json")
+_OUTPUTS = (
+    "viability_per_stack.csv",
+    "viability_group_summary.csv",
+    "contrasts.csv",
+    "run_config.json",
+)
 
 
 def load_manifest(path: Path) -> dict:
@@ -119,7 +122,7 @@ def load_manifest(path: Path) -> dict:
     m = json.loads(Path(path).read_text())
     if "groups" not in m or not m["groups"]:
         raise ValueError("manifest needs a non-empty 'groups' list")
-    m.setdefault("live_channel", None)         # None: resolved from channel names
+    m.setdefault("live_channel", None)  # None: resolved from channel names
     m.setdefault("dead_channel", None)
     m.setdefault("seg", dict(DEFAULT_SEG))
     m.setdefault("count_method", "all")
@@ -141,8 +144,9 @@ def _validate(m: dict) -> None:
     if m["count_method"] not in methods:
         problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
     problems += _check_seg(m["seg"])
-    problems += check_groups(m["groups"], roles=_ROLES, group_keys=_GROUP_FIELDS,
-                             stack_keys=_STACK_FIELDS)
+    problems += check_groups(
+        m["groups"], roles=_ROLES, group_keys=_GROUP_FIELDS, stack_keys=_STACK_FIELDS
+    )
     if problems:
         raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
 
@@ -166,20 +170,24 @@ def _check_seg(seg) -> list[str]:
 # `live_dead_by_count` keys written under another column name; every other key is
 # written as is, except ``viability`` (equals ``consensus``, not repeated) and the
 # deprecated nested ``by_method`` (its values are the per-method keys).
-_COUNT_COLUMNS = {"consensus": "viability_count_consensus",
-                  "spread": "viability_count_spread",
-                  "method_live": "count_method_live", "method_dead": "count_method_dead",
-                  "reason_live": "count_reason_live", "reason_dead": "count_reason_dead"}
+_COUNT_COLUMNS = {
+    "consensus": "viability_count_consensus",
+    "spread": "viability_count_spread",
+    "method_live": "count_method_live",
+    "method_dead": "count_method_dead",
+    "reason_live": "count_reason_live",
+    "reason_dead": "count_reason_dead",
+}
 
 
 def analyse_stack(path: Path, cfg: dict) -> dict:
     """All viability readouts for one two-channel stack."""
-    vol, meta = load_volume(Path(path))                 # (C, Z, Y, X)
+    vol, meta = load_volume(Path(path))  # (C, Z, Y, X)
     if vol.ndim != 4:  # pragma: no cover — load_volume always canonicalises to (C,Z,Y,X)
         raise ValueError(f"{path.name}: expected 4D (C,Z,Y,X), got shape {vol.shape}")
     names = meta["channel_names"]
     li, di = viab.live_dead_channels(names, cfg["live_channel"], cfg["dead_channel"])
-    live = vol[li].astype(np.float32)   # (Z, Y, X)
+    live = vol[li].astype(np.float32)  # (Z, Y, X)
     dead = vol[di].astype(np.float32)
     seg = cfg["seg"]
 
@@ -191,16 +199,25 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
 
     # live_dead_by_count's `method` is the COUNT mode; the threshold goes as `threshold`
     seg_count = {k: v for k, v in seg.items() if k != "method"}
-    area = viab.live_dead_fractions(live_mip, dead_mip, **seg)     # area / coverage
-    counts = viab.live_dead_by_count(live_mip, dead_mip, method=cfg["count_method"],
-                                     threshold=seg.get("method", viab.DEFAULT_SEG_METHOD),
-                                     **seg_count)
-    regime = viab.choose_count_method(live_mip, **seg)             # transparent regime
-    bias = viab.viability_2d_vs_3d(live, **seg)                    # MIP vs full 3D
+    area = viab.live_dead_fractions(live_mip, dead_mip, **seg)  # area / coverage
+    counts = viab.live_dead_by_count(
+        live_mip,
+        dead_mip,
+        method=cfg["count_method"],
+        threshold=seg.get("method", viab.DEFAULT_SEG_METHOD),
+        **seg_count,
+    )
+    regime = viab.choose_count_method(live_mip, **seg)  # transparent regime
+    bias = viab.viability_2d_vs_3d(live, **seg)  # MIP vs full 3D
 
     row = {
-        "live_channel_name": names[li], "dead_channel_name": names[di],
-        "px_um": px, "voxel_size_source": meta.get("voxel_size_source", ""), "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
+        "live_channel_name": names[li],
+        "dead_channel_name": names[di],
+        "px_um": px,
+        "voxel_size_source": meta.get("voxel_size_source", ""),
+        "n_z": nz,
+        "n_xy": nx,
+        "fov_mm2": fov_mm2,
         # area / coverage on the intensity MIP (segment the projection; MIP_COLUMNS)
         "live_cov_pct": 100.0 * area["live_fraction"],
         "dead_cov_pct": 100.0 * area["dead_fraction"],
@@ -214,8 +231,13 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "regime_crowding": regime["crowding"],
         "regime_method": regime["method"],
     }
-    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items()
-                if k not in ("viability", "by_method")})
+    row.update(
+        {
+            _COUNT_COLUMNS.get(k, k): v
+            for k, v in counts.items()
+            if k not in ("viability", "by_method")
+        }
+    )
     # density from the single count, or (method "all": no single count) the CC count
     n_live_ref = counts["n_live"] if counts["n_live"] == counts["n_live"] else counts["n_live_cc"]
     row["live_density_permm2"] = n_live_ref / fov_mm2 if fov_mm2 > 0 else float("nan")
@@ -255,9 +277,12 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     write_contrasts_csv(out / "contrasts.csv", tests)
 
     _print_summary(rows, groups, tests)
-    count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)   # counts use seg.method too
-    report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
-                            nested={"resolved": m, "mip_columns": MIP_COLUMNS})
+    count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)  # counts use seg.method too
+    report.write_run_config(
+        out,
+        {"manifest": Path(manifest_path), "count_seg_method": count_seg},
+        nested={"resolved": m, "mip_columns": MIP_COLUMNS},
+    )
     print(f"\nOutputs written to {out}/")
     return out
 
@@ -270,8 +295,9 @@ def _describe(rows: list[dict], group: str, metrics: list[str]) -> dict:
 
 def _write_group_summary(path: Path, rows: list[dict], groups: list[str]) -> None:
     """Mean and SEM (`stats.describe`: NaN SEM for n < 2) of every numeric column, by group."""
-    metrics = [k for k in rows[0] if k not in ("group", "stack")
-               and not isinstance(rows[0][k], str)]      # numeric columns only
+    metrics = [
+        k for k in rows[0] if k not in ("group", "stack") and not isinstance(rows[0][k], str)
+    ]  # numeric columns only
     with open(path, "w", newline="") as f:
         sw = csv.writer(f)
         sw.writerow(["group", "n", "metric", "mean", "sem"])
@@ -283,8 +309,9 @@ def _write_group_summary(path: Path, rows: list[dict], groups: list[str]) -> Non
 
 def _by_group(rows: list[dict], groups: list[str], metric: str) -> dict[str, list[float]]:
     """``metric``'s non-NaN values per group, in manifest order."""
-    return {g: [r[metric] for r in rows if r["group"] == g and r[metric] == r[metric]]
-            for g in groups}
+    return {
+        g: [r[metric] for r in rows if r["group"] == g and r[metric] == r[metric]] for g in groups
+    }
 
 
 def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
@@ -303,12 +330,20 @@ def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
 
 def _print_summary(rows: list[dict], groups: list[str], tests: list[dict]) -> None:
     print("\n=== Group means (mean +/- SEM) ===")
-    key_metrics = ["live_cov_pct", "dead_cov_pct", "viability_area",
-                   "viability_count_consensus", "live_density_permm2", "overestimate_mip"]
+    key_metrics = [
+        "live_cov_pct",
+        "dead_cov_pct",
+        "viability_area",
+        "viability_count_consensus",
+        "live_density_permm2",
+        "overestimate_mip",
+    ]
     by_group = {g: _describe(rows, g, key_metrics) for g in groups}
     for i, mk in enumerate(key_metrics):
-        parts = [f"{g}: {d['mean'][i]:.3g}±{d['sem'][i]:.2g} (n={int(d['n'][i])})"
-                 for g, d in by_group.items()]
+        parts = [
+            f"{g}: {d['mean'][i]:.3g}±{d['sem'][i]:.2g} (n={int(d['n'][i])})"
+            for g, d in by_group.items()
+        ]
         print(f"  {mk:<26} " + "   ".join(parts))
     _print_contrast(rows, groups, tests)
 
@@ -318,11 +353,15 @@ def _print_contrast(rows: list[dict], groups: list[str], tests: list[dict]) -> N
     if len(groups) != 2:
         print(f"\n(two-group contrast skipped: {len(groups)} group(s); it compares exactly two)")
         return
-    print("\n=== Two-group contrast (Mann-Whitney U, two-sided; Cliff's delta; "
-          "BH-FDR q across these tests) ===")
+    print(
+        "\n=== Two-group contrast (Mann-Whitney U, two-sided; Cliff's delta; "
+        "BH-FDR q across these tests) ==="
+    )
     for c in tests:
         a, b = _by_group(rows, groups, c["metric"]).values()
         fold = float(np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
-        print(f"  {c['metric']:<26} {c['group_a']} vs {c['group_b']}: U={c['U']:.0f}, "
-              f"p={c['p']:.4g}, q={c['q']:.4g}, delta={c['cliffs_delta']:+.2f}, "
-              f"fold={fold:.2f}x (n={c['n_a']},{c['n_b']})")
+        print(
+            f"  {c['metric']:<26} {c['group_a']} vs {c['group_b']}: U={c['U']:.0f}, "
+            f"p={c['p']:.4g}, q={c['q']:.4g}, delta={c['cliffs_delta']:+.2f}, "
+            f"fold={fold:.2f}x (n={c['n_a']},{c['n_b']})"
+        )

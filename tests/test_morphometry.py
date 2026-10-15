@@ -21,6 +21,7 @@ from fluorostats.morphometry import (
 # Lateral homogeneity
 # ---------------------------------------------------------------------------
 
+
 def test_lateral_homogeneity_uniform_volume_is_near_zero():
     vol = np.ones((4, 64, 64), dtype=np.float32)
     out = lateral_homogeneity(vol, tiles=8)
@@ -47,6 +48,7 @@ def test_lateral_homogeneity_tiny_volume_returns_nan():
 # ---------------------------------------------------------------------------
 # Depth profile / span / centroid
 # ---------------------------------------------------------------------------
+
 
 def test_depth_profile_shape_and_values():
     vol = np.zeros((5, 4, 4), dtype=np.float32)
@@ -105,6 +107,7 @@ def test_depth_span_uncalibrated_um_is_nan():
 # morphometry — zero-signal guard branches
 # ---------------------------------------------------------------------------
 
+
 def test_depth_span_zero_volume():
     out = morphometry.depth_span(np.zeros((5, 8, 8)), voxel_size_um=(2.0, 1.0, 1.0))
     assert out["span_slices"] == 0
@@ -126,7 +129,7 @@ def test_lateral_homogeneity_too_small_for_tiles():
 def test_morphometry_degenerate():
     assert morphometry.depth_span(np.zeros((3, 4, 4)))["span_slices"] == 0
     assert np.isnan(stats.gini(np.array([])))
-    assert stats.coefficient_of_variation(np.array([2.0])) == 0.0        # single value
+    assert stats.coefficient_of_variation(np.array([2.0])) == 0.0  # single value
     assert np.isnan(stats.coefficient_of_variation(np.array([])))
 
 
@@ -156,13 +159,14 @@ def test_lateral_homogeneity_uses_every_pixel_on_uneven_fields():
     """A field that does not divide by `tiles` is tiled like spatial.tile_reduce,
     so its edge pixels count instead of being cropped away."""
     from fluorostats import spatial, stats
+
     xy = np.zeros((10, 10))
-    xy[:, 9] = 100.0                          # signal only in the last column
+    xy[:, 9] = 100.0  # signal only in the last column
     res = lateral_homogeneity(xy[None], tiles=4)
     tiles = spatial.tile_reduce(xy, lambda t: float(t.mean()), grid=(4, 4)).ravel()
     assert res["n_tiles"] == 16
     assert res["lateral_gini"] == pytest.approx(stats.gini(tiles))
-    assert res["lateral_gini"] > 0            # cropping would have seen a flat field
+    assert res["lateral_gini"] > 0  # cropping would have seen a flat field
 
 
 def test_lateral_homogeneity_refuses_a_2d_image():

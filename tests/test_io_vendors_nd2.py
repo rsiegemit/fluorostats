@@ -13,6 +13,7 @@ from fluorostats import io, io_vendors
 # Nikon .nd2
 # ---------------------------------------------------------------------------
 
+
 def _make_fake_nd2(arr, voxel, channels, calibrated=(True, True, True), legacy=False):
     """Fake nd2 module; ``voxel`` and ``calibrated`` are (x, y, z) as nd2 gives them."""
     fake = types.ModuleType("nd2")
@@ -70,8 +71,9 @@ def test_load_nd2_volume(monkeypatch, tmp_path):
 
 def test_nd2_unreadable_voxel_size_keeps_channel_names_and_warns():
     class F:
-        metadata = types.SimpleNamespace(channels=[types.SimpleNamespace(
-            channel=types.SimpleNamespace(name="488"))])
+        metadata = types.SimpleNamespace(
+            channels=[types.SimpleNamespace(channel=types.SimpleNamespace(name="488"))]
+        )
 
         def voxel_size(self):
             raise KeyError("Calibration")
@@ -103,8 +105,13 @@ def test_nd2_channel_name_fallback_to_ch():
 
 def test_nd2_unreadable_channel_names_keep_voxel_size_and_warn():
     class F:
-        metadata = types.SimpleNamespace(channels=[types.SimpleNamespace(
-            volume=types.SimpleNamespace(axesCalibrated=(True, True, True)))])
+        metadata = types.SimpleNamespace(
+            channels=[
+                types.SimpleNamespace(
+                    volume=types.SimpleNamespace(axesCalibrated=(True, True, True))
+                )
+            ]
+        )
 
         def voxel_size(self):
             return types.SimpleNamespace(x=0.3, y=0.3, z=1.5)
@@ -118,6 +125,7 @@ def test_nd2_unreadable_channel_names_keep_voxel_size_and_warn():
 # ---------------------------------------------------------------------------
 # Readers that label their axes are reordered by name, not by shape
 # ---------------------------------------------------------------------------
+
 
 def _zc_stack(n_z=5, n_c=2):
     """(Z, C, Y, X) stack whose channel c holds the value c + 1."""
@@ -136,7 +144,7 @@ def test_nd2_zcyx_is_reordered_by_axis_name(monkeypatch, tmp_path):
 
 
 def test_nd2_time_and_position_keep_first_index(monkeypatch, tmp_path):
-    arr = np.stack([np.stack([_zc_stack(), _zc_stack() + 10])] * 3, axis=1)   # (T, P, Z, C, Y, X)
+    arr = np.stack([np.stack([_zc_stack(), _zc_stack() + 10])] * 3, axis=1)  # (T, P, Z, C, Y, X)
     fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
     fake.ND2File.sizes = {"T": 2, "P": 3, "Z": 5, "C": 2, "Y": 8, "X": 8}
     monkeypatch.setitem(sys.modules, "nd2", fake)
@@ -150,7 +158,7 @@ def test_nd2_time_and_position_keep_first_index(monkeypatch, tmp_path):
 
 
 def test_nd2_rgb_samples_become_channels(monkeypatch, tmp_path):
-    arr = np.stack([np.full((4, 8, 8), v, np.uint8) for v in (10, 20, 30)], -1)   # (Z, Y, X, S)
+    arr = np.stack([np.full((4, 8, 8), v, np.uint8) for v in (10, 20, 30)], -1)  # (Z, Y, X, S)
     fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
     fake.ND2File.sizes = {"Z": 4, "Y": 8, "X": 8, "S": 3}
     monkeypatch.setitem(sys.modules, "nd2", fake)
@@ -174,8 +182,11 @@ def test_labelled_axes_with_unknown_name_fall_back_to_shape(monkeypatch, tmp_pat
 
 
 def test_nd2_unnamed_channel_keeps_its_position(monkeypatch, tmp_path):
-    monkeypatch.setitem(sys.modules, "nd2", _make_fake_nd2(np.zeros((2, 5, 8, 8), np.uint16),
-                                                            (0.3, 0.3, 1.5), ["", "488"]))
+    monkeypatch.setitem(
+        sys.modules,
+        "nd2",
+        _make_fake_nd2(np.zeros((2, 5, 8, 8), np.uint16), (0.3, 0.3, 1.5), ["", "488"]),
+    )
     path = tmp_path / "s.nd2"
     path.write_bytes(b"")
     _, meta = io.load_volume(path)

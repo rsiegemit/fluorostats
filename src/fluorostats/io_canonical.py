@@ -23,9 +23,12 @@ def squeeze_singleton_dims(arr: np.ndarray) -> np.ndarray:
     while arr.ndim > 4 and arr.shape[-1] == 1:
         arr = arr[..., 0]
     if arr.ndim > 4:
-        warnings.warn(f"array of shape {arr.shape} has more than 4 non-singleton axes; keeping "
-                      "only the first index of each extra leading axis (e.g. time point, scene).",
-                      RuntimeWarning, stacklevel=4)
+        warnings.warn(
+            f"array of shape {arr.shape} has more than 4 non-singleton axes; keeping "
+            "only the first index of each extra leading axis (e.g. time point, scene).",
+            RuntimeWarning,
+            stacklevel=4,
+        )
     while arr.ndim > 4:
         arr = arr[0]
     return arr
@@ -51,8 +54,11 @@ def _by_axis_names(arr: np.ndarray, axes: str, index_axes: dict[str, str]) -> np
         return None
     for a, n in sizes.items():
         if a in index_axes and n > 1:
-            warnings.warn(f"keeping only {index_axes[a]} 0 of {n} (axis {a!r} of the file).",
-                          RuntimeWarning, stacklevel=4)
+            warnings.warn(
+                f"keeping only {index_axes[a]} 0 of {n} (axis {a!r} of the file).",
+                RuntimeWarning,
+                stacklevel=4,
+            )
     arr = arr[tuple(slice(None) if a in _CANONICAL_AXES else 0 for a in axes)]
     order = [a for a in "CSZ" if a not in sizes] + [a for a in axes if a in _CANONICAL_AXES]
     arr = arr[(np.newaxis,) * (len(order) - arr.ndim)]
@@ -74,14 +80,22 @@ def _unlabelled_as_z(axes: str, shape: tuple[int, ...], index_axes: dict[str, st
     is the only one, is longer than 1, and Y and X are labelled but Z is not;
     otherwise ``axes`` unchanged (two unlabelled axes are left to the shape rule)."""
     unlabelled = [i for i, a in enumerate(axes) if a in _UNLABELLED_AXES and a not in index_axes]
-    if (len(unlabelled) != 1 or len(axes) != len(shape) or shape[unlabelled[0]] == 1
-            or "Z" in axes or not {"Y", "X"} <= set(axes)):
+    if (
+        len(unlabelled) != 1
+        or len(axes) != len(shape)
+        or shape[unlabelled[0]] == 1
+        or "Z" in axes
+        or not {"Y", "X"} <= set(axes)
+    ):
         return axes
     i = unlabelled[0]
-    warnings.warn(f"the file labels axes {axes!r}; assuming the unlabelled axis of length "
-                  f"{shape[i]} is z. If it is not, save the file with all axes named.",
-                  RuntimeWarning, stacklevel=4)
-    return axes[:i] + "Z" + axes[i + 1:]
+    warnings.warn(
+        f"the file labels axes {axes!r}; assuming the unlabelled axis of length "
+        f"{shape[i]} is z. If it is not, save the file with all axes named.",
+        RuntimeWarning,
+        stacklevel=4,
+    )
+    return axes[:i] + "Z" + axes[i + 1 :]
 
 
 # More channels than any realistic fluorescence acquisition: a labelled file with
@@ -90,8 +104,9 @@ def _unlabelled_as_z(axes: str, shape: tuple[int, ...], index_axes: dict[str, st
 _MAX_PLAUSIBLE_CHANNELS = 4
 
 
-def canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
-                        index_axes: dict[str, str] | None = None) -> np.ndarray:
+def canonicalize_volume(
+    arr: np.ndarray, meta: dict, axes: str | None = None, index_axes: dict[str, str] | None = None
+) -> np.ndarray:
     """Ensure array is (C, Z, Y, X): by axis name when the reader labels its axes
     (``axes``), otherwise by shape."""
     index_axes = index_axes or {}
@@ -99,9 +114,12 @@ def canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
     named = _by_axis_names(arr, axes, index_axes) if axes else None
     arr = named if named is not None else _checked(_volume_by_shape(arr))
     if named is not None and arr.shape[1] == 1 and arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
-        warnings.warn(f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
-                      f"z-stack, re-save it with axes 'ZYX' (or slices={arr.shape[0]}).",
-                      RuntimeWarning, stacklevel=4)
+        warnings.warn(
+            f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
+            f"z-stack, re-save it with axes 'ZYX' (or slices={arr.shape[0]}).",
+            RuntimeWarning,
+            stacklevel=4,
+        )
     meta["channel_names"] = _padded_names(meta["channel_names"], arr.shape[0])
     return arr
 
@@ -119,7 +137,8 @@ def _checked(arr: np.ndarray) -> np.ndarray:
         raise ValueError(
             f"the file names no usable axes, and its shape read as (C, Z, Y, X) = {arr.shape} "
             f"gives {n_c} channels and X = {n_x}, which is not a plausible layout. Save it "
-            "with its axes named (OME-TIFF, or an ImageJ hyperstack).")
+            "with its axes named (OME-TIFF, or an ImageJ hyperstack)."
+        )
     return arr
 
 
@@ -133,20 +152,30 @@ def _volume_by_shape(arr: np.ndarray) -> np.ndarray:
         # likely to be Z than C, so the array is taken as channel-LAST. Either way the
         # layout is a guess, and it is announced.
         if arr.shape[0] > _MAX_GUESSED_CHANNELS:
-            warnings.warn(f"4D array leading axis = {arr.shape[0]} (> {_MAX_GUESSED_CHANNELS}); "
-                          "assuming channel-last and transposing to (C, Z, Y, X).",
-                          RuntimeWarning, stacklevel=3)
+            warnings.warn(
+                f"4D array leading axis = {arr.shape[0]} (> {_MAX_GUESSED_CHANNELS}); "
+                "assuming channel-last and transposing to (C, Z, Y, X).",
+                RuntimeWarning,
+                stacklevel=3,
+            )
             arr = np.moveaxis(arr, -1, 0)
         elif arr.shape[0] > 1:
-            warnings.warn(f"4D array of shape {arr.shape} has no axis labels; read as "
-                          f"(C, Z, Y, X) with {arr.shape[0]} channels. If it is (Z, Y, X, C) "
-                          "or (Z, C, Y, X), save it with its axes named (OME-TIFF, or an "
-                          "ImageJ hyperstack) to avoid the guess.", RuntimeWarning, stacklevel=3)
+            warnings.warn(
+                f"4D array of shape {arr.shape} has no axis labels; read as "
+                f"(C, Z, Y, X) with {arr.shape[0]} channels. If it is (Z, Y, X, C) "
+                "or (Z, C, Y, X), save it with its axes named (OME-TIFF, or an "
+                "ImageJ hyperstack) to avoid the guess.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
     elif ndim == 5:
         if arr.shape[0] > 1:
-            warnings.warn(f"5D array of shape {arr.shape}: keeping only the first of "
-                          f"{arr.shape[0]} entries along the leading axis (e.g. time point).",
-                          RuntimeWarning, stacklevel=3)
+            warnings.warn(
+                f"5D array of shape {arr.shape}: keeping only the first of "
+                f"{arr.shape[0]} entries along the leading axis (e.g. time point).",
+                RuntimeWarning,
+                stacklevel=3,
+            )
         arr = arr[0]
     elif ndim == 2:
         arr = arr[np.newaxis, np.newaxis]
@@ -159,8 +188,9 @@ def _volume_by_shape(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
-def canonicalize_image(arr: np.ndarray, meta: dict, axes: str | None = None,
-                       index_axes: dict[str, str] | None = None) -> np.ndarray:
+def canonicalize_image(
+    arr: np.ndarray, meta: dict, axes: str | None = None, index_axes: dict[str, str] | None = None
+) -> np.ndarray:
     """Ensure 2D image is (C, Y, X): by axis name when the reader labels a single
     plane (``axes``), otherwise by shape (a labelled z-stack keeps the shape rule)."""
     named = _by_axis_names(arr, axes, index_axes or {}) if axes else None
@@ -172,9 +202,13 @@ def canonicalize_image(arr: np.ndarray, meta: dict, axes: str | None = None,
         if arr.shape[2] <= 4:
             arr = np.moveaxis(arr, -1, 0)
         elif arr.shape[0] > 4:
-            warnings.warn(f"3D array of shape {arr.shape} read as a 2D image: its {arr.shape[0]} "
-                          "planes are treated as channels. If it is a z-stack, load it with "
-                          "load_volume / quant3d instead.", RuntimeWarning, stacklevel=3)
+            warnings.warn(
+                f"3D array of shape {arr.shape} read as a 2D image: its {arr.shape[0]} "
+                "planes are treated as channels. If it is a z-stack, load it with "
+                "load_volume / quant3d instead.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
     else:
         raise ValueError(f"Unexpected 2D image shape: {arr.shape}")
 

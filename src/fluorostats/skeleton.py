@@ -25,8 +25,13 @@ from .deprecation import renamed_keyword
 # The result of `skeleton_metrics` for an empty skeleton: the one definition of
 # its keys, also used by the CLI when skeletons are skipped. Counts and length are
 # a measured zero; the mean length of zero branches is undefined (NaN).
-EMPTY_METRICS = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
-                 "n_junction_nodes": 0, "mean_branch_length_um": float("nan")}
+EMPTY_METRICS = {
+    "total_length_um": 0.0,
+    "n_branches": 0,
+    "n_junctions": 0,
+    "n_junction_nodes": 0,
+    "mean_branch_length_um": float("nan"),
+}
 # The result when the skeleton could not be measured: NaN, not a measured zero.
 UNMEASURED_METRICS = {k: float("nan") for k in EMPTY_METRICS}
 
@@ -94,8 +99,7 @@ def prune_skeleton(
         skeleton_obj = skan.Skeleton(s, spacing=voxel_size_um or 1)
         branch_data = skan.summarize(skeleton_obj, separator="_")
         spurs = branch_data.index[
-            (branch_data["branch_type"] == 1)
-            & (branch_data["branch_distance"] < min_branch_length)
+            (branch_data["branch_type"] == 1) & (branch_data["branch_distance"] < min_branch_length)
         ]
         if len(spurs) == 0:
             break
@@ -103,7 +107,7 @@ def prune_skeleton(
         for i in spurs:
             coords = skeleton_obj.path_coordinates(i).astype(int)
             remove[tuple(coords.T)] = True
-        remove &= ~junctions          # keep junction nodes intact
+        remove &= ~junctions  # keep junction nodes intact
         if not remove.any():  # pragma: no cover  # spur endpoints are never junctions
             break
         s = s & ~remove
@@ -147,7 +151,7 @@ def skeleton_metrics(
         skel = skeletonize(mask)
         # Match spacing length to the mask dimensionality so 2D masks work too
         # (voxel_size_um is (z, y, x); a 2D image uses the trailing (y, x)).
-        spacing = tuple(voxel_size_um)[-skel.ndim:]
+        spacing = tuple(voxel_size_um)[-skel.ndim :]
 
         if prune and skel.sum() > 0:
             if min_branch_length_um is None:
@@ -155,7 +159,7 @@ def skeleton_metrics(
             else:
                 skel = prune_skeleton(skel, min_branch_length_um, voxel_size_um=spacing)
 
-        if not _has_branches(skel):      # empty, or isolated points only
+        if not _has_branches(skel):  # empty, or isolated points only
             return dict(EMPTY_METRICS)
 
         skeleton_obj = skan.Skeleton(skel, spacing=spacing)
@@ -174,8 +178,11 @@ def skeleton_metrics(
             "mean_branch_length_um": mean_branch_length,
         }
     except Exception as exc:  # any skeletonize/skan failure: surfaced, never a fake zero
-        warnings.warn(f"skeleton_metrics failed ({type(exc).__name__}: {exc}); returning "
-                      "NaN (not measured).", RuntimeWarning, stacklevel=2)
+        warnings.warn(
+            f"skeleton_metrics failed ({type(exc).__name__}: {exc}); returning NaN (not measured).",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return dict(UNMEASURED_METRICS)
 
 

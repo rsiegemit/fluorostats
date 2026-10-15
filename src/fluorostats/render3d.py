@@ -34,6 +34,7 @@ from .pubfig import DARK_PALETTE, PALETTE, save_figure
 # Downsampling
 # ---------------------------------------------------------------------------
 
+
 def block_reduce_max(mask: np.ndarray, factors: tuple[int, int, int]) -> np.ndarray:
     """Max-pool a 3D mask by integer factors per axis.
 
@@ -53,6 +54,7 @@ def block_reduce_max(mask: np.ndarray, factors: tuple[int, int, int]) -> np.ndar
 # ---------------------------------------------------------------------------
 # Isosurface mesh
 # ---------------------------------------------------------------------------
+
 
 def render_isosurface(
     mask: np.ndarray,
@@ -99,9 +101,15 @@ def render_isosurface(
 
     if ds.sum() < 100:
         ax.set_facecolor(bg)
-        ax.text2D(0.5, 0.5, "(insufficient signal)",
-                  ha="center", va="center", transform=ax.transAxes,
-                  color=text_color)
+        ax.text2D(
+            0.5,
+            0.5,
+            "(insufficient signal)",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            color=text_color,
+        )
         if title:
             ax.set_title(title, color=text_color)
         return ax
@@ -116,12 +124,19 @@ def render_isosurface(
     _style_mesh_axes(ax, box, theme, grid)
     ax.view_init(elev=elev, azim=azim)
     if scalebar_um:
-        ax.plot([10, 10 + scalebar_um], [10, 10], [0, 0],
-                color=scalebar_color, linewidth=3.0, zorder=10)
-        ax.text(10 + scalebar_um / 2, 10, -box[2] * 0.05,
-                f"{int(scalebar_um)} µm",
-                color=scalebar_color, ha="center", fontsize=10,
-                fontweight="semibold")
+        ax.plot(
+            [10, 10 + scalebar_um], [10, 10], [0, 0], color=scalebar_color, linewidth=3.0, zorder=10
+        )
+        ax.text(
+            10 + scalebar_um / 2,
+            10,
+            -box[2] * 0.05,
+            f"{int(scalebar_um)} µm",
+            color=scalebar_color,
+            ha="center",
+            fontsize=10,
+            fontweight="semibold",
+        )
     if title:
         ax.set_title(title, color=text_color)
     return ax
@@ -130,11 +145,20 @@ def render_isosurface(
 # Isosurface themes by ``style`` name: colours, and whether the axes are bare (no
 # ticks or µm labels, bounding box drawn instead) as on dark slides.
 _THEMES = {
-    "light": {"background": "white", "grid": "#cccccc", "text": PALETTE["ink"],
-              "scalebar": PALETTE["ink"], "bare_axes": False},
-    "dark": {"background": DARK_PALETTE["background"], "grid": DARK_PALETTE["grid"],
-             "text": DARK_PALETTE["ink"], "scalebar": DARK_PALETTE["scalebar"],
-             "bare_axes": True},
+    "light": {
+        "background": "white",
+        "grid": "#cccccc",
+        "text": PALETTE["ink"],
+        "scalebar": PALETTE["ink"],
+        "bare_axes": False,
+    },
+    "dark": {
+        "background": DARK_PALETTE["background"],
+        "grid": DARK_PALETTE["grid"],
+        "text": DARK_PALETTE["ink"],
+        "scalebar": DARK_PALETTE["scalebar"],
+        "bare_axes": True,
+    },
 }
 
 
@@ -152,36 +176,36 @@ def _isosurface_mesh(ds, spacing, smooth_iter: int, shade: bool, color: str, alp
     light; otherwise it is a flat fill.
     """
     padded = np.pad(ds, 1, mode="constant", constant_values=0)
-    verts, faces, _, _ = marching_cubes(padded.astype(np.float32),
-                                         level=0.5, spacing=spacing)
+    verts, faces, _, _ = marching_cubes(padded.astype(np.float32), level=0.5, spacing=spacing)
     if smooth_iter > 0:
         verts = _laplacian_smooth(verts, faces, n_iter=smooth_iter)
     verts_xyz = verts[:, [2, 1, 0]]
     polys = verts_xyz[faces]
     if not shade:
-        mesh = Poly3DCollection(polys, alpha=alpha, facecolor=color,
-                                 edgecolor="none", linewidth=0)
+        mesh = Poly3DCollection(polys, alpha=alpha, facecolor=color, edgecolor="none", linewidth=0)
         mesh.set_facecolor(color)
         return mesh
     from matplotlib.colors import to_rgb
+
     rgb = np.array(to_rgb(color))
     e1 = polys[:, 1] - polys[:, 0]
     e2 = polys[:, 2] - polys[:, 0]
     normals = np.cross(e1, e2)
     norm = np.linalg.norm(normals, axis=1, keepdims=True)
     normals = np.divide(normals, np.where(norm == 0, 1, norm))
-    light = np.array([np.cos(np.radians(45)) * np.cos(np.radians(315)),
-                      np.cos(np.radians(45)) * np.sin(np.radians(315)),
-                      np.sin(np.radians(45))])
+    light = np.array(
+        [
+            np.cos(np.radians(45)) * np.cos(np.radians(315)),
+            np.cos(np.radians(45)) * np.sin(np.radians(315)),
+            np.sin(np.radians(45)),
+        ]
+    )
     shading = np.clip(normals @ light, 0.0, 1.0)
     intensities = 0.55 + 0.45 * shading
     face_colors = rgb[None, :] * intensities[:, None]
     face_colors = np.clip(face_colors, 0, 1)
-    face_rgba = np.concatenate([face_colors,
-                                np.full((face_colors.shape[0], 1), alpha)],
-                               axis=1)
-    return Poly3DCollection(polys, facecolors=face_rgba,
-                            edgecolor="none", linewidth=0)
+    face_rgba = np.concatenate([face_colors, np.full((face_colors.shape[0], 1), alpha)], axis=1)
+    return Poly3DCollection(polys, facecolors=face_rgba, edgecolor="none", linewidth=0)
 
 
 def _style_mesh_axes(ax, box, theme: dict, grid: bool) -> None:
@@ -196,8 +220,7 @@ def _style_mesh_axes(ax, box, theme: dict, grid: bool) -> None:
         pane.fill = False
         pane.set_edgecolor(grid_color)
     ax.grid(grid, color=grid_color, linewidth=0.5)
-    ax.tick_params(axis="both", labelsize=7, length=2,
-                   colors=text_color)
+    ax.tick_params(axis="both", labelsize=7, length=2, colors=text_color)
     ax.xaxis.label.set_color(text_color)
     ax.yaxis.label.set_color(text_color)
     ax.zaxis.label.set_color(text_color)
@@ -218,8 +241,8 @@ def _style_mesh_axes(ax, box, theme: dict, grid: bool) -> None:
 # Smoothing + box helpers
 # ---------------------------------------------------------------------------
 
-def _laplacian_smooth(verts: np.ndarray, faces: np.ndarray,
-                      n_iter: int = 1) -> np.ndarray:
+
+def _laplacian_smooth(verts: np.ndarray, faces: np.ndarray, n_iter: int = 1) -> np.ndarray:
     """Average each vertex toward the centroid of its face-neighbours.
 
     Cheap Taubin-like smoothing — softens the marching-cubes staircase
@@ -247,21 +270,39 @@ def _laplacian_smooth(verts: np.ndarray, faces: np.ndarray,
 def _box_edges(box: tuple[float, float, float]):
     """12 edges of the bounding box for explicit grid rendering."""
     x, y, z = box
-    corners = [(0, 0, 0), (x, 0, 0), (x, y, 0), (0, y, 0),
-               (0, 0, z), (x, 0, z), (x, y, z), (0, y, z)]
-    pairs = [(0, 1), (1, 2), (2, 3), (3, 0),
-             (4, 5), (5, 6), (6, 7), (7, 4),
-             (0, 4), (1, 5), (2, 6), (3, 7)]
+    corners = [
+        (0, 0, 0),
+        (x, 0, 0),
+        (x, y, 0),
+        (0, y, 0),
+        (0, 0, z),
+        (x, 0, z),
+        (x, y, z),
+        (0, y, z),
+    ]
+    pairs = [
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 0),
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4),
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+    ]
     for i, j in pairs:
         a, b = corners[i], corners[j]
         yield ([a[0], b[0]], [a[1], b[1]], [a[2], b[2]])
 
 
-
-
 # ---------------------------------------------------------------------------
 # Voxel cloud
 # ---------------------------------------------------------------------------
+
 
 def render_voxel_cloud(
     mask: np.ndarray,
@@ -280,14 +321,12 @@ def render_voxel_cloud(
         ax = fig.add_subplot(111, projection="3d")
     ds = block_reduce_max(mask.astype(bool), downsample)
     if ds.sum() == 0:
-        ax.text2D(0.5, 0.5, "(no signal)", ha="center", va="center",
-                  transform=ax.transAxes)
+        ax.text2D(0.5, 0.5, "(no signal)", ha="center", va="center", transform=ax.transAxes)
         if title:
             ax.set_title(title, fontsize=11)
         return ax
     # matplotlib voxels() indexes as (X, Y, Z), so we transpose from (Z, Y, X).
-    ax.voxels(ds.transpose(2, 1, 0), facecolors=color, edgecolor=None,
-              alpha=alpha)
+    ax.voxels(ds.transpose(2, 1, 0), facecolors=color, edgecolor=None, alpha=alpha)
     nz, ny, nx = ds.shape
     # physical box aspect (accounts for anisotropic voxels + per-axis downsample)
     spacing = (
@@ -309,6 +348,7 @@ def render_voxel_cloud(
 # 2D MIP overlay (useful inside grid figures)
 # ---------------------------------------------------------------------------
 
+
 def mip_overlay(
     intensity: np.ndarray,
     mask: np.ndarray | None = None,
@@ -328,8 +368,9 @@ def mip_overlay(
         fig, ax = plt.subplots(figsize=(4, 4))
     mip = intensity.max(axis=z_axis)
     # numpy < 2.3 stubs type any(axis=...) as possibly a scalar; with an axis it is an array.
-    mip_mask = (np.zeros(mip.shape, dtype=bool) if mask is None
-                else cast(np.ndarray, mask.any(axis=z_axis)))
+    mip_mask = (
+        np.zeros(mip.shape, dtype=bool) if mask is None else cast(np.ndarray, mask.any(axis=z_axis))
+    )
     ax.imshow(overlay_rgb(mip, mip_mask, overlay_color, overlay_alpha))
     ax.set_xticks([])
     ax.set_yticks([])
@@ -372,11 +413,10 @@ def live_dead_mip(
             return m
         v_lo, v_hi = np.percentile(m, [lo, hi])
         m = np.clip((m - v_lo) / max(1e-9, v_hi - v_lo), 0, 1)
-        return m ** gamma
+        return m**gamma
 
     live_n = _to_norm(live)
-    rgb = (live_n[..., None] * lc[None, None, :] +
-           (1 - live_n[..., None]) * bg[None, None, :])
+    rgb = live_n[..., None] * lc[None, None, :] + (1 - live_n[..., None]) * bg[None, None, :]
 
     if dead is not None:
         dc = np.array(dead_color, dtype=float) / 255.0
@@ -433,24 +473,44 @@ def mip_grid(
     cell_kwargs = cell_kwargs or {}
 
     fig = plt.figure(figsize=figsize, facecolor=background)
-    gs = fig.add_gridspec(nrows + 1, ncols + 1,
-                          width_ratios=[0.18] + [1] * ncols,
-                          height_ratios=[0.18] + [1] * nrows,
-                          wspace=0.06, hspace=0.06)
+    gs = fig.add_gridspec(
+        nrows + 1,
+        ncols + 1,
+        width_ratios=[0.18] + [1] * ncols,
+        height_ratios=[0.18] + [1] * nrows,
+        wspace=0.06,
+        hspace=0.06,
+    )
 
     col_labels = col_labels or [str(c) for c in cols]
     row_labels = row_labels or [str(r) for r in rows]
 
     for ci, lab in enumerate(col_labels):
         ax = fig.add_subplot(gs[0, ci + 1])
-        ax.text(0.5, 0.4, lab, ha="center", va="center",
-                fontsize=13, fontweight="semibold", color=label_color)
+        ax.text(
+            0.5,
+            0.4,
+            lab,
+            ha="center",
+            va="center",
+            fontsize=13,
+            fontweight="semibold",
+            color=label_color,
+        )
         ax.axis("off")
     for ri, lab in enumerate(row_labels):
         ax = fig.add_subplot(gs[ri + 1, 0])
-        ax.text(0.5, 0.5, lab, ha="center", va="center",
-                fontsize=13, fontweight="semibold", color=label_color,
-                rotation=0)
+        ax.text(
+            0.5,
+            0.5,
+            lab,
+            ha="center",
+            va="center",
+            fontsize=13,
+            fontweight="semibold",
+            color=label_color,
+            rotation=0,
+        )
         ax.axis("off")
 
     for ri, r in enumerate(rows):
@@ -459,16 +519,22 @@ def mip_grid(
             cell = cells.get((r, c))
             if cell is None:
                 ax.set_facecolor("#f0f0f0")
-                ax.text(0.5, 0.5, "—", ha="center", va="center",
-                        transform=ax.transAxes, color=label_color,
-                        fontsize=14)
+                ax.text(
+                    0.5,
+                    0.5,
+                    "—",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                    color=label_color,
+                    fontsize=14,
+                )
                 ax.set_xticks([])
                 ax.set_yticks([])
             else:
                 render_func(ax=ax, **cell, **cell_kwargs)
     if title:
-        fig.suptitle(title, fontsize=15, fontweight="semibold",
-                     color=label_color)
+        fig.suptitle(title, fontsize=15, fontweight="semibold", color=label_color)
     return fig
 
 
@@ -500,12 +566,12 @@ def depth_coded_mip(
     z_idx = np.arange(nz)
     if z_axis == 0:
         depth = (vol_norm * z_idx[:, None, None]).sum(axis=0) / np.where(
-            vol_norm.sum(axis=0) == 0, 1, vol_norm.sum(axis=0))
+            vol_norm.sum(axis=0) == 0, 1, vol_norm.sum(axis=0)
+        )
     else:
-        depth = (vol_norm * np.arange(nz).reshape(
-            [1] * z_axis + [-1] + [1] * (vol.ndim - z_axis - 1))).sum(
-            axis=z_axis) / np.where(vol_norm.sum(axis=z_axis) == 0, 1,
-                                    vol_norm.sum(axis=z_axis))
+        depth = (
+            vol_norm * np.arange(nz).reshape([1] * z_axis + [-1] + [1] * (vol.ndim - z_axis - 1))
+        ).sum(axis=z_axis) / np.where(vol_norm.sum(axis=z_axis) == 0, 1, vol_norm.sum(axis=z_axis))
     depth_norm = depth / max(1, nz - 1)
     cmap_obj = plt.get_cmap(cmap)
     color = cmap_obj(depth_norm)[..., :3]
@@ -519,7 +585,8 @@ def depth_coded_mip(
 
 def layer_split_mip(
     volume: np.ndarray,
-    ax_top: Axes | None = None, ax_bot: Axes | None = None,
+    ax_top: Axes | None = None,
+    ax_bot: Axes | None = None,
     z_axis: int = 0,
     *,
     split: float = 0.5,
@@ -547,6 +614,7 @@ def layer_split_mip(
 # ---------------------------------------------------------------------------
 # Save helper for one-stop rendering
 # ---------------------------------------------------------------------------
+
 
 def save_isosurface(
     mask: np.ndarray,

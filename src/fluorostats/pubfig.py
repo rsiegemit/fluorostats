@@ -20,6 +20,7 @@ belong to the scripts that use this kit, not here. Usage::
     F.panel(ax, "a", "ground-truth recovery")
     F.save(fig, "fig1", out_dir)
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -37,9 +38,16 @@ from . import agreement
 
 # ---- Okabe-Ito palette (colourblind-safe) ----
 OKABE = {
-    "black": "#000000", "orange": "#E69F00", "sky": "#56B4E9", "green": "#009E73",
-    "yellow": "#F0E442", "blue": "#0072B2", "vermillion": "#D55E00", "purple": "#CC79A7",
-    "grey": "#999999", "lgrey": "#C4C9D0",
+    "black": "#000000",
+    "orange": "#E69F00",
+    "sky": "#56B4E9",
+    "green": "#009E73",
+    "yellow": "#F0E442",
+    "blue": "#0072B2",
+    "vermillion": "#D55E00",
+    "purple": "#CC79A7",
+    "grey": "#999999",
+    "lgrey": "#C4C9D0",
 }
 
 # One font scale for every compact figure (points): 5-7 pt for body text, with 8 pt
@@ -48,15 +56,15 @@ FS = {"title": 7, "label": 7, "tick": 6, "legend": 6, "annot": 6, "small": 5, "p
 
 # The house palette (the "house" theme and the CLI / depth / render figures).
 PALETTE = {
-    "primary":   "#3F6AB3",  # cool slate blue
-    "accent":    "#E25C5C",  # warm coral red
+    "primary": "#3F6AB3",  # cool slate blue
+    "accent": "#E25C5C",  # warm coral red
     "highlight": "#E8A946",  # soft amber
-    "muted":     "#9AA4B0",  # cool grey
-    "ink":       "#1F2937",  # deep blue-grey for text
-    "paper":     "#FCFCFA",  # off-white background
-    "grid":      "#E5E7EB",  # very light grey gridlines
+    "muted": "#9AA4B0",  # cool grey
+    "ink": "#1F2937",  # deep blue-grey for text
+    "paper": "#FCFCFA",  # off-white background
+    "grid": "#E5E7EB",  # very light grey gridlines
     "background": "#FCFCFA",
-    "panel":     "#FFFFFF",
+    "panel": "#FFFFFF",
 }
 
 MATERIAL_COLORS = {
@@ -68,10 +76,10 @@ MATERIAL_COLORS = {
 # Dark render palette (presentation slides)
 DARK_PALETTE = {
     "background": "#000000",
-    "mesh":       "#F5C518",   # rich yellow
-    "grid":       "#3A3A3A",
-    "ink":        "#FFFFFF",
-    "scalebar":   "#FFFFFF",
+    "mesh": "#F5C518",  # rich yellow
+    "grid": "#3A3A3A",
+    "ink": "#FFFFFF",
+    "scalebar": "#FFFFFF",
 }
 
 # Full text width in inches (372 pt = 130.74 mm). A figure authored at the width
@@ -90,8 +98,10 @@ def _compact_rc(font_scale: float) -> dict:
     fs = {k: v * font_scale for k, v in FS.items()}
     return {
         # dpi: preview at 200, export raster fallback at 600 (safe for small insets)
-        "figure.dpi": 200, "savefig.dpi": 600,
-        "pdf.fonttype": 42, "ps.fonttype": 42,   # embed TrueType, no Type-3, text stays selectable
+        "figure.dpi": 200,
+        "savefig.dpi": 600,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,  # embed TrueType, no Type-3, text stays selectable
         "svg.fonttype": "none",
         "font.family": "sans-serif",
         "font.sans-serif": [fam, "Arial", "Helvetica"],
@@ -99,53 +109,99 @@ def _compact_rc(font_scale: float) -> dict:
         "axes.unicode_minus": True,
         # 5-7 pt window: ticks 6, axis/panel titles 7, legend/annot 6
         "font.size": fs["tick"],
-        "axes.titlesize": fs["title"], "axes.labelsize": fs["label"],
-        "xtick.labelsize": fs["tick"], "ytick.labelsize": fs["tick"], "legend.fontsize": fs["legend"],
-        "lines.linewidth": 1.2, "lines.markersize": 4,
-        "axes.linewidth": 0.6, "axes.edgecolor": "#333333", "axes.titlepad": 4.0,
-        "axes.titlelocation": "left", "axes.titleweight": "regular",
-        "axes.spines.top": False, "axes.spines.right": False,   # despine everywhere
-        "xtick.direction": "out", "ytick.direction": "out",
-        "xtick.major.width": 0.6, "ytick.major.width": 0.6,
-        "xtick.major.size": 2.5, "ytick.major.size": 2.5,
-        "xtick.major.pad": 1.8, "ytick.major.pad": 1.8,
-        "axes.grid": False, "figure.facecolor": "white", "axes.facecolor": "white",
-        "savefig.facecolor": "white", "legend.frameon": False, "lines.solid_capstyle": "round",
+        "axes.titlesize": fs["title"],
+        "axes.labelsize": fs["label"],
+        "xtick.labelsize": fs["tick"],
+        "ytick.labelsize": fs["tick"],
+        "legend.fontsize": fs["legend"],
+        "lines.linewidth": 1.2,
+        "lines.markersize": 4,
+        "axes.linewidth": 0.6,
+        "axes.edgecolor": "#333333",
+        "axes.titlepad": 4.0,
+        "axes.titlelocation": "left",
+        "axes.titleweight": "regular",
+        "axes.spines.top": False,
+        "axes.spines.right": False,  # despine everywhere
+        "xtick.direction": "out",
+        "ytick.direction": "out",
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+        "xtick.major.size": 2.5,
+        "ytick.major.size": 2.5,
+        "xtick.major.pad": 1.8,
+        "ytick.major.pad": 1.8,
+        "axes.grid": False,
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "savefig.facecolor": "white",
+        "legend.frameon": False,
+        "lines.solid_capstyle": "round",
     }
 
 
 # The "house" theme's settings other than font sizes.
 _HOUSE_RC = {
     # Figure
-    "figure.facecolor": PALETTE["paper"], "figure.edgecolor": PALETTE["paper"],
-    "figure.dpi": 110, "savefig.dpi": 220, "savefig.bbox": "tight",
-    "savefig.facecolor": PALETTE["paper"], "savefig.edgecolor": "none",
+    "figure.facecolor": PALETTE["paper"],
+    "figure.edgecolor": PALETTE["paper"],
+    "figure.dpi": 110,
+    "savefig.dpi": 220,
+    "savefig.bbox": "tight",
+    "savefig.facecolor": PALETTE["paper"],
+    "savefig.edgecolor": "none",
     # Axes
-    "axes.facecolor": PALETTE["panel"], "axes.edgecolor": PALETTE["ink"],
-    "axes.labelcolor": PALETTE["ink"], "axes.titlecolor": PALETTE["ink"],
-    "axes.titleweight": "semibold", "axes.titlepad": 10, "axes.labelpad": 6,
-    "axes.linewidth": 0.9, "axes.spines.top": False, "axes.spines.right": False,
-    "axes.grid": True, "axes.grid.axis": "y", "axes.axisbelow": True,
-    "axes.prop_cycle": cycler(color=[PALETTE["primary"], PALETTE["accent"],
-                                     PALETTE["highlight"], PALETTE["muted"],
-                                     "#6BAA75", "#9A6FB0"]),
+    "axes.facecolor": PALETTE["panel"],
+    "axes.edgecolor": PALETTE["ink"],
+    "axes.labelcolor": PALETTE["ink"],
+    "axes.titlecolor": PALETTE["ink"],
+    "axes.titleweight": "semibold",
+    "axes.titlepad": 10,
+    "axes.labelpad": 6,
+    "axes.linewidth": 0.9,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.grid": True,
+    "axes.grid.axis": "y",
+    "axes.axisbelow": True,
+    "axes.prop_cycle": cycler(
+        color=[
+            PALETTE["primary"],
+            PALETTE["accent"],
+            PALETTE["highlight"],
+            PALETTE["muted"],
+            "#6BAA75",
+            "#9A6FB0",
+        ]
+    ),
     # Grid
-    "grid.color": PALETTE["grid"], "grid.linewidth": 0.7, "grid.linestyle": "-",
+    "grid.color": PALETTE["grid"],
+    "grid.linewidth": 0.7,
+    "grid.linestyle": "-",
     # Ticks
-    "xtick.color": PALETTE["ink"], "ytick.color": PALETTE["ink"],
-    "xtick.direction": "out", "ytick.direction": "out",
-    "xtick.major.size": 4, "ytick.major.size": 4,
-    "xtick.major.width": 0.8, "ytick.major.width": 0.8,
+    "xtick.color": PALETTE["ink"],
+    "ytick.color": PALETTE["ink"],
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.major.size": 4,
+    "ytick.major.size": 4,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
     # Typography (sizes come from the font scale)
     "font.family": "sans-serif",
     "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
     "figure.titleweight": "semibold",
     # Legend
-    "legend.frameon": False, "legend.handlelength": 1.6, "legend.handletextpad": 0.6,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.6,
     "legend.borderpad": 0.4,
     # Lines / markers
-    "lines.linewidth": 1.8, "lines.markersize": 6, "lines.markeredgewidth": 0.6,
-    "patch.linewidth": 0.6, "patch.edgecolor": PALETTE["ink"],
+    "lines.linewidth": 1.8,
+    "lines.markersize": 6,
+    "lines.markeredgewidth": 0.6,
+    "patch.linewidth": 0.6,
+    "patch.edgecolor": PALETTE["ink"],
     # Image
     "image.cmap": "viridis",
 }
@@ -154,10 +210,16 @@ _HOUSE_RC = {
 def _house_rc(font_scale: float) -> dict:
     """The "house" theme: 11 pt type (times ``font_scale``), PALETTE colours, y grid."""
     base = 11.0 * font_scale
-    return {**_HOUSE_RC,
-            "font.size": base, "axes.titlesize": base * 1.15, "axes.labelsize": base * 1.0,
-            "xtick.labelsize": base * 0.85, "ytick.labelsize": base * 0.85,
-            "legend.fontsize": base * 0.9, "figure.titlesize": base * 1.4}
+    return {
+        **_HOUSE_RC,
+        "font.size": base,
+        "axes.titlesize": base * 1.15,
+        "axes.labelsize": base * 1.0,
+        "xtick.labelsize": base * 0.85,
+        "ytick.labelsize": base * 0.85,
+        "legend.fontsize": base * 0.9,
+        "figure.titlesize": base * 1.4,
+    }
 
 
 # Figure themes by name: each maps a font scale to the rcParams it sets.
@@ -197,9 +259,15 @@ def lighten(color: str, amount: float = 0.2) -> str:
     return mcolors.to_hex((min(1, r + amount), min(1, g + amount), min(1, b + amount)))
 
 
-def panel(ax: plt.Axes, label: str, title: str | None = None, dx: float | None = None,
-          dy: float | None = None, pad: tuple[float, float] = (-16, 5),
-          xanchor: float | None = None) -> None:
+def panel(
+    ax: plt.Axes,
+    label: str,
+    title: str | None = None,
+    dx: float | None = None,
+    dy: float | None = None,
+    pad: tuple[float, float] = (-16, 5),
+    xanchor: float | None = None,
+) -> None:
     """Panel label: a bold lowercase letter at a fixed offset (points) from the
     axis top-left, plus an optional short roman descriptor beside it.
 
@@ -212,29 +280,62 @@ def panel(ax: plt.Axes, label: str, title: str | None = None, dx: float | None =
     tick-label widths share one page x instead of drifting with each axes frame.
     """
     if xanchor is None:
-        ax.annotate(label, xy=(0, 1), xycoords="axes fraction",
-                    xytext=pad, textcoords="offset points",
-                    fontsize=FS["panel"], fontweight="bold", va="baseline", ha="left")
+        ax.annotate(
+            label,
+            xy=(0, 1),
+            xycoords="axes fraction",
+            xytext=pad,
+            textcoords="offset points",
+            fontsize=FS["panel"],
+            fontweight="bold",
+            va="baseline",
+            ha="left",
+        )
         if title:
-            ax.annotate(title, xy=(0, 1), xycoords="axes fraction",
-                        xytext=(pad[0] + 9, pad[1]), textcoords="offset points",
-                        fontsize=FS["label"], fontweight="regular", color="#222",
-                        va="baseline", ha="left")
+            ax.annotate(
+                title,
+                xy=(0, 1),
+                xycoords="axes fraction",
+                xytext=(pad[0] + 9, pad[1]),
+                textcoords="offset points",
+                fontsize=FS["label"],
+                fontweight="regular",
+                color="#222",
+                va="baseline",
+                ha="left",
+            )
         return
     fig = ax.get_figure()
     assert fig is not None  # an Axes is always created inside a figure
     trans = mtransforms.blended_transform_factory(fig.transFigure, ax.transAxes)
-    ax.annotate(label, xy=(xanchor, 1), xycoords=trans,
-                xytext=(0, pad[1]), textcoords="offset points",
-                fontsize=FS["panel"], fontweight="bold", va="baseline", ha="left")
+    ax.annotate(
+        label,
+        xy=(xanchor, 1),
+        xycoords=trans,
+        xytext=(0, pad[1]),
+        textcoords="offset points",
+        fontsize=FS["panel"],
+        fontweight="bold",
+        va="baseline",
+        ha="left",
+    )
     if title:
-        ax.annotate(title, xy=(xanchor, 1), xycoords=trans,
-                    xytext=(9, pad[1]), textcoords="offset points",
-                    fontsize=FS["label"], fontweight="regular", color="#222",
-                    va="baseline", ha="left")
+        ax.annotate(
+            title,
+            xy=(xanchor, 1),
+            xycoords=trans,
+            xytext=(9, pad[1]),
+            textcoords="offset points",
+            fontsize=FS["label"],
+            fontweight="regular",
+            color="#222",
+            va="baseline",
+            ha="left",
+        )
 
 
 # ---- image-panel helpers (shared so every figure renders images identically) ----
+
 
 def imnorm(a: ArrayLike, lo: float = 1, hi: float = 99.5) -> np.ndarray:
     """Percentile-normalise an intensity image to [0, 1] for display."""
@@ -266,8 +367,9 @@ def outline(ax: plt.Axes, labels: np.ndarray, rgb: Sequence[float], width: int =
     ax.imshow(ov, interpolation="nearest")
 
 
-def composite2ch(live: np.ndarray, dead: np.ndarray, live_gain: float = 1.0,
-                 dead_gain: float = 1.0) -> np.ndarray:
+def composite2ch(
+    live: np.ndarray, dead: np.ndarray, live_gain: float = 1.0, dead_gain: float = 1.0
+) -> np.ndarray:
     """Green (live) / magenta (dead) two-channel RGB composite, colourblind-safe."""
     g = imnorm(live) * live_gain
     r = imnorm(dead) * dead_gain
@@ -281,8 +383,15 @@ def fill_mask(ax: plt.Axes, mask: np.ndarray, rgb: Sequence[float], alpha: float
     ax.imshow(ov, interpolation="nearest")
 
 
-def scalebar(ax: plt.Axes, length_px: float, label: str, loc: str = "lower right",
-             color: str = "white", pad: float = 0.07, center_label: bool = False) -> None:
+def scalebar(
+    ax: plt.Axes,
+    length_px: float,
+    label: str,
+    loc: str = "lower right",
+    color: str = "white",
+    pad: float = 0.07,
+    center_label: bool = False,
+) -> None:
     """Draw a scale bar on an image axis; ``length_px`` in data (pixel) units.
 
     The label is anchored to the bar end nearest the image edge (right-aligned for
@@ -302,11 +411,13 @@ def scalebar(ax: plt.Axes, length_px: float, label: str, loc: str = "lower right
         tx, tha = xr + length_px / 2, "center"
     else:
         tx, tha = (xr + length_px if right else xr), ("right" if right else "left")
-    ax.text(tx, yb - 0.02 * H, label, color=color, ha=tha, va="bottom",
-            fontsize=6, fontweight="bold")
+    ax.text(
+        tx, yb - 0.02 * H, label, color=color, ha=tha, va="bottom", fontsize=6, fontweight="bold"
+    )
 
 
 # ---- export ----
+
 
 def save_figure(fig: plt.Figure, outputs: dict, bbox_inches: str | None = None) -> None:
     """Write ``fig`` to each path of ``outputs`` (``{path: dpi}``; dpi None = the
@@ -321,7 +432,9 @@ def save_figure(fig: plt.Figure, outputs: dict, bbox_inches: str | None = None) 
     plt.close(fig)
 
 
-def save(fig: plt.Figure, name: str, folder: str | Path, tight: bool = True, pad: float = 0.4) -> None:
+def save(
+    fig: plt.Figure, name: str, folder: str | Path, tight: bool = True, pad: float = 0.4
+) -> None:
     """Export an editable vector PDF + 600-dpi PNG at the figure's exact size.
 
     Never crops with ``bbox_inches='tight'``, which silently rescales the physical
@@ -348,11 +461,22 @@ def caption(name: str, text: str, folder: str | Path) -> None:
 
 # ---- data panels ----
 
-def lollipop(ax: plt.Axes, labels: Sequence[str], values: Sequence[float], *,
-             colors: Sequence | None = None, floor: float | None = None,
-             los: Sequence[float] | None = None, his: Sequence[float] | None = None,
-             ascending: bool = False, fmt: str = "{:.3f}", label_fs: float = 6,
-             value_fs: float = 5.6, highlight: str | None = "fluorostats") -> list[str]:
+
+def lollipop(
+    ax: plt.Axes,
+    labels: Sequence[str],
+    values: Sequence[float],
+    *,
+    colors: Sequence | None = None,
+    floor: float | None = None,
+    los: Sequence[float] | None = None,
+    his: Sequence[float] | None = None,
+    ascending: bool = False,
+    fmt: str = "{:.3f}",
+    label_fs: float = 6,
+    value_fs: float = 5.6,
+    highlight: str | None = "fluorostats",
+) -> list[str]:
     """Horizontal dot/lollipop plot with a zoomed x-axis for near-max values
     (encode magnitude by position, not bar area). Use instead of bars when every
     value hugs the axis maximum (correlation / accuracy panels).
@@ -369,18 +493,39 @@ def lollipop(ax: plt.Axes, labels: Sequence[str], values: Sequence[float], *,
     lo_x = floor if floor is not None else max(0.0, min(values) - 0.03)
     hi_x = max(values) + (max(values) - lo_x) * 0.14
     for row, i in enumerate(idx):
-        c = (colors[i] if colors else (OKABE["blue"]
-             if highlight and highlight in str(labels[i]).lower() else OKABE["grey"]))
-        ax.plot([lo_x, values[i]], [row, row], color=c, lw=1.0, alpha=0.55, zorder=2,
-                solid_capstyle="butt")
+        c = (
+            colors[i]
+            if colors
+            else (
+                OKABE["blue"]
+                if highlight and highlight in str(labels[i]).lower()
+                else OKABE["grey"]
+            )
+        )
+        ax.plot(
+            [lo_x, values[i]],
+            [row, row],
+            color=c,
+            lw=1.0,
+            alpha=0.55,
+            zorder=2,
+            solid_capstyle="butt",
+        )
         ax.plot(values[i], row, "o", color=c, ms=5, mec="white", mew=0.5, zorder=4)
         if los is not None and his is not None:
             ax.plot([los[i], his[i]], [row, row], color=c, lw=1.4, alpha=0.9, zorder=3)
         # offset the value label a few points off the dot so it never strikes
         # through the marker; offset points are axis-scale robust
-        ax.annotate(fmt.format(values[i]), (values[i], row), xytext=(5, 0),
-                    textcoords="offset points", va="center", ha="left",
-                    fontsize=value_fs, color="#333")
+        ax.annotate(
+            fmt.format(values[i]),
+            (values[i], row),
+            xytext=(5, 0),
+            textcoords="offset points",
+            va="center",
+            ha="left",
+            fontsize=value_fs,
+            color="#333",
+        )
     ax.set_yticks(range(len(order)))
     ax.set_yticklabels(order, fontsize=label_fs)
     ax.set_xlim(lo_x, hi_x)
@@ -388,8 +533,16 @@ def lollipop(ax: plt.Axes, labels: Sequence[str], values: Sequence[float], *,
     return order
 
 
-def bland_altman(ax: plt.Axes, a: ArrayLike, b: ArrayLike, *, color: str | None = None,
-                 loa_k: float = 1.96, label: str = "", annotate: bool = True) -> tuple[float, float]:
+def bland_altman(
+    ax: plt.Axes,
+    a: ArrayLike,
+    b: ArrayLike,
+    *,
+    color: str | None = None,
+    loa_k: float = 1.96,
+    label: str = "",
+    annotate: bool = True,
+) -> tuple[float, float]:
     """Bland-Altman agreement panel: points, bias line and +/- limits of agreement.
 
     Numbers come from `fluorostats.agreement.bland_altman` (difference = a - b,
@@ -400,15 +553,23 @@ def bland_altman(ax: plt.Axes, a: ArrayLike, b: ArrayLike, *, color: str | None 
     ba = agreement.bland_altman(a, b)
     bias = ba["bias"]
     loa = float(loa_k * ba["sd_diff"])
-    ax.scatter(ba["mean_vals"], ba["diff_vals"], s=20, color=color, edgecolor="none",
-               alpha=0.75, zorder=3)
+    ax.scatter(
+        ba["mean_vals"], ba["diff_vals"], s=20, color=color, edgecolor="none", alpha=0.75, zorder=3
+    )
     ax.axhline(bias, color=OKABE["vermillion"], lw=1.1, zorder=2)
     ax.axhline(bias + loa, color="#888", ls="--", lw=0.8)
     ax.axhline(bias - loa, color="#888", ls="--", lw=0.8)
     ax.axhline(0, color="black", lw=0.5, alpha=0.4)
     if annotate:
-        ax.text(0.02, 0.96, f"bias {bias:+.3f}\n±{loa:.3f} (95% LoA){label}",
-                transform=ax.transAxes, va="top", fontsize=5.6, color="#333")
+        ax.text(
+            0.02,
+            0.96,
+            f"bias {bias:+.3f}\n±{loa:.3f} (95% LoA){label}",
+            transform=ax.transAxes,
+            va="top",
+            fontsize=5.6,
+            color="#333",
+        )
     return bias, loa
 
 

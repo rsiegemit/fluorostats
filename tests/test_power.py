@@ -39,8 +39,7 @@ def test_power_curve_monotone_for_signal():
 def test_fdr_power_curve_returns_per_metric_rows():
     rng = np.random.default_rng(0)
     a_metrics = {"m1": rng.normal(size=10), "m2": rng.normal(size=10)}
-    b_metrics = {"m1": rng.normal(loc=3, size=10),
-                 "m2": rng.normal(loc=0, size=10)}
+    b_metrics = {"m1": rng.normal(loc=3, size=10), "m2": rng.normal(loc=0, size=10)}
     df = fdr_power_curve(a_metrics, b_metrics, ns=[6, 12], n_sims=150, seed=1)
     assert set(df["metric"]) == {"m1", "m2"}
     assert set(df["n"]) == {6, 12}
@@ -54,8 +53,12 @@ def test_power_empty_group_is_nan_everywhere():
     # A metric with no measured value in a group has no power estimate: NaN from
     # every entry point (fdr_power_curve used to report 0.0).
     assert np.isnan(power.bootstrap_power(np.array([]), np.array([1.0, 2.0]), n=5, n_sims=10))
-    r = power.fdr_power_curve({"m": [], "k": [1.0, 2.0, 3.0]},
-                              {"m": [1.0, 2.0, 3.0], "k": [4.0, 5.0, 6.0]}, ns=[4], n_sims=10)
+    r = power.fdr_power_curve(
+        {"m": [], "k": [1.0, 2.0, 3.0]},
+        {"m": [1.0, 2.0, 3.0], "k": [4.0, 5.0, 6.0]},
+        ns=[4],
+        n_sims=10,
+    )
     assert np.isnan(r.set_index("metric").loc["m", "power"])
     assert 0.0 <= r.set_index("metric").loc["k", "power"] <= 1.0
 

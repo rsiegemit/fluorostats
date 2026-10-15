@@ -56,19 +56,23 @@ def _record_calibration(meta: dict, axes: str, path: Path) -> None:
     read = meta.pop("_read_axes", set())
     noted = meta.pop("_axis_source", {})
     meta["voxel_size_source"] = ",".join(
-        f"{a}:{noted.get(a) or ('file' if a in read else 'default')}" for a in axes)
+        f"{a}:{noted.get(a) or ('file' if a in read else 'default')}" for a in axes
+    )
     missing = [a for a in axes if a not in read and a not in noted]
     if missing:
         warnings.warn(
             f"{path.name}: no {'/'.join(missing)} calibration found in the file; assuming "
             "1.0 µm per pixel on that axis, so lengths, areas, volumes and densities along "
             "it are in pixel units. Check voxel_size_um.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning,
+            stacklevel=3,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def load_auto(path: str | Path) -> tuple[np.ndarray, dict]:
     """Auto-detect format and load as volume or image.
@@ -87,8 +91,12 @@ def load_auto(path: str | Path) -> tuple[np.ndarray, dict]:
     except Exception as exc:
         # A genuine volume-read failure (not a format we recognise as 2D) should not
         # be silently retried as a 2D read — surface it so a real error is visible.
-        warnings.warn(f"load_volume failed for {path.name} ({type(exc).__name__}: {exc}); "
-                      "falling back to a 2D image read.", RuntimeWarning, stacklevel=2)
+        warnings.warn(
+            f"load_volume failed for {path.name} ({type(exc).__name__}: {exc}); "
+            "falling back to a 2D image read.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return load_image(path)
     if arr.shape[1] == 1:  # a single plane: (C, 1, Y, X) -> (C, Y, X), no z calibration
         arr = arr[:, 0, :, :]
@@ -125,8 +133,7 @@ def _read_volume(path: Path) -> tuple[np.ndarray, dict]:
     fmt = FORMATS.get(suffix)
     if fmt is None or fmt.volume is None:
         raise ValueError(
-            f"Unsupported volume format: {suffix}\n"
-            f"Supported: {', '.join(sorted(VOLUME_SUFFIXES))}"
+            f"Unsupported volume format: {suffix}\nSupported: {', '.join(sorted(VOLUME_SUFFIXES))}"
         )
     return fmt.volume(path)
 
@@ -155,8 +162,10 @@ def read_voxel_size(path: str | Path) -> tuple[tuple[float, ...], str]:
     fmt = FORMATS.get(path.suffix.lower())
     if fmt is None or fmt.volume_meta is None:
         readable = ", ".join(sorted(ext for ext, f in FORMATS.items() if f.volume_meta))
-        raise NotImplementedError(f"read_voxel_size reads {readable} only; use load_volume for "
-                                  f"{path.name} and take meta['voxel_size_um'].")
+        raise NotImplementedError(
+            f"read_voxel_size reads {readable} only; use load_volume for "
+            f"{path.name} and take meta['voxel_size_um']."
+        )
     meta = fmt.volume_meta(path)
     _record_calibration(meta, "zyx", path)
     return meta["voxel_size_um"], meta["voxel_size_source"]
@@ -181,10 +190,12 @@ def supported_formats() -> dict[str, str]:
 # Keyence BZ-X export folder
 # ---------------------------------------------------------------------------
 
+
 def _load_keyence_volume(path: Path) -> tuple[np.ndarray, dict]:
     arr, meta = keyence.load_keyence_stack(path)
     meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
-        {"z"} if meta.get("z_step_um") else set())
+        {"z"} if meta.get("z_step_um") else set()
+    )
     # keyence.parse_gci warns that the Stack/Pitch unit is assumed.
     meta["_axis_source"] = {"z": "file-assumed-0.1um"} if meta.get("z_step_um") else {}
     chd = meta.get("channels") or {}
@@ -195,6 +206,7 @@ def _load_keyence_volume(path: Path) -> tuple[np.ndarray, dict]:
 # ---------------------------------------------------------------------------
 # NumPy .npy
 # ---------------------------------------------------------------------------
+
 
 def _load_npy_volume(path: Path) -> tuple[np.ndarray, dict]:
     data = np.load(str(path))
@@ -214,9 +226,14 @@ def _load_npy_image(path: Path) -> tuple[np.ndarray, dict]:
 # Standard images (PNG, JPEG, BMP)
 # ---------------------------------------------------------------------------
 
+
 def _load_standard_image(path: Path) -> tuple[np.ndarray, dict]:
     data = iio.imread(str(path))
-    meta: dict = {"voxel_size_um": (1.0, 1.0), "channel_names": [], "format": path.suffix.lstrip(".").lower()}
+    meta: dict = {
+        "voxel_size_um": (1.0, 1.0),
+        "channel_names": [],
+        "format": path.suffix.lstrip(".").lower(),
+    }
     data = canonicalize_image(data, meta)
     return data, meta
 
@@ -228,38 +245,60 @@ def _load_standard_image(path: Path) -> tuple[np.ndarray, dict]:
 # `supported_formats` reports. Defined last so it can name the loaders above.
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Format:
     """How one file suffix is read."""
 
     description: str
-    volume: Callable[[Path], tuple[np.ndarray, dict]] | None   # -> (C, Z, Y, X)
-    image: Callable[[Path], tuple[np.ndarray, dict]] | None    # -> (C, Y, X)
-    package: str | None = None    # optional vendor reader distribution
-    extra: str | None = None      # pyproject extra that installs it
-    volume_meta: Callable[[Path], dict] | None = None   # volume meta without pixels
+    volume: Callable[[Path], tuple[np.ndarray, dict]] | None  # -> (C, Z, Y, X)
+    image: Callable[[Path], tuple[np.ndarray, dict]] | None  # -> (C, Y, X)
+    package: str | None = None  # optional vendor reader distribution
+    extra: str | None = None  # pyproject extra that installs it
+    volume_meta: Callable[[Path], dict] | None = None  # volume meta without pixels
 
 
 FORMATS: dict[str, Format] = {
-    ".tif": Format("TIFF / OME-TIFF", io_vendors.load_tiff_volume, io_vendors.load_tiff_image,
-                   volume_meta=io_vendors.read_tiff_volume_meta),
-    ".tiff": Format("TIFF / OME-TIFF", io_vendors.load_tiff_volume, io_vendors.load_tiff_image,
-                    volume_meta=io_vendors.read_tiff_volume_meta),
+    ".tif": Format(
+        "TIFF / OME-TIFF",
+        io_vendors.load_tiff_volume,
+        io_vendors.load_tiff_image,
+        volume_meta=io_vendors.read_tiff_volume_meta,
+    ),
+    ".tiff": Format(
+        "TIFF / OME-TIFF",
+        io_vendors.load_tiff_volume,
+        io_vendors.load_tiff_image,
+        volume_meta=io_vendors.read_tiff_volume_meta,
+    ),
     ".png": Format("PNG", None, _load_standard_image),
     ".jpg": Format("JPEG", None, _load_standard_image),
     ".jpeg": Format("JPEG", None, _load_standard_image),
     ".bmp": Format("BMP", None, _load_standard_image),
     ".npy": Format("NumPy array", _load_npy_volume, _load_npy_image),
-    ".oib": Format("Olympus FluoView (OIB)", io_vendors.load_olympus_volume, None,
-                   "oiffile", READER_EXTRAS["oiffile"]),
-    ".oif": Format("Olympus FluoView (OIF)", io_vendors.load_olympus_volume, None,
-                   "oiffile", READER_EXTRAS["oiffile"]),
-    ".czi": Format("Zeiss ZEN (CZI)", io_vendors.load_czi_volume, None,
-                   "czifile", READER_EXTRAS["czifile"]),
-    ".nd2": Format("Nikon NIS-Elements (ND2)", io_vendors.load_nd2_volume, None,
-                   "nd2", READER_EXTRAS["nd2"]),
-    ".lif": Format("Leica LAS X (LIF)", io_vendors.load_lif_volume, None,
-                   "readlif", READER_EXTRAS["readlif"]),
+    ".oib": Format(
+        "Olympus FluoView (OIB)",
+        io_vendors.load_olympus_volume,
+        None,
+        "oiffile",
+        READER_EXTRAS["oiffile"],
+    ),
+    ".oif": Format(
+        "Olympus FluoView (OIF)",
+        io_vendors.load_olympus_volume,
+        None,
+        "oiffile",
+        READER_EXTRAS["oiffile"],
+    ),
+    ".czi": Format(
+        "Zeiss ZEN (CZI)", io_vendors.load_czi_volume, None, "czifile", READER_EXTRAS["czifile"]
+    ),
+    ".nd2": Format(
+        "Nikon NIS-Elements (ND2)", io_vendors.load_nd2_volume, None, "nd2", READER_EXTRAS["nd2"]
+    ),
+    ".lif": Format(
+        "Leica LAS X (LIF)", io_vendors.load_lif_volume, None, "readlif", READER_EXTRAS["readlif"]
+    ),
 }
 
 
@@ -268,8 +307,8 @@ class DirectoryFormat:
     """How one kind of folder export (read by ``load_volume``) is recognised and read."""
 
     description: str
-    probe: Callable[[Path], bool]                          # True if the folder is this kind
-    volume: Callable[[Path], tuple[np.ndarray, dict]]      # -> (C, Z, Y, X)
+    probe: Callable[[Path], bool]  # True if the folder is this kind
+    volume: Callable[[Path], tuple[np.ndarray, dict]]  # -> (C, Z, Y, X)
 
 
 DIRECTORY_FORMATS: tuple[DirectoryFormat, ...] = (

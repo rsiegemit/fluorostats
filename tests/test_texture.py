@@ -11,8 +11,8 @@ from fluorostats import texture
 # --------------------------------------------------------------------------- #
 def test_orientation_stripes_vs_isotropic():
     yy, xx = np.mgrid[0:128, 0:128]
-    stripes = np.sin(yy / 3.0).astype(float)                 # aligned along x
-    blob = np.exp(-((yy - 64) ** 2 + (xx - 64) ** 2) / (2 * 25.0 ** 2))
+    stripes = np.sin(yy / 3.0).astype(float)  # aligned along x
+    blob = np.exp(-((yy - 64) ** 2 + (xx - 64) ** 2) / (2 * 25.0**2))
     a_str = texture.orientation_anisotropy(stripes)
     a_iso = texture.orientation_anisotropy(blob)
     assert a_str["coherence"] > 0.5
@@ -42,6 +42,7 @@ def test_orientation_matches_regionprops_convention(theta):
     # Parallel stripes and an ellipse along the same axis report the same angle as
     # objects.object_shape_metrics (regionprops): one convention for both modules.
     from fluorostats.objects import object_shape_metrics
+
     yy, xx = np.mgrid[0:129, 0:129] - 64.0
     d = np.array([np.cos(np.radians(theta)), np.sin(np.radians(theta))])  # (row, col)
     along, across = yy * d[0] + xx * d[1], -yy * d[1] + xx * d[0]
@@ -58,9 +59,13 @@ def test_orientation_matches_regionprops_convention(theta):
 def test_orientation_near_axis_stays_in_half_open_range(monkeypatch, jxy):
     # A principal axis a rounding error off vertical must read 0, never 180.0.
     import skimage.feature
+
     ones = np.ones((8, 8))
-    monkeypatch.setattr(skimage.feature, "structure_tensor",
-                        lambda img, sigma, order: (0.0 * ones, jxy * ones, ones))
+    monkeypatch.setattr(
+        skimage.feature,
+        "structure_tensor",
+        lambda img, sigma, order: (0.0 * ones, jxy * ones, ones),
+    )
     got = texture.orientation_anisotropy(np.eye(8))["dominant_orientation_deg"]
     assert 0.0 <= got < 1e-9
 
@@ -71,7 +76,7 @@ def test_orientation_near_axis_stays_in_half_open_range(monkeypatch, jxy):
 def test_mesh_size_grid_and_scaling():
     m = np.zeros((100, 100), bool)
     m[::10, :] = True
-    m[:, ::10] = True                                        # 10-px mesh grid
+    m[:, ::10] = True  # 10-px mesh grid
     s1 = texture.mesh_size(m, voxel_size_um=1.0)
     s2 = texture.mesh_size(m, voxel_size_um=2.0)
     assert s1 > 0
@@ -79,8 +84,8 @@ def test_mesh_size_grid_and_scaling():
 
 
 def test_mesh_size_degenerate():
-    assert np.isnan(texture.mesh_size(np.zeros((10, 10), bool)))   # empty
-    assert np.isnan(texture.mesh_size(np.ones((10, 10), bool)))    # full
+    assert np.isnan(texture.mesh_size(np.zeros((10, 10), bool)))  # empty
+    assert np.isnan(texture.mesh_size(np.ones((10, 10), bool)))  # full
 
 
 # --------------------------------------------------------------------------- #
@@ -94,8 +99,8 @@ def test_orientation_order_aligned_vs_random():
     orr = texture.orientation_order(rand)
     assert oa["order"] == pytest.approx(1.0, abs=1e-6)
     assert oa["mean_orientation_deg"] == pytest.approx(30.0, abs=1.0)
-    assert oa["alignment"] == pytest.approx(1.0, abs=1e-6)       # parallel to reference
-    assert orr["order"] < 0.2                                    # random -> low order
+    assert oa["alignment"] == pytest.approx(1.0, abs=1e-6)  # parallel to reference
+    assert orr["order"] < 0.2  # random -> low order
     # perpendicular reference -> alignment ≈ -1
     perp = texture.orientation_order(aligned, reference_deg=120.0)
     assert perp["alignment"] == pytest.approx(-1.0, abs=1e-6)

@@ -28,7 +28,7 @@ def test_instance_f1_perfect_match():
 def test_instance_f1_missing_one_object():
     gt = _two_labeled_blobs()
     pred = gt.copy()
-    pred[pred == 2] = 0   # miss object 2
+    pred[pred == 2] = 0  # miss object 2
     r = instance_f1(pred, gt)
     assert r["tp"] == 1 and r["fn"] == 1
     assert r["recall"] == pytest.approx(0.5)
@@ -37,7 +37,7 @@ def test_instance_f1_missing_one_object():
 def test_instance_f1_false_positive():
     gt = _two_labeled_blobs()
     pred = gt.copy()
-    pred[0:3, 0:3] = 3    # spurious extra object
+    pred[0:3, 0:3] = 3  # spurious extra object
     r = instance_f1(pred, gt)
     assert r["fp"] >= 1
     assert r["precision"] < 1.0
@@ -53,12 +53,13 @@ def test_average_precision_perfect():
 # objects: watershed split + clear border
 # ---------------------------------------------------------------------------
 
+
 def test_watershed_splits_touching_blobs():
     # two overlapping disks forming a dumbbell -> CC labeling sees 1, watershed 2
     mask = np.zeros((40, 70), bool)
     yy, xx = np.ogrid[:40, :70]
-    mask |= (yy - 20) ** 2 + (xx - 25) ** 2 <= 13 ** 2
-    mask |= (yy - 20) ** 2 + (xx - 45) ** 2 <= 13 ** 2
+    mask |= (yy - 20) ** 2 + (xx - 25) ** 2 <= 13**2
+    mask |= (yy - 20) ** 2 + (xx - 45) ** 2 <= 13**2
     _, n_cc = label_3d(mask)
     _, n_ws = watershed_split(mask, min_distance=5)
     assert n_cc == 1
@@ -67,16 +68,16 @@ def test_watershed_splits_touching_blobs():
 
 def test_clear_border_removes_edge_objects():
     lab = np.zeros((30, 30), int)
-    lab[0:5, 10:15] = 1     # touches top border
-    lab[12:18, 12:18] = 2   # interior
+    lab[0:5, 10:15] = 1  # touches top border
+    lab[12:18, 12:18] = 2  # interior
     _, n = clear_border_labels(lab)
-    assert n == 1           # only the interior object survives
+    assert n == 1  # only the interior object survives
 
 
 def test_validate_empty_gt_and_double_claim():
     pred = np.zeros((10, 10), int)
     pred[1:4, 1:4] = 1
-    assert validate.match_instances(pred, np.zeros((10, 10), int))["fp"] == 1   # no GT -> all FP
+    assert validate.match_instances(pred, np.zeros((10, 10), int))["fp"] == 1  # no GT -> all FP
     # two predictions overlapping ONE gt -> the 2nd hits an already-matched gt (continue branch)
     gt = np.zeros((10, 10), int)
     gt[2:8, 2:8] = 1
@@ -87,12 +88,15 @@ def test_validate_empty_gt_and_double_claim():
     assert r["tp"] <= 1
 
 
-@pytest.mark.parametrize("pred,gt,expected", [
-    ([[1, 1, 0, 0]], [[1, 0, 0, 0]], 2 / 3),
-    ([[3, 0, 0, 0]], [[0, 0, 7, 0]], 0.0),
-    ([[0, 0]], [[0, 0]], 1.0),
-    ([[2, 5]], [[1, 1]], 1.0),
-])
+@pytest.mark.parametrize(
+    "pred,gt,expected",
+    [
+        ([[1, 1, 0, 0]], [[1, 0, 0, 0]], 2 / 3),
+        ([[3, 0, 0, 0]], [[0, 0, 7, 0]], 0.0),
+        ([[0, 0]], [[0, 0]], 1.0),
+        ([[2, 5]], [[1, 1]], 1.0),
+    ],
+)
 def test_dice_scores_foreground_overlap(pred, gt, expected):
     assert validate.dice(np.array(pred), np.array(gt)) == pytest.approx(expected)
     assert isinstance(validate.dice(np.array(pred), np.array(gt)), float)

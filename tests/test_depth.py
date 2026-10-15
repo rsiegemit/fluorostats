@@ -25,6 +25,7 @@ def _ramp_volume(per_slice, ny=4, nx=5):
 # intensity_depth_profile
 # ---------------------------------------------------------------------------
 
+
 def test_profile_mean_and_depth_axis():
     vol = _ramp_volume([10, 8, 6, 4])
     prof = intensity_depth_profile(vol, voxel_size_um=5.0)
@@ -56,6 +57,7 @@ def test_median_reducer_ignores_outlier():
 # subtract_background
 # ---------------------------------------------------------------------------
 
+
 def test_subtract_scalar_background():
     prof = intensity_depth_profile(_ramp_volume([10, 8, 6]), 1.0)
     out = subtract_background(prof, 5.0)
@@ -86,6 +88,7 @@ def test_resample_holds_endpoints():
 # normalize_to_surface
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_to_first_slices():
     prof = intensity_depth_profile(_ramp_volume([100, 100, 50, 0]), 1.0)
     out = normalize_to_surface(prof, n_surface=2)
@@ -102,6 +105,7 @@ def test_normalize_rejects_nonpositive_reference():
 # ---------------------------------------------------------------------------
 # auc_depth
 # ---------------------------------------------------------------------------
+
 
 def test_auc_flat_curve_equals_window():
     # normalized flat curve == 1 everywhere -> AUC over 0..100 == 100
@@ -128,6 +132,7 @@ def test_auc_shape_mismatch_raises():
 # ---------------------------------------------------------------------------
 # fit_penetration_depth
 # ---------------------------------------------------------------------------
+
 
 def test_fit_recovers_lambda_noiseless():
     # I0=100, lambda=40 um over 0..200 um
@@ -178,10 +183,10 @@ def test_fit_rejects_lambda_beyond_acquired_range():
     z = np.arange(0, 100.0, 4.0)
     y = 100.0 * np.exp(-z / 5000.0)
     fit = fit_penetration_depth(z, y)
-    assert not fit.fit_ok                     # degenerate: lambda out of range
-    assert np.isnan(fit.lambda_um)            # unreliable lambda is NaN'd
+    assert not fit.fit_ok  # degenerate: lambda out of range
+    assert np.isnan(fit.lambda_um)  # unreliable lambda is NaN'd
     assert np.isnan(fit.I0)
-    assert np.isfinite(fit.r_squared)         # r_squared kept (fit was attempted)
+    assert np.isfinite(fit.r_squared)  # r_squared kept (fit was attempted)
 
 
 def test_fit_accepts_lambda_at_edge_of_range():
@@ -208,6 +213,7 @@ def _ramp(per_slice, ny=4, nx=5):
 # _select_plane_stack — wrong ndim raises ValueError  (line 71)
 # ---------------------------------------------------------------------------
 
+
 def test_select_plane_stack_2d_raises():
     """A 2D array (not 3D or 4D) should raise ValueError."""
     vol_2d = np.ones((4, 4))
@@ -226,6 +232,7 @@ def test_select_plane_stack_5d_raises():
 # intensity_depth_profile — bad reducer  (line 116)
 # ---------------------------------------------------------------------------
 
+
 def test_bad_reducer_raises():
     vol = _ramp([10, 8, 6])
     with pytest.raises(ValueError, match="reducer must be"):
@@ -235,6 +242,7 @@ def test_bad_reducer_raises():
 # ---------------------------------------------------------------------------
 # normalize_to_surface  (line 191: non-positive reference)
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_rejects_nonpositive_reference_message():
     prof = intensity_depth_profile(_ramp([0.0, 0.0, 5.0]), 1.0)
@@ -252,6 +260,7 @@ def test_normalize_n_surface_zero_raises():
 # ---------------------------------------------------------------------------
 # fit_penetration_depth — not enough points (line 306)
 # ---------------------------------------------------------------------------
+
 
 def test_fit_too_few_points_2param():
     """2-param model needs >= 2 points; 1 point raises ValueError."""
@@ -277,9 +286,11 @@ def test_fit_too_few_points_3param():
 #     guard (line 324) sets lam_guess = span (which is the acquired depth).
 # ---------------------------------------------------------------------------
 
+
 def test_fit_i0_guess_clamped_to_one_when_all_nan():
     """All-NaN y: surface=nan, nanmax=nan -> i0_guess=1.0 (line 319); curve_fit raises -> except (lines 344-345)."""
     import warnings
+
     z = np.linspace(0.0, 50.0, 8)
     y = np.full(8, np.nan)
     with warnings.catch_warnings():
@@ -302,6 +313,7 @@ def test_fit_i0_guess_clamped_when_all_zeros():
 def test_fit_except_block_offset_all_nan():
     """All-NaN y with offset=True: curve_fit raises -> except block lines 344-345; offset returned as None."""
     import warnings
+
     z = np.linspace(0.0, 50.0, 8)
     y = np.full(8, np.nan)
     with warnings.catch_warnings():
@@ -314,10 +326,10 @@ def test_fit_except_block_offset_all_nan():
 def test_fit_lam_guess_when_all_below_threshold():
     """Profile is all below I0/e immediately at z=0 -> below[0]==0, lam_guess falls to span."""
     z = np.linspace(0, 100, 20)
-    y = np.full(20, 0.001)   # tiny flat — all below any reasonable I0/e
+    y = np.full(20, 0.001)  # tiny flat — all below any reasonable I0/e
     fit = fit_penetration_depth(z, y)
     assert not fit.fit_ok and np.isnan(fit.lambda_um)
-    assert np.isnan(fit.r_squared)        # no spread: R² undefined (rounding made it -1e20)
+    assert np.isnan(fit.r_squared)  # no spread: R² undefined (rounding made it -1e20)
 
 
 def test_fit_of_a_flat_profile_has_no_r_squared():
@@ -343,11 +355,12 @@ def test_fit_all_points_below_threshold_at_surface():
 # fit_penetration_depth — offset=True + failed convergence  (lines 344-345)
 # ---------------------------------------------------------------------------
 
+
 def test_fit_offset_nonconvergent_returns_fit_ok_false():
     """Pure noise with offset=True -> curve_fit fails -> fit_ok=False, offset=None."""
     rng = np.random.default_rng(42)
     z = np.linspace(0, 50, 8)
-    y = rng.uniform(-5, 5, 8)   # random noise, no exponential structure
+    y = rng.uniform(-5, 5, 8)  # random noise, no exponential structure
     # Force convergence failure by giving a tiny maxfev via a monotone-but-noisy signal
     # that still makes curve_fit fail; use a sawtooth that can't be fit at all.
     y = np.tile([50.0, 1.0, 50.0, 1.0], 2)
@@ -360,11 +373,12 @@ def test_fit_offset_nonconvergent_returns_fit_ok_false():
 # fit_penetration_depth — offset lambda out of range -> c_fit NaN'd  (line 369)
 # ---------------------------------------------------------------------------
 
+
 def test_fit_offset_lambda_out_of_range_nans_offset():
     """3-param fit with lambda >> acquired depth -> fit_ok False, offset is nan."""
     z = np.linspace(0, 50.0, 15)
     # Near-flat signal: true lambda >> 50 -> degenerate, out of range
-    y = 100.0 * np.exp(-z / 5000.0) + 2.0   # tiny decay + floor
+    y = 100.0 * np.exp(-z / 5000.0) + 2.0  # tiny decay + floor
     fit = fit_penetration_depth(z, y, offset=True)
     assert not fit.fit_ok
     assert np.isnan(fit.lambda_um)
@@ -378,6 +392,7 @@ def test_fit_offset_lambda_out_of_range_nans_offset():
 # auc_depth — z_max <= z_min raises  (line 401)
 # ---------------------------------------------------------------------------
 
+
 def test_auc_zmax_le_zmin_raises():
     depth = np.array([0.0, 1.0, 2.0])
     vals = np.array([1.0, 0.8, 0.5])
@@ -388,6 +403,7 @@ def test_auc_zmax_le_zmin_raises():
 # ---------------------------------------------------------------------------
 # auc_depth — window exceeds range AND z_max <= z_min after clamp  (lines 409-412)
 # ---------------------------------------------------------------------------
+
 
 def test_auc_window_entirely_outside_acquired_range_is_nan():
     """z_min > max acquired depth: nothing was measured there, so NaN, not 0.0."""

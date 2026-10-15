@@ -46,7 +46,9 @@ def green_channel_index(
         f"no channel name identifies the green channel among {n_channels} channels "
         f"{channel_names}; using channel {idx} by position. Pass an explicit channel "
         "(e.g. --channel) if that is not the signal to measure.",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning,
+        stacklevel=3,
+    )
     return idx
 
 
@@ -75,9 +77,7 @@ def select_green_channel(
     return arr[green_channel_index(channel_names, arr.shape[0], override)]
 
 
-def _resolve_override(
-    override: int | str, channel_names: list[str], n_ch: int
-) -> int:
+def _resolve_override(override: int | str, channel_names: list[str], n_ch: int) -> int:
     if isinstance(override, int):
         if 0 <= override < n_ch:
             return override
@@ -97,8 +97,10 @@ def denoise(arr: np.ndarray, sigma: float = 1.0) -> np.ndarray:
     in-plane PSF dominates. Pass a single channel, not a (C, Z, Y, X) volume.
     """
     if arr.ndim not in (2, 3):
-        raise ValueError(f"denoise expects a 2D (Y, X) image or a 3D (Z, Y, X) stack, got "
-                         f"shape {arr.shape}; pass one channel of a (C, Z, Y, X) volume")
+        raise ValueError(
+            f"denoise expects a 2D (Y, X) image or a 3D (Z, Y, X) stack, got "
+            f"shape {arr.shape}; pass one channel of a (C, Z, Y, X) volume"
+        )
     if arr.ndim == 2:
         return gaussian(arr, sigma=sigma, preserve_range=True)
 

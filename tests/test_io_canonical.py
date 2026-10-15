@@ -53,6 +53,7 @@ def test_canonicalize_volume_high_ndim_squeezes():
 # Partially labelled TIFF axes and the shape fallback's refusals
 # ---------------------------------------------------------------------------
 
+
 def _rgb_stack(n_z):
     """(Z, Y, X, S) uint8 stack whose sample s holds the value 10 * (s + 1)."""
     return np.stack([np.full((n_z, 16, 16), 10 * (s + 1), np.uint8) for s in range(3)], -1)
@@ -73,8 +74,9 @@ def test_rgb_z_stack_unlabelled_axis_is_taken_as_z(tmp_path):
 def test_planar_rgb_z_stack_unlabelled_axis_is_taken_as_z(tmp_path):
     # 'QSYX' (12, 3, Y, X) used to become 64 channels (channel-last guess).
     p = tmp_path / "planar.tif"
-    tifffile.imwrite(p, _rgb_stack(12).transpose(0, 3, 1, 2), photometric="rgb",
-                     planarconfig="separate")
+    tifffile.imwrite(
+        p, _rgb_stack(12).transpose(0, 3, 1, 2), photometric="rgb", planarconfig="separate"
+    )
     with pytest.warns(RuntimeWarning, match="unlabelled axis of length 12 is z"):
         arr, _ = load_volume(p)
     assert arr.shape == (3, 12, 16, 16)
@@ -89,8 +91,9 @@ def test_plain_z_stack_says_z_was_assumed(tmp_path):
     assert arr.shape == (1, 5, 16, 16)
 
 
-@pytest.mark.parametrize("shape, said", [((8, 32, 32, 3), "X = 3"),
-                                         ((12, 3, 16, 16), "16 channels")])
+@pytest.mark.parametrize(
+    "shape, said", [((8, 32, 32, 3), "X = 3"), ((12, 3, 16, 16), "16 channels")]
+)
 def test_shape_fallback_refuses_implausible_layouts(shape, said):
     with pytest.raises(ValueError, match=said):
         io_canonical.canonicalize_volume(np.zeros(shape), {"channel_names": []})

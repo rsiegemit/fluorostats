@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import pandas as pd
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -29,11 +30,13 @@ def _replicate_df():
     rng = np.random.default_rng(0)
     lo = rng.normal(1.0, 0.05, 6)
     hi = rng.normal(5.0, 0.05, 6)
-    return pd.DataFrame({
-        "condition": ["ctrl"] * 6 + ["treat"] * 6,
-        "volume_fraction": np.concatenate([lo, hi]),
-        "n_components": np.concatenate([lo * 10, hi * 10]),
-    })
+    return pd.DataFrame(
+        {
+            "condition": ["ctrl"] * 6 + ["treat"] * 6,
+            "volume_fraction": np.concatenate([lo, hi]),
+            "n_components": np.concatenate([lo * 10, hi * 10]),
+        }
+    )
 
 
 def test_bar_mean_sem_with_pvalue_brackets(tmp_path):
@@ -45,15 +48,13 @@ def test_bar_mean_sem_with_pvalue_brackets(tmp_path):
 
 def test_boxplot_by_condition_writes_file(tmp_path):
     out = tmp_path / "box.png"
-    boxplot_by_condition(_replicate_df(), "volume_fraction", out,
-                         ylabel="Volume Fraction")
+    boxplot_by_condition(_replicate_df(), "volume_fraction", out, ylabel="Volume Fraction")
     assert out.exists() and out.stat().st_size > 1000
 
 
 def test_summary_panel_with_pvalues(tmp_path):
     out = tmp_path / "summary.png"
-    summary_panel(_replicate_df(), ["volume_fraction", "n_components"], out,
-                  show_pvalues=True)
+    summary_panel(_replicate_df(), ["volume_fraction", "n_components"], out, show_pvalues=True)
     assert out.exists() and out.stat().st_size > 1000
 
 
@@ -66,26 +67,31 @@ def test_summary_panel_no_available_metrics_is_noop(tmp_path):
 
 def test_condition_strip_default_axes_and_palette():
     """ax=None + no hue/marker exercises the auto-figure and default palette."""
-    df = pd.DataFrame({
-        "cond": ["a", "a", "b", "b", "b"],
-        "val": [1.0, 2.0, 3.0, 4.0, 5.0],
-    })
+    df = pd.DataFrame(
+        {
+            "cond": ["a", "a", "b", "b", "b"],
+            "val": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    )
     ax = condition_strip(df, "cond", "val")
     assert [t.get_text() for t in ax.get_xticklabels()] == ["a", "b"]
-    assert len(ax.collections) == 2 and len(ax.lines) == 2       # points + median per level
+    assert len(ax.collections) == 2 and len(ax.lines) == 2  # points + median per level
     import matplotlib.pyplot as plt
+
     plt.close(ax.figure)
 
 
 def _stats_df():
-    return pd.DataFrame([
-        {"metric": "vf", "stratum": "top",    "cliffs_delta":  0.8, "sig_q05": True},
-        {"metric": "vf", "stratum": "middle", "cliffs_delta":  0.9, "sig_q05": True},
-        {"metric": "vf", "stratum": "bottom", "cliffs_delta":  0.2, "sig_q05": False},
-        {"metric": "len","stratum": "top",    "cliffs_delta":  0.5, "sig_q05": True},
-        {"metric": "len","stratum": "middle", "cliffs_delta":  0.7, "sig_q05": True},
-        {"metric": "len","stratum": "bottom", "cliffs_delta": -0.1, "sig_q05": False},
-    ])
+    return pd.DataFrame(
+        [
+            {"metric": "vf", "stratum": "top", "cliffs_delta": 0.8, "sig_q05": True},
+            {"metric": "vf", "stratum": "middle", "cliffs_delta": 0.9, "sig_q05": True},
+            {"metric": "vf", "stratum": "bottom", "cliffs_delta": 0.2, "sig_q05": False},
+            {"metric": "len", "stratum": "top", "cliffs_delta": 0.5, "sig_q05": True},
+            {"metric": "len", "stratum": "middle", "cliffs_delta": 0.7, "sig_q05": True},
+            {"metric": "len", "stratum": "bottom", "cliffs_delta": -0.1, "sig_q05": False},
+        ]
+    )
 
 
 def test_effect_size_heatmap_writes_file(tmp_path):
@@ -95,11 +101,13 @@ def test_effect_size_heatmap_writes_file(tmp_path):
 
 
 def test_forest_plot_writes_file(tmp_path):
-    fc = pd.DataFrame([
-        {"label": "VF",      "fold_change_median": 9.5,  "ci_low": 2.5, "ci_high": 38},
-        {"label": "Length",  "fold_change_median": 16.0, "ci_low": 2.5, "ci_high": 235},
-        {"label": "Junction","fold_change_median": 23.0, "ci_low": 2.6, "ci_high": 4097},
-    ])
+    fc = pd.DataFrame(
+        [
+            {"label": "VF", "fold_change_median": 9.5, "ci_low": 2.5, "ci_high": 38},
+            {"label": "Length", "fold_change_median": 16.0, "ci_low": 2.5, "ci_high": 235},
+            {"label": "Junction", "fold_change_median": 23.0, "ci_low": 2.6, "ci_high": 4097},
+        ]
+    )
     out = tmp_path / "forest.png"
     forest_plot(fc, out_path=out)
     assert out.exists() and out.stat().st_size > 1000
@@ -107,28 +115,32 @@ def test_forest_plot_writes_file(tmp_path):
 
 def test_condition_strip_runs(tmp_path):
     import matplotlib.pyplot as plt
+
     rng = np.random.default_rng(0)
-    df = pd.DataFrame({
-        "day": np.repeat([1, 7, 14], 16),
-        "material": np.tile(np.repeat(["A", "B"], 8), 3),
-        "batch": np.tile(["old", "new"], 24),
-        "value": rng.normal(size=48),
-    })
+    df = pd.DataFrame(
+        {
+            "day": np.repeat([1, 7, 14], 16),
+            "material": np.tile(np.repeat(["A", "B"], 8), 3),
+            "batch": np.tile(["old", "new"], 24),
+            "value": rng.normal(size=48),
+        }
+    )
     fig, ax = plt.subplots()
-    out_ax = condition_strip(df, "day", "value", hue_col="material",
-                             marker_col="batch", ax=ax)
+    out_ax = condition_strip(df, "day", "value", hue_col="material", marker_col="batch", ax=ax)
     assert out_ax is ax
     plt.close(fig)
 
 
 def test_modality_panel_writes_file(tmp_path):
     rng = np.random.default_rng(0)
-    df = pd.DataFrame({
-        "modality": np.repeat(["Live/Dead", "Immuno-488"], 12),
-        "condition": np.tile(np.repeat(["A", "B"], 6), 2),
-        "vf":  rng.normal(size=24),
-        "len": rng.normal(size=24),
-    })
+    df = pd.DataFrame(
+        {
+            "modality": np.repeat(["Live/Dead", "Immuno-488"], 12),
+            "condition": np.tile(np.repeat(["A", "B"], 6), 2),
+            "vf": rng.normal(size=24),
+            "len": rng.normal(size=24),
+        }
+    )
     out = tmp_path / "modality.png"
     modality_panel(df, metrics=["vf", "len"], out_path=out)
     assert out.exists() and out.stat().st_size > 1000
@@ -137,6 +149,7 @@ def test_modality_panel_writes_file(tmp_path):
 # ---------------------------------------------------------------------------
 # _add_pvalue_annotations — lines 213, 219, 222-223
 # ---------------------------------------------------------------------------
+
 
 def _make_ax_with_ylim():
     fig, ax = plt.subplots()
@@ -203,29 +216,34 @@ def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
 # effect_size_heatmap — lines 351, 376
 # ---------------------------------------------------------------------------
 
+
 def test_effect_size_heatmap_no_col_col_creates_all_stratum():
     """When col_col not in df, all rows collapse into an 'all' column (line 351)."""
-    df = pd.DataFrame([
-        {"metric": "vf", "cliffs_delta": 0.8, "sig_q05": True},
-        {"metric": "len", "cliffs_delta": 0.3, "sig_q05": False},
-    ])
+    df = pd.DataFrame(
+        [
+            {"metric": "vf", "cliffs_delta": 0.8, "sig_q05": True},
+            {"metric": "len", "cliffs_delta": 0.3, "sig_q05": False},
+        ]
+    )
     # 'stratum' column absent → line 351 fires
     fig = effect_size_heatmap(df, col_col="stratum")
     ax = fig.axes[0]
     assert [t.get_text() for t in ax.get_xticklabels()] == ["all"]
-    assert [t.get_text() for t in ax.texts] == ["0.30", "0.80*"]   # * marks sig_q05
+    assert [t.get_text() for t in ax.texts] == ["0.30", "0.80*"]  # * marks sig_q05
     plt.close(fig)
 
 
 def test_effect_size_heatmap_with_title(tmp_path):
     """title kwarg triggers ax.set_title (line 376)."""
-    df = pd.DataFrame([
-        {"metric": "vf", "stratum": "top", "cliffs_delta": 0.8, "sig_q05": True},
-    ])
+    df = pd.DataFrame(
+        [
+            {"metric": "vf", "stratum": "top", "cliffs_delta": 0.8, "sig_q05": True},
+        ]
+    )
     fig = effect_size_heatmap(df, title="My Title")
     ax = fig.axes[0]
     assert ax.get_title() == "My Title"
-    assert [t.get_text() for t in ax.texts] == ["0.80*"]          # value, starred as significant
+    assert [t.get_text() for t in ax.texts] == ["0.80*"]  # value, starred as significant
     plt.close(fig)
 
 
@@ -233,29 +251,34 @@ def test_effect_size_heatmap_with_title(tmp_path):
 # forest_plot — line 416
 # ---------------------------------------------------------------------------
 
+
 def test_forest_plot_with_title(tmp_path):
     """title kwarg triggers ax.set_title (line 416)."""
-    fc = pd.DataFrame([
-        {"label": "VF", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 4.0},
-    ])
+    fc = pd.DataFrame(
+        [
+            {"label": "VF", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 4.0},
+        ]
+    )
     fig = forest_plot(fc, title="Forest Title")
     ax = fig.axes[0]
     assert ax.get_title() == "Forest Title"
-    assert ax.patches[0].get_width() == 2.0                       # bar at the median
+    assert ax.patches[0].get_width() == 2.0  # bar at the median
     assert [t.get_text() for t in ax.get_yticklabels()] == ["VF"]
     plt.close(fig)
 
 
 def test_forest_plot_no_reference_no_log_scale(tmp_path):
     """reference=None skips axvline; log_scale=False skips log axis."""
-    fc = pd.DataFrame([
-        {"label": "A", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 3.0},
-    ])
+    fc = pd.DataFrame(
+        [
+            {"label": "A", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 3.0},
+        ]
+    )
     fig = forest_plot(fc, reference=None, log_scale=False)
     ax = fig.axes[0]
     with_ref = forest_plot(fc).axes[0]
     assert ax.get_xscale() == "linear" and with_ref.get_xscale() == "log"
-    assert len(with_ref.lines) == len(ax.lines) + 1               # only the reference line
+    assert len(with_ref.lines) == len(ax.lines) + 1  # only the reference line
     assert list(with_ref.lines[-1].get_xdata()) == [1.0, 1.0]
     plt.close("all")
 
@@ -264,14 +287,17 @@ def test_forest_plot_no_reference_no_log_scale(tmp_path):
 # modality_panel — lines 464, 511-512, 522
 # ---------------------------------------------------------------------------
 
+
 def _make_modality_df():
     rng = np.random.default_rng(1)
-    return pd.DataFrame({
-        "modality": np.repeat(["Live/Dead", "Immuno"], 12),
-        "condition": np.tile(np.repeat(["A", "B"], 6), 2),
-        "vf": rng.normal(size=24),
-        "len": rng.normal(size=24),
-    })
+    return pd.DataFrame(
+        {
+            "modality": np.repeat(["Live/Dead", "Immuno"], 12),
+            "condition": np.tile(np.repeat(["A", "B"], 6), 2),
+            "vf": rng.normal(size=24),
+            "len": rng.normal(size=24),
+        }
+    )
 
 
 def test_modality_panel_missing_metric_sets_axis_invisible(tmp_path):
@@ -309,13 +335,16 @@ def test_modality_panel_with_title(tmp_path):
 # condition_strip — line 483 (legend when hue + multiple levels, show_median=False)
 # ---------------------------------------------------------------------------
 
+
 def test_condition_strip_no_median():
     """show_median=False skips the median line drawing."""
-    df = pd.DataFrame({
-        "cond": ["a", "a", "b", "b"],
-        "hue": ["x", "y", "x", "y"],
-        "val": [1.0, 2.0, 3.0, 4.0],
-    })
+    df = pd.DataFrame(
+        {
+            "cond": ["a", "a", "b", "b"],
+            "hue": ["x", "y", "x", "y"],
+            "val": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
     fig, ax = plt.subplots()
     condition_strip(df, "cond", "val", hue_col="hue", ax=ax, show_median=False)
     assert len(ax.lines) == 0 and len(ax.collections) == 4
@@ -327,18 +356,21 @@ def test_condition_strip_no_median():
 # condition_strip — line 464: vals.size == 0 → continue (empty (x, hue, marker) cross)
 # ---------------------------------------------------------------------------
 
+
 def test_condition_strip_empty_cross_skips_scatter():
     """When a (x_level, hue_level) combination has no rows, vals.size==0 → continue (line 464)."""
     # Condition "a" only has hue "x"; condition "b" only has hue "y".
     # The cross (a, y) and (b, x) will be empty → vals.size == 0 → continue.
-    df = pd.DataFrame({
-        "cond": ["a", "a", "b", "b"],
-        "hue": ["x", "x", "y", "y"],
-        "val": [1.0, 2.0, 3.0, 4.0],
-    })
+    df = pd.DataFrame(
+        {
+            "cond": ["a", "a", "b", "b"],
+            "hue": ["x", "x", "y", "y"],
+            "val": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
     fig, ax = plt.subplots()
     condition_strip(df, "cond", "val", hue_col="hue", ax=ax)
-    assert len(ax.collections) == 2                    # (a, y) and (b, x) are not drawn
+    assert len(ax.collections) == 2  # (a, y) and (b, x) are not drawn
     plt.close(fig)
 
 
@@ -350,24 +382,29 @@ def test_plots_many_conditions_get_distinct_colors(tmp_path, monkeypatch):
     saved = []
     monkeypatch.setattr(Figure, "savefig", lambda fig, *a, **k: saved.append(fig))
     rng = np.random.default_rng(0)
-    df = pd.DataFrame([{"condition": f"C{c:02d}", "volume_fraction": float(rng.random())}
-                       for c in range(10) for _ in range(3)])
+    df = pd.DataFrame(
+        [
+            {"condition": f"C{c:02d}", "volume_fraction": float(rng.random())}
+            for c in range(10)
+            for _ in range(3)
+        ]
+    )
     plots.bar_mean_sem(df, "volume_fraction", tmp_path / "bar.png")
     plots.boxplot_by_condition(df, "volume_fraction", tmp_path / "box.png")
     plots.summary_panel(df, ["volume_fraction"], tmp_path / "panel.png")
     for fig in saved:
         colors = {p.get_facecolor()[:3] for p in fig.axes[0].patches}
         assert len(colors) == 10
-    ax = condition_strip(df.assign(h=df["condition"]), "condition", "volume_fraction",
-                         hue_col="h", show_median=False)
+    ax = condition_strip(
+        df.assign(h=df["condition"]), "condition", "volume_fraction", hue_col="h", show_median=False
+    )
     assert len({tuple(c.get_facecolor()[0][:3]) for c in ax.collections}) == 10
     plt.close(ax.figure)
 
 
 def test_condition_colors_unchanged_up_to_eight():
     for n in (1, 2, 5, 8):
-        np.testing.assert_array_equal(plots._condition_colors(n),
-                                      plt.cm.Set2(np.linspace(0, 1, n)))
+        np.testing.assert_array_equal(plots._condition_colors(n), plt.cm.Set2(np.linspace(0, 1, n)))
 
 
 def test_summary_stars_follow_the_corrected_table(tmp_path):
@@ -378,8 +415,12 @@ def test_summary_stars_follow_the_corrected_table(tmp_path):
 
     from fluorostats import plots
 
-    df = pd.DataFrame({"condition": ["A"] * 4 + ["B"] * 4 + ["C"] * 4,
-                       "m": [1, 2, 3, 4, 1, 6, 9, 14, 11, 12, 13, 14]})
+    df = pd.DataFrame(
+        {
+            "condition": ["A"] * 4 + ["B"] * 4 + ["C"] * 4,
+            "m": [1, 2, 3, 4, 1, 6, 9, 14, 11, 12, 13, 14],
+        }
+    )
     table = plots.compute_pvalues(df, ["m"])
     ac = table[(table.condition_a == "A") & (table.condition_b == "C")].iloc[0]
     assert ac.p_value < 0.05 and ac.significance == "ns"
@@ -435,8 +476,8 @@ def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
 
     def points(ax):
         from matplotlib.collections import PathCollection
-        return np.vstack([c.get_offsets() for c in ax.collections
-                          if isinstance(c, PathCollection)])
+
+        return np.vstack([c.get_offsets() for c in ax.collections if isinstance(c, PathCollection)])
 
     def caps(ax):
         err = next(c for c in ax.containers if hasattr(c, "has_yerr"))
@@ -445,10 +486,11 @@ def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
     np.testing.assert_array_equal(points(bar_ax), points(panel_ax))
     np.testing.assert_allclose(points(box_ax)[:, 0] - 1, points(bar_ax)[:, 0], atol=1e-12)
     assert np.abs(points(bar_ax)[:, 0] - np.repeat([0, 1], 6)).max() <= 0.05
-    assert caps(bar_ax) == caps(panel_ax) == [8.0, 8.0]           # capsize 4 -> 2 * 4 pt
+    assert caps(bar_ax) == caps(panel_ax) == [8.0, 8.0]  # capsize 4 -> 2 * 4 pt
 
 
 def test_plots_compute_pvalues_is_the_stats_function():
     """Moved to stats; the plots name stays for existing callers."""
     from fluorostats import plots, stats
+
     assert plots.compute_pvalues is stats.compute_pvalues

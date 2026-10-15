@@ -36,7 +36,7 @@ def require(package: str, extra: str | None) -> ModuleType:
         raise ImportError(
             f"Reading this format requires the '{package}' package.\n"
             f"Install it with: pip install {package}\n"
-            f"(or, from a fluorostats checkout: pip install -e \".[{extra}]\")"
+            f'(or, from a fluorostats checkout: pip install -e ".[{extra}]")'
         ) from None
 
 
@@ -60,8 +60,11 @@ def _safe_float(val, default: float) -> float:
 
 def _warn_unread(what: str, exc: Exception) -> None:
     """Announce a metadata element that could not be read (its default is kept)."""
-    warnings.warn(f"{what} could not be read ({type(exc).__name__}: {exc}); the default "
-                  "is kept.", RuntimeWarning, stacklevel=3)
+    warnings.warn(
+        f"{what} could not be read ({type(exc).__name__}: {exc}); the default is kept.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
 
 
 def _positional_names(names: list[str | None]) -> list[str]:
@@ -73,6 +76,7 @@ def _positional_names(names: list[str | None]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Olympus .oib / .oif
 # ---------------------------------------------------------------------------
+
 
 def load_olympus_volume(path: Path) -> tuple[np.ndarray, dict]:
     """Olympus .oib/.oif -> ((C, Z, Y, X), meta); z step from the axis section (nm or µm)."""
@@ -107,7 +111,10 @@ def _parse_olympus_metadata(oif) -> dict:
             channel_names.append(dye if dye not in ("(null)", "None") else None)
 
         if section_str == "Reference Image Parameter":
-            wx, hy = _section_get(section, "WidthConvertValue"), _section_get(section, "HeightConvertValue")
+            wx, hy = (
+                _section_get(section, "WidthConvertValue"),
+                _section_get(section, "HeightConvertValue"),
+            )
             voxel_x = _safe_float(wx, voxel_x)
             voxel_y = _safe_float(hy, voxel_y)
             read |= {a for a, v in (("x", wx), ("y", hy)) if _valid_size(v)}
@@ -136,9 +143,12 @@ def _olympus_z_um(section) -> float | None:
     if pix_unit.lower() == "um":
         return interval
     if pix_unit.lower() != "nm":
-        warnings.warn(f"Olympus PixUnit {pix_unit!r} not recognised; "
-                      "assuming nm (interval/1000). Verify the z voxel size.",
-                      RuntimeWarning, stacklevel=3)
+        warnings.warn(
+            f"Olympus PixUnit {pix_unit!r} not recognised; "
+            "assuming nm (interval/1000). Verify the z voxel size.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
     return interval / 1000.0
 
 
@@ -155,6 +165,7 @@ def _section_get(section, key: str):
 # Zeiss .czi
 # ---------------------------------------------------------------------------
 
+
 def load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
     """Zeiss .czi -> ((C, Z, Y, X), meta), first scene; sizes from ``Distance`` (m -> µm)."""
     czifile = _reader("czifile")
@@ -165,15 +176,24 @@ def load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
         meta = _parse_czi_metadata(czi)
 
     meta["format"] = "zeiss_czi"
-    arr = canonicalize_volume(arr if axes else squeeze_singleton_dims(arr), meta,
-                               axes, _CZI_INDEX_AXES)
+    arr = canonicalize_volume(
+        arr if axes else squeeze_singleton_dims(arr), meta, axes, _CZI_INDEX_AXES
+    )
     return arr, meta
 
 
 # CZI dimensions other than C/Z/Y/X/S that are reduced to their first index.
-_CZI_INDEX_AXES = {"T": "time point", "B": "block", "V": "view", "H": "phase",
-                   "I": "illumination", "R": "rotation", "M": "mosaic tile",
-                   "A": "acquisition", "s": "scene"}
+_CZI_INDEX_AXES = {
+    "T": "time point",
+    "B": "block",
+    "V": "view",
+    "H": "phase",
+    "I": "illumination",
+    "R": "rotation",
+    "M": "mosaic tile",
+    "A": "acquisition",
+    "s": "scene",
+}
 # czifile < 2026 letters: '0' = colour samples, 'S' = scene (renamed 's').
 _LEGACY_CZI_LETTERS = str.maketrans({"S": "s", "0": "S"})
 
@@ -241,6 +261,7 @@ def _parse_czi_metadata(czi) -> dict:
 # Nikon .nd2
 # ---------------------------------------------------------------------------
 
+
 def load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
     """Nikon .nd2 -> ((C, Z, Y, X), meta); sizes from ``voxel_size()`` (µm)."""
     nd2 = _reader("nd2")
@@ -251,8 +272,12 @@ def load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
         meta = _parse_nd2_metadata(f)
 
     meta["format"] = "nikon_nd2"
-    arr = canonicalize_volume(arr if axes else squeeze_singleton_dims(arr), meta,
-                               axes, {"T": "time point", "P": "position"})
+    arr = canonicalize_volume(
+        arr if axes else squeeze_singleton_dims(arr),
+        meta,
+        axes,
+        {"T": "time point", "P": "position"},
+    )
     return arr, meta
 
 
@@ -282,8 +307,11 @@ def _parse_nd2_metadata(f) -> dict:
         _warn_unread("ND2 voxel size", exc)
     try:
         meta["channel_names"] = _positional_names(
-            [getattr(ch.channel, "name", "") or getattr(ch, "name", "")
-             for ch in f.metadata.channels or []])
+            [
+                getattr(ch.channel, "name", "") or getattr(ch, "name", "")
+                for ch in f.metadata.channels or []
+            ]
+        )
     except (AttributeError, TypeError) as exc:
         _warn_unread("ND2 channel names", exc)
     return meta
@@ -292,6 +320,7 @@ def _parse_nd2_metadata(f) -> dict:
 # ---------------------------------------------------------------------------
 # Leica .lif
 # ---------------------------------------------------------------------------
+
 
 def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
     """Leica .lif -> ((C, Z, Y, X), meta), image 0 at time point 0."""
@@ -304,9 +333,13 @@ def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
 
     img = reader.get_image(0)
     if len(reader.image_list) > 1 or getattr(img.dims, "t", 1) > 1:
-        warnings.warn(f"{path.name}: reading image 0 at time point 0 only "
-                      f"({len(reader.image_list)} images, {getattr(img.dims, 't', 1)} time points "
-                      "in the file).", RuntimeWarning, stacklevel=3)
+        warnings.warn(
+            f"{path.name}: reading image 0 at time point 0 only "
+            f"({len(reader.image_list)} images, {getattr(img.dims, 't', 1)} time points "
+            "in the file).",
+            RuntimeWarning,
+            stacklevel=3,
+        )
     meta = _parse_lif_metadata(img)
     meta["format"] = "leica_lif"
 
@@ -340,6 +373,7 @@ def _parse_lif_metadata(img) -> dict:
     # the file gives no length for an axis), so the voxel size is its reciprocal.
     scale = img.scale
     if scale:
+
         def um(i: int):
             s = scale[i] if len(scale) > i else None
             return 1.0 / s if s and s > 0 else None
@@ -348,12 +382,18 @@ def _parse_lif_metadata(img) -> dict:
         voxel_y = um(1) or voxel_x
         voxel_z = um(2) or 1.0
         meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
-        meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
-                              if len(scale) > i and scale[i] and scale[i] > 0}
+        meta["_read_axes"] = {
+            a
+            for a, i in (("x", 0), ("y", 1), ("z", 2))
+            if len(scale) > i and scale[i] and scale[i] > 0
+        }
         if um(1) is None and um(0) is not None:
             meta["_axis_source"] = {"y": "copied-from-x"}
-            warnings.warn(f"the LIF file gives no y length; y voxel size copied from x "
-                          f"({voxel_x} µm).", RuntimeWarning, stacklevel=3)
+            warnings.warn(
+                f"the LIF file gives no y length; y voxel size copied from x ({voxel_x} µm).",
+                RuntimeWarning,
+                stacklevel=3,
+            )
     meta["channel_names"] = [f"Ch{i + 1}" for i in range(img.channels)]
     return meta
 
@@ -361,6 +401,7 @@ def _parse_lif_metadata(img) -> dict:
 # ---------------------------------------------------------------------------
 # TIFF / OME-TIFF
 # ---------------------------------------------------------------------------
+
 
 def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
     """TIFF / OME-TIFF / ImageJ TIFF -> ((C, Z, Y, X), meta), series 0."""
@@ -397,8 +438,12 @@ def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
         xy = _imagej_xy_um(tif, tif.imagej_metadata) if tif.imagej_metadata else None
     meta: dict = {"voxel_size_um": (1.0, 1.0), "channel_names": [], "format": "tiff"}
     if xy:
-        meta = {**meta, "voxel_size_um": (xy["y"][0], xy["x"][0]), "_read_axes": set(xy),
-                "_axis_source": {a: s for a, (_, s) in xy.items() if s != "file"}}
+        meta = {
+            **meta,
+            "voxel_size_um": (xy["y"][0], xy["x"][0]),
+            "_read_axes": set(xy),
+            "_axis_source": {a: s for a, (_, s) in xy.items() if s != "file"},
+        }
     data = canonicalize_image(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 
@@ -410,9 +455,21 @@ _TIFF_INDEX_AXES = {"T": "time point"}
 
 # Length units as OME (UnitsLength) and ImageJ write them -> µm per unit.
 # ImageJ descriptions are ASCII, so Fiji spells µm "micron" or "\\u00B5m".
-_UM_PER_UNIT: dict[str | None, float] = {"pm": 1e-6, "Å": 1e-4, "nm": 1e-3, "µm": 1.0, "μm": 1.0, "um": 1.0,
-                "micron": 1.0, "microns": 1.0, "\\u00B5m": 1.0, "\\u00b5m": 1.0,
-                "mm": 1e3, "cm": 1e4, "m": 1e6}
+_UM_PER_UNIT: dict[str | None, float] = {
+    "pm": 1e-6,
+    "Å": 1e-4,
+    "nm": 1e-3,
+    "µm": 1.0,
+    "μm": 1.0,
+    "um": 1.0,
+    "micron": 1.0,
+    "microns": 1.0,
+    "\\u00B5m": 1.0,
+    "\\u00b5m": 1.0,
+    "mm": 1e3,
+    "cm": 1e4,
+    "m": 1e6,
+}
 
 
 def _length_um(value: float, unit: str | None, axis: str) -> tuple[float, str]:
@@ -425,8 +482,12 @@ def _length_um(value: float, unit: str | None, axis: str) -> tuple[float, str]:
     if factor is not None:
         return value * factor, "file"
     said = "no length unit" if unit is None else f"length unit {unit!r}, which is not recognised"
-    warnings.warn(f"the file gives the {axis} voxel size {value} with {said}; keeping it as µm. "
-                  "Check voxel_size_um.", RuntimeWarning, stacklevel=3)
+    warnings.warn(
+        f"the file gives the {axis} voxel size {value} with {said}; keeping it as µm. "
+        "Check voxel_size_um.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
     return value, "file-unit-unknown"
 
 
@@ -445,12 +506,18 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
     for a in read:
         key = f"PhysicalSize{a.upper()}"
         size[a], source = _length_um(float(pixels.attrib[key]), pixels.get(f"{key}Unit", "µm"), a)
-        if source != "file":                    # the OME default unit is µm
+        if source != "file":  # the OME default unit is µm
             noted[a] = source
-    names = _positional_names([ch.get("Name") or ch.get("Fluor")
-                               for ch in pixels.findall("{*}Channel")])
-    return {**meta, "voxel_size_um": (size["z"], size["y"], size["x"]), "_read_axes": set(read),
-            "_axis_source": noted, "channel_names": meta["channel_names"] + names}
+    names = _positional_names(
+        [ch.get("Name") or ch.get("Fluor") for ch in pixels.findall("{*}Channel")]
+    )
+    return {
+        **meta,
+        "voxel_size_um": (size["z"], size["y"], size["x"]),
+        "_read_axes": set(read),
+        "_axis_source": noted,
+        "channel_names": meta["channel_names"] + names,
+    }
 
 
 def _imagej_xy_um(tif: tifffile.TiffFile, ij_meta: dict) -> dict | None:
@@ -482,11 +549,14 @@ def _parse_imagej_metadata(ij_meta: dict, meta: dict, xy: dict | None = None) ->
         try:
             spacing = float(ij_meta["spacing"])
         except (TypeError, ValueError):
-            warnings.warn(f"ImageJ spacing {ij_meta['spacing']!r} is not a number; the z "
-                          "spacing is not read.", RuntimeWarning, stacklevel=3)
+            warnings.warn(
+                f"ImageJ spacing {ij_meta['spacing']!r} is not a number; the z "
+                "spacing is not read.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
         else:
-            size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")),
-                                           "z")
+            size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
             read.add("z")
             noted.update({} if source == "file" else {"z": source})
     for axis, (value, source) in (xy or {}).items():
@@ -495,5 +565,9 @@ def _parse_imagej_metadata(ij_meta: dict, meta: dict, xy: dict | None = None) ->
         noted.update({} if source == "file" else {axis: source})
     if not read:
         return meta
-    return {**meta, "voxel_size_um": (size["z"], size["y"], size["x"]), "_read_axes": read,
-            "_axis_source": noted}
+    return {
+        **meta,
+        "voxel_size_um": (size["z"], size["y"], size["x"]),
+        "_read_axes": read,
+        "_axis_source": noted,
+    }

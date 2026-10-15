@@ -95,8 +95,11 @@ def watershed_split(
     Returns (labels, n).
     """
     if footprint_size is not None:
-        warnings.warn("watershed_split(): 'footprint_size' no longer has an effect and "
-                      "is ignored", DeprecationWarning, stacklevel=2)
+        warnings.warn(
+            "watershed_split(): 'footprint_size' no longer has an effect and is ignored",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     m = mask > 0
     if not m.any():
         return np.zeros(m.shape, int), 0
@@ -108,7 +111,7 @@ def watershed_split(
     markers, n_seeds = ndi.label(peaks, structure=np.ones((3,) * m.ndim))
     components, n_comp = ndi.label(m)
     unseeded = np.setdiff1d(np.arange(1, n_comp + 1), components[markers > 0])
-    if unseeded.size:            # components too small to seed: one marker each
+    if unseeded.size:  # components too small to seed: one marker each
         pos = ndi.maximum_position(dist, components, unseeded)
         markers[tuple(np.array(pos).T)] = np.arange(n_seeds + 1, n_seeds + unseeded.size + 1)
     labels = watershed(-dist, markers, mask=m)
@@ -168,9 +171,7 @@ def count_local_maxima(
         img = np.where(np.asarray(mask) > 0, img, 0.0)
     if img.size == 0 or img.max() <= 0:
         return {"count": 0, "coords": np.empty((0, img.ndim), dtype=int)}
-    coords = peak_local_max(
-        img, min_distance=min_distance, threshold_abs=img.max() * threshold_rel
-    )
+    coords = peak_local_max(img, min_distance=min_distance, threshold_abs=img.max() * threshold_rel)
     return {"count": int(len(coords)), "coords": coords}
 
 
@@ -189,7 +190,7 @@ def object_volumes_voxels(labels: np.ndarray) -> np.ndarray:
     if labels.max() == 0:
         return np.array([], dtype=np.int64)
     sizes = np.bincount(labels.ravel())[1:]
-    return sizes[sizes > 0].astype(np.int64)   # drop gaps from non-contiguous label images
+    return sizes[sizes > 0].astype(np.int64)  # drop gaps from non-contiguous label images
 
 
 def equivalent_diameters_um(
@@ -298,11 +299,16 @@ def nearest_neighbor_stats(
     pts = np.asarray(centroids, dtype=float)
     n, d = pts.shape if pts.ndim == 2 else (0, 0)
     if n < 2:
-        return {"mean_nn_dist": float("nan"), "median_nn_dist": float("nan"),
-                "clark_evans_R": float("nan"), "pattern": "n/a", "n": int(n)}
+        return {
+            "mean_nn_dist": float("nan"),
+            "median_nn_dist": float("nan"),
+            "clark_evans_R": float("nan"),
+            "pattern": "n/a",
+            "n": int(n),
+        }
     scale = np.asarray(voxel_size_um if voxel_size_um is not None else (1.0,) * d, float)
     xy = pts * scale
-    nn = cKDTree(xy).query(xy, k=2)[0][:, 1]      # distance to nearest other point
+    nn = cKDTree(xy).query(xy, k=2)[0][:, 1]  # distance to nearest other point
     mean_nn = float(nn.mean())
     ranges = xy.max(0) - xy.min(0)
     # The pattern's dimension is the number of axes the points actually span: 3D
@@ -315,14 +321,24 @@ def nearest_neighbor_stats(
         expected = 0.55396 / lam ** (1.0 / 3.0)
     else:
         if d_eff < 2:
-            warnings.warn(f"nearest_neighbor_stats: the points span fewer than 2 axes "
-                          f"({d_eff}); clark_evans_R is NaN.", RuntimeWarning, stacklevel=2)
+            warnings.warn(
+                f"nearest_neighbor_stats: the points span fewer than 2 axes "
+                f"({d_eff}); clark_evans_R is NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         expected = float("nan")
     R = mean_nn / expected if expected and expected == expected else float("nan")
-    pattern = "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")
-    return {"mean_nn_dist": mean_nn, "median_nn_dist": float(np.median(nn)),
-            "clark_evans_R": float(R) if R == R else float("nan"),
-            "pattern": pattern, "n": int(n)}
+    pattern = (
+        "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")
+    )
+    return {
+        "mean_nn_dist": mean_nn,
+        "median_nn_dist": float(np.median(nn)),
+        "clark_evans_R": float(R) if R == R else float("nan"),
+        "pattern": pattern,
+        "n": int(n),
+    }
 
 
 def object_mask_association(
@@ -353,11 +369,15 @@ def object_mask_association(
     m = np.asarray(mask) > 0
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0 or not m.any():
-        return {"median_distance": float("nan"), "mean_distance": float("nan"),
-                "frac_within": float("nan"), "n": int(pts.shape[0])}
+        return {
+            "median_distance": float("nan"),
+            "mean_distance": float("nan"),
+            "frac_within": float("nan"),
+            "n": int(pts.shape[0]),
+        }
     sampling = voxel_size_um if voxel_size_um is not None else (1.0,) * m.ndim
     dt = ndi.distance_transform_edt(~m, sampling=sampling)
-    idx = np.round(pts[:, -m.ndim:]).astype(int)
+    idx = np.round(pts[:, -m.ndim :]).astype(int)
     for ax in range(m.ndim):
         idx[:, ax] = np.clip(idx[:, ax], 0, m.shape[ax] - 1)
     dist = dt[tuple(idx.T)]
@@ -399,7 +419,9 @@ def centroid_homogeneity(
     n_obj = centroids.shape[0]
     if n_obj == 0:
         return {"centroid_gini": float("nan"), "centroid_cv": float("nan"), "n_objects": 0}
-    counts = tile_point_density(centroids, (shape_zyx[-2], shape_zyx[-1]), grid=(tiles, tiles)).ravel()
+    counts = tile_point_density(
+        centroids, (shape_zyx[-2], shape_zyx[-1]), grid=(tiles, tiles)
+    ).ravel()
     return {
         "centroid_gini": float(gini(counts)),
         "centroid_cv": float(coefficient_of_variation(counts)),
@@ -428,8 +450,12 @@ def angular_homogeneity(
     """
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0:
-        return {"angular_gini": float("nan"), "resultant_length": float("nan"),
-                "dominant_angle_deg": float("nan"), "n": 0}
+        return {
+            "angular_gini": float("nan"),
+            "resultant_length": float("nan"),
+            "dominant_angle_deg": float("nan"),
+            "n": 0,
+        }
     dy = pts[:, -2] - center[0]
     dx = pts[:, -1] - center[1]
     ang = np.arctan2(dy, dx)
@@ -463,13 +489,21 @@ def radial_distribution(
     """
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0:
-        return {"fractions": np.zeros(n_bins), "mean_norm_radius": float("nan"),
-                "r_max": float("nan"), "n": 0}
+        return {
+            "fractions": np.zeros(n_bins),
+            "mean_norm_radius": float("nan"),
+            "r_max": float("nan"),
+            "n": 0,
+        }
     r = np.hypot(pts[:, -2] - center[0], pts[:, -1] - center[1])
     rmax = float(r_max) if r_max is not None else float(r.max())
     if rmax <= 0:
-        return {"fractions": np.zeros(n_bins), "mean_norm_radius": 0.0,
-                "r_max": rmax, "n": int(pts.shape[0])}
+        return {
+            "fractions": np.zeros(n_bins),
+            "mean_norm_radius": 0.0,
+            "r_max": rmax,
+            "n": int(pts.shape[0]),
+        }
     rn = np.clip(r / rmax, 0.0, 1.0)
     counts, _ = np.histogram(rn, bins=n_bins, range=(0.0, 1.0))
     return {

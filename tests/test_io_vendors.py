@@ -20,6 +20,7 @@ from fluorostats import io, io_vendors
 # _require ImportError path
 # ---------------------------------------------------------------------------
 
+
 def test_require_missing_dependency_raises(monkeypatch):
     # Force importlib to fail even though the package may be installed.
     import importlib
@@ -35,6 +36,7 @@ def test_require_missing_dependency_raises(monkeypatch):
 # ---------------------------------------------------------------------------
 # Olympus .oib / .oif
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_oiffile(mainfile):
     fake = types.ModuleType("oiffile")
@@ -80,8 +82,10 @@ def test_load_olympus_volume(monkeypatch, tmp_path):
 
 
 def test_olympus_unnamed_channel_keeps_its_position(monkeypatch, tmp_path):
-    mainfile = {"Channel 1 Parameters": {"DyeName": "(null)"},
-                "Channel 2 Parameters": {"DyeName": "FITC"}}
+    mainfile = {
+        "Channel 1 Parameters": {"DyeName": "(null)"},
+        "Channel 2 Parameters": {"DyeName": "FITC"},
+    }
     monkeypatch.setitem(sys.modules, "oiffile", _make_fake_oiffile(mainfile))
     path = tmp_path / "sample.oib"
     path.write_bytes(b"")
@@ -149,6 +153,7 @@ def test_safe_float_paths():
 # Leica .lif
 # ---------------------------------------------------------------------------
 
+
 def _make_fake_readlif(n_channels, n_z, scale, frame_ndim=2, empty=False):
     fake = types.ModuleType("readlif")
 
@@ -191,7 +196,7 @@ def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
         scale = [2.0, 2.0, 0.5]
 
         def get_frame(self, z, t, c):
-            return np.full((4, 4), z * 10 + c, dtype=np.uint16)   # encodes (z, c)
+            return np.full((4, 4), z * 10 + c, dtype=np.uint16)  # encodes (z, c)
 
     class LifFile:
         def __init__(self, path):
@@ -204,11 +209,11 @@ def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "readlif", fake)
     path = tmp_path / "m.lif"
     path.write_bytes(b"")
-    arr, _ = io.load_volume(path)                 # (C, Z, Y, X)
+    arr, _ = io.load_volume(path)  # (C, Z, Y, X)
     assert arr.shape == (2, 3, 4, 4)
     for c in range(2):
         for z in range(3):
-            assert arr[c, z, 0, 0] == z * 10 + c   # correct de-interleave
+            assert arr[c, z, 0, 0] == z * 10 + c  # correct de-interleave
 
 
 def test_load_lif_volume(monkeypatch, tmp_path):

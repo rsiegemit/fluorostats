@@ -23,7 +23,8 @@ from .stats import coefficient_of_variation
 
 
 def tile_bounds(
-    shape: tuple[int, int], grid: tuple[int, int] = (5, 5),
+    shape: tuple[int, int],
+    grid: tuple[int, int] = (5, 5),
 ) -> Iterator[tuple[int, int, int, int]]:
     """Yield ``(y0, y1, x0, x1)`` pixel bounds for each cell of a ``grid`` partition.
 
@@ -135,8 +136,9 @@ def morans_i(grid: np.ndarray, connectivity: str = "rook") -> float:
     Returns ``NaN`` for <3 valid cells or zero variance.
     """
     if connectivity not in _NEIGHBOUR_OFFSETS:
-        raise ValueError(f"connectivity must be one of {tuple(_NEIGHBOUR_OFFSETS)}, "
-                         f"got {connectivity!r}")
+        raise ValueError(
+            f"connectivity must be one of {tuple(_NEIGHBOUR_OFFSETS)}, got {connectivity!r}"
+        )
     g = np.asarray(grid, dtype=float)
     mask = ~np.isnan(g)
     if mask.sum() < 3:
@@ -179,7 +181,6 @@ def spatial_heterogeneity(grid: np.ndarray, connectivity: str = "rook") -> dict:
     return {"cv": cv, "morans_i": morans_i(g, connectivity), "n": int(v.size)}
 
 
-
 def coverage_heterogeneity(mask: np.ndarray, grid: tuple[int, int] = (5, 5)) -> dict:
     """Spatial uniformity of a binary mask's coverage across a tile grid.
 
@@ -191,8 +192,13 @@ def coverage_heterogeneity(mask: np.ndarray, grid: tuple[int, int] = (5, 5)) -> 
     het = spatial_heterogeneity(tile_reduce(cov, lambda t: float(t.mean()), grid=grid))
     return {"coverage_tile_cv": het["cv"], "coverage_morans_i": het["morans_i"]}
 
+
 __all__ = [
-    "tile_bounds", "tile_reduce", "tile_point_density", "slab_reduce",
+    "tile_bounds",
+    "tile_reduce",
+    "tile_point_density",
+    "slab_reduce",
     "coverage_heterogeneity",
-    "morans_i", "spatial_heterogeneity",
+    "morans_i",
+    "spatial_heterogeneity",
 ]
