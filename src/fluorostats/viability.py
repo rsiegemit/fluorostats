@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import re
 import warnings
+from collections.abc import Callable
+from typing import NamedTuple
 
 import numpy as np
 
@@ -70,9 +72,22 @@ def _count_maxima(ch, sig, cseg, min_distance, threshold_rel) -> int:
     return count_local_maxima(ch, min_distance, threshold_rel, smooth_sigma=sig)["count"]
 
 
+class _Counter(NamedTuple):
+    """A count method: ``count(ch, sigma, seg, min_distance, threshold_rel)`` and
+    whether it takes a smoothing sigma estimated from the cell radius (``smoothed``;
+    the others are given 0.0)."""
+
+    count: Callable[..., int]
+    smoothed: bool
+
+
 # The object-counting modes of `live_dead_by_count`, in the order ``method="all"``
 # reports them (and `viability_batch` writes their columns).
-_COUNTERS = {"cc": _count_cc, "watershed": _count_watershed, "maxima": _count_maxima}
+_COUNTERS = {
+    "cc": _Counter(_count_cc, smoothed=False),
+    "watershed": _Counter(_count_watershed, smoothed=False),
+    "maxima": _Counter(_count_maxima, smoothed=True),
+}
 COUNT_METHODS = tuple(_COUNTERS)
 
 
@@ -226,7 +241,7 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
             "cc",
             (f"defaulting to robust CC (SNR {r['snr']:.1f}, crowding {r['crowding']:.2f})"),
         )
-    smooth = r["radius"] / 1.5 if method == "maxima" else 0.0
+    smooth = r["radius"] / 1.5 if _COUNTERS[method].smoothed else 0.0
     return {"method": method, "smooth_sigma": smooth, "reason": reason, **r}
 
 
@@ -253,13 +268,14 @@ def _count_every_method(live: np.ndarray, dead: np.ndarray, count_one, rseg: dic
     """``method="all"`` of `live_dead_by_count`: every count method on both channels,
     their median consensus and spread, and the deprecated nested ``by_method``."""
     out = _count_record()
-    # auto-smooth the maxima channel from each channel's estimated radius
+    # auto-smooth the smoothed methods from each channel's estimated radius
     # (no cells -> radius NaN -> no smoothing)
     sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
     sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
     for m in COUNT_METHODS:
-        nl = count_one(live, m, sig_l if m == "maxima" else 0.0)
-        nd = count_one(dead, m, sig_d if m == "maxima" else 0.0)
+        smoothed = _COUNTERS[m].smoothed
+        nl = count_one(live, m, sig_l if smoothed else 0.0)
+        nd = count_one(dead, m, sig_d if smoothed else 0.0)
         out.update({f"n_live_{m}": nl, f"n_dead_{m}": nd, f"viability_{m}": live_ratio(nl, nd)})
     vals = [
         out[f"viability_{m}"]
@@ -338,7 +354,7 @@ def live_dead_by_count(
     rseg = {**seg, "method": threshold}  # regime estimate, same segmentation
 
     def _count_one(ch, m, sig):
-        return _COUNTERS[m](ch, sig, cseg, min_distance, threshold_rel)
+        return _COUNTERS[m].count(ch, sig, cseg, min_distance, threshold_rel)
 
     if method == "all":
         return _count_every_method(live, dead, _count_one, rseg)

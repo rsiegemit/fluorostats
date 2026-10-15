@@ -146,7 +146,8 @@ def test_method_all_spread_is_nan_when_one_method_gives_a_viability(monkeypatch)
     # methods agree"), not NaN like the other modes' "one method ran".
     live, dead = _two_channel_stack()
     for m in viability.COUNT_METHODS[1:]:
-        monkeypatch.setitem(viability._COUNTERS, m, lambda *args: 0)  # finds nothing
+        nothing = viability._Counter(lambda *args: 0, smoothed=False)  # finds nothing
+        monkeypatch.setitem(viability._COUNTERS, m, nothing)
     out = viability.live_dead_by_count(live, dead, method="all")
     first = viability.COUNT_METHODS[0]
     assert out["consensus"] == out[f"viability_{first}"] and np.isnan(out["spread"])
