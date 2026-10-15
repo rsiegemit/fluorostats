@@ -127,7 +127,7 @@ def count_local_maxima(
     mask: np.ndarray | None = None,
     smooth_sigma: float = 0.0,
 ) -> dict:
-    """Count intensity local maxima — one peak per cell (like Fiji "Find Maxima").
+    """Count intensity local maxima — one peak per cell (skimage ``peak_local_max``).
 
     Peak counting excels at counting **crowded, overlapping**
     cells that each present a single intensity peak (realistic gaussian-like
@@ -154,7 +154,7 @@ def count_local_maxima(
         Minimum separation (voxels) between peaks; larger = fewer, merges close cells.
     threshold_rel : float
         Peaks must exceed this fraction of the image maximum: an absolute height
-        floor, not a prominence (Fiji's Find Maxima uses prominence instead).
+        floor, not a prominence.
     mask : np.ndarray, optional
         Restrict peak search to this foreground region.
     smooth_sigma : float

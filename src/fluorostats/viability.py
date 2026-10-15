@@ -234,11 +234,11 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
       ``smooth_sigma`` ≈ radius/1.5) — peaks separate overlapping cells that CC merges.
     - otherwise (well-separated): ``"cc"`` — exact and robust.
 
-    NOTE: ``"maxima"`` re-implements the Find Maxima step of the published Kerkhoff
-    Fiji Live/Dead macro with that macro's parameters (``min_distance`` 3,
-    ``threshold_rel`` 0.15); it is not validated against the macro itself. Its
-    agreement with ground truth is in
-    benchmarks/results/b_viability_external_agreement.csv. ``auto`` only escalates
+    NOTE: ``"maxima"`` counts local intensity maxima above a fraction of the image
+    maximum (`objects.count_local_maxima`, skimage ``peak_local_max``). With its
+    defaults it agrees with the ground truth of the synthetic Live/Dead set
+    published with the Kerkhoff Fiji macro (CCC 0.987,
+    benchmarks/results/b_viability_external_agreement.csv). ``auto`` only escalates
     to it in the clean + crowded regime above, so to reproduce those counts pass
     ``method="maxima"`` explicitly to ``live_dead_by_count``.
 
