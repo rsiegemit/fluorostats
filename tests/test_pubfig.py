@@ -161,3 +161,21 @@ def test_panel_dx_dy_are_ignored_with_a_warning():
     with pytest.warns(DeprecationWarning, match="panel\\(\\): 'dx' and 'dy' are deprecated"):
         pubfig.panel(ax, "a", dx=3.0)
     assert [t.get_text() for t in ax.texts] == ["a"]
+
+
+@pytest.mark.parametrize("k, coverage", [(1.96, "95%"), (2.576, "99%"), (1.0, "68%")])
+def test_bland_altman_names_the_coverage_of_its_limits(k, coverage):
+    # Regression (L8): the label said "95% LoA" whatever loa_k was.
+    fig, ax = plt.subplots()
+    pubfig.bland_altman(ax, [1.0, 2.0, 3.0, 4.0], [1.1, 2.3, 2.8, 4.2], loa_k=k)
+    assert f"({coverage} LoA)" in ax.texts[0].get_text()
+
+
+def test_text_sizes_come_from_the_one_font_scale():
+    # L8: FS said "never hardcode sizes" while 5.6 and 6 were typed at the call sites.
+    fig, ax = plt.subplots()
+    pubfig.lollipop(ax, ["a", "b"], [0.9, 0.95])
+    pubfig.scalebar(ax, 0.01, "1 µm")
+    sizes = {t.get_fontsize() for t in ax.texts}
+    assert sizes == {pubfig.FS["value"], pubfig.FS["annot"]}
+    assert {t.get_fontsize() for t in ax.get_yticklabels()} == {pubfig.FS["tick"]}

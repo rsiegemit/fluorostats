@@ -10,8 +10,9 @@ outlines, fills, scale bars), dot/lollipop and Bland-Altman panels,
 :func:`save_figure` (the one writer every figure goes through) and :func:`save`,
 which writes a vector PDF plus a 600-dpi PNG at the figure's exact authored size.
 
-Dataset-specific settings (text width, data roots, tool colour identities)
-belong to the scripts that use this kit, not here. Usage::
+Dataset-specific settings (data roots, tool colour identities) belong to the
+scripts that use this kit, not here; :data:`TEXT_WIDTH_IN` is the one shared
+authoring width. Usage::
 
     from fluorostats import pubfig as F
     F.apply_style()
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
+from math import erf, sqrt
 from pathlib import Path
 from typing import Sequence
 
@@ -52,8 +54,9 @@ OKABE = {
 }
 
 # One font scale for every compact figure (points): 5-7 pt for body text, with 8 pt
-# bold panel letters. Reference these, never hardcode sizes.
-FS = {"title": 7, "label": 7, "tick": 6, "legend": 6, "annot": 6, "small": 5, "panel": 8}
+# bold panel letters ("value": numbers printed beside data marks). Reference these,
+# never hardcode sizes.
+FS = dict(title=7, label=7, tick=6, legend=6, annot=6, value=5.6, small=5, panel=8)
 
 # The house palette (the "house" theme and the CLI / depth / render figures).
 PALETTE = {
@@ -416,7 +419,14 @@ def scalebar(
     else:
         tx, tha = (xr + length_px if right else xr), ("right" if right else "left")
     ax.text(
-        tx, yb - 0.02 * H, label, color=color, ha=tha, va="bottom", fontsize=6, fontweight="bold"
+        tx,
+        yb - 0.02 * H,
+        label,
+        color=color,
+        ha=tha,
+        va="bottom",
+        fontsize=FS["annot"],
+        fontweight="bold",
     )
 
 
@@ -477,8 +487,8 @@ def lollipop(
     his: Sequence[float] | None = None,
     ascending: bool = False,
     fmt: str = "{:.3f}",
-    label_fs: float = 6,
-    value_fs: float = 5.6,
+    label_fs: float = FS["tick"],
+    value_fs: float = FS["value"],
     highlight: str | None = "fluorostats",
 ) -> list[str]:
     """Horizontal dot/lollipop plot with a zoomed x-axis for near-max values
@@ -550,8 +560,8 @@ def bland_altman(
     """Bland-Altman agreement panel: points, bias line and +/- limits of agreement.
 
     Numbers come from `fluorostats.agreement.bland_altman` (difference = a - b,
-    NaN pairs dropped); ``loa_k`` scales the SD of the differences. Returns
-    ``(bias, loa)``.
+    NaN pairs dropped); ``loa_k`` scales the SD of the differences, and the label
+    names the normal coverage of those limits (1.96 -> 95%). Returns ``(bias, loa)``.
     """
     color = color or OKABE["blue"]
     ba = agreement.bland_altman(a, b)
@@ -568,10 +578,10 @@ def bland_altman(
         ax.text(
             0.02,
             0.96,
-            f"bias {bias:+.3f}\n±{loa:.3f} (95% LoA){label}",
+            f"bias {bias:+.3f}\n±{loa:.3f} ({100 * erf(loa_k / sqrt(2)):.0f}% LoA){label}",
             transform=ax.transAxes,
             va="top",
-            fontsize=5.6,
+            fontsize=FS["value"],
             color="#333",
         )
     return bias, loa
