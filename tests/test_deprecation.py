@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from fluorostats import depth, metrics_2d, ring, skeleton, texture
+from fluorostats import depth, depth_batch, depth_figures, metrics_2d, ring, skeleton, texture
 from fluorostats.deprecation import renamed_keyword
 
 
@@ -50,3 +50,21 @@ def test_watershed_footprint_size_is_accepted_and_ignored():
     new = watershed_split(m, min_distance=3)
     for res in (old, positional):
         assert res[1] == new[1] and (res[0] == new[0]).all()
+
+
+@pytest.mark.parametrize(
+    "module, name, target",
+    [
+        (depth_batch, "parse_window", depth),
+        (depth_batch, "window_label", depth),
+        (depth_batch, "plot_retention_multiwindow", depth_figures),
+    ],
+)
+def test_re_exported_names_resolve_with_a_warning(module, name, target):
+    # STY-4: these re-exports were kept without a DeprecationWarning.
+    short = module.__name__.rsplit(".", 1)[-1]
+    with pytest.warns(DeprecationWarning, match=f"{short}.{name} is deprecated; use"):
+        assert getattr(module, name) is getattr(target, name)
+    assert name not in module.__all__
+    with pytest.raises(AttributeError, match="no attribute 'nope'"):
+        module.nope

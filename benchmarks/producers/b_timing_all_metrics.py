@@ -8,8 +8,9 @@ machine, so a re-run reproduces relative cost, not the committed digits.
 The two DL rows are CPU inference times measured on the cluster (cluster script,
 not included), carried as constants in ``common.DL_CPU_MS``. Comparator
 implementations (the point-pattern statistics and lacunarity that
-b_homogeneity_multi validates the tile Gini against, the Kerkhoff peak count) are
-the independent references in ``common.py``, not library code.
+b_homogeneity_multi validates the tile Gini against) are the independent
+references in ``common.py``, not library code; the skimage peak count there is the
+library's own algorithm, timed for its raw cost.
 Data: ``$FLUOROSTATS_DATA/{BBBC024,BBBC039,kerkhoff_lda}``.
 """
 from __future__ import annotations
@@ -30,8 +31,8 @@ from skimage.measure import euler_number
 from skimage.morphology import medial_axis, skeletonize, thin
 from skimage.segmentation import watershed
 
-from common import (DATA, DL_CPU_MS, KERKHOFF_MIN_DISTANCE, KERKHOFF_THRESHOLD_REL, bbbc024_volumes, bbbc039_pairs,
-                    clark_evans, kerkhoff_peak_count,
+from common import (DATA, DL_CPU_MS, MAXIMA_MIN_DISTANCE, MAXIMA_THRESHOLD_REL, bbbc024_volumes, bbbc039_pairs,
+                    clark_evans, skimage_peak_count,
                     lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds, write_table)
 from fluorostats import (agreement, metrics_2d, metrics_3d, morphometry, objects, preprocess, segment,
                          skeleton, stats, validate, viability)
@@ -104,9 +105,9 @@ def metric_ops(d):
          lambda: metrics_3d.density_per_mm3(d.lab.max(), v.shape, (1., 1., 1.))),
         ("fluorostats", "objects.equivalent_diameters_um", lambda: objects.equivalent_diameters_um(d.lab, (1., 1., 1.))),
         ("fluorostats", "objects.count_local_maxima 3D",
-         lambda: objects.count_local_maxima(v, min_distance=KERKHOFF_MIN_DISTANCE, threshold_rel=KERKHOFF_THRESHOLD_REL)),
+         lambda: objects.count_local_maxima(v, min_distance=MAXIMA_MIN_DISTANCE, threshold_rel=MAXIMA_THRESHOLD_REL)),
         ("comparator", "peak_local_max 3D",
-         lambda: peak_local_max(v, min_distance=KERKHOFF_MIN_DISTANCE, threshold_abs=v.max() * KERKHOFF_THRESHOLD_REL)),
+         lambda: peak_local_max(v, min_distance=MAXIMA_MIN_DISTANCE, threshold_abs=v.max() * MAXIMA_THRESHOLD_REL)),
         ("fluorostats", "metrics_2d.area_fraction", lambda: metrics_2d.area_fraction(otsu2())),
         ("fluorostats", "metrics_2d.coverage_metrics", lambda: metrics_2d.coverage_metrics(otsu2())),
         ("fluorostats", "morphometry.lateral_homogeneity", lambda: morphometry.lateral_homogeneity(d.mask)),
@@ -133,7 +134,7 @@ def viability_stats_ops(d):
     return [
         ("fluorostats", "viability.live_dead_fractions", lambda: viability.live_dead_fractions(live, dead, min_size=8)),
         *by_count,
-        ("comparator", "Kerkhoff macro (peak count)", lambda: (kerkhoff_peak_count(live), kerkhoff_peak_count(dead))),
+        ("comparator", "skimage peak count (live + dead)", lambda: (skimage_peak_count(live), skimage_peak_count(dead))),
         ("fluorostats", "viability.attenuation_correct", lambda: viability.attenuation_correct(d.vol)),
         ("fluorostats", "stats.mann_whitney", lambda: stats.mann_whitney(a, b)),
         ("comparator", "scipy.mannwhitneyu", lambda: sps.mannwhitneyu(a, b, alternative="two-sided")),

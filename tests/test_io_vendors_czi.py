@@ -185,3 +185,16 @@ def test_czi_channel_names_come_from_the_image_dimensions_only():
     </Metadata></ImageDocument>"""
     meta = io_vendors._parse_czi_metadata(_czi(xml))
     assert meta["channel_names"] == ["AF635-T1", "DAPI-T2"]
+
+
+def test_czi_reading_the_first_of_several_scenes_is_announced(monkeypatch, tmp_path):
+    # Regression: only scene 0 was read, without a word.
+    fake = _make_fake_czifile("", _zc_stack())
+    scene = types.SimpleNamespace(axes="ZCYX")
+    fake.CziFile.scenes = {0: scene, 1: scene, 2: scene}
+    monkeypatch.setitem(sys.modules, "czifile", fake)
+    path = tmp_path / "s.czi"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match="s.czi: reading the first of 3 scenes only"):
+        out, _ = io.load_volume(path)
+    assert out.shape == (2, 5, 8, 8)

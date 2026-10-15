@@ -407,7 +407,7 @@ def test_imagej_spacing_unit_converted_to_um(tmp_path, unit, z_um):
     assert meta["voxel_size_source"].startswith("z:file,")
 
 
-@pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "inch"}, "'inch'")])
+@pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "ell"}, "'ell'")])
 def test_imagej_spacing_without_known_unit_is_flagged(tmp_path, extra, said):
     p = tmp_path / "ij.tif"
     tifffile.imwrite(
@@ -477,6 +477,23 @@ def test_labelled_many_channels_one_slice_warns_without_changing_numbers(tmp_pat
         arr, _ = load_volume(p)
     assert arr.shape == (10, 1, 16, 16)
     np.testing.assert_array_equal(arr[:, 0], data)
+
+
+def test_named_many_channels_one_slice_does_not_warn(tmp_path):
+    # Regression: an OME file declaring 10 named channels was told it might be a
+    # mislabelled z-stack; a file that names its channels is not one.
+    p = tmp_path / "c10.ome.tif"
+    names = [f"C:{i}" for i in range(10)]
+    tifffile.imwrite(
+        p,
+        np.zeros((10, 8, 8), np.uint16),
+        ome=True,
+        metadata={"axes": "CYX", "Channel": {"Name": names}},
+    )
+    with pytest.warns(RuntimeWarning) as rec:
+        arr, meta = load_volume(p)
+    assert not [w for w in rec if "declares 10 channels" in str(w.message)]
+    assert arr.shape == (10, 1, 8, 8) and meta["channel_names"] == names
 
 
 def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
@@ -551,3 +568,12 @@ def test_read_voxel_size_other_formats_are_not_implemented(tmp_path):
     np.save(p, np.zeros((3, 8, 8)))
     with pytest.raises(NotImplementedError, match="use load_volume"):
         io.read_voxel_size(p)
+
+
+@pytest.mark.parametrize("suffix", [".oib", ".czi", ".nd2", ".lif"])
+def test_load_image_refuses_volume_only_formats_by_name(tmp_path, suffix):
+    # Regression: these fell through to imageio ("Could not find a backend").
+    p = tmp_path / f"x{suffix}"
+    p.write_bytes(b"")
+    with pytest.raises(ValueError, match="use load_volume or load_auto"):
+        load_image(p)

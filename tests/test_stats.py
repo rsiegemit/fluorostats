@@ -217,30 +217,25 @@ def test_mann_whitney_empty_y_returns_nan():
     assert res["n_y"] == 0
 
 
-def test_mann_whitney_single_sample_each_returns_nan_on_valueerror():
-    """When both groups have n=1, mannwhitneyu may raise ValueError.
-
-    Scipy's mannwhitneyu does not always raise for n=1, but the except
-    branch (lines 87-88) must be reachable. We verify at minimum that
-    the function returns a dict with the right keys and does not raise.
-    """
-    res = mann_whitney([5.0], [5.0])
-    # Result must have all expected keys regardless of path taken.
-    assert set(res.keys()) == {"u", "p", "cliffs_delta", "n_x", "n_y"}
+def test_mann_whitney_does_not_test_a_group_of_one():
+    # Regression (M3): n = 1 vs 1 gave p = 1.0, which entered BH denominators as a
+    # tested row, while compute_pvalues called the same pair "n<2". One rule now.
+    res = mann_whitney([5.0], [7.0, 8.0])
+    assert np.isnan(res["p"]) and np.isnan(res["u"]) and np.isnan(res["cliffs_delta"])
+    assert (res["n_x"], res["n_y"], res["reason"]) == (1, 2, f"n<{stats.MIN_N}")
+    assert mann_whitney([1.0, 2.0], [3.0, 4.0])["reason"] == ""
 
 
-def test_mann_whitney_identical_single_values_valueerror_branch():
-    """Force the ValueError branch by calling with identical single-element arrays.
+def test_mann_whitney_refuses_an_unknown_alternative():
+    # Regression (S3): a misspelt alternative was swallowed into p = NaN.
+    with pytest.raises(ValueError, match="alternative must be one of"):
+        mann_whitney([1.0, 2.0], [3.0, 4.0], alternative="two_sided")
 
-    Some scipy versions raise ValueError('All numbers are identical in mannwhitneyu')
-    for arrays where all values are equal. We patch mannwhitneyu to guarantee the branch.
-    """
-    from scipy import stats as sps
 
-    with patch.object(sps, "mannwhitneyu", side_effect=ValueError("identical")):
+def test_mann_whitney_says_why_a_nan_p_was_not_computed():
+    with patch("scipy.stats.mannwhitneyu", return_value=(1.0, float("nan"))):
         res = mann_whitney([1.0, 2.0], [3.0, 4.0])
-    assert np.isnan(res["u"])
-    assert np.isnan(res["p"])
+    assert np.isnan(res["p"]) and res["reason"] == "test not computable"
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +418,7 @@ def test_all_lists_every_public_function():
         for n, f in inspect.getmembers(stats, inspect.isfunction)
         if f.__module__ == stats.__name__ and not n.startswith("_")
     }
-    assert set(stats.__all__) - {"REDUCERS"} == public  # plus the one registry
+    assert set(stats.__all__) - {"REDUCERS", "MIN_N"} == public  # plus the constants
 
 
 def test_bootstrap_mean_ci_drops_nan_like_the_fold_change_bootstrap():
@@ -529,3 +524,31 @@ def test_one_reducer_registry_serves_depth_and_the_bootstrap():
 
     assert depth.REDUCERS is stats.REDUCERS
     assert stats.REDUCERS == {"mean": np.mean, "median": np.median}
+
+
+def test_cliffs_delta_drops_nan_instead_of_counting_it_as_a_tie():
+    # Regression (S1): NaN compared False both ways, so it counted as a tie that
+    # stayed in the denominator and pulled delta toward 0 (0.667 here).
+    assert cliffs_delta([1.0, 2.0, np.nan], [0.0, 0.0]) == 1.0
+    assert np.isnan(cliffs_delta([np.nan], [1.0]))
+
+
+def test_stratified_mann_whitney_records_why_a_cell_was_not_tested():
+    df = pd.DataFrame({"g": ["A", "B", "B"], "v": [1.0, 2.0, 3.0]})
+    out = stratified_mann_whitney(df, ["v"], "g", "A", "B")
+    assert out["reason"].tolist() == ["n<2"] and np.isnan(out["q"]).all()
+
+
+@pytest.mark.parametrize(
+    "call, match",
+    [
+        (lambda: stats.bootstrap_mean_ci([1.0, 2.0], n_boot=0), "n_boot must be"),
+        (lambda: stats.bootstrap_fold_change_ci([1.0], [2.0], n_boot=0), "n_boot must be"),
+        (lambda: stats.bootstrap_mean_ci([1.0, 2.0], ci=1.5), "ci must be"),
+        (lambda: stats.bootstrap_fold_change_ci([1.0], [2.0], ci=0), "ci must be"),
+    ],
+)
+def test_bootstraps_refuse_degenerate_sizes_by_name(call, match):
+    # Regression (S4): n_boot=0 raised IndexError, ci>1 numpy's quantile error.
+    with pytest.raises(ValueError, match=match):
+        call()

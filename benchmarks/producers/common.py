@@ -74,10 +74,12 @@ SBIAD2130_DEAD_CH = 1
 SBIAD2130_DOWNSAMPLE = 8
 SBIAD2130_SEG = dict(method="otsu", threshold_scale=1.0, min_size=8)
 
-# Find-Maxima parameters of the published Kerkhoff Fiji Live/Dead macro: peak
-# separation (px) and threshold as a fraction of the image maximum.
-KERKHOFF_MIN_DISTANCE = 3
-KERKHOFF_THRESHOLD_REL = 0.15
+# Peak-counting parameters for the viability benchmarks: peak separation (px) and
+# threshold as a fraction of the image maximum (the library's count_local_maxima
+# defaults, passed explicitly). Not the Kerkhoff Fiji macro's
+# settings: that macro runs Find Maxima with prominence 20 after a mean filter.
+MAXIMA_MIN_DISTANCE = 3
+MAXIMA_THRESHOLD_REL = 0.15
 
 # Side (px) of the square field of the example point patterns.
 EXAMPLE_FIELD = 500
@@ -204,13 +206,14 @@ def denoised_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:
                     min_size=min_size)[0]
 
 
-def kerkhoff_peak_count(img: np.ndarray) -> int:
-    """Cell count of the published Kerkhoff Fiji Live/Dead macro (its Find Maxima step).
-
-    A comparator, not library code.
-    """
-    return len(peak_local_max(img, min_distance=KERKHOFF_MIN_DISTANCE,
-                              threshold_abs=img.max() * KERKHOFF_THRESHOLD_REL))
+# exception REU-3: a direct skimage call with the same algorithm and parameters as
+# objects.count_local_maxima, kept as a check that live_dead_by_count(maxima) adds
+# nothing to the raw peak count. It agrees with the library by construction, so it
+# is not an external comparator; in particular it is not the Kerkhoff Fiji macro.
+def skimage_peak_count(img: np.ndarray) -> int:
+    """Number of ``skimage.feature.peak_local_max`` peaks with the ``MAXIMA_*`` parameters."""
+    return len(peak_local_max(img, min_distance=MAXIMA_MIN_DISTANCE,
+                              threshold_abs=img.max() * MAXIMA_THRESHOLD_REL))
 
 
 def example_patterns(rng: np.random.Generator, n: int = 225) -> dict[str, np.ndarray]:

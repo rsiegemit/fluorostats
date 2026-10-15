@@ -130,10 +130,12 @@ def cliffs_delta(x: np.ndarray, y: np.ndarray) -> float:
     """Cliff's delta = P(X > Y) - P(X < Y), in [-1, 1].
 
     Positive values mean ``x`` tends to exceed ``y``. Robust to outliers,
-    distribution-free, and meaningful even for tiny samples.
+    distribution-free, and meaningful even for tiny samples. NaN values are
+    dropped; NaN when either sample is then empty.
     """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
+    x, y = x[~np.isnan(x)], y[~np.isnan(y)]
     if x.size == 0 or y.size == 0:
         return float("nan")
     gt = (x[:, None] > y[None, :]).sum()
@@ -186,38 +188,42 @@ def welch_t(x: Sequence[float] | np.ndarray, y: Sequence[float] | np.ndarray) ->
     return {"t": float(t), "p": float(p), "n_x": len(x), "n_y": len(y)}
 
 
+# The fewest values per group a two-group test is run on: a group of one has no spread.
+# Every two-group entry point (`mann_whitney` and the grids built on it) reports such a
+# pair as untested (p NaN, reason "n<2"), so it never enters a BH denominator.
+MIN_N = 2
+_ALTERNATIVES = ("two-sided", "less", "greater")
+
+
 def mann_whitney(x: ArrayLike, y: ArrayLike, alternative: str = "two-sided") -> dict:
     """Mann-Whitney U test with effect size and sample sizes.
 
-    NaN values are dropped. When every value in both samples is equal the test
-    has no information and ``p`` is NaN, whatever the installed scipy says
-    (scipy < 1.18 returned 1.0 there, later versions NaN).
+    NaN values are dropped. Returns ``u``, ``p``, ``cliffs_delta``, ``n_x``, ``n_y``
+    and ``reason``: empty when tested, else why ``p`` is NaN. ``"n<2"``: a group has
+    fewer than :data:`MIN_N` values (``u`` and ``cliffs_delta`` are NaN too).
+    ``"all values tied"``: the test has no information, whatever the installed
+    scipy says (scipy < 1.18 returned 1.0 there, later versions NaN).
+    ``"test not computable"``: scipy returned NaN. ``alternative`` is
+    ``"two-sided"``, ``"less"`` or ``"greater"``; anything else is a ValueError.
     """
+    if alternative not in _ALTERNATIVES:
+        raise ValueError(f"alternative must be one of {_ALTERNATIVES}, got {alternative!r}")
     xa: np.ndarray = np.asarray(x, dtype=float)
     ya: np.ndarray = np.asarray(y, dtype=float)
     xa = xa[~np.isnan(xa)]
     ya = ya[~np.isnan(ya)]
-    if xa.size < 1 or ya.size < 1:
-        return {
-            "u": float("nan"),
-            "p": float("nan"),
-            "cliffs_delta": float("nan"),
-            "n_x": int(xa.size),
-            "n_y": int(ya.size),
-        }
-    try:
-        u, p = sps.mannwhitneyu(xa, ya, alternative=alternative)
-    except ValueError:
-        u, p = float("nan"), float("nan")
+    nan = float("nan")
+    n = {"n_x": int(xa.size), "n_y": int(ya.size)}
+    if min(xa.size, ya.size) < MIN_N:
+        return {"u": nan, "p": nan, "cliffs_delta": nan, **n, "reason": f"n<{MIN_N}"}
+    u, p = sps.mannwhitneyu(xa, ya, alternative=alternative)
+    reason = ""
     if np.ptp(np.concatenate([xa, ya])) == 0:  # all tied: no information
-        p = float("nan")
-    return {
-        "u": float(u),
-        "p": float(p),
-        "cliffs_delta": cliffs_delta(xa, ya),
-        "n_x": int(xa.size),
-        "n_y": int(ya.size),
-    }
+        p, reason = nan, "all values tied"
+    elif np.isnan(p):
+        reason = "test not computable"
+    delta = cliffs_delta(xa, ya)
+    return {"u": float(u), "p": float(p), "cliffs_delta": delta, **n, "reason": reason}
 
 
 def stratified_mann_whitney(
@@ -245,7 +251,8 @@ def stratified_mann_whitney(
     -------
     DataFrame with one row per (stratum × metric): stratum keys,
     `metric`, `n_a`, `n_b`, `median_a`, `median_b`, `cliffs_delta`,
-    `u`, `p`, and BH-corrected `q`.
+    `u`, `p`, BH-corrected `q`, `sig_q05` and `reason` (`mann_whitney`'s: empty
+    when tested, else why `p` is NaN).
     """
     strata = list(strata or [])
     grouped = df.groupby(strata, dropna=False) if strata else [((), df)]
@@ -270,6 +277,7 @@ def stratified_mann_whitney(
                     "cliffs_delta": res["cliffs_delta"],
                     "u": res["u"],
                     "p": res["p"],
+                    "reason": res["reason"],
                 }
             )
             rows.append(row)
@@ -291,6 +299,12 @@ def significance_stars(p: float) -> str:
     return "ns"
 
 
+_PVALUE_COLUMNS = (
+    "metric condition_a condition_b n_a n_b p_value q_value significance cliffs_delta test "
+    "correction reason"
+).split()
+
+
 def compute_pvalues(
     df: pd.DataFrame,
     metrics: list[str],
@@ -303,15 +317,21 @@ def compute_pvalues(
     correction (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
 
     A pair that cannot be tested is kept with ``p_value``/``q_value`` NaN, empty
-    ``significance`` and a ``reason`` ("n<2", "all values tied", "test not
-    computable"); ``reason`` is empty for tested rows.
+    ``significance`` and `mann_whitney`'s ``reason`` ("n<2", "all values tied",
+    "test not computable"); ``reason`` is empty for tested rows. Rows with no
+    condition label are left out, with a warning; labels mixing numbers and
+    strings sort numbers first.
 
     Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
     p_value, q_value, significance, cliffs_delta (``stats.cliffs_delta`` of a vs b),
     test and correction (naming both), reason; empty if no metric is in ``df``.
     """
 
-    conditions = sorted(df["condition"].unique())
+    if unlabelled := int(df["condition"].isna().sum()):
+        msg = f"compute_pvalues: left out {unlabelled} row(s) with no condition label"
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
+    labels = df["condition"].dropna().unique()
+    conditions = sorted(labels, key=lambda c: (isinstance(c, str), c))
     rows = []
 
     for metric in metrics:
@@ -341,36 +361,14 @@ def compute_pvalues(
         out["test"] = "Mann-Whitney U, two-sided"
         out["correction"] = "Benjamini-Hochberg FDR across all tested rows"
         # existing columns first, in their earlier order; the added ones last
-        out = out[
-            [
-                "metric",
-                "condition_a",
-                "condition_b",
-                "n_a",
-                "n_b",
-                "p_value",
-                "q_value",
-                "significance",
-                "cliffs_delta",
-                "test",
-                "correction",
-                "reason",
-            ]
-        ]
+        out = out[_PVALUE_COLUMNS]
     return out
 
 
 def _pair_test(a: np.ndarray, b: np.ndarray) -> dict:
     """``p_value``, ``cliffs_delta`` and ``reason`` (empty when tested) for one pair."""
-    nan = float("nan")
-    if len(a) < 2 or len(b) < 2:
-        return {"p_value": nan, "cliffs_delta": nan, "reason": "n<2"}
     res = mann_whitney(a, b)
-    reason = ""
-    if np.isnan(res["p"]):  # the test could not be computed
-        tied = np.ptp(np.concatenate([a, b])) == 0
-        reason = "all values tied" if tied else "test not computable"
-    return {"p_value": res["p"], "cliffs_delta": res["cliffs_delta"], "reason": reason}
+    return {"p_value": res["p"], "cliffs_delta": res["cliffs_delta"], "reason": res["reason"]}
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +393,7 @@ def bootstrap_fold_change_ci(
     ci_low, ci_high, n_boot.
     """
     func = reducer(agg, "agg")
+    _check_bootstrap(n_boot, ci)
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     x = x[~np.isnan(x)]
@@ -447,6 +446,7 @@ def bootstrap_mean_ci(
     pass one ``rng`` to draw several intervals from a single stream. NaNs are
     dropped first; raises ValueError when no value remains.
     """
+    _check_bootstrap(n_boot, ci)
     x = np.asarray(x, float)
     x = x[~np.isnan(x)]
     if x.size == 0:
@@ -460,6 +460,14 @@ def bootstrap_mean_ci(
         "ci_low": float(np.percentile(means, lo)),
         "ci_high": float(np.percentile(means, 100 - lo)),
     }
+
+
+def _check_bootstrap(n_boot: int, ci: float) -> None:
+    """ValueError naming the parameter unless ``n_boot >= 1`` and ``0 < ci < 1``."""
+    if n_boot < 1:
+        raise ValueError(f"n_boot must be at least 1, got {n_boot!r}")
+    if not 0 < ci < 1:
+        raise ValueError(f"ci must be in (0, 1), got {ci!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -476,7 +484,9 @@ def stouffer_combine(
 
     Useful for pooling evidence across strata or modalities. By default
     treats p-values as two-sided; pass `one_sided=True` if directional
-    p's were supplied.
+    p's were supplied. Two-sided p-values carry no direction, so effects in
+    opposite directions add up as if they agreed; when direction matters, pool
+    one-sided p-values that all test the same direction.
     """
     p = np.asarray(p_values, dtype=float)
     keep = ~np.isnan(p)
@@ -491,9 +501,7 @@ def stouffer_combine(
     if weights is None:
         z = z_individual.sum() / np.sqrt(p.size)
     else:
-        w = np.asarray(weights, dtype=float)[
-            keep
-        ]  # align weights with surviving (non-NaN) p-values
+        w = np.asarray(weights, dtype=float)[keep]  # aligned with the non-NaN p-values
         z = (w * z_individual).sum() / np.sqrt((w**2).sum())
     p_combined = float(sps.norm.sf(z) if one_sided else 2 * sps.norm.sf(abs(z)))
     return {"z": float(z), "p": p_combined, "n": int(p.size)}
@@ -579,6 +587,7 @@ __all__ = [
     "cliffs_delta",
     "bh_fdr",
     "welch_t",
+    "MIN_N",
     "mann_whitney",
     "stratified_mann_whitney",
     "bootstrap_fold_change_ci",

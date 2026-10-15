@@ -173,12 +173,14 @@ def plot_retention_multiwindow(
     out_base: Path,
     title: str = "Signal retained vs depth window",
 ) -> None:
-    """Grouped bars: mean retained fraction (AUC_norm / window width) per window.
+    """Grouped bars: mean retained fraction (AUC_norm / covered width) per window.
 
-    Dividing normalised AUC by window width gives the average fraction of
-    surface signal retained across that depth window (0-1), so windows of
-    different sizes sit on one comparable axis and a gap between groups that
-    widens with depth is visible at a glance.
+    Dividing normalised AUC by the depth it was integrated over gives the average
+    fraction of surface signal retained across that depth window (0-1), so windows
+    of different sizes sit on one comparable axis and a gap between groups that
+    widens with depth is visible at a glance. The divisor is the part of the window
+    the stack covers (``covered_um``): a stack shorter than the window has only that
+    much area, so dividing by the full width would read as lost signal.
     """
     groups = list(colors.keys())
     labels = [window_label(w) for w in windows]
@@ -192,7 +194,7 @@ def plot_retention_multiwindow(
         means, sems, ptsx, ptsy = [], [], [], []
         for wi, lab in enumerate(labels):
             fr = [
-                r["result"]["auc"][lab]["normalized"] / r["result"]["auc"][lab]["width_um"]
+                _retained(r["result"]["auc"][lab])
                 for r in rows
                 if r["group"] == g and r["role"] == "primary"
             ]
@@ -215,6 +217,11 @@ def plot_retention_multiwindow(
     ax.set_ylim(0, 1.05)
     ax.legend()
     _save(fig, out_base)
+
+
+def _retained(auc: dict) -> float:
+    """Mean retained fraction over the covered part of a window; NaN when none is."""
+    return auc["normalized"] / auc["covered_um"] if auc["covered_um"] > 0 else float("nan")
 
 
 def _save(fig, out_base: Path) -> None:

@@ -3,7 +3,7 @@ import json
 import pytest
 
 from fluorostats import depth_batch, viability_batch
-from fluorostats.manifest import check_groups
+from fluorostats.manifest import check_groups, not_strings
 
 
 def _write(tmp_path, m):
@@ -209,3 +209,23 @@ def test_depth_manifest_with_a_non_object_group_is_reported(tmp_path):
     m = {"groups": ["g"]}
     with pytest.raises(ValueError, match="group 0 must be an object"):
         depth_batch.load_manifest(_write(tmp_path, m))
+
+
+def test_check_groups_reports_a_repeated_numeric_label_zero(tmp_path):
+    # Regression (L5): repeats were found only among truthy values, so label 0 twice passed.
+    ok = tmp_path / "a.tif"
+    ok.write_bytes(b"")
+    st = {"path": str(ok), "label": 0}
+    problems = check_groups([{"name": "g", "stacks": [st, st]}])
+    assert problems == [
+        "group 'g': stack label 0 is used by more than one stack; "
+        "labels must be unique within a group"
+    ]
+
+
+def test_not_strings_names_each_present_field_that_is_not_text():
+    m = {"title": "t", "output_dir": 5, "signal_label": None}
+    assert not_strings(m, ("title", "output_dir", "signal_label", "absent")) == [
+        "output_dir must be a string, got 5",
+        "signal_label must be a string, got None",
+    ]

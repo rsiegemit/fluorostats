@@ -55,7 +55,12 @@ def test_depth_batch_run(tmp_path):
     ps = pd.read_csv(out / "auc_per_stack.csv")
     assert len(ps) == 4  # 2 groups x 2 stacks
     # plain TIFFs carry no calibration: the table records that the 1 µm z-step is a default
-    assert list(ps.columns[-1:]) == ["voxel_size_source"]
+    assert list(ps.columns[-3:]) == [
+        "voxel_size_source",
+        "window_complete_0_10um",
+        "window_complete_full",
+    ]
+    assert (ps[["window_complete_0_10um", "window_complete_full"]] == 1).all().all()
     assert (ps["voxel_size_source"] == "z:default,y:default,x:default").all()
     assert set(ps["group"]) == {"fast", "slow"}
     # slower decay retains signal deeper -> larger surface-normalised full-depth AUC
@@ -440,5 +445,57 @@ def test_non_positive_surface_reference_names_the_file(tmp_path):
     s0 = tmp_path / "s0.tif"
     flat_stack(s0, value=5.0)
     blank = depth.intensity_depth_profile(np.full((16, 8, 8), 9.0), 1.0)  # brighter than the stack
-    with pytest.raises(ValueError, match="s0.tif: near-surface reference is non-positive"):
+    with pytest.raises(
+        ValueError, match=r"s0.tif: near-surface reference is 0 \(non-positive or NaN\)"
+    ):
         depth_batch.analyse_stack(s0, blank, _cfg())
+
+
+def test_load_blank_with_no_positive_slice_names_the_blank(tmp_path):
+    # Regression (D3): every slice <= 0 left an empty profile and numpy's bare
+    # "array of sample points is empty" later, naming no file.
+    flat_stack(tmp_path / "b.tif", value=-5.0)
+    with pytest.raises(ValueError, match="blank b.tif: no slice has a mean > 0"):
+        _load_blank(str(tmp_path / "b.tif"), _CFG)
+
+
+def test_auc_csv_flags_a_window_the_stack_covers_only_partly(tmp_path):
+    # Regression (M2): a clamped AUC sat in auc_per_stack.csv like a complete one.
+    s0 = tmp_path / "s0.tif"
+    decay_stack(s0, n_z=11)  # 0-10 µm
+    cfg = {**_cfg(), "windows": [(0.0, 5.0), (5.0, 20.0)]}
+    with pytest.warns(RuntimeWarning, match="only 5 µm of it"):
+        res = depth_batch.analyse_stack(s0, None, cfg)
+    depth_batch.write_auc_csv(
+        tmp_path / "auc.csv",
+        [{"group": "A", "stack": "s0", "role": "primary", "result": res}],
+        cfg["windows"],
+    )
+    ps = pd.read_csv(tmp_path / "auc.csv")
+    assert list(ps.columns[-2:]) == ["window_complete_0_5um", "window_complete_5_20um"]
+    assert ps.iloc[0, -2:].tolist() == [1, 0]
+
+
+def test_run_refuses_a_folder_holding_files_it_did_not_write(tmp_path):
+    # Regression (M1): a depth run replaced the user's contrasts.csv without notice;
+    # its own earlier tables were not removed before a rerun.
+    s0 = tmp_path / "s0.tif"
+    decay_stack(s0)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "contrasts.csv").write_text("mine")
+    m = {
+        "output_dir": str(out),
+        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
+    }
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    with pytest.raises(ValueError, match="holds contrasts.csv but no run_config.json"):
+        depth_batch.run(mpath)
+    assert (out / "contrasts.csv").read_text() == "mine"
+    with pytest.warns(RuntimeWarning, match="replacing contrasts.csv"):
+        depth_batch.run(mpath, overwrite=True)
+    assert json.loads((out / "run_config.json").read_text())["tool"] == "depth"
+    (out / "depth_profiles_long.csv").write_text("stale")
+    depth_batch.run(mpath)  # a rerun of its own folder rewrites its tables
+    assert (out / "depth_profiles_long.csv").read_text().startswith("group,stack")

@@ -2,6 +2,8 @@
 empty inputs, an output inside the input, and what a rerun removes (the rules live
 in `cli_paths`)."""
 
+import json
+
 import pandas as pd
 import pytest
 from click.testing import CliRunner
@@ -97,3 +99,23 @@ def test_overlays_of_same_named_files_in_different_conditions_are_kept(tmp_path,
         for p in (tmp_path / "out" / "overlays").rglob("*.png")
     )
     assert made == [f"{c}/s{i}_overlay.png" for c in ("GelMA", "Hybrid") for i in range(3)]
+
+
+@pytest.mark.parametrize("other", ["quant3d", None])
+def test_quant_refuses_a_folder_another_run_wrote_unless_overwrite(tmp_path, other):
+    # Regression (M1): quant2d replaced another tool's (or the user's) per_file.csv and
+    # run_config.json without notice.
+    make_dataset(tmp_path / "in", blob_2d)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "per_file.csv").write_text("theirs")
+    if other:
+        (out / "run_config.json").write_text(f'{{"tool": "{other}"}}')
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 2 and "--overwrite" in res.output
+    assert (out / "per_file.csv").read_text() == "theirs"
+    res = CliRunner().invoke(cli, args + ["--overwrite"])
+    assert res.exit_code == 0, res.output
+    assert len(pd.read_csv(out / "per_file.csv")) == 6
+    assert json.loads((out / "run_config.json").read_text())["tool"] == "quant2d"
