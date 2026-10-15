@@ -9,39 +9,44 @@ published reference values and the values we observed on the same metric.
 
 Metric: **F1 at IoU ≥ 0.5** (predicted instances matched to ground-truth instances),
 the standard DSB2018 / Caicedo-2019 nuclei metric. Our runs were on **BBBC039**
-(U2OS Hoechst, instance GT, n = 200) on an AMD ROCm CPU cluster.
+(U2OS Hoechst, instance GT, n = 200), with inference on the GPU/ROCm cluster
+described in `README.md` (models and settings listed there under "Tables without a
+producer here"). Observed values: `results/b2_nuclei_ci.csv`, subset `all200`.
 
 | Tool | Published | Source | Observed (BBBC039) | In published band? |
 |---|---|---|---|---|
 | StarDist 2D (`2D_versatile_fluo`) | AP@0.5 = 0.864 | Schmidt et al. 2018 (arXiv:1806.03535) | **F1@0.5 = 0.871** | ✅ yes |
-| Cellpose v3 (`nuclei`) | AP@0.5 ≈ 0.8 | Stringer et al. 2021 Nat. Methods | **F1@0.5 = 0.862** | ✅ yes (0.8–0.9) |
-| CellProfiler | F1@0.5 ≈ 0.82 | Caicedo et al. 2019 Nat. Methods | — (threshold panel, see `results/b_dsb2018.csv`) | — |
+| Cellpose (`nuclei`) | AP@0.5 ≈ 0.8 | Stringer et al. 2021 Nat. Methods | **F1@0.5 = 0.862** | ✅ yes (0.8–0.9) |
+| CellProfiler | F1@0.5 ≈ 0.82 | Caicedo et al. 2019 Nat. Methods | — (not re-run) | — |
 
+The Cellpose package version used on the cluster is not recorded in this repository.
 Both DL baselines reproduce their published instance-F1, so the fluorostats comparison
 below is trustworthy.
 
-## fluorostats vs. the validated baselines — the metrics it actually computes
+## fluorostats vs. the validated baselines
 
-fluorostats is **not** an instance segmenter: it reports foreground overlap
-(Jaccard/Dice), object **count**, area/volume fraction, and skeleton/topology metrics —
-never instance AP or CTC SEG/DET/TRA. So it is compared on **nucleus count**, not F1.
+fluorostats is not a trained instance segmenter: its objects are the connected
+components of a thresholded mask, optionally split by the distance-transform
+watershed (`objects.watershed_split`). The benchmark scripts score those objects as
+instances, against the same ground truth and matcher as the DL tools:
 
-Tri-tool nucleus-count agreement vs. ground truth (BBBC039, n = 200):
+- **instance F1 @ IoU 0.5** — `results/b_dl_ci.csv` (all 200 images, paired bootstrap
+  differences) and `results/b2_nuclei_ci.csv` (every threshold configuration, first
+  100 images);
+- **nucleus count** — `results/b_nuclei_count_agreement.csv`
+  (`producers/b_nuclei_count_agreement.py`): Lin's CCC, Spearman ρ, count MAE and mean
+  bias against the ground-truth count, for fluorostats and the three DL tools.
 
-| Tool | count CCC | Spearman | count MAE | bias |
-|---|---|---|---|---|
-| **fluorostats** (connected-component labelling) | **0.918** | 0.960 | **5.96** | −4.03 |
-| Cellpose | 0.908 | 0.975 | 12.39 | +11.94 |
-
-fluorostats attains the lowest count error while running on CPU with no training.
+fluorostats never reports instance AP or CTC SEG/DET/TRA.
 
 ## Exact-match / topology validation
 
 - **Topology & volume fraction on analytic phantoms** — Euler characteristic, connectivity,
   and volume fraction match the closed-form ground truth to zero error (reproduces BoneJ's own
   validation approach). See `results/b1_topology_phantoms.csv`.
-- **Skeleton metrics** share the Lee-1994 thinning algorithm with Fiji AnalyzeSkeleton and
-  match branch/junction/length counts on shared inputs.
+- **Skeleton metrics** — branch and junction counts match the known counts of synthetic
+  bifurcating trees (`results/b_skeleton_tree.csv`). No side-by-side comparison with Fiji
+  AnalyzeSkeleton is recorded here.
 
 ## Reproducing these numbers
 

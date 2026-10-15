@@ -27,10 +27,11 @@ from skimage import filters, restoration
 from skimage.feature import peak_local_max
 from skimage.filters import median
 from skimage.measure import euler_number
-from skimage.morphology import medial_axis, remove_small_objects, skeletonize, thin
+from skimage.morphology import medial_axis, skeletonize, thin
 from skimage.segmentation import watershed
 
-from common import (DATA, DL_CPU_MS, bbbc024_volumes, bbbc039_pairs, clark_evans, kerkhoff_peak_count,
+from common import (DATA, DL_CPU_MS, KERKHOFF_MIN_DISTANCE, KERKHOFF_THRESHOLD_REL, bbbc024_volumes, bbbc039_pairs,
+                    clark_evans, kerkhoff_peak_count,
                     lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds, write_table)
 from fluorostats import (agreement, metrics_2d, metrics_3d, morphometry, objects, preprocess, segment,
                          skeleton, stats, validate, viability)
@@ -41,7 +42,7 @@ SLOW = ["rolling", "average_precision", "median_filter", "watershed", "instance_
 def load_inputs():
     fp, gp = bbbc024_volumes(n=1)[0]
     vol = tifffile.imread(fp).astype(np.float32)
-    mask = remove_small_objects(vol > filters.threshold_otsu(vol), 20)
+    mask = segment.remove_small(vol > filters.threshold_otsu(vol), 20)
     mid = vol[vol.shape[0] // 2]
     kerk = [x for x in glob.glob(str(require(DATA / "kerkhoff_lda" / "synthetic") / "**" / "*.tif"),
                                  recursive=True) if "700 Live; 700 Dead-1" in x][0]
@@ -102,8 +103,10 @@ def metric_ops(d):
         ("fluorostats", "metrics_3d.density_per_mm3",
          lambda: metrics_3d.density_per_mm3(d.lab.max(), v.shape, (1., 1., 1.))),
         ("fluorostats", "objects.equivalent_diameters_um", lambda: objects.equivalent_diameters_um(d.lab, (1., 1., 1.))),
-        ("fluorostats", "objects.count_local_maxima 3D", lambda: objects.count_local_maxima(v, min_distance=3)),
-        ("comparator", "peak_local_max 3D", lambda: peak_local_max(v, min_distance=3, threshold_abs=v.max() * 0.15)),
+        ("fluorostats", "objects.count_local_maxima 3D",
+         lambda: objects.count_local_maxima(v, min_distance=KERKHOFF_MIN_DISTANCE, threshold_rel=KERKHOFF_THRESHOLD_REL)),
+        ("comparator", "peak_local_max 3D",
+         lambda: peak_local_max(v, min_distance=KERKHOFF_MIN_DISTANCE, threshold_abs=v.max() * KERKHOFF_THRESHOLD_REL)),
         ("fluorostats", "metrics_2d.area_fraction", lambda: metrics_2d.area_fraction(otsu2())),
         ("fluorostats", "metrics_2d.coverage_metrics", lambda: metrics_2d.coverage_metrics(otsu2())),
         ("fluorostats", "morphometry.lateral_homogeneity", lambda: morphometry.lateral_homogeneity(d.mask)),

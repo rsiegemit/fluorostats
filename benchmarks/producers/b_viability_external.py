@@ -18,10 +18,11 @@ import numpy as np
 import pandas as pd
 import tifffile
 from skimage import filters
-from skimage.morphology import remove_small_objects
 
-from common import DATA, kerkhoff_peak_count, require, threshold_cc, write_table
+from common import (DATA, KERKHOFF_MIN_DISTANCE, KERKHOFF_THRESHOLD_REL, SMALL_OBJECT_RULE, kerkhoff_peak_count, require,
+                    threshold_cc, write_table)
 from fluorostats.objects import watershed_split
+from fluorostats.segment import remove_small
 from fluorostats.viability import live_dead_by_count, live_dead_fractions, live_ratio
 
 MIN_SIZE = 8
@@ -30,16 +31,16 @@ MIN_SIZE = 8
 def score(path):
     im = tifffile.imread(path).astype(np.float32)
     live, dead = im[1], im[0]
-    lm = remove_small_objects(live > filters.threshold_otsu(live), max_size=MIN_SIZE)
-    dm = remove_small_objects(dead > filters.threshold_otsu(dead), max_size=MIN_SIZE)
+    lm = remove_small(live > filters.threshold_otsu(live), MIN_SIZE)
+    dm = remove_small(dead > filters.threshold_otsu(dead), MIN_SIZE)
     n_ws = [watershed_split(m, min_size=MIN_SIZE, min_distance=3)[0].max() for m in (lm, dm)]
-    n_cc = [threshold_cc(im, filters.threshold_otsu, max_size=MIN_SIZE).max() for im in (live, dead)]
+    n_cc = [threshold_cc(im, filters.threshold_otsu, MIN_SIZE).max() for im in (live, dead)]
     return {
         "Kerkhoff_macro_peakcount": live_ratio(kerkhoff_peak_count(live), kerkhoff_peak_count(dead)),
         "fluorostats_objcount": live_ratio(*n_ws),
         "fluorostats_areafrac": live_dead_fractions(live, dead, method="otsu", min_size=MIN_SIZE)["viability"],
-        "fluorostats_maxima(NEW)": live_dead_by_count(live, dead, method="maxima", min_distance=3,
-                                                      threshold_rel=0.15)["viability"],
+        "fluorostats_maxima": live_dead_by_count(live, dead, method="maxima", min_distance=KERKHOFF_MIN_DISTANCE,
+                                                 threshold_rel=KERKHOFF_THRESHOLD_REL)["viability"],
         "Otsu_CC_count": live_ratio(*n_cc),
     }
 
@@ -54,7 +55,7 @@ def main():
         n_live, n_dead = int(m.group(1)), int(m.group(2))
         rows.append({"file": Path(f).name, "true_viability": n_live / (n_live + n_dead), **score(f)})
     df = pd.DataFrame(rows)
-    write_table(df, "b_viability_external", {"min_size": MIN_SIZE, "n_images": len(df)})
+    write_table(df, "b_viability_external", {"min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "n_images": len(df)})
     print(f"n = {len(df)} images")
     print(df.drop(columns=["file"]).describe().to_string())
 

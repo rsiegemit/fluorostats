@@ -108,8 +108,8 @@ panel(axc, "c", "statistics layer output")
 # NB power analysis intentionally has no panel here: under complete separation
 # (Cliff's δ=−1) a Mann-Whitney power-vs-n curve is fixed by the rank test's
 # discreteness (min two-sided p = 0.10 at n=3, 0.029 at n=4), so it would render
-# identically for any perfectly-separated data. It lives in Methods / Limitations
-# and in fluorostats.power instead.
+# identically for any perfectly-separated data. It lives in the text and in
+# fluorostats.power instead.
 
 # caption numbers read from the tables (never typed)
 mc = pd.read_csv(R/"b_homogeneity_multi_corr.csv")

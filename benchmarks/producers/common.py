@@ -18,6 +18,7 @@ import glob
 import json
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,12 +31,11 @@ from scipy import ndimage as ndi
 from scipy.spatial import cKDTree
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_minimum
-from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
 
 import fluorostats
 from fluorostats.objects import label_3d
-from fluorostats.segment import THRESHOLD_METHODS, segment_channel
+from fluorostats.segment import THRESHOLD_METHODS, remove_small, segment_channel
 
 DATA = Path(os.environ.get(
     "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[2] / "data" / "downloads")))
@@ -56,6 +56,28 @@ YEAR_LABELS = {"otsu": "Otsu_1979", "li": "Li_1993", "isodata": "Isodata_1978",
 RAW_OTSU_CC = "fluorostats(raw Otsu+CC)"
 DENOISED_OTSU_CC = "fluorostats(denoised Otsu+CC)"
 
+# The one small-object rule every producer applies (``segment.remove_small``),
+# recorded in each run.json that has a min_size.
+SMALL_OBJECT_RULE = "keep >= min_size"
+
+# What segment.binarize(method="auto") resolves to on every VesselExpress volume
+# (b_ve_metrics checks it on each run); the fig3 overlay is labelled with it.
+VE_AUTO_RESOLVED = "li"
+
+# S-BIAD2130 Day-14 Live/Dead stack: channel roles, the XY downsample applied on
+# read, the z step (µm; the file's ImageJ "spacing") and the segmentation every
+# viability table and figure of it uses.
+SBIAD2130_LIVE_CH = 2
+SBIAD2130_DEAD_CH = 1
+SBIAD2130_DOWNSAMPLE = 8
+SBIAD2130_Z_UM = 5.5
+SBIAD2130_SEG = dict(method="otsu", threshold_scale=1.0, min_size=8)
+
+# Find-Maxima parameters of the published Kerkhoff Fiji Live/Dead macro: peak
+# separation (px) and threshold as a fraction of the image maximum.
+KERKHOFF_MIN_DISTANCE = 3
+KERKHOFF_THRESHOLD_REL = 0.15
+
 # Side (px) of the square field of the example point patterns.
 EXAMPLE_FIELD = 500
 
@@ -64,10 +86,27 @@ EXAMPLE_FIELD = 500
 DL_CPU_MS = {"StarDist": 215.1, "Cellpose": 5547.0}
 
 
+def git_commit() -> str:
+    """Short SHA of the checkout the producer runs from, with ``-dirty`` when tracked
+    files outside ``benchmarks/results`` (the producers' own outputs) have changes;
+    ``unknown`` outside a git checkout."""
+    repo = Path(__file__).resolve().parents[2]
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True,
+                             text=True, check=True).stdout.strip()
+        changed = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", ".",
+                                  ":(exclude)benchmarks/results"], cwd=repo, capture_output=True,
+                                 text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return f"{sha}-dirty" if changed else sha
+
+
 def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) -> None:
     """Write ``results/<stem>.csv`` and its provenance record ``results/<stem>.run.json``.
 
-    The record names the producer, its ``params`` and the python / numpy /
+    The record names the producer, its ``params``, the fluorostats git commit
+    (``git_commit``) and the python / numpy /
     scipy / scikit-image / fluorostats versions; a ``timing`` table also records
     the CPU (``platform.machine()``, ``platform.processor()``). No host name,
     user or absolute path is written. ``csv_kw`` goes to ``DataFrame.to_csv``
@@ -75,7 +114,7 @@ def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) 
     """
     df.to_csv(RESULTS / f"{stem}.csv", **{"index": False, **csv_kw})
     record = {"table": f"{stem}.csv", "producer": f"benchmarks/producers/{Path(sys.argv[0]).name}",
-              "params": params,
+              "params": params, "git_commit": git_commit(),
               "versions": {"python": platform.python_version(), "numpy": np.__version__,
                            "scipy": scipy.__version__, "scikit-image": skimage.__version__,
                            "fluorostats": fluorostats.__version__}}
@@ -121,7 +160,7 @@ def bbbc024_volumes(subdir: str = "BBBC024", n: int | None = None) -> list[tuple
     return [(f, f.replace("image-final_", "image-labels_")) for f in finals]
 
 
-def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = 8) -> np.ndarray:
+def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = SBIAD2130_DOWNSAMPLE) -> np.ndarray:
     """One channel of the S-BIAD2130 Day-14 Live/Dead ZCYX stack, XY-downsampled on read."""
     stack = require(DATA / "viability" / "zccs1035_Day14_LiveDead.tif")
     with tifffile.TiffFile(stack) as t:
@@ -140,15 +179,14 @@ def thresholds(names, labels: dict[str, str] | None = None) -> dict:
     return {labels.get(n, n): THRESHOLD_FNS[n] for n in names}
 
 
-def threshold_cc(img: np.ndarray, threshold_fn, max_size: int) -> np.ndarray:
-    """Global threshold -> drop objects of <= ``max_size`` px -> connected-component labels."""
-    return label_3d(remove_small_objects(img > threshold_fn(img), max_size=max_size))[0]
+def threshold_cc(img: np.ndarray, threshold_fn, min_size: int) -> np.ndarray:
+    """Global threshold -> drop objects smaller than ``min_size`` px -> connected-component labels."""
+    return label_3d(remove_small(img > threshold_fn(img), min_size))[0]
 
 
 def raw_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:
-    """RAW_OTSU_CC: Otsu on the raw image -> drop objects of <= ``min_size`` px -> label."""
-    return label_3d(remove_small_objects(img > THRESHOLD_FNS["otsu"](img), max_size=min_size),
-                    min_size=min_size)[0]
+    """RAW_OTSU_CC: Otsu on the raw image -> drop objects smaller than ``min_size`` px -> label."""
+    return threshold_cc(img, THRESHOLD_FNS["otsu"], min_size)
 
 
 def denoised_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:
@@ -163,7 +201,8 @@ def kerkhoff_peak_count(img: np.ndarray) -> int:
 
     A comparator, not library code.
     """
-    return len(peak_local_max(img, min_distance=3, threshold_abs=img.max() * 0.15))
+    return len(peak_local_max(img, min_distance=KERKHOFF_MIN_DISTANCE,
+                              threshold_abs=img.max() * KERKHOFF_THRESHOLD_REL))
 
 
 def example_patterns(rng: np.random.Generator, n: int = 225) -> dict[str, np.ndarray]:

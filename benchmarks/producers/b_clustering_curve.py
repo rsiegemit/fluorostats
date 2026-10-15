@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 import tifffile
 from skimage import filters
-from skimage.morphology import remove_small_objects
 
-from common import (RAW_OTSU_CC, YEAR_LABELS, bbbc024_volumes, raw_otsu_cc, threshold_cc, thresholds,
-                    write_table)
+from common import (RAW_OTSU_CC, SMALL_OBJECT_RULE, YEAR_LABELS, bbbc024_volumes, raw_otsu_cc, threshold_cc,
+                    thresholds, write_table)
 from fluorostats.objects import watershed_split
+from fluorostats.segment import remove_small
 from fluorostats.validate import instance_f1
 
 LEVELS = {"c00": "BBBC024", "c25": "BBBC024_c25", "c50": "BBBC024_c50", "c75": "BBBC024_c75"}
@@ -32,8 +32,8 @@ def main():
             vol = tifffile.imread(fp).astype(np.float32)
             gt = tifffile.imread(gp).astype(np.int32)
             for name, fn in THRESHOLDS.items():
-                acc[name].append(instance_f1(threshold_cc(vol, fn, max_size=MIN_SIZE), gt)["f1"])
-            otsu = remove_small_objects(vol > filters.threshold_otsu(vol), MIN_SIZE)
+                acc[name].append(instance_f1(threshold_cc(vol, fn, MIN_SIZE), gt)["f1"])
+            otsu = remove_small(vol > filters.threshold_otsu(vol), MIN_SIZE)
             acc[RAW_OTSU_CC].append(instance_f1(raw_otsu_cc(vol, MIN_SIZE), gt)["f1"])
             ws = watershed_split(otsu, min_size=MIN_SIZE, min_distance=6)[0]
             acc["fluorostats_watershed"].append(instance_f1(ws, gt)["f1"])
@@ -41,7 +41,8 @@ def main():
                  for m, v in acc.items()]
         print(f"done {lvl}", flush=True)
     piv = pd.DataFrame(rows).pivot(index="method", columns="clustering", values="mean_F1")
-    write_table(piv, "b_clustering_curve", {"levels": LEVELS, "n_volumes": N_VOL, "min_size": MIN_SIZE, "watershed_min_distance": 6}, index=True)
+    write_table(piv, "b_clustering_curve", {"levels": LEVELS, "n_volumes": N_VOL, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE,
+                                              "watershed_min_distance": 6}, index=True)
     print(piv.to_string())
 
 

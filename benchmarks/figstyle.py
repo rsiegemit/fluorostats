@@ -1,9 +1,9 @@
-"""Methods-paper figure settings, layered on the library's figure kit.
+"""Settings for the benchmark figures, layered on the library's figure kit.
 
 The general publication tooling (Okabe-Ito palette, type scale, panel letters,
 image helpers, scale bars, export, lollipop and Bland-Altman panels) lives in
 `fluorostats.pubfig` and is re-exported here. This module adds only what is
-specific to this paper: the tool colour identities, the manuscript text width
+specific to these figures: the tool colour identities, the text width
 and the figure output folders. The raw-data root, the missing-data check and the
 dataset loaders are the producers' (``producers/common.py``), re-exported here.
 
@@ -24,8 +24,8 @@ from fluorostats.pubfig import (  # noqa: E402,F401
     outline, panel, round_sig, scalebar,
 )
 from producers.common import (  # noqa: E402,F401
-    BBBC039_UM_PER_PX, DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel,
-    raw_otsu_cc, require,
+    BBBC039_UM_PER_PX, DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, SBIAD2130_DEAD_CH, SBIAD2130_LIVE_CH, SBIAD2130_SEG,
+    VE_AUTO_RESOLVED, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel, raw_otsu_cc, require,
 )
 
 # Fixed tool identities (colour + marker + linestyle) so series survive greyscale.
@@ -48,12 +48,12 @@ TW = pubfig.TEXT_WIDTH_IN
 
 
 def save(fig, name, folder=None, tight=True, pad=0.4):
-    """`pubfig.save` into this paper's main-figure folder unless told otherwise."""
+    """`pubfig.save` into the main-figure folder unless told otherwise."""
     pubfig.save(fig, name, folder or MAIN, tight=tight, pad=pad)
 
 
 def caption(name, text, folder=None):
-    """`pubfig.caption` into this paper's main-figure folder unless told otherwise."""
+    """`pubfig.caption` into the main-figure folder unless told otherwise."""
     pubfig.caption(name, text, folder or MAIN)
 
 

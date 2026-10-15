@@ -17,7 +17,7 @@ MAG = OKABE["purple"]
 VERM = OKABE["vermillion"]
 GREY = OKABE["grey"]
 
-# Authored at the true submission text width (F.TW = 5.147 in) so
+# Authored at the text width (F.TW = 5.147 in) so
 # \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt on the
 # page. Narrower canvas -> taller figure; the 2x2 plot grid (a-d) sits above a
 # full-width 3-across image row (e). Extra top/left margin + hspace keeps panel
@@ -66,11 +66,11 @@ panel(axb, "b", "depth gradient")
 ext = pd.read_csv(R/"b_viability_external.csv")
 tv = ext.true_viability.values
 mac = ext["Kerkhoff_macro_peakcount"].values
-fx = ext["fluorostats_maxima(NEW)"].values
+fx = ext["fluorostats_maxima"].values
 # fluorostats-vs-ground-truth agreement (Lin's CCC + MAE), from the producer's table
 agr = pd.read_csv(R/"b_viability_external_agreement.csv", float_precision="round_trip").set_index("estimator")
-ccc_v = agr.loc["fluorostats_maxima(NEW)", "lins_ccc"]
-mae_v = agr.loc["fluorostats_maxima(NEW)", "MAE"]
+ccc_v = agr.loc["fluorostats_maxima", "lins_ccc"]
+mae_v = agr.loc["fluorostats_maxima", "MAE"]
 axc = fig.add_subplot(gs[1, :2])
 axc.scatter(tv, ext["fluorostats_objcount"].values, s=10, color=GREY, alpha=0.55,
             zorder=1, label="fs alt. modes (count, area)")
@@ -99,13 +99,14 @@ axd.text(0.5, 0.08, f"vs ground truth: CCC {ccc_v:.3f}, MAE {mae_v:.3f}", transf
 panel(axd, "d", "fluorostats $-$ macro = 0")
 
 # (e) Live/Dead qualitative overlay
-live = F.load_sbiad2130_channel(2)
-dead = F.load_sbiad2130_channel(1)
+# exception DAT-3: an overlay shows the segmentation on the image itself, so the
+# display masks are computed here from the raw stack with the tables' settings.
+live = F.load_sbiad2130_channel(F.SBIAD2130_LIVE_CH)
+dead = F.load_sbiad2130_channel(F.SBIAD2130_DEAD_CH)
 z = live.shape[0]//2
 gs_c = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[2, :], wspace=0.10)
-seg = dict(method="otsu", min_size=8)
-lm_mid = binarize(live[z], **seg)
-dm_mid = binarize(dead[z], **seg)
+lm_mid = binarize(live[z], **F.SBIAD2130_SEG)
+dm_mid = binarize(dead[z], **F.SBIAD2130_SEG)
 # short, wrapped titles so each ~1.6-in crop keeps its label inside its own cell
 panels_c = [
     (F.composite2ch(live[z], dead[z]), "raw mid-plane\n(green live / magenta dead)"),

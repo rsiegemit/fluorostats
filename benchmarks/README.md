@@ -1,8 +1,7 @@
 # Benchmarks
 
-The benchmark harness behind the FluoroStats methods paper: the scripts that
-regenerate the paper's figures and tables, the precomputed metric tables they
-plot, the dataset manifest, and the baseline-validation record. Each script also
+The FluoroStats benchmark harness: the scripts that regenerate the benchmark
+figures and tables, the precomputed metric tables they plot, the dataset manifest, and the baseline-validation record. Each script also
 doubles as a worked example of the library's analysis modules.
 
 - **[`DATA_MANIFEST.md`](DATA_MANIFEST.md)** — every dataset used, with licence and source URL.
@@ -10,7 +9,6 @@ doubles as a worked example of the library's analysis modules.
 - `figstyle.py` — shared publication styling (Okabe–Ito palette, panel labels, scale bars).
 - `results/` — small precomputed metric tables the figures plot (+ `ve_crops.npz` image crops).
 - `producers/` — one script per `results/` table that regenerates it from the public data.
-- `previews/` — expected output for the offline figures.
 
 ## Figures that reproduce offline (from bundled `results/` — no download)
 
@@ -37,7 +35,8 @@ python fig5_homogeneity_stats.py      # writes figures/ (git-ignored)
 ## Figures that require a dataset download (scripts provided)
 
 These read raw microscopy rather than a bundled table. Fetch the dataset from
-`DATA_MANIFEST.md` into `$FLUOROSTATS_DATA` (default `./data/downloads`), then run:
+`DATA_MANIFEST.md` into `$FLUOROSTATS_DATA` (default: `data/downloads` under the
+repository root, wherever the script is run from), then run:
 
 | script | figure | dataset |
 |---|---|---|
@@ -45,10 +44,10 @@ These read raw microscopy rather than a bundled table. Fetch the dataset from
 | `fig4_viability.py` | depth-resolved Live/Dead viability | S-BIAD2130 |
 | `figS2_runtime.py` | runtime + determinism | BBBC024 |
 
-For Figure 2, the summary panels (b forest, d crowding curve) reproduce from the
-bundled `results/` tables; only the image panels (a/c/e) need the raw BBBC039/BBBC024
-images. The per-image table the figure plots, `b2_nuclei_methods_perimage.csv`, is
-written by `producers/b2_nuclei_methods_perimage.py` (see below).
+For Figure 2, the summary panels (a, b, d) reproduce from the bundled `results/`
+tables; only the image panels (c, e) need the raw BBBC039/BBBC024 images. Panel a
+plots `b2_nuclei_ci.csv`, derived from the per-image table
+`b2_nuclei_methods_perimage.csv` (see below).
 
 The deep-learning baselines (StarDist, Cellpose, Omnipose) were evaluated on a
 GPU/ROCm cluster; their per-image outputs are shipped in `results/`
@@ -61,22 +60,20 @@ Every table in `results/` that the public data can regenerate has a producer in
 `producers/` named after it; it reads `$FLUOROSTATS_DATA`, measures with the
 `fluorostats` library, uses explicit seeds, and overwrites `results/<same name>`.
 Next to each table it writes `results/<same name>.run.json`: the producer, its
-parameters and the python / numpy / scipy / scikit-image / fluorostats versions
-(timing tables also record the CPU). A committed `.run.json` marks a table that was
-re-run with those versions and reproduced byte for byte.
+parameters (including `small_object_rule` wherever a `min_size` applies), the
+fluorostats git commit (`-dirty` when tracked files other than `results/` were
+modified) and the python / numpy / scipy / scikit-image / fluorostats versions
+(timing tables also record the CPU).
 
 ```bash
 # from the repo root
 FLUOROSTATS_DATA=/path/to/downloads PYTHONPATH=src python benchmarks/producers/b_dsb2018.py
 ```
 
-"Verified" is the check made when the producers were added: the producer was run on
-the full dataset and its output compared with the committed table (EXACT =
-byte-identical; NUMERIC = every value equal within 1e-9 relative). STALE marks a
-table that a re-run with the current library no longer reproduces: since
-`segment.binarize` stopped removing objects of exactly `min_size` pixels, its
-fluorostats values differ in the third or fourth decimal. Stale tables are not
-regenerated here.
+"Verified" records how a re-run of the producer on the full dataset compares
+with the committed table (EXACT = byte-identical; NUMERIC = every value equal
+within 1e-9 relative). The `git_commit` in each `.run.json` names the code a
+table was produced with.
 
 | table(s) | producer | data | verified |
 |---|---|---|---|
@@ -93,6 +90,7 @@ regenerated here.
 | `b_dsb2018.csv` | `b_dsb2018.py` | DSB2018 | EXACT when added; STALE |
 | `b_homogeneity_multi.csv`, `b_homogeneity_multi_corr.csv` | `b_homogeneity_multi.py` | none (synthetic) | EXACT |
 | `b_noise_robustness.csv` | `b_noise_robustness.py` | BBBC024 | EXACT |
+| `b_nuclei_count_agreement.csv` | `b_nuclei_count_agreement.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv`) | BBBC039 | new |
 | `b_nuclei_size.csv` | `b_nuclei_size.py` | BBBC024 | EXACT |
 | `b_skeleton_tree.csv` | `b_skeleton_tree.py` | none (synthetic) | EXACT |
 | `b_timing.csv` | `b_timing.py` | BBBC039 | re-run differs (wall-clock) |
@@ -117,8 +115,8 @@ raw data and are re-run offline:
 | `b_viability_external_agreement.csv` | `b_viability_external_agreement.py` | `b_viability_external.csv` | EXACT |
 
 Timing tables are wall-clock measurements: a re-run reproduces the relative cost of
-each operation, not the committed milliseconds. Their two DL rows (StarDist 215.1 ms,
-Cellpose 5547.0 ms per image) are constants measured on the cluster CPU.
+each operation, not the committed milliseconds. Their two DL rows are constants
+measured on the cluster CPU (`producers/common.py`, `DL_CPU_MS`).
 
 ### Tables without a producer here
 

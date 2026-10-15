@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import tifffile
 
-from common import DATA, require, write_table
+from common import DATA, SMALL_OBJECT_RULE, require, write_table
 from fluorostats.segment import segment_channel
 
 TOOLS = ["REAVER_Auto", "AngioTool_Auto", "AngioQuant_Auto", "ImageJ_Auto", "RAVE_Auto"]
@@ -49,7 +49,7 @@ def main():
         rec["fluorostats"] = fluorostats_area_fraction(root / "_Original_Images" / f"{name}.tif")
         rows.append(rec)
     df = pd.DataFrame(rows)
-    write_table(df, "b4_reaver_ranking_perimage", {"tools": TOOLS, "fluorostats": SEG})
+    write_table(df, "b4_reaver_ranking_perimage", {"tools": TOOLS, "fluorostats": SEG, "small_object_rule": SMALL_OBJECT_RULE})
     print(df.drop(columns=["image"]).describe().to_string())
 
 

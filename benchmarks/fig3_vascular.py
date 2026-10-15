@@ -15,7 +15,7 @@ R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]
 GREY = OKABE["grey"]
 
-# Authored at the manuscript text width (F.TW = 5.147 in) so the LaTeX
+# Authored at the text width (F.TW = 5.147 in) so the LaTeX
 # \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt.
 # Narrower canvas -> taller stacked layout, three rows, reading order a->b->c->d:
 #   row 0  (a) six-tool REAVER accuracy ranking (full width)
@@ -55,7 +55,7 @@ gs_b = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1, :], hspace=0.06
 # scale bar and auto->li label are preserved. Same window for every panel so the
 # raw / VesselExpress / fluorostats overlays stay pixel-aligned.
 YB0, YB1 = 90, 305
-labs = ["raw", "VesselExpress", r"fluorostats (auto$\rightarrow$li)"]
+labs = ["raw", "VesselExpress", rf"fluorostats (auto$\rightarrow${F.VE_AUTO_RESOLVED})"]
 for row in range(2):
     raw = crops[f"raw{row}"][YB0:YB1]
     ve_m = crops[f"ve{row}"][YB0:YB1]
@@ -137,13 +137,22 @@ for sp in axr.spines.values():
 assert (ph.fs_branches == ph.true_segments).all() and (ph.vf_err_pct == 0).all(), \
     "b_vascular_phantom_3d.csv no longer exact: update the panel (c) caption"
 qualifying = list(rk.tool[rk.unbiased])   # tools whose bias test is not significant
+# bias wording from the signed mean bias and the bias test the producer wrote
+biased = rk[~rk.unbiased]
+fs_row = rk.set_index("tool").loc["fluorostats"]
+fs_bias = ("no significant bias" if fs_row.unbiased else
+           f"a systematic {'under' if fs_row.mean_bias < 0 else 'over'}estimate (mean bias {fs_row.mean_bias:+.3f})")
+same_sign = (biased.mean_bias < 0).all() or (biased.mean_bias > 0).all()
+others = (f"every tool except {' and '.join(qualifying)} is biased in the same direction" if same_sign
+          else "the biased tools differ in direction")
+fs_rank = list(rk.tool).index("fluorostats") + 1
 cap = ("Figure 3 | Vascular networks. (a) fluorostats inserted into the six-tool REAVER benchmark "
  f"(n={rk.n_images.iloc[0]}): area-fraction error vs manual ground truth (mean ± residual s.d. = accuracy and precision); "
  "'unbiased' marks tools whose mean error is not significantly different from 0 (one-sample t-test, "
- f"Bonferroni across the six tools); only {' and '.join(qualifying)} qualifies. fluorostats (blue) ranks alongside AngioTool "
- "in accuracy but, like every tool except REAVER, carries a small systematic underestimate. (b) Real "
+ f"Bonferroni across the {len(rk)} tools); only {' and '.join(qualifying)} qualifies. fluorostats (blue) ranks "
+ f"{fs_rank} of {len(rk)} by mean absolute error, with {fs_bias}; {others}. (b) Real "
  "light-sheet vessels (VesselExpress, Zenodo 6025935), 3-slice MIP crops: raw, VesselExpress software "
- "segmentation (magenta), fluorostats auto->li (blue); scale bar 100 µm. (c) 3D synthetic phantom vs "
+ f"segmentation (magenta), fluorostats auto->{F.VE_AUTO_RESOLVED} (blue); scale bar 100 µm. (c) 3D synthetic phantom vs "
  "exact ground truth: centreline-length error (%) with branch counts recovered exactly; volume-fraction "
  "error is 0.0 (exact) for every phantom. (d) Bland–Altman of vessel volume fraction, fluorostats vs "
  f"VesselExpress (n={len(fs)}): a ~{offset:.1f}× systematic offset (bias line ± 95% limits) with consistent ranking "

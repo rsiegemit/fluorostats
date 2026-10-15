@@ -39,12 +39,12 @@ GREEN = OKABE["green"]
 VERM = OKABE["vermillion"]
 
 # ================================================================ figure
-# Authored at the manuscript \textwidth (F.TW = 5.147 in) so
+# Authored at the text width (F.TW = 5.147 in) so
 # \includegraphics[width=\textwidth] is 1:1. At this narrow width a and b cannot
 # share a row without crushing their grouped bars + multi-entry legends, so the
 # three panels stack vertically (a, b, c), each spanning the full width.
 # constrained layout spaces everything; save with tight=False.
-# Height trimmed to fit the sn-jnl \textheight (7.65 in) with room for the short
+# Height trimmed to fit a 7.65 in text height with room for the short
 # caption: 6.5 in overall. constrained-layout padding pulled in tight so the three
 # stacked panels use the reduced height without empty gaps between rows.
 fig = plt.figure(figsize=(figstyle.TW, 6.5), layout="constrained")
