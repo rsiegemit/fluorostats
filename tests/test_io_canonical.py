@@ -1,7 +1,7 @@
 """Tests for io_canonical: (C, Z, Y, X) / (C, Y, X) layout from reader arrays.
 
 Axis-name reordering is exercised end to end through the loaders in
-test_io.py (TIFF) and test_io_vendors.py (ND2, CZI fakes).
+test_io.py and test_io_tiff.py (TIFF) and the test_io_vendors*.py files (ND2, CZI fakes).
 """
 
 import warnings

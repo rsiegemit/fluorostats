@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import tifffile
 
-from fluorostats import io, io_vendors
+from fluorostats import io, io_tiff
 
 
 def test_ome_metadata_parse_error():
@@ -16,7 +16,7 @@ def test_ome_metadata_parse_error():
     with pytest.warns(
         RuntimeWarning, match="OME-XML .voxel size and channel names. could not be read"
     ):
-        out = io_vendors._parse_ome_metadata("<not valid xml", meta)
+        out = io_tiff._parse_ome_metadata("<not valid xml", meta)
     assert out is meta
 
 
@@ -24,7 +24,7 @@ def test_imagej_metadata_unparseable_spacing_warns():
     # spacing present but non-float -> announced, defaults kept
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
     with pytest.warns(RuntimeWarning, match="'notanumber' is not a positive number"):
-        out = io_vendors._parse_imagej_metadata({"spacing": "notanumber"}, meta)
+        out = io_tiff._parse_imagej_metadata({"spacing": "notanumber"}, meta)
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
@@ -37,7 +37,7 @@ def test_ome_metadata_channel_name_append():
         "</Pixels></Image></OME>"
     )
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io_vendors._parse_ome_metadata(ome_xml, meta)
+    out = io_tiff._parse_ome_metadata(ome_xml, meta)
     assert out["channel_names"] == ["EGFP", "mCherry"]
     assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
     assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}  # not mutated
@@ -45,15 +45,15 @@ def test_ome_metadata_channel_name_append():
 
 def test_ome_metadata_without_pixels_returns_meta_unchanged():
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    assert io_vendors._parse_ome_metadata("<OME><Image/></OME>", meta) == meta
+    assert io_tiff._parse_ome_metadata("<OME><Image/></OME>", meta) == meta
 
 
 def test_imagej_metadata_returns_new_dict():
     meta = {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
-    out = io_vendors._parse_imagej_metadata({"spacing": 2.0, "unit": "micron"}, meta)
+    out = io_tiff._parse_imagej_metadata({"spacing": 2.0, "unit": "micron"}, meta)
     assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
     assert meta == {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
-    assert io_vendors._parse_imagej_metadata({}, meta) is meta
+    assert io_tiff._parse_imagej_metadata({}, meta) is meta
 
 
 @pytest.mark.parametrize("unit, scale", [("micron", 1.0), ("nm", 1e-3)])
@@ -102,7 +102,7 @@ def test_imagej_resolution_without_a_unit_is_not_calibration(tmp_path):
 )
 def test_imagej_xy_missing_or_zero_resolution_is_not_calibration(tags):
     tif = types.SimpleNamespace(pages=[types.SimpleNamespace(tags=tags)])
-    assert io_vendors._imagej_xy_um(tif, {"unit": "micron"}) is None
+    assert io_tiff._imagej_xy_um(tif, {"unit": "micron"}) is None
 
 
 def test_ome_unnamed_channel_keeps_its_position(tmp_path):

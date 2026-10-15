@@ -24,7 +24,7 @@ Metadata dict carries:
   - format: str — detected file format
 
 This module is the entry point and the format registry; the per-format readers
-live in ``io_vendors`` and the array layout rules in ``io_canonical``.
+live in ``io_tiff`` and ``io_vendors`` and the array layout rules in ``io_canonical``.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from typing import Callable
 import imageio.v3 as iio
 import numpy as np
 
-from . import io_vendors, keyence
+from . import io_tiff, io_vendors, keyence
 from .io_canonical import canonicalize_image, canonicalize_volume
 from .io_vendors import READER_EXTRAS
 
@@ -261,15 +261,15 @@ class Format:
 FORMATS: dict[str, Format] = {
     ".tif": Format(
         "TIFF / OME-TIFF",
-        io_vendors.load_tiff_volume,
-        io_vendors.load_tiff_image,
-        volume_meta=io_vendors.read_tiff_volume_meta,
+        io_tiff.load_tiff_volume,
+        io_tiff.load_tiff_image,
+        volume_meta=io_tiff.read_tiff_volume_meta,
     ),
     ".tiff": Format(
         "TIFF / OME-TIFF",
-        io_vendors.load_tiff_volume,
-        io_vendors.load_tiff_image,
-        volume_meta=io_vendors.read_tiff_volume_meta,
+        io_tiff.load_tiff_volume,
+        io_tiff.load_tiff_image,
+        volume_meta=io_tiff.read_tiff_volume_meta,
     ),
     ".png": Format("PNG", None, _load_standard_image),
     ".jpg": Format("JPEG", None, _load_standard_image),
