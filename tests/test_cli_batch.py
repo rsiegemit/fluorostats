@@ -3,17 +3,10 @@
 import json
 
 import numpy as np
-import tifffile
 from click.testing import CliRunner
 
+from depth_data import decay_stack
 from fluorostats.cli import cli
-
-
-def _decay_stack(path, lam=20.0, n_z=16, yx=8, bg=5.0, i0=150.0):
-    """Write a synthetic z-stack whose per-slice mean is i0*exp(-z/lam)+bg."""
-    z = np.arange(n_z)[:, None, None]
-    vol = np.broadcast_to((i0 * np.exp(-z / lam) + bg).astype(np.float32), (n_z, yx, yx))
-    tifffile.imwrite(path, np.ascontiguousarray(vol))
 
 
 def _blob_stack_npy(path, n_live=5, n_dead=5, z=4, size=64, seed=0):
@@ -37,11 +30,11 @@ def _blob_stack_npy(path, n_live=5, n_dead=5, z=4, size=64, seed=0):
 def test_cli_depth_cmd(tmp_path):
     """depth <manifest> should exit 0 and produce AUC csv."""
     blank = tmp_path / "blank.tif"
-    _decay_stack(blank, lam=1e9, i0=0.0)
+    decay_stack(blank, lam=1e9, i0=0.0)
     stacks = []
     for i in range(2):
         p = tmp_path / f"s{i}.tif"
-        _decay_stack(p)
+        decay_stack(p)
         stacks.append({"label": f"s{i}", "path": str(p)})
     manifest = {
         "channel": 0,
@@ -62,7 +55,7 @@ def test_cli_depth_cmd(tmp_path):
 def test_cli_depth_cmd_output_override(tmp_path):
     """depth <manifest> --output DIR should write to the override dir."""
     blank = tmp_path / "blank.tif"
-    _decay_stack(blank, lam=1e9, i0=0.0)
+    decay_stack(blank, lam=1e9, i0=0.0)
     stacks = [{"label": "s0", "path": str(blank)}]
     manifest = {
         "channel": 0,

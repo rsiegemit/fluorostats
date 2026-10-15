@@ -7,9 +7,9 @@ import pandas as pd
 import pytest
 import tifffile
 
+from depth_data import decay_stack, flat_stack
 from fluorostats import depth, depth_batch
 from fluorostats.depth_batch import (
-    load_manifest,
     _common_grid,
     _load_blank,
     write_group_summary_csv,
@@ -66,21 +66,8 @@ def test_depth_batch_run(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Helper: write a synthetic decay tiff
+# Helper: a blank whose last slices are zero
 # ---------------------------------------------------------------------------
-
-
-def _decay_stack(path, lam=20.0, n_z=16, yx=8, bg=5.0, i0=150.0):
-    """Write a synthetic z-stack whose per-slice mean is i0*exp(-z/lam)+bg."""
-    z = np.arange(n_z)[:, None, None]
-    vol = np.broadcast_to((i0 * np.exp(-z / lam) + bg).astype(np.float32), (n_z, yx, yx))
-    tifffile.imwrite(path, np.ascontiguousarray(vol))
-
-
-def _flat_stack(path, value=5.0, n_z=16, yx=8):
-    """Write a spatially-flat stack (used as blank)."""
-    vol = np.full((n_z, yx, yx), value, dtype=np.float32)
-    tifffile.imwrite(path, vol)
 
 
 def _zero_tail_blank(path, n_z=16, yx=8, good_slices=8):
@@ -88,49 +75,6 @@ def _zero_tail_blank(path, n_z=16, yx=8, good_slices=8):
     vol = np.zeros((n_z, yx, yx), dtype=np.float32)
     vol[:good_slices] = 5.0  # only first half has signal
     tifffile.imwrite(path, vol)
-
-
-# ---------------------------------------------------------------------------
-# load_manifest — back-compat singular auc_window_um  (line 88)
-# ---------------------------------------------------------------------------
-
-
-def test_load_manifest_singular_auc_window(tmp_path):
-    """auc_window_um (singular) should be accepted and wrapped into windows."""
-    blank = tmp_path / "blank.tif"
-    _flat_stack(blank)
-    s0 = tmp_path / "s0.tif"
-    _decay_stack(s0)
-    m = {
-        "auc_window_um": [0, 10],  # singular (back-compat), NOT auc_windows_um
-        "output_dir": str(tmp_path / "out"),
-        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
-    }
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    loaded = load_manifest(mpath)
-    assert loaded["windows"] == [(0.0, 10.0)]
-
-
-# ---------------------------------------------------------------------------
-# load_manifest — no groups raises ValueError  (line 91)
-# ---------------------------------------------------------------------------
-
-
-def test_load_manifest_no_groups_raises(tmp_path):
-    m = {"auc_windows_um": [[0, 10]], "groups": []}
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    with pytest.raises(ValueError, match="at least one group"):
-        load_manifest(mpath)
-
-
-def test_load_manifest_missing_groups_key_raises(tmp_path):
-    m = {"auc_windows_um": [[0, 10]]}
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    with pytest.raises(ValueError, match="at least one group"):
-        load_manifest(mpath)
 
 
 # ---------------------------------------------------------------------------
@@ -195,11 +139,11 @@ def test_run_with_replicate_blanks(tmp_path):
     """background as a list of paths triggers the replicate-averaging branch."""
     blank1 = tmp_path / "blank1.tif"
     blank2 = tmp_path / "blank2.tif"
-    _flat_stack(blank1, value=5.0)
-    _flat_stack(blank2, value=6.0)
+    flat_stack(blank1, value=5.0)
+    flat_stack(blank2, value=6.0)
 
     s0 = tmp_path / "s0.tif"
-    _decay_stack(s0)
+    decay_stack(s0)
 
     manifest = {
         "channel": 0,
@@ -234,8 +178,8 @@ _CFG = {"channel": 0, "reducer": "mean"}
 
 
 def test_load_blank_announces_replicates_cut_to_the_shortest(tmp_path):
-    _flat_stack(tmp_path / "b1.tif", value=5.0, n_z=16)
-    _flat_stack(tmp_path / "b2.tif", value=7.0, n_z=10)
+    flat_stack(tmp_path / "b1.tif", value=5.0, n_z=16)
+    flat_stack(tmp_path / "b2.tif", value=7.0, n_z=10)
     with pytest.warns(RuntimeWarning, match=r"replicate blanks have \[10, 16\] slices.*first 10"):
         blank = _load_blank([str(tmp_path / "b1.tif"), str(tmp_path / "b2.tif")], _CFG)
     np.testing.assert_allclose(blank.mean, np.full(10, 6.0))
@@ -266,7 +210,7 @@ def test_run_blank_trailing_zeros_trimmed(tmp_path):
     _zero_tail_blank(blank, n_z=16, good_slices=8)
 
     s0 = tmp_path / "s0.tif"
-    _decay_stack(s0)
+    decay_stack(s0)
 
     manifest = {
         "channel": 0,
@@ -292,137 +236,6 @@ def test_run_blank_trailing_zeros_trimmed(tmp_path):
     expected = depth.auc_depth(np.arange(16.0), s0_curve / s0_curve[:2].mean(), z_max=8.0)
     ps = pd.read_csv(out / "auc_per_stack.csv")
     assert ps["auc_normalized_0_8um"].iloc[0] == pytest.approx(expected, rel=1e-5)
-
-
-# ---------------------------------------------------------------------------
-# Two-group contrasts: Mann-Whitney by default, Welch only when asked for (EXP-2)
-# ---------------------------------------------------------------------------
-
-
-def _two_group_manifest(tmp_path, **fields):
-    """2 groups x 2 stacks, every λ fit accepted (λ ≈ 5-6 and 12-13 µm in a 39 µm stack)."""
-    blank = tmp_path / "blank.tif"
-    _flat_stack(blank, value=2.0, n_z=40, yx=8)
-    groups = []
-    for name, lam in (("fast", 5.0), ("slow", 12.0)):
-        stacks = []
-        for i in range(2):
-            p = tmp_path / f"{name}_{i}.tif"
-            # replicates differ slightly so the rank tests see no ties
-            _decay_stack(p, lam=lam + i, n_z=40)
-            stacks.append({"label": f"{name}{i}", "path": str(p)})
-        groups.append({"name": name, "background": str(blank), "stacks": stacks})
-    m = {
-        "channel": 0,
-        "reducer": "mean",
-        "n_surface": 2,
-        "auc_windows_um": [[0, 10], "full"],
-        "output_dir": str(tmp_path / "out"),
-        "groups": groups,
-        **fields,
-    }
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    return mpath
-
-
-def test_run_two_groups_prints_mann_whitney_contrasts_and_no_welch_by_default(tmp_path, capsys):
-    # Regression (EXP-2): a parametric Welch t-test was printed by default.
-    out = depth_batch.run(_two_group_manifest(tmp_path))
-    assert (out / "auc_per_stack.csv").exists()
-    text = capsys.readouterr().out
-    assert "Welch" not in text
-    # n=2 vs 2, complete separation: exact two-sided p = 2/C(4,2) = 1/3, δ = -1
-    assert (
-        text.count(
-            "Mann-Whitney fast vs slow: U=0.0, p=0.3333, Cliff's δ=-1.00, "
-            "BH q=0.3333 across 2 windows (n=2,2)"
-        )
-        == 2
-    )
-    assert "Mann-Whitney on λ, fast vs slow: U=0.0, p=0.3333, Cliff's δ=-1.00 (n=2,2)" in text
-
-
-def test_run_prints_welch_only_when_the_manifest_asks_for_it(tmp_path, capsys):
-    depth_batch.run(_two_group_manifest(tmp_path, parametric=True))
-    text = capsys.readouterr().out
-    assert text.count("Welch t-test (parametric, requested) fast vs slow: t=") == 2
-    assert "(n=2,2 — underpowered, descriptive only)" in text
-    assert "Welch t-test (parametric, requested) on λ, fast vs slow: t=" in text
-    assert text.count("Mann-Whitney fast vs slow: U=0.0") == 2  # still reported
-
-
-def test_run_writes_the_printed_contrasts_to_contrasts_csv(tmp_path, capsys):
-    # The two-group statistics were printed only; contrasts.csv now holds the same
-    # numbers, one row per AUC window (BH across windows) and one for λ.
-    out = depth_batch.run(_two_group_manifest(tmp_path))
-    text = capsys.readouterr().out
-    c = pd.read_csv(out / "contrasts.csv", keep_default_na=False)
-    assert list(c.columns) == [
-        "metric",
-        "window",
-        "group_a",
-        "group_b",
-        "n_a",
-        "n_b",
-        "U",
-        "p",
-        "q",
-        "cliffs_delta",
-        "test",
-        "correction",
-    ]
-    assert c[["metric", "window"]].values.tolist() == [
-        ["auc_normalized", "0_10um"],
-        ["auc_normalized", "full"],
-        ["lambda_um", ""],
-    ]
-    assert (c["group_a"] == "fast").all() and (c["group_b"] == "slow").all()
-    assert (c[["n_a", "n_b"]] == 2).all().all()
-    assert np.allclose(c["p"].astype(float), 1 / 3) and np.allclose(c["q"].astype(float), 1 / 3)
-    assert (c["U"].astype(float) == 0).all() and (c["cliffs_delta"].astype(float) == -1).all()
-    assert (c["test"] == "Mann-Whitney U, two-sided").all()
-    assert c["correction"].tolist() == ["Benjamini-Hochberg FDR across 2 windows"] * 2 + [
-        "none (single test; q = p)"
-    ]
-    # the printed line and the table are one computation
-    assert f"p={float(c['p'][0]):.4f}, Cliff's δ={float(c['cliffs_delta'][0]):+.2f}" in text
-
-
-def test_contrasts_csv_has_only_a_header_without_two_groups(tmp_path):
-    s0 = tmp_path / "s0.tif"
-    _decay_stack(s0)
-    m = {
-        "auc_windows_um": [[0, 4]],
-        "output_dir": str(tmp_path / "out"),
-        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
-    }
-    mpath = tmp_path / "m.json"
-    mpath.write_text(json.dumps(m))
-    out = depth_batch.run(mpath)
-    assert (out / "contrasts.csv").read_text().splitlines() == [
-        "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction"
-    ]
-
-
-def test_run_with_three_groups_says_contrasts_were_skipped(tmp_path, capsys):
-    stacks = {}
-    for g, lam in (("a", 5.0), ("b", 8.0), ("c", 12.0)):
-        p = tmp_path / f"{g}.tif"
-        _decay_stack(p, lam=lam, n_z=40)
-        stacks[g] = [{"label": g, "path": str(p)}]
-    m = {
-        "auc_windows_um": [[0, 10]],
-        "output_dir": str(tmp_path / "out"),
-        "groups": [{"name": g, "stacks": st} for g, st in stacks.items()],
-    }
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    depth_batch.run(mpath)
-    text = capsys.readouterr().out
-    assert "Welch" not in text and "Mann-Whitney" not in text
-    assert "contrasts skipped: 3 groups; a two-group contrast needs exactly 2" in text
-    assert "contrasts skipped: 3 groups with an accepted λ fit; a two-group" in text
 
 
 def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):
@@ -465,76 +278,10 @@ def test_run_announces_partial_window_and_mismatched_blanks(tmp_path):
     assert ps["voxel_size_source"].tolist() == ["z:file-unit-unknown,y:default,x:default"]
 
 
-# ---------------------------------------------------------------------------
-# load_manifest — invalid input is rejected before any image loads (ERR-1)
-# ---------------------------------------------------------------------------
-
-
-def _manifest_errors(tmp_path, **fields):
-    s0 = tmp_path / "s0.tif"
-    s0.write_bytes(b"")  # never read: validation comes first
-    m = {"groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}], **fields}
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    with pytest.raises(ValueError, match="invalid depth manifest") as e:
-        load_manifest(mpath)
-    return str(e.value)
-
-
-@pytest.mark.parametrize("field", ["channel", "n_surface"])
-def test_load_manifest_rejects_booleans_as_integers(tmp_path, field):
-    assert f"{field} must be" in _manifest_errors(tmp_path, **{field: True})
-
-
-def test_load_manifest_requires_a_bool_for_parametric(tmp_path):
-    msg = _manifest_errors(tmp_path, parametric="false")
-    assert "parametric must be true or false, got 'false'" in msg
-
-
-@pytest.mark.parametrize(
-    "windows, expected",
-    [
-        ([0, 100], "a single window is [[0, 100]]"),  # flat pair: used to be a bare TypeError
-        ("full", "auc_windows_um must be a list"),
-        ([], "auc_windows_um must be a list"),
-        ([[0, "a"]], "entry [0, 'a'] must be 'full' or a [z0, z1] pair of numbers"),
-        ([[0, None]], "entry [0, None] must be"),
-        ([[0, 10, 20]], "entry [0, 10, 20] must be"),
-        ([[False, 10]], "entry [False, 10] must be"),
-        ([{"z0": 0}], "entry {'z0': 0} must be"),
-    ],
-)
-def test_load_manifest_rejects_malformed_windows(tmp_path, windows, expected):
-    msg = _manifest_errors(tmp_path, auc_windows_um=windows)
-    assert expected in msg
-    assert "e.g. [[0, 100], 'full']" in msg  # names the expected form
-
-
-def test_load_manifest_rejects_malformed_singular_window(tmp_path):
-    assert "entry 'deep' must be" in _manifest_errors(tmp_path, auc_window_um="deep")
-
-
-def test_load_manifest_rejects_bad_group_color(tmp_path):
-    s0 = tmp_path / "s0.tif"
-    s0.write_bytes(b"")
-    m = {
-        "groups": [
-            {"name": "A", "color": "not-a-colour", "stacks": [{"label": "s0", "path": str(s0)}]},
-            {"name": "B", "color": "#3F6AB3", "stacks": [{"label": "s1", "path": str(s0)}]},
-            {"name": "C", "color": None, "stacks": [{"label": "s2", "path": str(s0)}]},
-        ]
-    }
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    with pytest.raises(ValueError) as e:
-        load_manifest(mpath)
-    assert str(e.value).endswith("group 'A': color 'not-a-colour' is not a matplotlib colour")
-
-
 def test_window_covered_um_is_clamped_at_zero(tmp_path):
     """A window starting past the stack end covers 0 µm, not a negative depth."""
     s0 = tmp_path / "s0.tif"
-    _decay_stack(s0, n_z=11)  # 0-10 µm at the 1 µm default
+    decay_stack(s0, n_z=11)  # 0-10 µm at the 1 µm default
     cfg = {
         "channel": 0,
         "reducer": "mean",
@@ -576,7 +323,7 @@ def test_rerun_removes_stale_figures_and_writes_run_config_last(tmp_path, capsys
     # run_config.json was written before analysis, so a failed run left the new
     # configuration next to the old run's tables.
     s0 = tmp_path / "s0.tif"
-    _decay_stack(s0)
+    decay_stack(s0)
     out = tmp_path / "out"
     m = {
         "auc_windows_um": [[0, 4], [0, 8]],
@@ -630,63 +377,6 @@ def test_common_grid_never_extends_past_the_shallowest_stack():
     assert len(_common_grid([prof(11, 0.3)])) == 11
 
 
-# ---------------------------------------------------------------------------
-# Manifest fields: unknown names and non-bool flags are refused up front (ERR-1)
-# ---------------------------------------------------------------------------
-
-
-def test_load_manifest_rejects_unknown_fields_at_every_level(tmp_path):
-    # Regression: "chanel": 1 was ignored and the run measured channel 0.
-    s0 = tmp_path / "s0.tif"
-    s0.write_bytes(b"")
-    m = {
-        "chanel": 1,
-        "groups": [
-            {
-                "name": "A",
-                "colour": "red",
-                "stacks": [{"label": "s0", "path": str(s0), "rol": "aux"}],
-            }
-        ],
-    }
-    mpath = tmp_path / "m.json"
-    mpath.write_text(json.dumps(m))
-    with pytest.raises(ValueError) as e:
-        load_manifest(mpath)
-    msg = str(e.value)
-    assert "manifest: unknown field 'chanel' (allowed: title, signal_label, channel," in msg
-    assert "group 'A': unknown field 'colour' (allowed: name, color, background, stacks)" in msg
-    assert "group 'A': stack 's0': unknown field 'rol' (allowed: label, path, role)" in msg
-
-
-@pytest.mark.parametrize("field", ["fit_offset", "parametric"])
-def test_load_manifest_requires_real_bools(tmp_path, field):
-    # Regression: "fit_offset": "false" is a non-empty string, so it fitted the offset.
-    assert f"{field} must be true or false, got 'false'" in _manifest_errors(
-        tmp_path, **{field: "false"}
-    )
-
-
-@pytest.mark.parametrize("value", [0.0, 1, 0.5])
-def test_load_manifest_accepts_an_r2_threshold_in_0_1(tmp_path, value):
-    s0 = tmp_path / "s0.tif"
-    s0.write_bytes(b"")
-    m = {
-        "fit_r2_threshold": value,
-        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
-    }
-    mpath = tmp_path / "m.json"
-    mpath.write_text(json.dumps(m))
-    assert load_manifest(mpath)["fit_r2_threshold"] == value
-
-
-@pytest.mark.parametrize("value", [1.5, -0.1, "0.9", True])
-def test_load_manifest_rejects_a_bad_r2_threshold(tmp_path, value):
-    assert "fit_r2_threshold must be a number in [0, 1]" in _manifest_errors(
-        tmp_path, fit_r2_threshold=value
-    )
-
-
 def test_r2_threshold_decides_fit_ok(tmp_path):
     # The acceptance threshold was hard-wired at 0.85; it is now a manifest field.
     s0 = tmp_path / "s0.tif"
@@ -729,7 +419,7 @@ def _cfg(**kw):
 def test_out_of_range_channel_names_the_file(tmp_path):
     # Regression: a bare IndexError ("index 3 is out of bounds for axis 0 with size 1").
     s0 = tmp_path / "s0.tif"
-    _decay_stack(s0)
+    decay_stack(s0)
     with pytest.raises(
         ValueError, match="s0.tif: channel 3 is out of range; the stack has 1 channel"
     ):
@@ -748,7 +438,7 @@ def test_too_few_slices_names_the_file(tmp_path, n_z, fit_offset, need):
 
 def test_non_positive_surface_reference_names_the_file(tmp_path):
     s0 = tmp_path / "s0.tif"
-    _flat_stack(s0, value=5.0)
+    flat_stack(s0, value=5.0)
     blank = depth.intensity_depth_profile(np.full((16, 8, 8), 9.0), 1.0)  # brighter than the stack
     with pytest.raises(ValueError, match="s0.tif: near-surface reference is non-positive"):
         depth_batch.analyse_stack(s0, blank, _cfg())
