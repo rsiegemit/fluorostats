@@ -444,9 +444,10 @@ def test_run_config_records_the_absolute_stack_paths_read(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     out = viability_batch.run(mp)
     cfg = json.loads((out / "run_config.json").read_text(encoding="utf-8"))
-    assert cfg["stacks_read"] == [
-        {"group": "g", "stack": "s", "path": str((tmp_path / "s.npy").resolve())}
-    ]
+    assert cfg["files_read"] == {  # the same record as depth's
+        "stacks": [str((tmp_path / "s.npy").resolve())],
+        "output_dir": str((tmp_path / "o").resolve()),
+    }
     assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s.npy"  # as given
 
 
@@ -473,3 +474,15 @@ def test_run_refuses_a_folder_another_tool_or_the_user_wrote(tmp_path, capsys):
 def test_manifest_rejects_non_string_text_fields(tmp_path, key):
     with pytest.raises(ValueError, match=f"{key} must be a string"):
         viability_batch.load_manifest(_one_stack_manifest(tmp_path, **{key: 5}))
+
+
+def test_a_failed_run_leaves_no_new_output_folder(tmp_path, monkeypatch):
+    """C3: the output folder is created only once every stack has been analysed."""
+
+    def boom(path, cfg):
+        raise RuntimeError("unreadable stack")
+
+    monkeypatch.setattr(viability_batch, "analyse_stack", boom)
+    with pytest.raises(RuntimeError, match="unreadable stack"):
+        viability_batch.run(_one_stack_manifest(tmp_path))
+    assert not (tmp_path / "o").exists()

@@ -63,8 +63,9 @@ apart, whose only value is "primary") is refused, a group ``background`` include
 Outputs: ``viability_per_stack.csv``, ``viability_group_summary.csv`` (mean and SEM
 per group), ``contrasts.csv`` (the printed two-group statistics, in the columns of
 `depth_batch`'s contrasts.csv) and, written last, ``run_config.json`` (the manifest
-as given, plus ``stacks_read``: the absolute path of every stack read; relative
-stack paths resolve against the working directory). Text files are UTF-8. A run
+as given, plus ``files_read``: the absolute paths of every stack read and of the
+output folder; relative paths resolve against the working directory). The output
+folder is created only once every stack has been analysed. Text files are UTF-8. A run
 first removes those files left by an earlier viability run in the output folder; it
 refuses a folder whose run_config.json names another tool, or that holds those
 names with no run_config.json, unless ``overwrite`` is set.
@@ -268,7 +269,6 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     anyway."""
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
-    out.mkdir(parents=True, exist_ok=True)
     # removing the earlier outputs first keeps a failed run from leaving an
     # earlier run's tables next to an absent run_config.json; a completed run
     # writes every name again, so none is ever stale (no report.stale_notices)
@@ -276,16 +276,13 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
-    read: list[dict] = []  # the absolute file each stack was read from
     for grp in m["groups"]:
         gname = grp["name"]
         for st in grp["stacks"]:
             print(f"  [{gname}] {st['label']}")
             r = analyse_stack(Path(st["path"]), cfg)
             rows.append({"group": gname, "stack": st["label"], **r})
-            read.append(
-                {"group": gname, "stack": st["label"], "path": str(Path(st["path"]).resolve())}
-            )
+    out.mkdir(parents=True, exist_ok=True)  # only now: a failed run leaves no folder
 
     # per-stack CSV (load_manifest guarantees every group has stacks)
     fields = list(rows[0].keys())
@@ -304,11 +301,20 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     report.write_run_config(
         out,
         {"manifest": Path(manifest_path), "count_seg_method": count_seg},
-        nested={"resolved": m, "mip_columns": MIP_COLUMNS, "stacks_read": read},
+        nested={"resolved": m, "mip_columns": MIP_COLUMNS, "files_read": _files_read(m, out)},
         tool="viability",
     )
     print(f"\nOutputs written to {out}/")
     return out
+
+
+def _files_read(m: dict, out: Path) -> dict:
+    """The absolute paths a run read and wrote (manifest paths resolve against the
+    working directory), as `depth_batch` records them in ``run_config.json``."""
+    return {
+        "stacks": [str(Path(st["path"]).resolve()) for g in m["groups"] for st in g["stacks"]],
+        "output_dir": str(out.resolve()),
+    }
 
 
 def _describe(rows: list[dict], group: str, metrics: list[str]) -> dict:
