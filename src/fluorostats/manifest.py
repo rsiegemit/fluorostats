@@ -183,6 +183,11 @@ def check_depth(m: dict) -> list[str]:
         for k in ("fit_offset", "parametric")
         if not isinstance(m[k], bool)
     ]
+    problems += [
+        f"{k} must be a string, got {m[k]!r}"
+        for k in ("title", "signal_label", "output_dir")
+        if k in m and not isinstance(m[k], str)
+    ]
     r2 = m["fit_r2_threshold"]
     if not (is_number(r2) and 0 <= r2 <= 1):
         problems.append(f"fit_r2_threshold must be a number in [0, 1], got {r2!r}")

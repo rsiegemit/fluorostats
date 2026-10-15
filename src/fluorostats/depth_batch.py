@@ -471,17 +471,21 @@ def _load_blank(bg, cfg: dict) -> depth.DepthProfile:
     shortest replicate, with the across-replicate SEM. Every slice whose mean is
     <= 0 (empty or truncated; trailing or mid-stack) is then dropped, so the
     background is interpolated across mid-stack gaps and held at its last value
-    past the end. Both are announced with counts.
+    past the end. Both are announced with counts; a blank with no slice left is a
+    ValueError naming it.
     """
     bg_paths = [bg] if isinstance(bg, str) else list(bg)
     profs = [_load_profile(Path(bp), cfg)[0] for bp in bg_paths]
     blank = profs[0] if len(profs) == 1 else _average_blanks(profs)
     valid = blank.mean > 0
+    names = ", ".join(Path(bp).name for bp in bg_paths)
+    if not valid.any():
+        raise ValueError(f"blank {names}: no slice has a mean > 0, so there is no background")
     if not valid.all():
         n_drop = int((~valid).sum())
-        trailing = int(np.argmax(valid[::-1])) if valid.any() else n_drop
+        trailing = int(np.argmax(valid[::-1]))
         warnings.warn(
-            f"blank {', '.join(Path(bp).name for bp in bg_paths)}: dropped {n_drop} "
+            f"blank {names}: dropped {n_drop} "
             f"of {valid.size} slices with mean <= 0 ({n_drop - trailing} mid-stack, "
             f"{trailing} trailing).",
             RuntimeWarning,

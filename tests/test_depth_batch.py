@@ -440,5 +440,15 @@ def test_non_positive_surface_reference_names_the_file(tmp_path):
     s0 = tmp_path / "s0.tif"
     flat_stack(s0, value=5.0)
     blank = depth.intensity_depth_profile(np.full((16, 8, 8), 9.0), 1.0)  # brighter than the stack
-    with pytest.raises(ValueError, match="s0.tif: near-surface reference is non-positive"):
+    with pytest.raises(
+        ValueError, match=r"s0.tif: near-surface reference is 0 \(non-positive or NaN\)"
+    ):
         depth_batch.analyse_stack(s0, blank, _cfg())
+
+
+def test_load_blank_with_no_positive_slice_names_the_blank(tmp_path):
+    # Regression (D3): every slice <= 0 left an empty profile and numpy's bare
+    # "array of sample points is empty" later, naming no file.
+    flat_stack(tmp_path / "b.tif", value=-5.0)
+    with pytest.raises(ValueError, match="blank b.tif: no slice has a mean > 0"):
+        _load_blank(str(tmp_path / "b.tif"), _CFG)

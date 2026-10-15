@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from fluorostats.depth import (
+    DepthProfile,
     intensity_depth_profile,
     subtract_background,
     normalize_to_surface,
@@ -344,10 +345,10 @@ def test_fit_of_a_flat_profile_has_no_r_squared():
 def test_fit_all_points_below_threshold_at_surface():
     """Profile that starts below I0/e at z=0 (below[0] == 0 path)."""
     z = np.linspace(0.0, 50.0, 10)
-    y = 0.001 * np.exp(-z / 5.0)
+    y = 0.001 * np.exp(-z / 6.0)  # λ above the 5.6 µm step, so it is resolved
     fit = fit_penetration_depth(z, y)
     assert fit.fit_ok and fit.n_points == 10
-    assert fit.lambda_um == pytest.approx(5.0, rel=1e-6)
+    assert fit.lambda_um == pytest.approx(6.0, rel=1e-6)
     assert fit.I0 == pytest.approx(0.001, rel=1e-6)
 
 
@@ -421,3 +422,45 @@ def test_auc_window_lower_edge_below_start_returns_nonzero():
     # z_min=0 is below depth[0]=5; gets clamped to 5; window [5,15] -> AUC=10
     result = auc_depth(depth, vals, z_min=0.0, z_max=15.0)
     assert result == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize("lam, i0", [(3.0, 1e-3), (2.0, 1e-4), (10.0, 1e-6)])
+def test_fit_lambda_does_not_depend_on_the_intensity_scale(lam, i0):
+    # Regression (D1): curve_fit's absolute tolerances stopped a small-valued profile
+    # before λ moved (λ=2, I0=1e-4 gave 2.215 µm with fit_ok=True).
+    z = np.arange(40) * 2.0
+    small = fit_penetration_depth(z, i0 * np.exp(-z / lam))
+    large = fit_penetration_depth(z, np.exp(-z / lam))
+    assert small.fit_ok and small.lambda_um == pytest.approx(lam, rel=1e-4)
+    assert small.lambda_um == pytest.approx(large.lambda_um, rel=1e-6)
+    assert small.I0 == pytest.approx(i0, rel=1e-4)
+
+
+@pytest.mark.parametrize("offset", [False, True])
+def test_fit_rejects_lambda_below_the_z_step(offset):
+    # Regression (D2): one non-zero surface slice fits any λ << dz equally well; λ=0.13
+    # µm at a 2 µm step was reported with fit_ok=True.
+    z = np.arange(10) * 2.0
+    fit = fit_penetration_depth(z, np.r_[100.0, np.zeros(9)], offset=offset)
+    assert not fit.fit_ok and np.isnan(fit.lambda_um) and np.isnan(fit.I0)
+
+
+def test_fit_accepts_lambda_at_the_z_step():
+    z = np.arange(0, 40.0, 2.0)
+    fit = fit_penetration_depth(z, 100.0 * np.exp(-z / 2.0))
+    assert fit.fit_ok and fit.lambda_um == pytest.approx(2.0, rel=1e-4)
+
+
+def test_subtract_background_sorts_the_background_depths():
+    # Regression (D6): np.interp needs increasing depths; a background given deepest
+    # first was silently misread ([30, 20, 20] instead of [20, 25, 30]).
+    sig = DepthProfile(np.arange(3) * 5.0, np.full(3, 30.0), np.zeros(3), 1)
+    bg = DepthProfile(np.array([10.0, 0.0]), np.array([0.0, 10.0]), np.zeros(2), 1)
+    np.testing.assert_allclose(subtract_background(sig, bg).mean, [20.0, 25.0, 30.0])
+
+
+def test_normalize_refuses_a_nan_surface_reference():
+    # Regression (D7): `reference <= 0` is False for NaN, so the whole curve became NaN.
+    prof = intensity_depth_profile(_ramp([np.nan, 5.0, 5.0, 4.0]), 1.0)
+    with pytest.raises(ValueError, match="near-surface reference is nan"):
+        normalize_to_surface(prof, n_surface=2)

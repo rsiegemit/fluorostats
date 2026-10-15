@@ -169,3 +169,23 @@ def test_load_manifest_rejects_a_bad_r2_threshold(tmp_path, value):
     assert "fit_r2_threshold must be a number in [0, 1]" in _manifest_errors(
         tmp_path, fit_r2_threshold=value
     )
+
+
+def test_load_manifest_keeps_windows_apart_beyond_six_digits(tmp_path):
+    # Regression (D5): `%g` labels kept 6 significant digits, so distinct windows were
+    # refused as "given more than once".
+    s0 = tmp_path / "s0.tif"
+    s0.write_bytes(b"")
+    m = {
+        "auc_windows_um": [[0, 1234567], [0, 1234568]],
+        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
+    }
+    mpath = tmp_path / "manifest.json"
+    mpath.write_text(json.dumps(m))
+    assert len(load_manifest(mpath)["windows"]) == 2
+
+
+@pytest.mark.parametrize("field", ["output_dir", "title", "signal_label"])
+def test_load_manifest_requires_text_fields_to_be_strings(tmp_path, field):
+    # Regression (D4): "output_dir": 5 passed validation and crashed run() with TypeError.
+    assert f"{field} must be a string, got 5" in _manifest_errors(tmp_path, **{field: 5})
