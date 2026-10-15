@@ -237,7 +237,7 @@ axd.legend(fontsize=4.5, loc="lower left", frameon=False, handlelength=1.4, labe
            borderaxespad=0.2)
 axd.set_xlabel("nuclear overlap (%)")
 axd.set_ylabel("instance F1")
-axd.set_ylim(0,1.02)
+axd.set_ylim(0, 1.06)   # room for markers at F1 = 1.0
 panel(axd, "d", "F1 vs crowding", xanchor=0.0315)   # row-leader
 
 # (e) separated vs crowded fields
