@@ -140,3 +140,18 @@ def test_a_file_that_cannot_be_measured_is_listed_and_the_run_exits_1(tmp_path):
     res = CliRunner().invoke(cli, args)  # fixed input: the stale failures.csv goes
     assert res.exit_code == 0, res.output
     assert not (out / "failures.csv").exists() and "failures.csv" in res.output
+
+
+def test_a_quant_run_that_writes_nothing_leaves_no_output_folder(tmp_path, monkeypatch):
+    # Regression (C3): the output folder was created before anything was written.
+    from fluorostats import cli as cli_mod
+
+    def fail(*a, **k):
+        raise RuntimeError("reporting failed")
+
+    monkeypatch.setattr(cli_mod, "_report_and_plot", fail)
+    make_dataset(tmp_path / "in", blob_2d)
+    out = tmp_path / "new" / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-overlays"]
+    assert isinstance(CliRunner().invoke(cli, args).exception, RuntimeError)
+    assert not (tmp_path / "new").exists()

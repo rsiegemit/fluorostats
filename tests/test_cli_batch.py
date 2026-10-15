@@ -3,6 +3,7 @@
 import json
 
 import numpy as np
+import pytest
 from click.testing import CliRunner
 
 from depth_data import decay_stack
@@ -124,3 +125,33 @@ def test_cli_viability_cmd_output_override(tmp_path):
     assert res.exit_code == 0, res.output
     assert (override / "viability_per_stack.csv").exists()
     assert not (tmp_path / "ignored").exists()
+
+
+@pytest.mark.parametrize("cmd", ["depth", "viability"])
+@pytest.mark.parametrize(
+    "text, message",
+    [
+        ('{"groups": [], "typo_field": 1}', "groups"),
+        ('{"groups": [', "Expecting"),  # JSON syntax error
+    ],
+)
+def test_a_bad_manifest_is_an_error_message_not_a_traceback(tmp_path, cmd, text, message):
+    # Regression (C1): manifest errors surfaced as a 20-line Python traceback.
+    m = tmp_path / "m.json"
+    m.write_text(text)
+    res = CliRunner().invoke(cli, [cmd, str(m), "--output", str(tmp_path / "out")])
+    assert res.exit_code == 1 and isinstance(res.exception, SystemExit)
+    assert res.output.startswith("Error: ") and message in res.output
+
+
+def test_a_depth_run_that_fails_leaves_no_output_folder(tmp_path):
+    # Regression (C3): the output folder was created before the first stack failed.
+    s0 = tmp_path / "s0.tif"
+    decay_stack(s0, n_z=1)  # one slice: too few for the λ fit
+    m = tmp_path / "m.json"
+    m.write_text(
+        json.dumps({"groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}]})
+    )
+    res = CliRunner().invoke(cli, ["depth", str(m), "--output", str(tmp_path / "out")])
+    assert res.exit_code == 1 and "s0.tif: has 1 z-slice" in res.output
+    assert not (tmp_path / "out").exists()

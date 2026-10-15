@@ -76,7 +76,7 @@ def depth_cmd(manifest, output_dir, overwrite):
     """
     from . import depth_batch  # on use: the other commands never load the batch driver
 
-    out = depth_batch.run(Path(manifest), output_dir, overwrite)
+    out = _run_driver(depth_batch.run, manifest, output_dir, overwrite)
     click.echo(f"Done. Outputs in {out}/")
 
 
@@ -105,8 +105,18 @@ def viability_cmd(manifest, output_dir):
     """
     from . import viability_batch  # on use: the other commands never load the batch driver
 
-    out = viability_batch.run(Path(manifest), output_dir)
+    out = _run_driver(viability_batch.run, manifest, output_dir)
     click.echo(f"Done. Outputs in {out}/")
+
+
+def _run_driver(run, manifest: str, *args) -> Path:
+    """A batch driver's ``run``. A problem with the manifest or the data it names (a
+    ValueError, which JSON syntax errors and file-format errors are too) is printed as
+    ``Error: <message>`` with exit status 1, not as a traceback."""
+    try:
+        return run(Path(manifest), *args)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +248,6 @@ def quant3d(
     if not files:
         raise click.UsageError(f"No volume files found in {input_path}")
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
-    output_path.mkdir(parents=True, exist_ok=True)
     previous = cli_paths.claim_output(output_path, "quant3d", overwrite)
 
     click.echo(f"Found {len(files)} volume file(s)")
@@ -378,7 +387,6 @@ def quant2d(
             "`quant3d`."
         )
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
-    output_path.mkdir(parents=True, exist_ok=True)
     previous = cli_paths.claim_output(output_path, "quant2d", overwrite)
 
     click.echo(f"Found {len(files)} image file(s)")
