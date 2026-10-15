@@ -83,3 +83,10 @@ def test_density_zero_volume_is_nan_with_warning():
         out = normalise_skeleton_metrics({"total_length_um": 3.0}, (0, 10, 10), (1.0, 1.0, 1.0))
     assert np.isnan(out["length_density_um_per_mm3"])
     assert np.isnan(out["branch_density_per_mm3"])
+
+
+def test_volume_metrics_treat_a_0_255_mask_as_binary():
+    v = np.zeros((4, 10, 10), np.uint8)
+    v[1, 2:5, 2:5] = 255
+    assert metrics_3d.volume_fraction(v) == pytest.approx(9 / 400)
+    assert metrics_3d.connectivity_metrics(v)["largest_component_fraction"] == 1.0

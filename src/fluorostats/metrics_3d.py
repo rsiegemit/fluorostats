@@ -25,12 +25,12 @@ __getattr__ = moved_names(
 
 
 def volume_fraction(mask: np.ndarray) -> float:
-    """Fraction of voxels that are foreground, in [0, 1] (not a percent)."""
-    return float(mask.sum() / mask.size)
+    """Fraction of voxels that are foreground (``mask > 0``), in [0, 1] (not a percent)."""
+    return float(np.count_nonzero(np.asarray(mask) > 0) / mask.size)
 
 
 def connectivity_metrics(mask: np.ndarray) -> dict:
-    """Connected component and topological metrics.
+    """Connected component and topological metrics of a mask (nonzero = foreground).
 
     Returns
     -------
@@ -52,6 +52,7 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
     # counts face-connected components like label_3d. Objects touching only at an
     # edge or corner are therefore 2 components but one object for χ, so these two
     # values are not a consistent pair of Betti numbers.
+    mask = np.asarray(mask) > 0
     labeled, n_comp = label(mask)
     euler = int(euler_number(mask, connectivity=3))
 

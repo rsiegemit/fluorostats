@@ -44,3 +44,13 @@ def test_coverage_metrics_empty_mask_is_nan_not_zero():
         "median_cluster_area_um2",
     ):
         assert np.isnan(m[k]), k
+
+
+def test_coverage_metrics_treat_a_0_255_mask_as_binary():
+    """A 0/255 uint8 mask (as read from a mask image) is foreground where > 0."""
+    u = np.zeros((10, 10), np.uint8)
+    u[2:5, 2:5] = 255
+    r = metrics_2d.coverage_metrics(u)
+    assert r["area_fraction"] == pytest.approx(0.09)
+    assert r["largest_component_fraction"] == 1.0
+    assert area_fraction(u) == pytest.approx(0.09)

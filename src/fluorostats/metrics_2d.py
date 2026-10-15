@@ -9,8 +9,9 @@ from .deprecation import renamed_keyword
 
 
 def area_fraction(mask: np.ndarray) -> float:
-    """Fraction of pixels that are foreground (cell-covered), in [0, 1] (not a percent)."""
-    return float(mask.sum() / mask.size)
+    """Fraction of pixels that are foreground (cell-covered, ``mask > 0``), in [0, 1]
+    (not a percent)."""
+    return float(np.count_nonzero(np.asarray(mask) > 0) / mask.size)
 
 
 @renamed_keyword("pixel_size_um", "voxel_size_um")
@@ -23,7 +24,7 @@ def coverage_metrics(
     Parameters
     ----------
     mask : ndarray (Y, X), bool
-        Binary segmentation mask.
+        Binary segmentation mask; any nonzero value is foreground (e.g. 0/255).
     voxel_size_um : float or (dy, dx)
         Pixel size in µm (for calibrated area). Default 1.0 (uncalibrated).
 
@@ -45,6 +46,7 @@ def coverage_metrics(
             The same cluster areas times the pixel area (``dy * dx``, or the
             scalar squared); equal to the pixel values when uncalibrated (1.0).
     """
+    mask = np.asarray(mask) > 0
     af = area_fraction(mask)
     labeled, n_comp = label(mask)
 
