@@ -46,21 +46,23 @@ def n_instances(labels):
 
 
 def load_pairs():
+    """``(image, instance mask)`` pairs and the number of images skipped (not 2D, or no mask)."""
     root = require(DATA / "dsb2018" / "test")
-    pairs = []
+    pairs, n_skipped = [], 0
     for img_path in sorted(glob.glob(str(root / "images" / "*.tif"))):
         mask_path = root / "masks" / Path(img_path).name
         img = tifffile.imread(img_path)
         if img.ndim != 2 or not mask_path.exists():
             print(f"skipped {Path(img_path).name}: shape {img.shape}, mask {mask_path.exists()}")
+            n_skipped += 1
             continue
         pairs.append((img.astype(np.float64), tifffile.imread(mask_path).astype(np.int32)))
-    return pairs
+    return pairs, n_skipped
 
 
 def main():
     acc = {m: {"f1": [], "prec": [], "rec": [], "pred": [], "gt": []} for m in METHODS}
-    pairs = load_pairs()
+    pairs, n_skipped = load_pairs()
     for img, gt in pairs:
         for mname, fn in METHODS.items():
             pred = fn(img)
@@ -84,7 +86,7 @@ def main():
     df = pd.DataFrame(rows)
     df.insert(0, "rank", range(1, len(df) + 1))
     write_table(df, "b_dsb2018", {"min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "iou_threshold": 0.5,
-                                  "n_images": len(pairs)},
+                                  "n_images": len(pairs), "n_skipped": n_skipped},
                 lineterminator="\r\n")  # csv-module line endings of the committed table
     print(df.to_string(index=False))
 

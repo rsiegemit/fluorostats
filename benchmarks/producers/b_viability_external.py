@@ -19,7 +19,8 @@ import pandas as pd
 import tifffile
 from skimage import filters
 
-from common import DATA, SMALL_OBJECT_RULE, kerkhoff_peak_count, require, threshold_cc, write_table
+from common import (DATA, KERKHOFF_MIN_DISTANCE, KERKHOFF_THRESHOLD_REL, SMALL_OBJECT_RULE, kerkhoff_peak_count, require,
+                    threshold_cc, write_table)
 from fluorostats.objects import watershed_split
 from fluorostats.segment import remove_small
 from fluorostats.viability import live_dead_by_count, live_dead_fractions, live_ratio
@@ -38,8 +39,8 @@ def score(path):
         "Kerkhoff_macro_peakcount": live_ratio(kerkhoff_peak_count(live), kerkhoff_peak_count(dead)),
         "fluorostats_objcount": live_ratio(*n_ws),
         "fluorostats_areafrac": live_dead_fractions(live, dead, method="otsu", min_size=MIN_SIZE)["viability"],
-        "fluorostats_maxima(NEW)": live_dead_by_count(live, dead, method="maxima", min_distance=3,
-                                                      threshold_rel=0.15)["viability"],
+        "fluorostats_maxima": live_dead_by_count(live, dead, method="maxima", min_distance=KERKHOFF_MIN_DISTANCE,
+                                                 threshold_rel=KERKHOFF_THRESHOLD_REL)["viability"],
         "Otsu_CC_count": live_ratio(*n_cc),
     }
 

@@ -60,6 +60,24 @@ DENOISED_OTSU_CC = "fluorostats(denoised Otsu+CC)"
 # recorded in each run.json that has a min_size.
 SMALL_OBJECT_RULE = "keep >= min_size"
 
+# What segment.binarize(method="auto") resolves to on every VesselExpress volume
+# (b_ve_metrics checks it on each run); the fig3 overlay is labelled with it.
+VE_AUTO_RESOLVED = "li"
+
+# S-BIAD2130 Day-14 Live/Dead stack: channel roles, the XY downsample applied on
+# read, the z step (µm; the file's ImageJ "spacing") and the segmentation every
+# viability table and figure of it uses.
+SBIAD2130_LIVE_CH = 2
+SBIAD2130_DEAD_CH = 1
+SBIAD2130_DOWNSAMPLE = 8
+SBIAD2130_Z_UM = 5.5
+SBIAD2130_SEG = dict(method="otsu", threshold_scale=1.0, min_size=8)
+
+# Find-Maxima parameters of the published Kerkhoff Fiji Live/Dead macro: peak
+# separation (px) and threshold as a fraction of the image maximum.
+KERKHOFF_MIN_DISTANCE = 3
+KERKHOFF_THRESHOLD_REL = 0.15
+
 # Side (px) of the square field of the example point patterns.
 EXAMPLE_FIELD = 500
 
@@ -142,7 +160,7 @@ def bbbc024_volumes(subdir: str = "BBBC024", n: int | None = None) -> list[tuple
     return [(f, f.replace("image-final_", "image-labels_")) for f in finals]
 
 
-def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = 8) -> np.ndarray:
+def load_sbiad2130_channel(ch: int, n_ch: int = 3, down: int = SBIAD2130_DOWNSAMPLE) -> np.ndarray:
     """One channel of the S-BIAD2130 Day-14 Live/Dead ZCYX stack, XY-downsampled on read."""
     stack = require(DATA / "viability" / "zccs1035_Day14_LiveDead.tif")
     with tifffile.TiffFile(stack) as t:
@@ -183,7 +201,8 @@ def kerkhoff_peak_count(img: np.ndarray) -> int:
 
     A comparator, not library code.
     """
-    return len(peak_local_max(img, min_distance=3, threshold_abs=img.max() * 0.15))
+    return len(peak_local_max(img, min_distance=KERKHOFF_MIN_DISTANCE,
+                              threshold_abs=img.max() * KERKHOFF_THRESHOLD_REL))
 
 
 def example_patterns(rng: np.random.Generator, n: int = 225) -> dict[str, np.ndarray]:

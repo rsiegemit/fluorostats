@@ -10,22 +10,19 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import SMALL_OBJECT_RULE, load_sbiad2130_channel, write_table
+from common import (SBIAD2130_DOWNSAMPLE, SBIAD2130_LIVE_CH, SBIAD2130_SEG, SBIAD2130_Z_UM, SMALL_OBJECT_RULE,
+                    load_sbiad2130_channel, write_table)
 from fluorostats.viability import attenuation_correct, viability_depth_profile
 
-Z_UM = 5.5
-LIVE_CH = 2
-SEG = dict(method="otsu", threshold_scale=1.0, min_size=8)
-
-
 def main():
-    live = load_sbiad2130_channel(LIVE_CH)
-    prof = viability_depth_profile(live, **SEG)["live_by_z"]
-    prof_corr = viability_depth_profile(attenuation_correct(live), **SEG)["live_by_z"]
+    live = load_sbiad2130_channel(SBIAD2130_LIVE_CH)
+    prof = viability_depth_profile(live, **SBIAD2130_SEG)["live_by_z"]
+    prof_corr = viability_depth_profile(attenuation_correct(live), **SBIAD2130_SEG)["live_by_z"]
     z = np.arange(len(prof))
-    df = pd.DataFrame({"z_slice": z, "depth_um": z * Z_UM,
+    df = pd.DataFrame({"z_slice": z, "depth_um": z * SBIAD2130_Z_UM,
                        "live_fraction_raw": prof, "live_fraction_attn_corrected": prof_corr})
-    write_table(df, "b3_viability_depth_profile", {"live_channel": LIVE_CH, "z_um": Z_UM, "xy_downsample": 8, "seg": SEG,
+    write_table(df, "b3_viability_depth_profile", {"live_channel": SBIAD2130_LIVE_CH, "z_um": SBIAD2130_Z_UM,
+                                                         "xy_downsample": SBIAD2130_DOWNSAMPLE, "seg": SBIAD2130_SEG,
                                                          "small_object_rule": SMALL_OBJECT_RULE})
     print(df.describe().to_string())
 

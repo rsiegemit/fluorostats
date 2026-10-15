@@ -55,7 +55,7 @@ gs_b = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1, :], hspace=0.06
 # scale bar and auto->li label are preserved. Same window for every panel so the
 # raw / VesselExpress / fluorostats overlays stay pixel-aligned.
 YB0, YB1 = 90, 305
-labs = ["raw", "VesselExpress", r"fluorostats (auto$\rightarrow$li)"]
+labs = ["raw", "VesselExpress", rf"fluorostats (auto$\rightarrow${F.VE_AUTO_RESOLVED})"]
 for row in range(2):
     raw = crops[f"raw{row}"][YB0:YB1]
     ve_m = crops[f"ve{row}"][YB0:YB1]

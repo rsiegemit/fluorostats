@@ -24,8 +24,8 @@ from fluorostats.pubfig import (  # noqa: E402,F401
     outline, panel, round_sig, scalebar,
 )
 from producers.common import (  # noqa: E402,F401
-    BBBC039_UM_PER_PX, DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel,
-    raw_otsu_cc, require,
+    BBBC039_UM_PER_PX, DATA, DENOISED_OTSU_CC, RAW_OTSU_CC, SBIAD2130_DEAD_CH, SBIAD2130_LIVE_CH, SBIAD2130_SEG,
+    VE_AUTO_RESOLVED, bbbc039_gt_instances, example_patterns, load_sbiad2130_channel, raw_otsu_cc, require,
 )
 
 # Fixed tool identities (colour + marker + linestyle) so series survive greyscale.

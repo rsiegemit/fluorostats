@@ -13,6 +13,7 @@ from common import EXAMPLE_FIELD, example_patterns, write_table
 from fluorostats.objects import centroid_homogeneity
 
 SEED = 1
+TILES = 8
 
 
 def main():
@@ -20,9 +21,10 @@ def main():
     for kind, p in example_patterns(np.random.default_rng(SEED)).items():
         p3 = np.column_stack([np.zeros(len(p)), p[:, 0], p[:, 1]])
         rows.append({"pattern": kind, "n_points": len(p), "field_px": EXAMPLE_FIELD,
-                     "tile_gini": centroid_homogeneity(p3, (1, EXAMPLE_FIELD, EXAMPLE_FIELD))["centroid_gini"]})
+                     "tile_gini": centroid_homogeneity(p3, (1, EXAMPLE_FIELD, EXAMPLE_FIELD),
+                                                          tiles=TILES)["centroid_gini"]})
     df = pd.DataFrame(rows)
-    write_table(df, "b_homogeneity_examples", {"seed": SEED, "tiles": 8})
+    write_table(df, "b_homogeneity_examples", {"seed": SEED, "tiles": TILES})
     print(df.to_string(index=False))
 
 
