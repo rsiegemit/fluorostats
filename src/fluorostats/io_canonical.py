@@ -111,8 +111,8 @@ def _unlabelled_as_z(axes: str, shape: tuple[int, ...], index_axes: dict[str, st
 
 
 # More channels than any realistic fluorescence acquisition: a labelled file with
-# this many channels and one z-slice is most likely a mislabelled z-stack (e.g.
-# tifffile's imagej=True writes a 3D array without axes as channels=N).
+# this many unnamed channels and one z-slice is most likely a mislabelled z-stack
+# (e.g. tifffile's imagej=True writes a 3D array without axes as channels=N).
 _MAX_PLAUSIBLE_CHANNELS = 4
 
 
@@ -134,7 +134,9 @@ def canonicalize_volume(
     else:
         names = _per_sample_names(names, cast(str, axes), arr.shape)
         arr = named
-    if named is not None and arr.shape[1] == 1 and arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
+    # A file that names its channels declared them on purpose: no warning.
+    many = arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS and not meta["channel_names"]
+    if named is not None and arr.shape[1] == 1 and many:
         warnings.warn(
             f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
             f"z-stack, re-save it with axes 'ZYX' (or slices={arr.shape[0]}).",

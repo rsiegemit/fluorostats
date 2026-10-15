@@ -479,6 +479,23 @@ def test_labelled_many_channels_one_slice_warns_without_changing_numbers(tmp_pat
     np.testing.assert_array_equal(arr[:, 0], data)
 
 
+def test_named_many_channels_one_slice_does_not_warn(tmp_path):
+    # Regression: an OME file declaring 10 named channels was told it might be a
+    # mislabelled z-stack; a file that names its channels is not one.
+    p = tmp_path / "c10.ome.tif"
+    names = [f"C:{i}" for i in range(10)]
+    tifffile.imwrite(
+        p,
+        np.zeros((10, 8, 8), np.uint16),
+        ome=True,
+        metadata={"axes": "CYX", "Channel": {"Name": names}},
+    )
+    with pytest.warns(RuntimeWarning) as rec:
+        arr, meta = load_volume(p)
+    assert not [w for w in rec if "declares 10 channels" in str(w.message)]
+    assert arr.shape == (10, 1, 8, 8) and meta["channel_names"] == names
+
+
 def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
     import warnings
 
