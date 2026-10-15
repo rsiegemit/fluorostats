@@ -38,8 +38,11 @@ def unknown_keys(where: str, d: dict, allowed: Iterable[str]) -> list[str]:
 
 
 def _repeated(values: list) -> list:
-    """The values that occur more than once, each once, in first-seen order."""
-    return [v for i, v in enumerate(values) if v and v in values[i + 1 :] and v not in values[:i]]
+    """The values that occur more than once, each once, in first-seen order. A missing
+    value (None or "") is reported as missing elsewhere, so it is skipped here; a
+    numeric 0 is a value like any other."""
+    present = [v for v in values if v is not None and v != ""]
+    return [v for i, v in enumerate(present) if v in present[i + 1 :] and v not in present[:i]]
 
 
 def require_groups(m) -> None:
