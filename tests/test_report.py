@@ -2,12 +2,14 @@
 
 import importlib.metadata
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import fluorostats
 from fluorostats import report
 
 
@@ -72,18 +74,57 @@ def test_environment_records_versions_and_readers():
 
 
 def test_environment_records_none_for_an_uninstalled_package(monkeypatch):
-    # Running from source (PYTHONPATH=src) has no installed fluorostats distribution.
     real = importlib.metadata.version
 
     def version(name):
-        if name == "fluorostats":
+        if name == "skan":
             raise importlib.metadata.PackageNotFoundError(name)
         return real(name)
 
     monkeypatch.setattr(importlib.metadata, "version", version)
     env = report.environment()
-    assert env["packages"]["fluorostats"] is None
+    assert env["packages"]["skan"] is None
     assert env["packages"]["numpy"] == np.__version__
+
+
+def test_environment_records_the_code_that_ran_not_the_installed_dist(monkeypatch):
+    # Regression: the fluorostats version came from the installed distribution, so a
+    # run from a source checkout over an old install recorded the old version.
+    real = importlib.metadata.version
+    monkeypatch.setattr(
+        importlib.metadata, "version", lambda n: "0.1.0" if n == "fluorostats" else real(n)
+    )
+    env = report.environment()
+    assert env["packages"]["fluorostats"] == fluorostats.__version__
+    head = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=Path(report.__file__).parent,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert env["fluorostats_commit"].removesuffix("-dirty") == head
+
+
+def test_git_commit_is_none_outside_a_checkout_and_flags_local_changes(tmp_path, monkeypatch):
+    assert report._git_commit(tmp_path) is None  # not a git checkout
+    monkeypatch.setattr(report.subprocess, "run", _raise(OSError("no git")))
+    assert report._git_commit(Path(report.__file__).parent) is None
+    monkeypatch.setattr(
+        report.subprocess,
+        "run",
+        lambda args, **kw: subprocess.CompletedProcess(
+            args, 0, "M x.py\n" if "status" in args else "abc1234\n"
+        ),
+    )
+    assert report._git_commit(tmp_path) == "abc1234-dirty"
+
+
+def _raise(exc):
+    def run(*args, **kwargs):
+        raise exc
+
+    return run
 
 
 def test_write_run_config_keeps_scalars_and_paths_and_nested(tmp_path):
