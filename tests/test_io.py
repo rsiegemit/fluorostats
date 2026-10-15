@@ -568,3 +568,12 @@ def test_read_voxel_size_other_formats_are_not_implemented(tmp_path):
     np.save(p, np.zeros((3, 8, 8)))
     with pytest.raises(NotImplementedError, match="use load_volume"):
         io.read_voxel_size(p)
+
+
+@pytest.mark.parametrize("suffix", [".oib", ".czi", ".nd2", ".lif"])
+def test_load_image_refuses_volume_only_formats_by_name(tmp_path, suffix):
+    # Regression: these fell through to imageio ("Could not find a backend").
+    p = tmp_path / f"x{suffix}"
+    p.write_bytes(b"")
+    with pytest.raises(ValueError, match="use load_volume or load_auto"):
+        load_image(p)

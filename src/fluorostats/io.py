@@ -32,7 +32,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 import imageio.v3 as iio
 import numpy as np
@@ -144,7 +144,12 @@ def load_image(path: str | Path) -> tuple[np.ndarray, dict]:
     suffix = path.suffix.lower()
 
     fmt = FORMATS.get(suffix)
-    loader = fmt.image if fmt is not None and fmt.image is not None else _load_standard_image
+    loader = _load_standard_image if fmt is None else fmt.image
+    if loader is None:
+        raise ValueError(
+            f"{path.name}: {cast(Format, fmt).description} files are read as volumes; use "
+            "load_volume or load_auto (quant3d) for this format."
+        )
     arr, meta = loader(path)
     _record_calibration(meta, "yx", path)
     return arr, meta
