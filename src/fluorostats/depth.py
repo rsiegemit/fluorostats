@@ -234,7 +234,8 @@ class PenetrationFit:
         Fitted additive floor ``c`` if the 3-parameter model was used,
         else ``None``.
     r_squared:
-        Coefficient of determination of the fit (1 = perfect).
+        Coefficient of determination of the fit (1 = perfect); NaN for a profile
+        with no variance, where it is undefined.
     rmse:
         Root-mean-square residual, in the profile's intensity units.
     n_points:
@@ -371,7 +372,8 @@ def fit_penetration_depth(
     resid = y - model
     ss_res = float(np.sum(resid ** 2))
     ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    # A profile with no variance has no R² (0/0): NaN, which also fails the threshold.
+    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
     rmse = float(np.sqrt(np.mean(resid ** 2)))
 
     # A decay length longer than the acquired depth is NOT constrained by the
