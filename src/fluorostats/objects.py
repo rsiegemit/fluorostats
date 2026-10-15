@@ -16,6 +16,7 @@ from skimage.morphology import local_maxima, reconstruction
 from skimage.segmentation import clear_border, watershed
 
 from .metrics_3d import density_per_mm3
+from .segment import remove_small_labels
 from .spatial import tile_point_density
 from .stats import coefficient_of_variation, gini
 
@@ -40,19 +41,7 @@ def label_3d(mask: np.ndarray, min_size: int = 0) -> tuple[np.ndarray, int]:
     labels, n = ndi.label(mask)
     if min_size <= 0 or n == 0:
         return labels, int(n)
-    return _drop_small(labels, min_size)
-
-
-def _drop_small(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
-    """Remove labels with fewer than ``min_size`` voxels; relabel survivors 1..N."""
-    sizes = np.bincount(labels.ravel())
-    keep = sizes >= min_size
-    keep[0] = False  # background
-    if not keep.any():
-        return np.zeros_like(labels), 0
-    remap = np.zeros(sizes.size, dtype=labels.dtype)
-    remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
-    return remap[labels], int(keep.sum())
+    return remove_small_labels(labels, min_size)
 
 
 def watershed_split(
@@ -116,7 +105,7 @@ def watershed_split(
         markers[tuple(np.array(pos).T)] = np.arange(n_seeds + 1, n_seeds + unseeded.size + 1)
     labels = watershed(-dist, markers, mask=m)
     if min_size > 0:
-        return _drop_small(labels, min_size)
+        return remove_small_labels(labels, min_size)
     return labels, int(labels.max())
 
 
