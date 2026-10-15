@@ -266,11 +266,12 @@ def _install_readlif(monkeypatch, reader):
     monkeypatch.setitem(sys.modules, "readlif.reader", reader)
 
 
-def _make_fake_readlif(n_channels, n_z, scale, frame_ndim=2, empty=False):
+def _make_fake_readlif(n_channels, n_z, scale, frame_ndim=2, empty=False, n_tiles=1):
     fake = types.ModuleType("readlif.reader")
 
     class Dims:
         z = n_z
+        m = n_tiles
 
     class Image:
         def __init__(self):
@@ -382,7 +383,7 @@ def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
     _install_readlif(monkeypatch, fake)
     p = tmp_path / "s.lif"
     p.write_bytes(b"")
-    with pytest.warns(RuntimeWarning, match="reading image 0 at time point 0 only"):
+    with pytest.warns(RuntimeWarning, match="reading image 0, time point 0, mosaic tile 0 only"):
         io.load_volume(p)
 
 
@@ -421,3 +422,13 @@ def test_lif_negative_length_is_a_calibration(monkeypatch, tmp_path):
         _, meta = io.load_volume(path)
     assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
     assert meta["voxel_size_source"] == "z:file,y:file,x:file"
+
+
+def test_lif_reading_the_first_mosaic_tile_is_announced(monkeypatch, tmp_path):
+    # Regression: only tile 0 of a mosaic was read; the warning named images and
+    # time points but not tiles.
+    _install_readlif(monkeypatch, _make_fake_readlif(1, 2, [2.0, 2.0, 0.5], n_tiles=4))
+    path = tmp_path / "tiles.lif"
+    path.write_bytes(b"")
+    with pytest.warns(RuntimeWarning, match=r"\(1 images, 1 time points, 4 mosaic tiles"):
+        io.load_volume(path)

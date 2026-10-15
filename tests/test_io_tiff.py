@@ -228,3 +228,16 @@ def test_imagej_negative_spacing_gives_its_magnitude(tmp_path):
         _, meta = io.load_volume(p)
     assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
     assert meta["voxel_size_source"] == "z:file,y:file,x:file"
+
+
+def test_ome_reading_the_first_of_several_series_is_announced(tmp_path):
+    # Regression: only the first OME Image was read, without a word.
+    p = tmp_path / "two.ome.tif"
+    with tifffile.TiffWriter(p, ome=True) as tif:
+        for value in (1, 2):
+            tif.write(np.full((3, 8, 8), value, np.uint16), metadata={"axes": "ZYX"})
+    with pytest.warns(RuntimeWarning, match="two.ome.tif: reading the first of 2 series only"):
+        vol, _ = io.load_volume(p)
+    assert vol.shape == (1, 3, 8, 8) and vol.max() == 1
+    with pytest.warns(RuntimeWarning, match="the first of 2 series only"):
+        io.load_image(p)

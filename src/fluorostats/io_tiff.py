@@ -17,7 +17,7 @@ import numpy as np
 import tifffile
 
 from .io_canonical import canonicalize_image, canonicalize_volume
-from .io_vendors import positional_names, valid_size, warn_unread
+from .io_vendors import positional_names, valid_size, warn_first_only, warn_unread
 
 
 def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
@@ -25,6 +25,7 @@ def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
         meta = _tiff_volume_meta(tif)
+        _warn_first_series(tif, path)
     data, meta = canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
 
@@ -47,12 +48,21 @@ def _tiff_volume_meta(tif: tifffile.TiffFile) -> dict:
     return meta
 
 
+def _warn_first_series(tif: tifffile.TiffFile, path: Path) -> None:
+    """Announce an OME-TIFF holding several images (series), of which the loaders
+    read the first. Other TIFFs are not counted: their extra series are
+    thumbnails or reduced copies, and pyramid levels are not series."""
+    if tif.is_ome:
+        warn_first_only(path, len(tif.series), "series")
+
+
 def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
     """TIFF -> ((C, Y, X), meta), series 0; the y/x pixel size and channel names
     are read as `load_tiff_volume` reads them (OME-XML first, then ImageJ)."""
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
         volume_meta = _tiff_volume_meta(tif)
+        _warn_first_series(tif, path)
     meta = {
         **volume_meta,
         "voxel_size_um": volume_meta["voxel_size_um"][1:],

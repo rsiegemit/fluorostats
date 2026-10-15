@@ -68,6 +68,15 @@ def warn_unread(what: str, exc: Exception) -> None:
     )
 
 
+def warn_first_only(path: Path, n: int, what: str) -> None:
+    """Announce that a loader reads only the first of the file's ``n`` ``what``
+    (scenes, series), when there is more than one."""
+    if n > 1:
+        warnings.warn(
+            f"{path.name}: reading the first of {n} {what} only.", RuntimeWarning, stacklevel=4
+        )
+
+
 def positional_names(names: list[str | None]) -> list[str]:
     """Channel names in file order, an empty one becoming ``Ch<i+1>`` in place so
     every later name keeps its channel."""
@@ -237,6 +246,7 @@ def load_czi_volume(path: Path) -> tuple[np.ndarray, dict]:
         arr = czi.asarray()
         axes = _czi_axes(czi)
         meta = _parse_czi_metadata(czi)
+        warn_first_only(path, len(getattr(czi, "scenes", None) or {}), "scenes")
 
     meta["format"] = "zeiss_czi"
     arr, meta = canonicalize_volume(
@@ -395,10 +405,11 @@ def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
         raise ValueError(f"No images found in LIF file: {path}")
 
     img = reader.get_image(0)
-    if len(reader.image_list) > 1 or getattr(img.dims, "t", 1) > 1:
+    n_t, n_m = getattr(img.dims, "t", 1), getattr(img.dims, "m", 1)
+    if len(reader.image_list) > 1 or n_t > 1 or n_m > 1:
         warnings.warn(
-            f"{path.name}: reading image 0 at time point 0 only "
-            f"({len(reader.image_list)} images, {getattr(img.dims, 't', 1)} time points "
+            f"{path.name}: reading image 0, time point 0, mosaic tile 0 only "
+            f"({len(reader.image_list)} images, {n_t} time points, {n_m} mosaic tiles "
             "in the file).",
             RuntimeWarning,
             stacklevel=3,
