@@ -140,7 +140,7 @@ cap = (
     f"collapses to {hi_noise['Li']:.2f}. Triangle is the exception: worst at low noise "
     f"({noise['Triangle'].iloc[0]:.2f} at s.d.=0) but best at the highest "
     f"({hi_noise['Triangle']:.2f}). "
-    "(b) Foreground Dice under denoising strategies (none, 3×3 median, Gaussian sigma=2, "
+    "(b) Foreground Dice under denoising strategies (none, 3×3×3 median, Gaussian sigma=2, "
     "total-variation Chambolle, and the fluorostats built-in Gaussian sigma=1 pre-filter) "
     f"across increasing noise. Without denoising, Dice collapses to {yn:.2f} at "
     f"s.d.={levels[-1]:.0f}; the fluorostats pre-filter recovers it to {yf:.2f}, matching "
