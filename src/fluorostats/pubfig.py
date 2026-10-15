@@ -478,7 +478,7 @@ def caption(name: str, text: str, folder: str | Path) -> None:
     """Write a figure's caption next to it as ``<folder>/<name>.txt``."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / f"{name}.txt").write_text(text.strip() + "\n")
+    (folder / f"{name}.txt").write_text(text.strip() + "\n", encoding="utf-8")
 
 
 # ---- data panels ----

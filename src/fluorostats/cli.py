@@ -7,20 +7,15 @@ from pathlib import Path
 
 import click
 import matplotlib
+import pandas as pd
 
-from . import cli_paths
+from . import cli_measure, cli_paths
 from . import io as iq_io
 from . import (
-    metrics_2d,
-    metrics_3d,
     plots,
-    preprocess,
     pubfig,
-    qc,
     report,
     segment,
-    skeleton,
-    spatial,
     stats,
 )
 from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
@@ -51,8 +46,11 @@ def formats():
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
         click.echo(f"  [{marker}] {ext:<8} {desc}")
-    click.echo("\nInstall all readers: pip install " + " ".join(iq_io.OPTIONAL_READERS))
-    click.echo('(from a fluorostats checkout: pip install -e ".[all]")')
+    click.echo('\nInstall all readers: pip install "fluorostats[all]"')
+    readers = " ".join(iq_io.OPTIONAL_READERS)
+    click.echo(
+        f'(from a checkout: pip install -e ".[all]"; the readers alone: pip install {readers})'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +79,7 @@ def depth_cmd(manifest, output_dir, overwrite):
     """
     from . import depth_batch  # on use: the other commands never load the batch driver
 
-    out = depth_batch.run(Path(manifest), output_dir, overwrite)
+    out = _run_driver(depth_batch.run, manifest, output_dir, overwrite)
     click.echo(f"Done. Outputs in {out}/")
 
 
@@ -110,8 +108,18 @@ def viability_cmd(manifest, output_dir):
     """
     from . import viability_batch  # on use: the other commands never load the batch driver
 
-    out = viability_batch.run(Path(manifest), output_dir)
+    out = _run_driver(viability_batch.run, manifest, output_dir)
     click.echo(f"Done. Outputs in {out}/")
+
+
+def _run_driver(run, manifest: str, *args) -> Path:
+    """A batch driver's ``run``. A problem with the manifest or the data it names (a
+    ValueError, which JSON syntax errors and file-format errors are too) is printed as
+    ``Error: <message>`` with exit status 1, not as a traceback."""
+    try:
+        return run(Path(manifest), *args)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +153,7 @@ def viability_cmd(manifest, output_dir):
 @click.option(
     "--channel",
     default=None,
-    help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
+    help="Channel to measure, by index (int) or name substring (ImageJ TIFFs carry no channel names: use an index); default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
 )
 @click.option(
     "--threshold",
@@ -232,6 +240,9 @@ def quant3d(
 ):
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
+    pruning = prune or _given("min_branch_length")
+    if no_skeleton and pruning:
+        raise click.UsageError("--prune / --min-branch-length have no effect with --no-skeleton")
     input_path = Path(input_dir)
     output_path = cli_paths.output_outside_input(input_path, Path(output_dir))
 
@@ -243,13 +254,12 @@ def quant3d(
     if not files:
         raise click.UsageError(f"No volume files found in {input_path}")
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
-    output_path.mkdir(parents=True, exist_ok=True)
     previous = cli_paths.claim_output(output_path, "quant3d", overwrite)
 
     click.echo(f"Found {len(files)} volume file(s)")
 
     measure = functools.partial(
-        _measure_volume,
+        cli_measure.measure_volume,
         ch_override=ch_override,
         sigma=sigma,
         bg_radius=bg_radius,
@@ -263,14 +273,16 @@ def quant3d(
         overlay_dir=None if no_overlays else output_path / "overlays",
         input_root=input_path,
     )
-    rows = _quantify_files(files, condition_from, "Processing volumes", measure)
+    rows, failures = cli_measure.quantify_files(
+        files, condition_from, "Processing volumes", measure
+    )
 
     # Every reported metric is plotted except n_branches, as in earlier releases.
     plotted = [m for m in report.METRICS_3D if m != "n_branches"]
     _report_and_plot(
         rows, output_path, "3d", plotted, no_plots, "3D Confocal Quantification Summary"
     )
-    _finish(output_path, config, previous, "quant3d")
+    _finish(output_path, config, previous, "quant3d", failures, len(files))
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +316,7 @@ def quant3d(
 @click.option(
     "--channel",
     default=None,
-    help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
+    help="Channel to measure, by index (int) or name substring (ImageJ TIFFs carry no channel names: use an index); default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
 )
 @click.option(
     "--threshold",
@@ -381,13 +393,12 @@ def quant2d(
             "`quant3d`."
         )
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
-    output_path.mkdir(parents=True, exist_ok=True)
     previous = cli_paths.claim_output(output_path, "quant2d", overwrite)
 
     click.echo(f"Found {len(files)} image file(s)")
 
     measure = functools.partial(
-        _measure_image,
+        cli_measure.measure_image,
         ch_override=ch_override,
         sigma=sigma,
         bg_radius=bg_radius,
@@ -398,107 +409,16 @@ def quant2d(
         overlay_dir=None if no_overlays else output_path / "overlays",
         input_root=input_path,
     )
-    rows = _quantify_files(files, condition_from, "Processing images", measure)
+    rows, failures = cli_measure.quantify_files(files, condition_from, "Processing images", measure)
     _report_and_plot(
         rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
     )
-    _finish(output_path, config, previous, "quant2d")
+    _finish(output_path, config, previous, "quant2d", failures, len(files))
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _quantify_files(files, condition_from, label, measure) -> list[dict]:
-    """Run ``measure(path) -> dict`` over files, tagging condition + replicate."""
-    rows: list[dict] = []
-    rep_counter = _ReplicateCounter()
-    with click.progressbar(files, label=label) as bar:
-        for fpath in bar:
-            condition = cli_paths.get_condition(fpath, condition_from)
-            replicate = rep_counter.next(condition)
-            rows.append(
-                {
-                    "file": fpath.name,
-                    "condition": condition,
-                    "replicate": replicate,
-                    **measure(fpath),
-                }
-            )
-    return rows
-
-
-def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size, opening="ball"):
-    """The CLI's options mapped onto `segment.segment_channel` (quant2d has no
-    --opening: its 2D opening is disk(1) for every choice but "none")."""
-    return segment.segment_channel(
-        img,
-        method=threshold,
-        min_size=min_size,
-        threshold_scale=threshold_scale,
-        sigma=sigma,
-        bg_radius=bg_radius,
-        opening=opening,
-    )
-
-
-def _measure_volume(
-    fpath, *, ch_override, no_skeleton, prune, min_branch_length, overlay_dir, input_root, **seg
-) -> dict:
-    """quant3d's per-file metrics (volume fraction, connectivity, skeleton, coverage)."""
-    arr, meta = iq_io.load_volume(fpath)
-    voxel_size = meta["voxel_size_um"]
-    ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
-    vol, mask = _segment(arr[ch], **seg)
-
-    # --no-skeleton: same keys as skeleton_metrics() so the CSV keeps its shape, but
-    # NaN (not measured) rather than 0 (measured, nothing there), so skipped
-    # metrics are left out of plots and statistics instead of entering as zeros.
-    skel = dict(skeleton.UNMEASURED_METRICS)
-    if not no_skeleton:
-        skel = skeleton.skeleton_metrics(
-            mask, voxel_size_um=voxel_size, prune=prune, min_branch_length_um=min_branch_length
-        )
-    if overlay_dir is not None:
-        qc.overlay_3d(vol, mask, cli_paths.overlay_path(fpath, input_root, overlay_dir))
-    return {
-        "shape": str(arr.shape),
-        "voxel_size_um": str(voxel_size),
-        "voxel_size_source": meta.get("voxel_size_source", ""),
-        "channel_used": _channel_label(ch, meta["channel_names"]),
-        "volume_fraction": metrics_3d.volume_fraction(mask),
-        **metrics_3d.connectivity_metrics(mask),
-        **skel,
-        **spatial.coverage_heterogeneity(mask),
-    }
-
-
-def _measure_image(fpath, *, ch_override, auto_crop, overlay_dir, input_root, **seg) -> dict:
-    """quant2d's per-file metrics (area fraction, clusters, coverage uniformity)."""
-    arr, meta = iq_io.load_image(fpath)
-    crop_box = ""
-    if auto_crop:  # crop microscope borders before channel selection
-        arr, (y0, y1, x0, x1) = preprocess.auto_crop(arr)
-        crop_box = f"[{y0}:{y1}, {x0}:{x1}]"
-    ch = preprocess.green_channel_index(meta["channel_names"], arr.shape[0], ch_override)
-    img, mask = _segment(arr[ch], **seg)
-    if overlay_dir is not None:
-        qc.overlay_2d(img, mask, cli_paths.overlay_path(fpath, input_root, overlay_dir))
-    return {
-        "shape": str(arr.shape),
-        "voxel_size_um": str(meta["voxel_size_um"]),
-        "voxel_size_source": meta.get("voxel_size_source", ""),
-        "auto_crop_box": crop_box,
-        "channel_used": _channel_label(ch, meta["channel_names"]),
-        **metrics_2d.coverage_metrics(mask, voxel_size_um=meta["voxel_size_um"]),
-        **spatial.coverage_heterogeneity(mask),
-    }
-
-
-def _channel_label(index: int, names: list[str]) -> str:
-    """The measured channel as ``"<index> (<name>)"`` for the per-file record."""
-    return f"{index} ({names[index]})" if index < len(names) else str(index)
 
 
 def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) -> None:
@@ -524,12 +444,22 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
         _draw_plots_and_pvalues(df, metrics, output_path / "plots", summary_title)
 
 
-def _finish(output_path: Path, config: dict, previous: list[Path], tool: str) -> None:
-    """Record the run (last, so only a completed run claims the folder) and name the
-    earlier outputs it removed and did not write again."""
+def _finish(output_path: Path, config: dict, previous: list[Path], tool: str, failures, n) -> None:
+    """Write ``failures.csv`` (file, condition, error) when files of the ``n`` failed,
+    record the run (last, so only a completed run claims the folder), name the earlier
+    outputs it removed and did not write again, then exit 1 naming the failed files."""
+    if failures:
+        pd.DataFrame(failures, columns=["file", "condition", "error"]).to_csv(
+            output_path / "failures.csv", index=False
+        )
     report.write_run_config(output_path, config, tool=tool)
     for line in report.stale_notices(previous):
         click.echo(line)
+    if failures:
+        listed = "".join(f"\n  {f['condition']}/{f['file']}: {f['error']}" for f in failures)
+        raise click.ClickException(
+            f"{len(failures)} of {n} file(s) could not be measured (failures.csv):{listed}"
+        )
 
 
 def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
@@ -565,15 +495,10 @@ def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
     click.echo(f"Plots saved to {plot_dir}")
 
 
-class _ReplicateCounter:
-    """Auto-assign replicate IDs per condition."""
-
-    def __init__(self):
-        self._counts: dict[str, int] = {}
-
-    def next(self, condition: str) -> int:
-        self._counts[condition] = self._counts.get(condition, 0) + 1
-        return self._counts[condition]
+def _given(param: str) -> bool:
+    """Whether the current command's option ``param`` was typed, not defaulted."""
+    source = click.get_current_context().get_parameter_source(param)
+    return source == click.core.ParameterSource.COMMANDLINE
 
 
 def _parse_channel(channel: str | None) -> int | str | None:
