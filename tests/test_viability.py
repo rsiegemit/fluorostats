@@ -404,3 +404,17 @@ def test_viability_2d_vs_3d_no_warning_when_cells_survive():
         warnings.simplefilter("error")
         assert viability.viability_2d_vs_3d(_monolayer(3))["live_fraction_3d"] > 0
         assert viability.viability_2d_vs_3d(np.zeros((4, 8, 8)))["live_fraction_3d"] == 0
+
+
+def test_live_only_calls_return_the_same_keys_with_nan_dead_values():
+    """One key set per function (MOD-5): without a dead channel the dead readouts
+    are NaN, not missing."""
+    live = _monolayer(3)
+    dead = _monolayer(3)[::-1]
+    frac = live_dead_fractions(live)
+    assert frac.keys() == live_dead_fractions(live, dead).keys()
+    assert np.isnan(frac["dead_fraction"]) and np.isnan(frac["viability"])
+    prof = viability_depth_profile(live)
+    assert prof.keys() == viability_depth_profile(live, dead).keys()
+    assert prof["dead_by_z"].shape == prof["viability_by_z"].shape == (8,)
+    assert np.isnan(prof["dead_by_z"]).all() and np.isnan(prof["viability_by_z"]).all()

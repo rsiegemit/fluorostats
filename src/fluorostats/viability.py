@@ -170,11 +170,12 @@ def live_dead_fractions(
     """Whole-volume live / dead fractions and viability ratio.
 
     Returns dict: live_fraction, dead_fraction (of all voxels), and
-    viability = live / (live + dead) area (NaN if no cells detected).
+    viability = live / (live + dead) area (NaN if no cells detected). Without a
+    dead channel or mask, dead_fraction and viability are NaN.
     """
     lm = _mask(live, live_mask, **seg)
     lf = float(lm.mean())
-    out = {"live_fraction": lf}
+    out = {"live_fraction": lf, "dead_fraction": float("nan"), "viability": float("nan")}
     if dead is not None or dead_mask is not None:
         dm = _mask(dead, dead_mask, **seg)
         df = float(dm.mean())
@@ -419,13 +420,14 @@ def viability_depth_profile(
 ) -> dict:
     """Per-z live (and dead) area fraction — the depth-resolved viability.
 
-    Returns dict of 1D arrays (length = n z slices): live_by_z, and if a dead
-    channel is given, dead_by_z and viability_by_z.
+    Returns dict of 1D arrays (length = n z slices): live_by_z, dead_by_z and
+    viability_by_z (the last two all NaN without a dead channel or mask).
     """
     lm = _mask(live, live_mask, **seg)
     axes = tuple(a for a in range(lm.ndim) if a != z_axis)
     live_by_z = lm.mean(axis=axes)
-    out = {"live_by_z": live_by_z}
+    no_dead = np.full(live_by_z.shape, np.nan)
+    out = {"live_by_z": live_by_z, "dead_by_z": no_dead, "viability_by_z": no_dead.copy()}
     if dead is not None or dead_mask is not None:
         dm = _mask(dead, dead_mask, **seg)
         dead_by_z = dm.mean(axis=axes)
