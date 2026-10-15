@@ -41,8 +41,7 @@ def test_load_czi_volume(monkeypatch, tmp_path):
       <Distance Id="X"><Value>2.5e-7</Value></Distance>
       <Distance Id="Y"><Value>2.5e-7</Value></Distance>
       <Distance Id="Z"><Value>1e-6</Value></Distance>
-      <Channel Name="EGFP"/>
-      <Channel Name="mCherry"/>
+      <Metadata><Information><Image><Dimensions><Channels><Channel Name="EGFP"/><Channel Name="mCherry"/></Channels></Dimensions></Image></Information></Metadata>
     </root>"""
     arr = np.zeros((1, 1, 2, 3, 8, 8), dtype=np.uint16)  # extra singleton dims
     monkeypatch.setitem(sys.modules, "czifile", _make_fake_czifile(xml, arr))
@@ -58,7 +57,7 @@ def test_load_czi_volume(monkeypatch, tmp_path):
 
 def test_czi_dyename_fallback(monkeypatch, tmp_path):
     xml = """<root>
-      <DyeName>DAPI</DyeName>
+      <Metadata><Information><Image><Dimensions><Channels><Channel><DyeName>DAPI</DyeName></Channel></Channels></Dimensions></Image></Information></Metadata>
     </root>"""
     arr = np.zeros((1, 4, 8, 8), dtype=np.uint16)
     monkeypatch.setitem(sys.modules, "czifile", _make_fake_czifile(xml, arr))
@@ -88,7 +87,7 @@ def test_czi_unreadable_distance_keeps_the_rest_and_warns():
       <Distance Id="Y"><Value>2.5e-7</Value></Distance>
       <Distance Id="Z"><Value>n/a</Value></Distance>
       <Distance Id="T"><Value>1</Value></Distance>
-      <Channel Name="EGFP"/>
+      <Metadata><Information><Image><Dimensions><Channels><Channel Name="EGFP"/></Channels></Dimensions></Image></Information></Metadata>
     </root>"""
     with pytest.warns(RuntimeWarning, match="CZI Distance 'Z' value 'n/a' could not be read"):
         meta = io_vendors._parse_czi_metadata(_czi(xml))
@@ -150,8 +149,31 @@ def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
     assert (out[0].mean(), out[1].mean()) == (1, 2)
 
 
-@pytest.mark.parametrize("xml", ['<root><Channel Name=""/><Channel Name="mCherry"/></root>',
-                                 "<root><DyeName/><DyeName>mCherry</DyeName></root>"])
+_DIMS = "<root><Metadata><Information><Image><Dimensions><Channels>{}</Channels></Dimensions>" \
+        "</Image></Information></Metadata></root>"
+
+
+@pytest.mark.parametrize("xml", [_DIMS.format('<Channel Name=""/><Channel Name="mCherry"/>'),
+                                 _DIMS.format("<Channel><DyeName/></Channel>"
+                                              "<Channel><DyeName>mCherry</DyeName></Channel>")])
 def test_czi_unnamed_channel_keeps_its_position(xml):
     meta = io_vendors._parse_czi_metadata(types.SimpleNamespace(metadata=lambda: xml))
     assert meta["channel_names"] == ["Ch1", "mCherry"]
+
+
+def test_czi_channel_names_come_from_the_image_dimensions_only():
+    # Regression: every Channel element in the document was collected, so the
+    # experiment's tracks and the display settings added names (a 2-channel
+    # image got 12, and channel 1 was named after an unacquired track channel).
+    xml = """<ImageDocument><Metadata>
+      <Experiment><Track><Channels><Channel Name="Ch1-T1"/><Channel Name="AF635-T1"/>
+        <Channel Name="DAPI-T2"/></Channels></Track></Experiment>
+      <Information><Image><Dimensions><Channels>
+        <Channel Id="Channel:0" Name="AF635-T1"/><Channel Id="Channel:1" Name="DAPI-T2"/>
+      </Channels></Dimensions></Image></Information>
+      <DisplaySetting><Channels><Channel Name="AF635-T1"/><Channel Name="DAPI-T2"/>
+      </Channels></DisplaySetting>
+      <DyeName>Unrelated</DyeName>
+    </Metadata></ImageDocument>"""
+    meta = io_vendors._parse_czi_metadata(_czi(xml))
+    assert meta["channel_names"] == ["AF635-T1", "DAPI-T2"]

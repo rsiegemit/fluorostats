@@ -208,10 +208,13 @@ def _czi_voxel_um(root):
 
 
 def _czi_channel_names(root) -> list[str]:
-    """Channel names from ``Channel@Name``, falling back to ``DyeName`` text."""
-    names = [ch.get("Name") for ch in root.iter("Channel")]
+    """Names of the image's channels (``Information/Image/Dimensions/Channels``;
+    the experiment tracks and display settings also hold ``Channel`` elements,
+    acquired or not) from ``Channel@Name``, falling back to their ``DyeName``."""
+    channels = root.findall(".//Information/Image/Dimensions/Channels/Channel")
+    names = [ch.get("Name") for ch in channels]
     if not any(names):
-        names = [dye.text for dye in root.iter("DyeName")]
+        names = [ch.findtext("DyeName") for ch in channels]
     return _positional_names(names)
 
 
