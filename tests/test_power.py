@@ -92,3 +92,8 @@ def test_power_rejects_zero_simulations(call):
 def test_fdr_power_curve_rejects_an_empty_metric_set():
     with pytest.raises(ValueError, match="metric"):
         fdr_power_curve({}, {}, [3], n_sims=5)
+
+
+def test_fdr_power_curve_rejects_metrics_missing_from_one_group():
+    with pytest.raises(ValueError, match="'a'"):
+        fdr_power_curve({"a": [1, 2]}, {"b": [3, 4]}, [3], n_sims=5)

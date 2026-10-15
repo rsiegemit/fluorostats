@@ -125,11 +125,15 @@ def fdr_power_curve(
     correction.
 
     Returns a long DataFrame with columns ``n``, ``metric``, ``power``. Raises
-    ValueError for an empty metric set or ``n_sims < 1``.
+    ValueError for an empty metric set, a metric missing from
+    ``samples_per_metric_b``, or ``n_sims < 1``.
     """
     metrics = list(samples_per_metric_a.keys())
     if not metrics:
         raise ValueError("fdr_power_curve: no metric given (empty samples_per_metric_a)")
+    missing = [m for m in metrics if m not in samples_per_metric_b]
+    if missing:
+        raise ValueError(f"fdr_power_curve: metrics {missing} have no samples_per_metric_b")
     rows = []
     for n in ns:
         sims = {
