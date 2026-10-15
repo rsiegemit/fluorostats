@@ -22,7 +22,8 @@ Public API surface, grouped by module:
     background subtraction, surface normalisation, AUC, single-exponential λ fit).
   - ``depth_batch`` / ``viability_batch`` — manifest-driven batch drivers (many
     stacks by condition → tidy CSVs + figures); ``depth_figures`` draws the
-    depth driver's figures.
+    depth driver's figures and ``depth_contrasts`` computes, prints and writes
+    its two-group statistics.
   - ``objects`` — per-object volumes, equivalent diameters, centroids, shape
     descriptors (elongation/orientation/solidity), object density, centroid /
     angular / radial spatial distribution, nearest-neighbour clustering
@@ -85,7 +86,7 @@ from . import (  # noqa: F401
 
 # Figure and orchestration modules load on first use (PEP 562), so importing a
 # measurement module never imports matplotlib.pyplot or changes its backend.
-_LAZY = {"depth_batch", "depth_figures", "viability_batch", "render3d", "plots",
+_LAZY = {"depth_batch", "depth_contrasts", "depth_figures", "viability_batch", "render3d", "plots",
          "pubfig", "style", "report"}
 
 

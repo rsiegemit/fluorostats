@@ -29,7 +29,7 @@ def test_figure_and_driver_modules_load_on_first_use():
 
     assert fluorostats.plots.compute_pvalues is compute_pvalues
     assert fluorostats.pubfig is pubfig
-    for name in ("render3d", "depth_figures", "depth_batch", "viability_batch", "style", "report"):
+    for name in ("render3d", "depth_figures", "depth_contrasts", "depth_batch", "viability_batch", "style", "report"):
         assert getattr(fluorostats, name).__name__ == f"fluorostats.{name}"
     with pytest.raises(AttributeError, match="no attribute 'nope'"):
         fluorostats.nope

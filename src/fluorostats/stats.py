@@ -108,13 +108,11 @@ def gini(values: ArrayLike) -> float:
 def coefficient_of_variation(values: np.ndarray, ddof: int = 0) -> float:
     """Coefficient of variation ``std(ddof) / mean``.
 
-    ``ddof`` is a parameter because the callers differ and it is part of the
-    result. The homogeneity metrics in `morphometry`, `objects` and `ring` take the
-    CV over every tile of the image: that is the whole population of tiles, not a
-    sample drawn from one, so they use ``ddof=0``. `spatial.spatial_heterogeneity`
-    uses the sample form (``ddof=1``, about 2% larger on a 5x5 grid), which its
-    reported values were computed with. NaN when there are ``<= ddof`` values or the
-    mean is 0.
+    Every caller in the package (the homogeneity metrics in `morphometry`,
+    `objects`, `ring` and `spatial`) takes the CV over every tile of the image:
+    the whole population of tiles, not a sample drawn from one, so they use
+    ``ddof=0``. ``ddof`` stays a parameter for a caller whose values are a sample
+    (``ddof=1``). NaN when there are ``<= ddof`` values or the mean is 0.
     """
     v = np.asarray(values, dtype=float).ravel()
     if v.size <= ddof or v.mean() == 0:
