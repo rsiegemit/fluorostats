@@ -154,8 +154,18 @@ def test_safe_float_paths():
 # ---------------------------------------------------------------------------
 
 
+def _install_readlif(monkeypatch, reader):
+    """Install a fake readlif laid out like the real one: ``LifFile`` lives in
+    ``readlif.reader``; the top-level package holds only ``__version__``."""
+    package = types.ModuleType("readlif")
+    package.__version__ = "0.6.6"
+    package.reader = reader
+    monkeypatch.setitem(sys.modules, "readlif", package)
+    monkeypatch.setitem(sys.modules, "readlif.reader", reader)
+
+
 def _make_fake_readlif(n_channels, n_z, scale, frame_ndim=2, empty=False):
-    fake = types.ModuleType("readlif")
+    fake = types.ModuleType("readlif.reader")
 
     class Dims:
         z = n_z
@@ -185,7 +195,7 @@ def _make_fake_readlif(n_channels, n_z, scale, frame_ndim=2, empty=False):
 def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
     """Multi-channel LIF: frames are appended Z-major/C-minor, so channel c, slice z
     must come back de-interleaved (regression for the (Z,C)-vs-(C,Z) reshape bug)."""
-    fake = types.ModuleType("readlif")
+    fake = types.ModuleType("readlif.reader")
 
     class Dims:
         z = 3
@@ -206,7 +216,7 @@ def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
             return Image()
 
     fake.LifFile = LifFile
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     path = tmp_path / "m.lif"
     path.write_bytes(b"")
     arr, _ = io.load_volume(path)  # (C, Z, Y, X)
@@ -219,7 +229,7 @@ def test_load_lif_deinterleaves_multichannel(monkeypatch, tmp_path):
 def test_load_lif_volume(monkeypatch, tmp_path):
     # readlif's scale is pixels per µm (x, y, z): 2 px/µm -> 0.5 µm voxels.
     fake = _make_fake_readlif(2, 3, [2.0, 4.0, 0.5])
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     path = tmp_path / "s.lif"
     path.write_bytes(b"")
     arr, meta = io.load_volume(path)
@@ -232,7 +242,7 @@ def test_load_lif_volume(monkeypatch, tmp_path):
 
 def test_load_lif_volume_rgb_frames(monkeypatch, tmp_path):
     fake = _make_fake_readlif(1, 2, [2.0], frame_ndim=3)
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     path = tmp_path / "rgb.lif"
     path.write_bytes(b"")
     arr, _ = io.load_volume(path)
@@ -241,7 +251,7 @@ def test_load_lif_volume_rgb_frames(monkeypatch, tmp_path):
 
 def test_load_lif_empty_raises(monkeypatch, tmp_path):
     fake = _make_fake_readlif(1, 1, [2.0], empty=True)
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     path = tmp_path / "empty.lif"
     path.write_bytes(b"")
     with pytest.raises(ValueError, match="No images"):
@@ -267,7 +277,7 @@ def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
             self.image_list = [{"name": "img0"}, {"name": "img1"}]
 
     fake.LifFile = TwoImages
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     p = tmp_path / "s.lif"
     p.write_bytes(b"")
     with pytest.warns(RuntimeWarning, match="reading image 0 at time point 0 only"):
@@ -278,7 +288,7 @@ def test_lif_missing_z_length_keeps_xy_calibration(monkeypatch, tmp_path):
     # Regression: a None z scale used to raise inside the parser, and the broad
     # except then discarded the valid x/y calibration as well.
     fake = _make_fake_readlif(1, 2, [2.0, 2.0, None, None])
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     path = tmp_path / "noz.lif"
     path.write_bytes(b"")
     with pytest.warns(RuntimeWarning, match="no z calibration"):
@@ -288,7 +298,7 @@ def test_lif_missing_z_length_keeps_xy_calibration(monkeypatch, tmp_path):
 
 def test_lif_y_copied_from_x_is_said_and_recorded(monkeypatch, tmp_path):
     fake = _make_fake_readlif(1, 2, [2.0, None, 0.5])
-    monkeypatch.setitem(sys.modules, "readlif", fake)
+    _install_readlif(monkeypatch, fake)
     path = tmp_path / "noy.lif"
     path.write_bytes(b"")
     with pytest.warns(RuntimeWarning, match="y voxel size copied from x") as rec:

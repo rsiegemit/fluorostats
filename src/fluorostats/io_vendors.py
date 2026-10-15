@@ -324,9 +324,9 @@ def _parse_nd2_metadata(f) -> dict:
 
 def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
     """Leica .lif -> ((C, Z, Y, X), meta), image 0 at time point 0."""
-    readlif = _reader("readlif")
-
-    reader = readlif.LifFile(str(path))
+    _reader("readlif")  # names the extra when readlif is missing
+    # readlif's package holds only __version__; LifFile lives in readlif.reader.
+    reader = importlib.import_module("readlif.reader").LifFile(str(path))
 
     if len(reader.image_list) == 0:
         raise ValueError(f"No images found in LIF file: {path}")
