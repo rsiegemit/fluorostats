@@ -13,6 +13,16 @@ DO alter outputs come first, each with the inputs it affects.
 ### Fixed (changes outputs)
 
 Reading files
+- **Leica `.lif` files load** (every one failed: the reader used a name readlif does
+  not export); a negative z length (top-down acquisition) is read as its magnitude.
+- **Olympus axes come from the plane file names**, checked against the mainfile
+  sizes: 2-channel single-plane files were read as 1 channel x 2 slices, time series
+  as z-stacks, C x Z x T files lost a channel, and a file name pattern dropped all
+  but one plane silently (a size mismatch now raises). Pixel sizes written with a
+  comma decimal are read.
+- ImageJ: a z spacing of 0 or NaN is not calibration; the unit `inch` is converted.
+  RGB channel names stay on their data; unlabelled 5D/6D arrays follow the 4D rule;
+  `load_image` of a z-stack no longer parses or warns about z.
 - **Axis order comes from the file's axis labels** (TIFF series axes, nd2 sizes,
   czifile axes), not from the array shape. Changes results for TIFF/ND2/CZI files
   not already in (C, Z, Y, X) order: ImageJ ZCYX hyperstacks with more than one
@@ -36,6 +46,11 @@ Reading files
   RGBA images and unnamed 4-channel volumes in `quant3d` (announced as a guess).
 
 Segmentation and objects
+- **`clear_border_labels` re-merged touching objects**; `watershed_split` merged
+  objects touching only at a corner. Both keep objects apart now.
+- `object_centroids` gives one row per present label (gaps in label ids made phantom
+  objects); skeletonize output is treated as a mask on every scikit-image version;
+  spur pruning keeps two branches at every junction.
 - **`objects.watershed_split(min_size>0)` re-merged the objects it split** (the size
   filter relabelled the foreground). It now filters the watershed labels, and seeds
   at the h-maxima of the distance transform (h = `min_distance`/2) so irregular or
@@ -54,6 +69,13 @@ Segmentation and objects
   constant); NaN with a warning below two varying axes.
 
 Measurements and statistics
+- **Cliff's delta ignores NaN** (NaN counted as a tie); **one minimum-n rule** for
+  every two-group test (a group with fewer than 2 values is untested, p NaN, not
+  p = 1.0); `compute_pvalues` no longer crashes on missing or mixed-type labels.
+- **The λ fit no longer depends on the intensity scale** (tiny intensities gave a
+  wrong λ with `fit_ok` true) and refuses a λ below the z-step.
+- Depth windows a stack covers only partly are flagged (`n_partial`), and retention
+  divides by the covered depth; power estimates refuse empty inputs.
 - **A value that was never measured is NaN, not 0**: a skeleton that cannot be
   measured; `largest_component_fraction` and cluster areas of an empty mask; the
   mean branch length of no branches; the regime estimate with no segmented cell;
@@ -81,6 +103,15 @@ Measurements and statistics
   q-values; both use q now.
 
 CLI and drivers
+- **A run refuses an output folder holding files it did not write** (`--overwrite` to
+  replace them) and records which tool wrote the folder; files it wrote earlier are
+  replaced and named.
+- **One unreadable file no longer stops `quant2d`/`quant3d`**: failures go to
+  `failures.csv`, the rest are measured, and the command exits 1. Errors from bad
+  manifests or options print as messages, not tracebacks; a failed run leaves no
+  empty folder; `quant3d` skips Olympus `.oif.files` companion folders;
+  `--condition-from filename` strips `.ome.tif`; `--prune` with `--no-skeleton` is
+  refused.
 - **`quant2d`/`quant3d` refuse an `--output` inside `--input`**; reruns remove the
   tool's own earlier plots, overlays and (depth) figures, naming each, and every
   command writes `run_config.json` last, so a failed run leaves none. An input
@@ -107,6 +138,12 @@ CLI and drivers
   backend.
 
 ### Added
+- `quant3d --opening` and the viability `seg.opening`; `viability.live_dead_channels`
+  (live/dead from dye names); `live_cov_frac`/`dead_cov_frac` (fractions; the `_pct`
+  columns are kept, deprecated); `run_config.json` records the tool, the code commit
+  and the absolute paths read; `io.read_voxel_size`; an optional regression suite on
+  real vendor files (`FLUOROSTATS_VENDOR_DATA`); a CI job at the minimum dependency
+  versions.
 - `voxel_size_source` (which axes came from the file, which were defaulted, copied
   or assumed) in every per-file/per-stack table; quant2d also records
   `voxel_size_um`, `auto_crop_box` and µm² cluster areas; `channel_used`.
@@ -134,6 +171,16 @@ CLI and drivers
   suite at 100% coverage on Python 3.10-3.13); `ruff` and `mypy` pinned in `dev`.
 
 ### Changed
+- **Dependency floors raised to versions that work**: numpy >= 1.25, scikit-image
+  >= 0.23, matplotlib >= 3.8, skan >= 0.12 (at the old floors 3D skeleton metrics
+  were NaN and other functions failed).
+- `fluorostats.style`, the `render3d` MIP panels, the `depth_batch` window/figure
+  helpers, `pubfig.panel(dx=, dy=)` and the manifest's `auc_window_um` are deprecated
+  and warn (use `pubfig`, `projections`, `depth`/`depth_figures`). `quant2d`/`quant3d`
+  plots follow the one figure style (their colours and fonts change).
+- The maxima count is described as what it is (local maxima above a fraction of the
+  image maximum); no claim of agreement with the Fiji Live/Dead macro.
+- Version 0.9.0.dev0 on the development branch.
 - **One name for the voxel-size argument, `voxel_size_um`** (per-axis µm in array
   order; a scalar means isotropic): `ring_morphometry`/`mesh_size` (`spacing`),
   `coverage_metrics` (`pixel_size_um`), `intensity_depth_profile`
@@ -152,6 +199,9 @@ CLI and drivers
 - Metric labels: `n_junctions` is "Junction-to-Junction Branches".
 
 ### Benchmarks and examples
+- The external-viability peak-count comparator is named `skimage_peakcount` (it is a
+  direct scikit-image peak count with the library's parameters, not the Fiji macro);
+  figure and docs wording follow.
 - Every locally reproducible results table is regenerated with this library
   (watershed columns change materially; others in the 3rd-4th decimal). Not
   regenerated, and marked so in `benchmarks/README.md`: cluster-only tables
