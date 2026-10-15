@@ -29,6 +29,13 @@ def _auc_by_group(rows, w) -> dict[str, list[float]]:
     return by_group
 
 
+def _n_partial(rows, w) -> int:
+    """Primary stacks with an AUC over window ``w`` that covers only part of it."""
+    lab = window_label(w)
+    aucs = [r["result"]["auc"][lab] for r in rows if r["role"] == "primary"]
+    return sum(a["normalized"] == a["normalized"] and a["covered_um"] < a["width_um"] for a in aucs)
+
+
 def _lambda_by_group(rows) -> dict[str, list[float]]:
     """Accepted (``fit_ok``) λ of primary stacks, by group (in manifest order)."""
     by_group: dict[str, list[float]] = {}
@@ -54,6 +61,7 @@ def _mann_whitney_row(metric: str, window: str, by_group: Mapping[str, Sequence[
         "cliffs_delta": mw["cliffs_delta"],
         "test": "Mann-Whitney U, two-sided",
         "reason": mw["reason"],
+        "n_partial": 0,
     }
 
 
@@ -68,7 +76,9 @@ def mann_whitney_contrasts(
     <across>", n counting the entries with a p-value); without it each row is its own test (q = p). ``window`` is free text
     (empty when it does not apply). ``reason`` is `stats.mann_whitney`'s: empty when
     tested, else why p is NaN (e.g. "n<2": a group below `stats.MIN_N`, left out of
-    the BH family). Rows have the `write_contrasts_csv` columns.
+    the BH family). ``n_partial`` (values measured over only part of their window)
+    is 0 here; `contrasts` sets it for depth AUC rows. Rows have the
+    `write_contrasts_csv` columns.
     """
     rows = [_mann_whitney_row(metric, window, bg) for metric, window, bg in entries if len(bg) == 2]
     if across is None:
@@ -84,13 +94,17 @@ def contrasts(rows: list[dict], windows: list[tuple]) -> list[dict]:
 
     One row per AUC window on the primary stacks' normalised AUC, BH-corrected across
     the windows, and one on accepted λ fits (a single test: q = p). Columns: metric,
-    window, group_a, group_b, n_a, n_b, U, p, q, cliffs_delta, test, correction, reason. The
-    console summary prints these same rows; `write_contrasts_csv` writes them.
+    window, group_a, group_b, n_a, n_b, U, p, q, cliffs_delta, test, correction, reason,
+    n_partial. ``n_partial`` counts the tested stacks whose depth covers the window
+    only partly (their AUC is over the covered part: see ``window_covered_um`` in
+    ``auc_per_stack.csv``); 0 for λ. The console summary prints these same rows;
+    `write_contrasts_csv` writes them.
     """
     auc = [("auc_normalized", window_label(w), _auc_by_group(rows, w)) for w in windows]
-    return mann_whitney_contrasts(auc, across="windows") + mann_whitney_contrasts(
-        [("lambda_um", "", _lambda_by_group(rows))]
-    )
+    partial = {window_label(w): _n_partial(rows, w) for w in windows}
+    auc_rows = mann_whitney_contrasts(auc, across="windows")
+    auc_rows = [{**c, "n_partial": partial[c["window"]]} for c in auc_rows]
+    return auc_rows + mann_whitney_contrasts([("lambda_um", "", _lambda_by_group(rows))])
 
 
 _CONTRAST_COLUMNS = [
@@ -107,6 +121,7 @@ _CONTRAST_COLUMNS = [
     "test",
     "correction",
     "reason",
+    "n_partial",
 ]
 
 
@@ -169,6 +184,8 @@ def print_auc_summary(rows, windows, parametric: bool, tests: list[dict]) -> Non
         if parametric:
             _print_welch("Welch t-test (parametric, requested)", by_group)
         _print_mann_whitney("Mann-Whitney", c, f", BH q={c['q']:.4f} across {len(auc)} windows")
+        if c["n_partial"]:
+            print(f"  ({c['n_partial']} stack(s) cover only part of it; see window_covered_um)")
 
 
 def print_lambda_summary(rows, parametric: bool, tests: list[dict]) -> None:

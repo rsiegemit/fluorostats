@@ -298,8 +298,10 @@ def write_profiles_csv(out: Path, rows: list[dict]) -> None:
 
 
 def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
-    """One row per stack: acquisition, λ fit, absolute/normalised AUC per window, and
-    ``voxel_size_source`` (which voxel axes were read from the file vs defaulted)."""
+    """One row per stack: acquisition, λ fit, absolute/normalised AUC per window,
+    ``voxel_size_source`` (which voxel axes were read from the file vs defaulted) and
+    ``window_complete_<window>`` (1 when the stack covers the whole window, 0 when
+    its AUC is over only ``window_covered_um`` of it)."""
     labels = [window_label(w) for w in windows]
     header = [
         "group",
@@ -318,7 +320,8 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
     ]
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}", f"window_covered_um_{lab}"]
-    header.append("voxel_size_source")  # appended last so existing column positions hold
+    # appended last so existing column positions hold
+    header += ["voxel_size_source"] + [f"window_complete_{lab}" for lab in labels]
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(header)
@@ -343,7 +346,10 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
             for lab in labels:
                 a = res["auc"][lab]
                 row += [f"{a['absolute']:.6g}", f"{a['normalized']:.6g}", f"{a['covered_um']:.4g}"]
-            w.writerow(row + [res["voxel_size_source"]])
+            complete = [
+                int(res["auc"][lab]["covered_um"] >= res["auc"][lab]["width_um"]) for lab in labels
+            ]
+            w.writerow(row + [res["voxel_size_source"], *complete])
 
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:

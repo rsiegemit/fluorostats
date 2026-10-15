@@ -55,7 +55,12 @@ def test_depth_batch_run(tmp_path):
     ps = pd.read_csv(out / "auc_per_stack.csv")
     assert len(ps) == 4  # 2 groups x 2 stacks
     # plain TIFFs carry no calibration: the table records that the 1 µm z-step is a default
-    assert list(ps.columns[-1:]) == ["voxel_size_source"]
+    assert list(ps.columns[-3:]) == [
+        "voxel_size_source",
+        "window_complete_0_10um",
+        "window_complete_full",
+    ]
+    assert (ps[["window_complete_0_10um", "window_complete_full"]] == 1).all().all()
     assert (ps["voxel_size_source"] == "z:default,y:default,x:default").all()
     assert set(ps["group"]) == {"fast", "slow"}
     # slower decay retains signal deeper -> larger surface-normalised full-depth AUC
@@ -452,3 +457,20 @@ def test_load_blank_with_no_positive_slice_names_the_blank(tmp_path):
     flat_stack(tmp_path / "b.tif", value=-5.0)
     with pytest.raises(ValueError, match="blank b.tif: no slice has a mean > 0"):
         _load_blank(str(tmp_path / "b.tif"), _CFG)
+
+
+def test_auc_csv_flags_a_window_the_stack_covers_only_partly(tmp_path):
+    # Regression (M2): a clamped AUC sat in auc_per_stack.csv like a complete one.
+    s0 = tmp_path / "s0.tif"
+    decay_stack(s0, n_z=11)  # 0-10 µm
+    cfg = {**_cfg(), "windows": [(0.0, 5.0), (5.0, 20.0)]}
+    with pytest.warns(RuntimeWarning, match="only 5 µm of it"):
+        res = depth_batch.analyse_stack(s0, None, cfg)
+    depth_batch.write_auc_csv(
+        tmp_path / "auc.csv",
+        [{"group": "A", "stack": "s0", "role": "primary", "result": res}],
+        cfg["windows"],
+    )
+    ps = pd.read_csv(tmp_path / "auc.csv")
+    assert list(ps.columns[-2:]) == ["window_complete_0_5um", "window_complete_5_20um"]
+    assert ps.iloc[0, -2:].tolist() == [1, 0]
