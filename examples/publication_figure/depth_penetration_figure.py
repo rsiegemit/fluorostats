@@ -130,12 +130,8 @@ def noiseless_norm_auc(i0, lam, bg, dz, n_z, yx, z0, z1, n_surface):
     return depth.auc_depth(p.depth_um, nn.normalized, z_min=z0, z_max=z1)
 
 
-def benchmark_A():
-    print("\n=== A. Correctness on synthetic Beer-Lambert ground truth ===")
-    i0, bg, dz, n_z, yx = 1000.0, 50.0, 2.0, 60, 128
-    z1 = (n_z - 1) * dz
+def _a1_exact(i0, bg, dz, n_z, yx, z1):
     rows = []
-
     # A1: exactness on NOISELESS stacks across a lambda sweep (n_surface=1 so the
     # surface reference is exactly I0 -> analytic normalized AUC closed-form applies).
     for lam in (20.0, 40.0, 80.0, 160.0):
@@ -150,7 +146,10 @@ def benchmark_A():
                          err_norm_pct=err_norm, err_abs_pct=err_abs))
         print(f"  lambda={lam:5.0f}: norm-AUC fs={norm_auc:7.3f} gt={gt_norm:7.3f} "
               f"err={err_norm:.3f}%  |  abs-AUC err={err_abs:.3f}%")
+    return rows
 
+
+def _a2_noisy(i0, bg, dz, n_z, yx, z1):
     # A2: robustness on NOISY replicate stacks (sigma = 10% of surface signal,
     # i.e. surface SNR ~10, a realistic good-confocal regime).
     lam, sigma, n_rep = 40.0, 100.0, 8
@@ -167,10 +166,13 @@ def benchmark_A():
     print(f"  A2 noisy (sigma={sigma:.0f}, {n_rep} reps): recovered norm-AUC "
           f"{noisy.mean():.2f}±{noisy.std(ddof=1):.2f}  gt={gt_norm:.2f}  "
           f"mean|err|={mad:.2f} ({mad/gt_norm*100:.2f}%)")
-    rows.append(dict(test="A2_noisy_recovery", lam=lam, gt_norm_auc=gt_norm,
-                     fs_norm_auc=float(noisy.mean()), err_norm_pct=mad / gt_norm * 100,
-                     err_abs_pct=np.nan))
+    row = dict(test="A2_noisy_recovery", lam=lam, gt_norm_auc=gt_norm,
+               fs_norm_auc=float(noisy.mean()), err_norm_pct=mad / gt_norm * 100,
+               err_abs_pct=np.nan)
+    return row, dict(lam=lam, dz=dz, n_z=n_z, snr=i0 / sigma, curves=np.vstack(curves)), sigma
 
+
+def _a3_discrimination(i0, bg, dz, n_z, yx, sigma):
     # A3: two-condition discrimination (short vs long penetration), like the real
     # GelMA(short) vs hybrid(long) contrast: does the pipeline recover the ordering
     # and the retained-fraction gap, with the built-in Welch test?
@@ -187,18 +189,27 @@ def benchmark_A():
     print(f"  A3 discrimination: retained-frac short={np.mean(rf['short']):.3f} "
           f"(gt {rf_gt_short:.3f}) long={np.mean(rf['long']):.3f} (gt {rf_gt_long:.3f})  "
           f"Welch p={p:.2e}  ordering_correct={np.mean(rf['short'])<np.mean(rf['long'])}")
-    rows.append(dict(test="A3_discrimination", lam=lam_short,
-                     gt_norm_auc=rf_gt_short, fs_norm_auc=float(np.mean(rf["short"])),
-                     err_norm_pct=abs(np.mean(rf["short"]) - rf_gt_short) / rf_gt_short * 100,
-                     err_abs_pct=np.nan))
-    rows.append(dict(test="A3_discrimination", lam=lam_long,
-                     gt_norm_auc=rf_gt_long, fs_norm_auc=float(np.mean(rf["long"])),
-                     err_norm_pct=abs(np.mean(rf["long"]) - rf_gt_long) / rf_gt_long * 100,
-                     err_abs_pct=np.nan))
+    rows = [dict(test="A3_discrimination", lam=lam_short,
+                 gt_norm_auc=rf_gt_short, fs_norm_auc=float(np.mean(rf["short"])),
+                 err_norm_pct=abs(np.mean(rf["short"]) - rf_gt_short) / rf_gt_short * 100,
+                 err_abs_pct=np.nan),
+            dict(test="A3_discrimination", lam=lam_long,
+                 gt_norm_auc=rf_gt_long, fs_norm_auc=float(np.mean(rf["long"])),
+                 err_norm_pct=abs(np.mean(rf["long"]) - rf_gt_long) / rf_gt_long * 100,
+                 err_abs_pct=np.nan)]
     return rows, dict(lam_short=lam_short, lam_long=lam_long, z_win=z_win,
                       rf_short=rf["short"], rf_long=rf["long"],
-                      rf_gt_short=rf_gt_short, rf_gt_long=rf_gt_long, welch_p=p,
-                      noisy_curve=dict(lam=lam, dz=dz, n_z=n_z, snr=i0 / sigma, curves=np.vstack(curves)))
+                      rf_gt_short=rf_gt_short, rf_gt_long=rf_gt_long, welch_p=p)
+
+
+def benchmark_A():
+    print("\n=== A. Correctness on synthetic Beer-Lambert ground truth ===")
+    i0, bg, dz, n_z, yx = 1000.0, 50.0, 2.0, 60, 128
+    z1 = (n_z - 1) * dz
+    rows = _a1_exact(i0, bg, dz, n_z, yx, z1)
+    a2_row, noisy_curve, sigma = _a2_noisy(i0, bg, dz, n_z, yx, z1)
+    a3_rows, ctx = _a3_discrimination(i0, bg, dz, n_z, yx, sigma)
+    return rows + [a2_row] + a3_rows, {**ctx, "noisy_curve": noisy_curve}
 
 
 # --------------------------------------------------------------------------- #
@@ -326,12 +337,7 @@ def benchmark_C():
 # --------------------------------------------------------------------------- #
 # Figure
 # --------------------------------------------------------------------------- #
-def make_figure(ctx, lam_ctx):
-    F.apply_style()
-    fig = plt.figure(figsize=(FIG_WIDTH, 2.237))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 0.95, 0.95], wspace=0.46,
-                          left=0.075, right=0.985, top=0.915, bottom=0.148)
-
+def _panel_recovery(axa, ctx):
     # (a) GT recovery: analytic normalized decay vs fluorostats recovered (noisy, mean±band)
     p = ctx["noisy_curve"]
     z = np.arange(p["n_z"]) * p["dz"]
@@ -340,7 +346,6 @@ def make_figure(ctx, lam_ctx):
     curves = p["curves"]
     m = curves.mean(0)
     sd = curves.std(0, ddof=1)
-    axa = fig.add_subplot(gs[0, 0])
     axa.plot(z, analytic, color="black", lw=1.3, ls="--", label="analytic exp(−z/λ)", zorder=3)
     axa.fill_between(z, m - sd, m + sd, color=OKABE["blue"], alpha=0.25, lw=0, zorder=1)
     axa.plot(z, m, color=OKABE["blue"], lw=1.8, label="fluorostats (mean±s.d.)", zorder=2)
@@ -353,9 +358,10 @@ def make_figure(ctx, lam_ctx):
     axa.legend(fontsize=5.0, loc="upper right", frameon=False, handlelength=1.6, borderaxespad=0.2)
     panel(axa, "a", "ground-truth recovery")
 
+
+def _panel_lambda(axb, lam_ctx):
     # (b) penetration-constant recovery: recovered λ vs known λ on the identity line,
     #     with one example profile + fitted exponential inset (annotated R²).
-    axb = fig.add_subplot(gs[0, 1])
     known = np.asarray(lam_ctx["known"])
     rec = np.asarray(lam_ctx["recovered"])
     lo, hi = 0, known.max() * 1.12
@@ -375,8 +381,9 @@ def make_figure(ctx, lam_ctx):
              transform=axb.transAxes, ha="right", va="bottom", fontsize=5.0, color="#333")
     panel(axb, "b", "λ recovery")
 
+
+def _panel_discrimination(axc, ctx):
     # (c) two-condition discrimination: recovered retained fraction vs known truth
-    axc = fig.add_subplot(gs[0, 2])
     # both bars are fluorostats output (two ground-truth λ conditions, not a tool
     # comparison), so keep #0072B2 reserved for the tool and use two non-reserved hues
     conds = [("short λ = %g" % ctx["lam_short"], ctx["rf_short"], ctx["rf_gt_short"], OKABE["orange"]),
@@ -401,6 +408,15 @@ def make_figure(ctx, lam_ctx):
              transform=axc.transAxes, ha="center", va="top", fontsize=5.0, color="#333")
     panel(axc, "c", "condition discrimination")
 
+
+def make_figure(ctx, lam_ctx):
+    F.apply_style()
+    fig = plt.figure(figsize=(FIG_WIDTH, 2.237))
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 0.95, 0.95], wspace=0.46,
+                          left=0.075, right=0.985, top=0.915, bottom=0.148)
+    _panel_recovery(fig.add_subplot(gs[0, 0]), ctx)
+    _panel_lambda(fig.add_subplot(gs[0, 1]), lam_ctx)
+    _panel_discrimination(fig.add_subplot(gs[0, 2]), ctx)
     F.save(fig, "depth_penetration", FIGURES, tight=False)
 
 

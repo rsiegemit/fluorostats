@@ -17,6 +17,7 @@ Outputs PDF+PNG to figures/supplementary/ plus a .txt caption.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -70,7 +71,7 @@ def panel_a(ax):
 
     BLUE = figstyle.OKABE["blue"]
     # (label, F1, is_default) — headline uses the fluorostats(Otsu+CC) score with
-    # connected-component post-processing (0.789); the envelope rows are the other
+    # connected-component post-processing; the envelope rows are the other
     # thresholder configs. Sorted best->worst; drawn best-on-top.
     rows = [
         ("fluorostats (Otsu+CC)", float(df.loc["fluorostats", "mean_f1@0.5"]), True),
@@ -96,14 +97,6 @@ def panel_a(ax):
         ax.text(v + 0.008, yi, f"{v:.3f}", va="center", ha="left", fontsize=5,
                 color="#222222")
 
-    # StarDist trained-DL reference line (raised so its vertical label sits above
-    # the annotation cluster in the lower-left)
-    ax.axvline(STARDIST_AP50, color=figstyle.OKABE["orange"], ls="--", lw=1.1,
-               zorder=2)
-    ax.text(STARDIST_AP50 + 0.02, len(rows) - 1, "StarDist (trained DL), published",
-            rotation=90, va="top", ha="left", fontsize=6,
-            color=figstyle.OKABE["orange"], fontweight="bold")
-
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
     # emphasise the default (headline) fluorostats tick label
@@ -115,17 +108,24 @@ def panel_a(ax):
     ax.set_xlim(0, 1.05)
     ax.set_ylim(-0.6, len(rows) - 0.4)
     ax.set_xlabel("instance F1 @ IoU 0.5")
+    stardist_reference(ax, len(rows), float(df.loc["fluorostats", "mean_f1@0.5"]))
 
-    # "% of trained model" headline, placed in the clear whitespace beside the two
-    # shortest bars (Yen 0.578, Triangle 0.185): starts right of the Yen value
-    # label and stays left of the StarDist reference line, centred on rows 0-1.
-    best = float(df.loc["fluorostats", "mean_f1@0.5"])   # the default (headline) row
+
+def stardist_reference(ax, n_rows, best):
+    """StarDist's published AP@0.5 as a reference line, and the default row's share of it."""
+    # reference line raised so its vertical label sits above the annotation cluster
+    # in the lower-left
+    ax.axvline(STARDIST_AP50, color=figstyle.OKABE["orange"], ls="--", lw=1.1,
+               zorder=2)
+    ax.text(STARDIST_AP50 + 0.02, n_rows - 1, "StarDist (trained DL), published",
+            rotation=90, va="top", ha="left", fontsize=6,
+            color=figstyle.OKABE["orange"], fontweight="bold")
+    # "% of trained model" headline on the bottom (shortest-bar) row, in the clear
+    # space right of that bar and left of the reference line
     pct = 100.0 * best / STARDIST_AP50
-    # placed on the Triangle row (bottom, shortest bar 0.185) in genuinely clear space
-    # to the right of that bar -> live text, no halo carving into the Yen bar above
     ax.text(0.335, 0.0,
             f"training-free fluorostats =\n{pct:.0f}% of the trained model",
-            fontsize=6.0, va="center", ha="left", color=BLUE, zorder=5)
+            fontsize=6.0, va="center", ha="left", color=figstyle.OKABE["blue"], zorder=5)
 
 
 def panel_b(ax):
@@ -202,6 +202,8 @@ def main():
     figstyle.save(fig, "figS4_generalization", figstyle.SUPP, tight=False)
 
     dsb = pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv")).set_index("method")
+    with open(os.path.join(RESULTS, "b_dsb2018.run.json")) as fh:
+        n_dsb = json.load(fh)["params"]["n_images"]
     best_f1 = float(dsb.loc["fluorostats", "mean_f1@0.5"])
     ctc_seg = (pd.read_csv(os.path.join(RESULTS, "b2_ctc_multi.csv"))
                .groupby("dataset")["ctc_top_SEG"].first())
@@ -211,7 +213,7 @@ def main():
         "same estimator to every dataset with no per-dataset fitting, so it does "
         "not collapse on modalities outside a training distribution the way a "
         "trained model can. (a) Instance F1 at IoU 0.5 on the StarDist DSB2018 "
-        "fluorescence-nuclei test set (50 images) — the exact curated dataset that "
+        f"fluorescence-nuclei test set ({n_dsb} images) — the exact curated dataset that "
         "the StarDist deep-learning model was trained and evaluated on. fluorostats "
         "(blue) ranks first among all classical threshold heuristics and reaches "
         f"{100.0 * best_f1 / STARDIST_AP50:.0f}% of StarDist's published trained-DL "
