@@ -1,7 +1,7 @@
 """Produce results/b_nuclei_size.csv — per-nucleus diameter recovery vs BBBC024 GT.
 
-Median equivalent diameter (``objects.equivalent_diameters_um``, unit voxels)
-of objects from four global thresholds and fluorostats raw Otsu+CC, against the GT
+Median equivalent diameter in voxels (``objects.equivalent_diameters_um`` with
+unit voxel size: the BBBC024 volumes carry no calibration) of objects from four global thresholds and fluorostats raw Otsu+CC, against the GT
 median over the first 6 BBBC024 volumes. Data: ``$FLUOROSTATS_DATA/BBBC024``.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ def main():
     rows = []
     for m, v in per_method.items():
         med = float(np.median(v))
-        rows.append({"method": m, "median_diam_um": round(med, 2), "GT_median": round(gt_med, 2),
+        rows.append({"method": m, "median_diam_vox": round(med, 2), "GT_median": round(gt_med, 2),
                      "pct_error": round(abs(med - gt_med) / gt_med * 100, 1)})
     df = pd.DataFrame(rows).sort_values("pct_error")
     write_table(df, "b_nuclei_size", {"voxel_um": VOX, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "n_volumes": 6})

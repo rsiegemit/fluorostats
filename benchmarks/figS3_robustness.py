@@ -146,7 +146,7 @@ cap = (
     f"s.d.={levels[-1]:.0f}; the fluorostats pre-filter recovers it to {yf:.2f}, matching "
     "dedicated denoisers. "
     "(c) Per-nucleus median-diameter recovery error relative to BBBC024 ground truth "
-    f"({size_by['GT_median'].iloc[0]:.1f} um), sorted best-to-worst. fluorostats is "
+    f"({size_by['GT_median'].iloc[0]:.1f} voxels), sorted best-to-worst. fluorostats is "
     f"best-tied at {size_by.loc[RAW_OTSU_CC, 'pct_error']:.1f}% error, versus "
     f"{size_by.loc['Li_1993', 'pct_error']:.1f}% (Li) and "
     f"{size_by.loc['Triangle_1977', 'pct_error']:.1f}% (Triangle). Blue denotes fluorostats "
