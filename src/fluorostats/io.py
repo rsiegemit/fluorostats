@@ -143,6 +143,25 @@ def load_image(path: str | Path) -> tuple[np.ndarray, dict]:
     return arr, meta
 
 
+def read_voxel_size(path: str | Path) -> tuple[tuple[float, ...], str]:
+    """``(voxel_size_um, voxel_size_source)`` of a volume file, as `load_volume`
+    records them, read from the file's metadata without loading its pixels.
+
+    Supported for TIFF (plain, OME and ImageJ); other formats raise
+    NotImplementedError (use `load_volume` there). Warns about defaulted axes
+    exactly as `load_volume` does.
+    """
+    path = Path(path)
+    fmt = FORMATS.get(path.suffix.lower())
+    if fmt is None or fmt.volume_meta is None:
+        readable = ", ".join(sorted(ext for ext, f in FORMATS.items() if f.volume_meta))
+        raise NotImplementedError(f"read_voxel_size reads {readable} only; use load_volume for "
+                                  f"{path.name} and take meta['voxel_size_um'].")
+    meta = fmt.volume_meta(path)
+    _record_calibration(meta, "zyx", path)
+    return meta["voxel_size_um"], meta["voxel_size_source"]
+
+
 def supported_formats() -> dict[str, str]:
     """Return dict of extension -> description for all supported formats."""
     formats: dict[str, str] = {}
@@ -218,11 +237,14 @@ class Format:
     image: Callable[[Path], tuple[np.ndarray, dict]] | None    # -> (C, Y, X)
     package: str | None = None    # optional vendor reader distribution
     extra: str | None = None      # pyproject extra that installs it
+    volume_meta: Callable[[Path], dict] | None = None   # volume meta without pixels
 
 
 FORMATS: dict[str, Format] = {
-    ".tif": Format("TIFF / OME-TIFF", io_vendors.load_tiff_volume, io_vendors.load_tiff_image),
-    ".tiff": Format("TIFF / OME-TIFF", io_vendors.load_tiff_volume, io_vendors.load_tiff_image),
+    ".tif": Format("TIFF / OME-TIFF", io_vendors.load_tiff_volume, io_vendors.load_tiff_image,
+                   volume_meta=io_vendors.read_tiff_volume_meta),
+    ".tiff": Format("TIFF / OME-TIFF", io_vendors.load_tiff_volume, io_vendors.load_tiff_image,
+                    volume_meta=io_vendors.read_tiff_volume_meta),
     ".png": Format("PNG", None, _load_standard_image),
     ".jpg": Format("JPEG", None, _load_standard_image),
     ".jpeg": Format("JPEG", None, _load_standard_image),

@@ -361,20 +361,29 @@ def _parse_lif_metadata(img) -> dict:
 
 def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
     """TIFF / OME-TIFF / ImageJ TIFF -> ((C, Z, Y, X), meta), series 0."""
-    meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "tiff"}
-
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
-        if tif.ome_metadata:
-            meta = _parse_ome_metadata(tif.ome_metadata, meta)
-            meta["format"] = "ome_tiff"
-        elif tif.imagej_metadata:
-            meta = _parse_imagej_metadata(tif.imagej_metadata, meta,
-                                          _imagej_xy_um(tif, tif.imagej_metadata))
-            meta["format"] = "imagej_tiff"
-
+        meta = _tiff_volume_meta(tif)
     data = canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
+
+
+def read_tiff_volume_meta(path: Path) -> dict:
+    """The ``meta`` of `load_tiff_volume` before channel names are padded, read
+    from the TIFF header and metadata only (no pixel data)."""
+    with tifffile.TiffFile(str(path)) as tif:
+        return _tiff_volume_meta(tif)
+
+
+def _tiff_volume_meta(tif: tifffile.TiffFile) -> dict:
+    """Volume ``meta`` from the OME-XML or ImageJ metadata of an open TIFF."""
+    meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "tiff"}
+    if tif.ome_metadata:
+        return {**_parse_ome_metadata(tif.ome_metadata, meta), "format": "ome_tiff"}
+    if tif.imagej_metadata:
+        xy = _imagej_xy_um(tif, tif.imagej_metadata)
+        return {**_parse_imagej_metadata(tif.imagej_metadata, meta, xy), "format": "imagej_tiff"}
+    return meta
 
 
 def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:

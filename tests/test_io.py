@@ -451,3 +451,47 @@ def test_labelled_few_channels_one_slice_does_not_warn(tmp_path):
         warnings.simplefilter("error")
         arr, _ = load_volume(p)
     assert arr.shape == (3, 1, 8, 8)
+
+
+# ---------------------------------------------------------------------------
+# read_voxel_size: the calibration load_volume records, without the pixels
+# ---------------------------------------------------------------------------
+
+def _no_pixel_reads(monkeypatch):
+    def refuse(*a, **k):
+        raise AssertionError("pixel data was read")
+
+    monkeypatch.setattr(tifffile.TiffPageSeries, "asarray", refuse)
+
+
+@pytest.mark.parametrize("kind", ["imagej", "ome"])
+def test_read_voxel_size_matches_load_volume_without_reading_pixels(tmp_path, monkeypatch, kind):
+    p = tmp_path / f"{kind}.tif"
+    data = np.zeros((3, 8, 8), np.uint16)
+    if kind == "imagej":
+        tifffile.imwrite(p, data, imagej=True, resolution=(2.0, 4.0),
+                         metadata={"axes": "ZYX", "spacing": 3.0, "unit": "micron"})
+    else:
+        tifffile.imwrite(p, data, ome=True, metadata={"axes": "ZYX", "PhysicalSizeX": 0.5,
+                                                      "PhysicalSizeY": 0.25,
+                                                      "PhysicalSizeZ": 3.0})
+    _, meta = load_volume(p)
+    _no_pixel_reads(monkeypatch)
+    size, source = io.read_voxel_size(p)
+    assert (size, source) == (meta["voxel_size_um"], meta["voxel_size_source"])
+    assert size == pytest.approx((3.0, 0.25, 0.5))
+    assert source == "z:file,y:file,x:file"
+
+
+def test_read_voxel_size_of_an_uncalibrated_tiff_warns(tmp_path):
+    p = tmp_path / "plain.tif"
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), photometric="minisblack")
+    with pytest.warns(RuntimeWarning, match="no z/y/x calibration"):
+        assert io.read_voxel_size(p) == ((1.0, 1.0, 1.0), "z:default,y:default,x:default")
+
+
+def test_read_voxel_size_other_formats_are_not_implemented(tmp_path):
+    p = tmp_path / "a.npy"
+    np.save(p, np.zeros((3, 8, 8)))
+    with pytest.raises(NotImplementedError, match="use load_volume"):
+        io.read_voxel_size(p)
