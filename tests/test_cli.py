@@ -485,7 +485,7 @@ def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monke
     # Regression: overlays of files no longer in the input survived a rerun, and
     # run_config.json was written before measuring, so a run that failed part-way left a
     # folder claiming the new configuration over the old run's tables.
-    from fluorostats import cli_measure
+    from fluorostats import cli as cli_mod
 
     make_dataset(tmp_path / "in", blob_2d)
     out = tmp_path / "out"
@@ -504,9 +504,9 @@ def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monke
     assert json.loads((out / "run_config.json").read_text())["threshold"] == "li"
 
     def fail(*a, **k):
-        raise RuntimeError("measurement failed")
+        raise RuntimeError("reporting failed")
 
-    monkeypatch.setattr(cli_measure, "measure_image", fail)
+    monkeypatch.setattr(cli_mod, "_report_and_plot", fail)
     res = CliRunner().invoke(cli, args)
     assert isinstance(res.exception, RuntimeError)
     assert not (out / "run_config.json").exists()

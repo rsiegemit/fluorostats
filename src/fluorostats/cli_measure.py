@@ -15,23 +15,33 @@ from . import io as iq_io
 from . import metrics_2d, metrics_3d, preprocess, qc, segment, skeleton, spatial
 
 
-def quantify_files(files, condition_from, label, measure) -> list[dict]:
-    """Run ``measure(path) -> dict`` over files, tagging condition + replicate."""
+def quantify_files(files, condition_from, label, measure) -> tuple[list[dict], list[dict]]:
+    """Run ``measure(path) -> dict`` over files, tagging condition + replicate.
+
+    Returns ``(rows, failures)``. A file that cannot be loaded or measured does not
+    stop the batch: it becomes a failure ``{"file", "condition", "error"}`` (the
+    exception's type and message) and takes no replicate number.
+    """
     rows: list[dict] = []
+    failures: list[dict] = []
     rep_counter = _ReplicateCounter()
     with click.progressbar(files, label=label) as bar:
         for fpath in bar:
             condition = cli_paths.get_condition(fpath, condition_from)
+            try:
+                metrics = measure(fpath)
+            # exception ERR-1: one unreadable file must not abort the batch; every
+            # failure is named on the console and in failures.csv, and the command
+            # exits 1 (cli._finish).
+            except Exception as e:
+                error = f"{type(e).__name__}: {e}"
+                failures.append({"file": fpath.name, "condition": condition, "error": error})
+                continue
             replicate = rep_counter.next(condition)
             rows.append(
-                {
-                    "file": fpath.name,
-                    "condition": condition,
-                    "replicate": replicate,
-                    **measure(fpath),
-                }
+                {"file": fpath.name, "condition": condition, "replicate": replicate, **metrics}
             )
-    return rows
+    return rows, failures
 
 
 def _segment(img, *, sigma, bg_radius, threshold, threshold_scale, min_size, opening="ball"):

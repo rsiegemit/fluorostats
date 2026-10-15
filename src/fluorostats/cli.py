@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 import matplotlib
+import pandas as pd
 
 from . import cli_measure, cli_paths
 from . import io as iq_io
@@ -257,14 +258,16 @@ def quant3d(
         overlay_dir=None if no_overlays else output_path / "overlays",
         input_root=input_path,
     )
-    rows = cli_measure.quantify_files(files, condition_from, "Processing volumes", measure)
+    rows, failures = cli_measure.quantify_files(
+        files, condition_from, "Processing volumes", measure
+    )
 
     # Every reported metric is plotted except n_branches, as in earlier releases.
     plotted = [m for m in report.METRICS_3D if m != "n_branches"]
     _report_and_plot(
         rows, output_path, "3d", plotted, no_plots, "3D Confocal Quantification Summary"
     )
-    _finish(output_path, config, previous, "quant3d")
+    _finish(output_path, config, previous, "quant3d", failures, len(files))
 
 
 # ---------------------------------------------------------------------------
@@ -392,11 +395,11 @@ def quant2d(
         overlay_dir=None if no_overlays else output_path / "overlays",
         input_root=input_path,
     )
-    rows = cli_measure.quantify_files(files, condition_from, "Processing images", measure)
+    rows, failures = cli_measure.quantify_files(files, condition_from, "Processing images", measure)
     _report_and_plot(
         rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
     )
-    _finish(output_path, config, previous, "quant2d")
+    _finish(output_path, config, previous, "quant2d", failures, len(files))
 
 
 # ---------------------------------------------------------------------------
@@ -427,12 +430,22 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
         _draw_plots_and_pvalues(df, metrics, output_path / "plots", summary_title)
 
 
-def _finish(output_path: Path, config: dict, previous: list[Path], tool: str) -> None:
-    """Record the run (last, so only a completed run claims the folder) and name the
-    earlier outputs it removed and did not write again."""
+def _finish(output_path: Path, config: dict, previous: list[Path], tool: str, failures, n) -> None:
+    """Write ``failures.csv`` (file, condition, error) when files of the ``n`` failed,
+    record the run (last, so only a completed run claims the folder), name the earlier
+    outputs it removed and did not write again, then exit 1 naming the failed files."""
+    if failures:
+        pd.DataFrame(failures, columns=["file", "condition", "error"]).to_csv(
+            output_path / "failures.csv", index=False
+        )
     report.write_run_config(output_path, config, tool=tool)
     for line in report.stale_notices(previous):
         click.echo(line)
+    if failures:
+        listed = "".join(f"\n  {f['condition']}/{f['file']}: {f['error']}" for f in failures)
+        raise click.ClickException(
+            f"{len(failures)} of {n} file(s) could not be measured (failures.csv):{listed}"
+        )
 
 
 def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:

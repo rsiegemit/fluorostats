@@ -98,6 +98,7 @@ def claim_output(output_path: Path, tool: str, overwrite: bool) -> list[Path]:
     delete the files an earlier run of ``tool`` wrote; return the paths deleted.
 
     Only names this tool writes are touched (``per_file.csv``, ``per_condition.csv``,
+    ``failures.csv``,
     any reported metric's ``_bar``/``_box`` PNG, the summary panel, ``pvalues.csv``,
     ``*_overlay.png`` under ``overlays/``, ``run_config.json``), so an earlier run's
     results never sit next to this run's and nothing else in the folder is removed.
@@ -111,6 +112,7 @@ def claim_output(output_path: Path, tool: str, overwrite: bool) -> list[Path]:
     owned += [
         output_path / "per_file.csv",
         output_path / "per_condition.csv",
+        output_path / "failures.csv",
         plot_dir / "summary_panel.png",
         plot_dir / "pvalues.csv",
         output_path / "run_config.json",

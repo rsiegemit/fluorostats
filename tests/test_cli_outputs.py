@@ -119,3 +119,24 @@ def test_quant_refuses_a_folder_another_run_wrote_unless_overwrite(tmp_path, oth
     assert res.exit_code == 0, res.output
     assert len(pd.read_csv(out / "per_file.csv")) == 6
     assert json.loads((out / "run_config.json").read_text())["tool"] == "quant2d"
+
+
+def test_a_file_that_cannot_be_measured_is_listed_and_the_run_exits_1(tmp_path):
+    # Regression (vendor report): one unreadable file aborted quant2d/quant3d with a
+    # traceback and no tables.
+    make_dataset(tmp_path / "in", blob_2d)
+    (tmp_path / "in" / "GelMA" / "broken.tif").write_bytes(b"not a tiff")
+    out = tmp_path / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 1
+    assert "1 of 7 file(s) could not be measured" in res.output and "broken.tif" in res.output
+    failed = pd.read_csv(out / "failures.csv")
+    assert failed[["file", "condition"]].values.tolist() == [["broken.tif", "GelMA"]]
+    assert len(pd.read_csv(out / "per_file.csv")) == 6
+    assert json.loads((out / "run_config.json").read_text())["tool"] == "quant2d"
+
+    (tmp_path / "in" / "GelMA" / "broken.tif").unlink()
+    res = CliRunner().invoke(cli, args)  # fixed input: the stale failures.csv goes
+    assert res.exit_code == 0, res.output
+    assert not (out / "failures.csv").exists() and "failures.csv" in res.output
