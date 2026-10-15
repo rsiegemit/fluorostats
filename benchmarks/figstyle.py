@@ -1,9 +1,9 @@
-"""Methods-paper figure settings, layered on the library's figure kit.
+"""Settings for the benchmark figures, layered on the library's figure kit.
 
 The general publication tooling (Okabe-Ito palette, type scale, panel letters,
 image helpers, scale bars, export, lollipop and Bland-Altman panels) lives in
 `fluorostats.pubfig` and is re-exported here. This module adds only what is
-specific to this paper: the tool colour identities, the manuscript text width
+specific to these figures: the tool colour identities, the text width
 and the figure output folders. The raw-data root, the missing-data check and the
 dataset loaders are the producers' (``producers/common.py``), re-exported here.
 
@@ -48,12 +48,12 @@ TW = pubfig.TEXT_WIDTH_IN
 
 
 def save(fig, name, folder=None, tight=True, pad=0.4):
-    """`pubfig.save` into this paper's main-figure folder unless told otherwise."""
+    """`pubfig.save` into the main-figure folder unless told otherwise."""
     pubfig.save(fig, name, folder or MAIN, tight=tight, pad=pad)
 
 
 def caption(name, text, folder=None):
-    """`pubfig.caption` into this paper's main-figure folder unless told otherwise."""
+    """`pubfig.caption` into the main-figure folder unless told otherwise."""
     pubfig.caption(name, text, folder or MAIN)
 
 

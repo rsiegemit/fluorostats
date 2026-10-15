@@ -17,7 +17,7 @@ MAG = OKABE["purple"]
 VERM = OKABE["vermillion"]
 GREY = OKABE["grey"]
 
-# Authored at the true submission text width (F.TW = 5.147 in) so
+# Authored at the text width (F.TW = 5.147 in) so
 # \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt on the
 # page. Narrower canvas -> taller figure; the 2x2 plot grid (a-d) sits above a
 # full-width 3-across image row (e). Extra top/left margin + hspace keeps panel

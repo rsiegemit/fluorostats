@@ -187,7 +187,7 @@ def panel_b(ax):
 
 def main():
     figstyle.apply_style()
-    # Author at the true manuscript text width (TW = 5.147 in) for a 1:1 include.
+    # Author at the text width (TW = 5.147 in) for a 1:1 include.
     # At this narrower canvas the former 1x2 row is too cramped, so stack the two
     # panels vertically: (a) DSB2018 ranking on top, (b) CTC grouped bars below.
     fig = plt.figure(figsize=(figstyle.TW, 5.116))

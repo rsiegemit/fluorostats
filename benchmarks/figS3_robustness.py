@@ -23,7 +23,7 @@ size = pd.read_csv(RES / "b_nuclei_size.csv")
 
 FLU = OKABE["blue"]
 
-# Author at the true manuscript text width (TW = 5.147 in) for a 1:1 include.
+# Author at the text width (TW = 5.147 in) for a 1:1 include.
 # At this narrower canvas the former 1x3 row is too cramped, so stack: panel a
 # (noise-robustness curves + legend) spans the full width on top; panels b
 # (denoising bars) and c (median-diameter error) sit side-by-side below.

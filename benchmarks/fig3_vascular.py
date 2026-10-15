@@ -15,7 +15,7 @@ R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]
 GREY = OKABE["grey"]
 
-# Authored at the manuscript text width (F.TW = 5.147 in) so the LaTeX
+# Authored at the text width (F.TW = 5.147 in) so the LaTeX
 # \includegraphics[width=\textwidth] is 1:1 and the 6-7 pt type stays 6-7 pt.
 # Narrower canvas -> taller stacked layout, three rows, reading order a->b->c->d:
 #   row 0  (a) six-tool REAVER accuracy ranking (full width)

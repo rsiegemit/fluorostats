@@ -141,7 +141,7 @@ for cat, lab, val, kind in seen:
 ypos = np.array(ypos)
 
 # ----------------------------------------------------------------------------
-# Figure — constrained layout, TRUE manuscript text width (F.TW = 5.147 in).
+# Figure — constrained layout, at the text width (F.TW = 5.147 in).
 # Narrow single-column canvas: stack panel (a) full-width on top (it is
 # label-heavy: 14 bars + long left y-labels + a far-left category band), with
 # (b) and (c) side-by-side below. A tall H gives (a) room to breathe.

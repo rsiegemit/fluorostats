@@ -10,7 +10,7 @@ and (c) two-condition discrimination.
 
 The figure is built with `fluorostats.pubfig`, the library's publication-figure
 kit (Okabe–Ito palette, panel labels, scale bars, consistent type sizes) — the
-same kit the methods-paper benchmark figures use.
+same kit the benchmark figures use.
 
 Run it:
 
