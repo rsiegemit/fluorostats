@@ -532,3 +532,26 @@ def test_run_names_utf8_for_every_text_file_it_reads_and_writes(tmp_path):
     )
     assert res.returncode == 0, res.stderr[-2000:]
     assert "µ-gel 0" in (tmp_path / "out" / "auc_per_stack.csv").read_text(encoding="utf-8")
+
+
+def test_run_config_records_the_absolute_paths_it_read(tmp_path, monkeypatch):
+    # Regression (C2, the non-breaking part): relative manifest paths resolve against
+    # the working directory, and run_config.json kept only the manifest's text, so the
+    # folder did not say which files were read.
+    monkeypatch.chdir(tmp_path)
+    decay_stack(tmp_path / "s0.tif")
+    flat_stack(tmp_path / "blank.tif")
+    stack = {"label": "s0", "path": "s0.tif"}
+    m = {
+        "output_dir": "out",
+        "groups": [{"name": "A", "background": "blank.tif", "stacks": [stack]}],
+    }
+    (tmp_path / "m.json").write_text(json.dumps(m))
+    depth_batch.run("m.json")
+    cfg = json.loads((tmp_path / "out" / "run_config.json").read_text())
+    assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s0.tif"  # as written
+    assert cfg["files_read"] == {
+        "stacks": [str((tmp_path / "s0.tif").resolve())],
+        "backgrounds": [str((tmp_path / "blank.tif").resolve())],
+        "output_dir": str((tmp_path / "out").resolve()),
+    }

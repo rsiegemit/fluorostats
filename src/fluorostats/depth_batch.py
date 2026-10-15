@@ -315,21 +315,10 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
     ``window_complete_<window>`` (1 when the stack covers the whole window, 0 when
     its AUC is over only ``window_covered_um`` of it)."""
     labels = [depth.window_label(w) for w in windows]
-    header = [
-        "group",
-        "stack",
-        "role",
-        "voxel_z_um",
-        "n_slices",
-        "max_depth_um",
-        "surface_intensity_subtracted",
-        "lambda_um",
-        "lambda_I0",
-        "lambda_offset",
-        "lambda_r_squared",
-        "lambda_rmse",
-        "lambda_fit_ok",
-    ]
+    header = (
+        "group stack role voxel_z_um n_slices max_depth_um surface_intensity_subtracted "
+        "lambda_um lambda_I0 lambda_offset lambda_r_squared lambda_rmse lambda_fit_ok"
+    ).split()
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}", f"window_covered_um_{lab}"]
     # appended last so existing column positions hold
@@ -444,13 +433,27 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     print_auc_summary(rows, windows, m["parametric"], tests)
     print_lambda_summary(rows, m["parametric"], tests)
     # Written last, so only a completed run leaves a record claiming the folder.
-    report.write_run_config(
-        out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m}, tool="depth"
-    )
+    nested = {"resolved": m, "files_read": _files_read(m["groups"], out_dir)}
+    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested, tool="depth")
     for line in report.stale_notices(previous):
         print(line)
     print(f"\nOutputs written to {out_dir}/")
     return out_dir
+
+
+def _files_read(groups: list[dict], out_dir: Path) -> dict:
+    """The absolute paths a run read and wrote (manifest paths resolve against the
+    working directory), so ``run_config.json`` names the files, not only the text."""
+    backgrounds = [g["background"] for g in groups if g.get("background")]
+    return {
+        "stacks": [str(Path(st["path"]).resolve()) for g in groups for st in g["stacks"]],
+        "backgrounds": [
+            str(Path(bp).resolve())
+            for bg in backgrounds
+            for bp in ([bg] if isinstance(bg, str) else bg)
+        ],
+        "output_dir": str(out_dir.resolve()),
+    }
 
 
 def _owned_outputs(out_dir: Path) -> list[Path]:
