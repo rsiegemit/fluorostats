@@ -309,6 +309,39 @@ def test_run_prints_welch_only_when_the_manifest_asks_for_it(tmp_path, capsys):
     assert text.count("Mann-Whitney fast vs slow: U=0.0") == 2      # still reported
 
 
+def test_run_writes_the_printed_contrasts_to_contrasts_csv(tmp_path, capsys):
+    # The two-group statistics were printed only; contrasts.csv now holds the same
+    # numbers, one row per AUC window (BH across windows) and one for λ.
+    out = depth_batch.run(_two_group_manifest(tmp_path))
+    text = capsys.readouterr().out
+    c = pd.read_csv(out / "contrasts.csv", keep_default_na=False)
+    assert list(c.columns) == ["metric", "window", "group_a", "group_b", "n_a", "n_b", "U", "p",
+                               "q", "cliffs_delta", "test", "correction"]
+    assert c[["metric", "window"]].values.tolist() == [
+        ["auc_normalized", "0_10um"], ["auc_normalized", "full"], ["lambda_um", ""]]
+    assert (c["group_a"] == "fast").all() and (c["group_b"] == "slow").all()
+    assert (c[["n_a", "n_b"]] == 2).all().all()
+    assert np.allclose(c["p"].astype(float), 1 / 3) and np.allclose(c["q"].astype(float), 1 / 3)
+    assert (c["U"].astype(float) == 0).all() and (c["cliffs_delta"].astype(float) == -1).all()
+    assert (c["test"] == "Mann-Whitney U, two-sided").all()
+    assert c["correction"].tolist() == ["Benjamini-Hochberg FDR across 2 windows"] * 2 + [
+        "none (single test; q = p)"]
+    # the printed line and the table are one computation
+    assert f"p={float(c['p'][0]):.4f}, Cliff's δ={float(c['cliffs_delta'][0]):+.2f}" in text
+
+
+def test_contrasts_csv_has_only_a_header_without_two_groups(tmp_path):
+    s0 = tmp_path / "s0.tif"
+    _decay_stack(s0)
+    m = {"auc_windows_um": [[0, 4]], "output_dir": str(tmp_path / "out"),
+         "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}]}
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    out = depth_batch.run(mpath)
+    assert (out / "contrasts.csv").read_text().splitlines() == [
+        "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction"]
+
+
 def test_run_with_three_groups_says_contrasts_were_skipped(tmp_path, capsys):
     stacks = {}
     for g, lam in (("a", 5.0), ("b", 8.0), ("c", 12.0)):

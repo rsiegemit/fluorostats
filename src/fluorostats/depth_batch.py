@@ -11,7 +11,9 @@ This is the batch orchestration layer over :mod:`fluorostats.depth` (the
 pure per-stack functions). Nothing here is specific to any one experiment:
 all inputs — file paths, grouping, channel, background blanks,
 normalisation slices, AUC windows — come from a JSON manifest, so the same
-tool serves any probe-penetration / permeability study.
+tool serves any probe-penetration / permeability study. With exactly two
+groups, the Mann-Whitney contrasts (normalised AUC per window, BH-corrected
+across windows, and λ) are printed and written to ``contrasts.csv``.
 
 Run it from the command line::
 
@@ -32,7 +34,7 @@ Manifest schema (all fields except groups/stacks are optional)::
       "n_surface": 3,              # slices averaged for surface normalisation
       "fit_offset": false,         # true → 3-parameter exp fit with additive floor
       "fit_r2_threshold": 0.85,    # minimum R² for an accepted λ fit (fit_ok)
-      "parametric": false,         # true → also print Welch t-tests (Mann-Whitney is always reported)
+      "parametric": false,         # true → also print Welch t-tests (Mann-Whitney always)
       "auc_windows_um": [[0, 100], [0, 200], "full"],  # one or more windows
       "output_dir": "results/permeability",
       "groups": [
@@ -80,6 +82,7 @@ from . import pubfig, report
 __all__ = [
     "load_manifest", "analyse_stack", "aggregate_group", "run",
     "write_profiles_csv", "write_auc_csv", "write_group_summary_csv",
+    "contrasts", "write_contrasts_csv",
     "parse_window", "window_label", "window_title", "window_bounds",
     "plot_depth_curves", "plot_auc", "plot_retention_multiwindow",
 ]
@@ -331,10 +334,12 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
     write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
     write_group_summary_csv(out_dir / "group_depth_summary.csv", aggregates)
+    tests = contrasts(rows, windows)
+    write_contrasts_csv(out_dir / "contrasts.csv", tests)
     _write_figures(rows, aggregates, colors, cfg, m["signal_label"], out_dir)
 
-    _print_summary(rows, windows, m["parametric"])
-    _print_lambda_summary(rows, m["parametric"])
+    _print_summary(rows, windows, m["parametric"], tests)
+    _print_lambda_summary(rows, m["parametric"], tests)
     # Written last, so only a completed run leaves a record claiming the folder.
     report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
     for line in report.stale_notices(previous):
@@ -440,6 +445,68 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
                                    title=f"{sig} retained vs depth window")
 
 
+def _auc_by_group(rows, w) -> dict[str, list[float]]:
+    """Primary stacks' normalised AUC over window ``w``, by group (in manifest order)."""
+    lab = window_label(w)
+    by_group: dict[str, list[float]] = {}
+    for r in rows:
+        if r["role"] == "primary":
+            by_group.setdefault(r["group"], []).append(r["result"]["auc"][lab]["normalized"])
+    return by_group
+
+
+def _lambda_by_group(rows) -> dict[str, list[float]]:
+    """Accepted (``fit_ok``) λ of primary stacks, by group (in manifest order)."""
+    by_group: dict[str, list[float]] = {}
+    for r in rows:
+        if r["role"] == "primary" and r["result"]["fit"].fit_ok:
+            by_group.setdefault(r["group"], []).append(r["result"]["fit"].lambda_um)
+    return by_group
+
+
+def _mann_whitney_row(metric: str, window: str, by_group: dict[str, list[float]]) -> dict:
+    """Two-sided Mann-Whitney between the two groups of ``by_group``, as a contrasts row."""
+    (ga, va), (gb, vb) = by_group.items()
+    mw = stats.mann_whitney(va, vb)
+    return {"metric": metric, "window": window, "group_a": ga, "group_b": gb,
+            "n_a": mw["n_x"], "n_b": mw["n_y"], "U": mw["u"], "p": mw["p"],
+            "cliffs_delta": mw["cliffs_delta"], "test": "Mann-Whitney U, two-sided"}
+
+
+def contrasts(rows: list[dict], windows: list[tuple]) -> list[dict]:
+    """The two-group statistics of a run (none unless there are exactly two groups).
+
+    One row per AUC window on the primary stacks' normalised AUC, BH-corrected across
+    the windows, and one on accepted λ fits (a single test: q = p). Columns: metric,
+    window, group_a, group_b, n_a, n_b, U, p, q, cliffs_delta, test, correction. The
+    console summary prints these same rows; `write_contrasts_csv` writes them.
+    """
+    auc = [_mann_whitney_row("auc_normalized", window_label(w), bg)
+           for w in windows if len(bg := _auc_by_group(rows, w)) == 2]
+    qs = stats.bh_fdr([c["p"] for c in auc])
+    out = [{**c, "q": float(q), "correction": f"Benjamini-Hochberg FDR across {len(auc)} windows"}
+           for c, q in zip(auc, qs)]
+    lam = _lambda_by_group(rows)
+    if len(lam) == 2:
+        c = _mann_whitney_row("lambda_um", "", lam)
+        out.append({**c, "q": c["p"], "correction": "none (single test; q = p)"})
+    return out
+
+
+_CONTRAST_COLUMNS = ["metric", "window", "group_a", "group_b", "n_a", "n_b", "U", "p", "q",
+                     "cliffs_delta", "test", "correction"]
+
+
+def write_contrasts_csv(out: Path, tests: list[dict]) -> None:
+    """One row per `contrasts` entry; only the header when there is no two-group contrast."""
+    with open(out, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(_CONTRAST_COLUMNS)
+        for c in tests:
+            w.writerow([f"{c[k]:.6g}" if isinstance(c[k], float) else c[k]
+                        for k in _CONTRAST_COLUMNS])
+
+
 def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
     """Print a descriptive two-group Welch contrast (``by_group`` has 2 groups); only
     when the manifest asks for parametric tests, the default being non-parametric (EXP-2)."""
@@ -450,18 +517,10 @@ def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
           f"(n={len(va)},{len(vb)} — underpowered, descriptive only)")
 
 
-def _mann_whitney_pair(by_group: dict[str, list[float]]) -> dict:
-    """Two-sided Mann-Whitney between the two groups of ``by_group``."""
-    va, vb = by_group.values()
-    return stats.mann_whitney(va, vb)
-
-
-def _print_mann_whitney(label: str, by_group: dict[str, list[float]], mw: dict,
-                        q: str = "") -> None:
-    """Print a two-sided Mann-Whitney contrast with Cliff's δ (and BH q when given)."""
-    ga, gb = list(by_group)
-    print(f"  {label} {ga} vs {gb}: U={mw['u']:.1f}, p={mw['p']:.4f}, "
-          f"Cliff's δ={mw['cliffs_delta']:+.2f}{q} (n={mw['n_x']},{mw['n_y']})")
+def _print_mann_whitney(label: str, c: dict, q: str = "") -> None:
+    """Print a `contrasts` row: two-sided Mann-Whitney with Cliff's δ (and BH q when given)."""
+    print(f"  {label} {c['group_a']} vs {c['group_b']}: U={c['U']:.1f}, p={c['p']:.4f}, "
+          f"Cliff's δ={c['cliffs_delta']:+.2f}{q} (n={c['n_a']},{c['n_b']})")
 
 
 def _print_skipped(n_groups: int, which: str = "") -> None:
@@ -470,54 +529,44 @@ def _print_skipped(n_groups: int, which: str = "") -> None:
           "a two-group contrast needs exactly 2)")
 
 
-def _print_summary(rows, windows, parametric: bool) -> None:
-    """Per-window normalised AUC by group; with two groups, Mann-Whitney contrasts
-    BH-corrected across the windows (preceded by Welch when ``parametric``)."""
-    per_window = []
+def _print_summary(rows, windows, parametric: bool, tests: list[dict]) -> None:
+    """Per-window normalised AUC by group; with two groups, the Mann-Whitney contrasts
+    of ``tests`` (preceded by Welch when ``parametric``)."""
+    auc = {c["window"]: c for c in tests if c["metric"] == "auc_normalized"}
     for w in windows:
-        lab = window_label(w)
-        by_group: dict[str, list[float]] = {}
-        for r in rows:
-            if r["role"] == "primary":
-                by_group.setdefault(r["group"], []).append(r["result"]["auc"][lab]["normalized"])
-        per_window.append(by_group)
-    mws = [_mann_whitney_pair(bg) if len(bg) == 2 else None for bg in per_window]
-    tested = [i for i, mw in enumerate(mws) if mw is not None]
-    qs = dict(zip(tested, stats.bh_fdr([mw["p"] for mw in mws if mw is not None])))
-    for i, (w, by_group, mw) in enumerate(zip(windows, per_window, mws)):
+        by_group = _auc_by_group(rows, w)
         print(f"\n=== AUC {window_title(w)} (normalised) ===")
         for g, vals in by_group.items():
             d = stats.describe(vals)
             print(f"  {g:8s} n={d['n']}  mean={d['mean']:8.2f}  sd={d['sd']:6.2f}  "
                   f"values={[round(v, 1) for v in vals]}")
-        if mw is None:
+        c = auc.get(window_label(w))
+        if c is None:
             _print_skipped(len(by_group))
             continue
         if parametric:
             _print_welch("Welch t-test (parametric, requested)", by_group)
-        _print_mann_whitney("Mann-Whitney", by_group, mw,
-                            f", BH q={qs[i]:.4f} across {len(tested)} windows")
+        _print_mann_whitney("Mann-Whitney", c, f", BH q={c['q']:.4f} across {len(auc)} windows")
 
 
-def _print_lambda_summary(rows, parametric: bool) -> None:
-    """Per-group penetration constant λ and its Mann-Whitney contrast (Welch too when
-    ``parametric``)."""
+def _print_lambda_summary(rows, parametric: bool, tests: list[dict]) -> None:
+    """Per-group penetration constant λ and its Mann-Whitney contrast from ``tests``
+    (Welch too when ``parametric``)."""
     print("\n=== Penetration constant λ (single-exponential fit, absolute profile) ===")
-    by_group: dict[str, list[float]] = {}
     for r in rows:
         fit = r["result"]["fit"]
         flag = "" if fit.fit_ok else "  [fit_ok=False]"
         print(f"  [{r['group']}/{r['role']}] {r['stack']}: "
               f"λ={fit.lambda_um:7.2f} µm  R²={fit.r_squared:.4f}{flag}")
-        if r["role"] == "primary" and fit.fit_ok:
-            by_group.setdefault(r["group"], []).append(fit.lambda_um)
+    by_group = _lambda_by_group(rows)
     for g, vals in by_group.items():
         d = stats.describe(vals)
         print(f"  {g:8s} n={d['n']}  λ mean={d['mean']:7.2f} µm  SEM={d['sem']:5.2f}  "
               f"values={[round(v, 1) for v in vals]}")
-    if len(by_group) != 2:
+    lam = [c for c in tests if c["metric"] == "lambda_um"]
+    if not lam:
         _print_skipped(len(by_group), " with an accepted λ fit")
         return
     if parametric:
         _print_welch("Welch t-test (parametric, requested) on λ,", by_group)
-    _print_mann_whitney("Mann-Whitney on λ,", by_group, _mann_whitney_pair(by_group))
+    _print_mann_whitney("Mann-Whitney on λ,", lam[0])
