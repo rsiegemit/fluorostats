@@ -601,3 +601,12 @@ def test_quant3d_measures_a_keyence_folder_as_one_volume(tmp_path):
         ["tube1", "GelMA"], ["tube2", "GelMA"], ["plain.tif", "Hybrid"], ["tube3", "Hybrid"]]
     assert (df.loc[df["file"] != "plain.tif", "shape"] == "(2, 8, 48, 48)").all()
     assert (tmp_path / "out" / "overlays" / "GelMA" / "tube1_overlay.png").exists()
+
+
+@pytest.mark.parametrize("cmd", ["quant2d", "quant3d"])
+def test_condition_modes_come_from_one_registry(cmd):
+    from fluorostats.cli import CONDITION_FROM
+
+    option = next(p for p in cli.commands[cmd].params if p.name == "condition_from")
+    assert list(option.type.choices) == list(CONDITION_FROM) == ["parent", "grandparent",
+                                                                 "filename"]

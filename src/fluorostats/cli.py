@@ -11,6 +11,13 @@ import matplotlib
 from . import io as iq_io
 from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, skeleton, spatial
 
+# How a file's condition label is derived from its path (--condition-from), by name.
+CONDITION_FROM = {
+    "parent": lambda path: path.parent.name,
+    "grandparent": lambda path: path.parent.parent.name,
+    "filename": lambda path: path.stem,     # the name without its extension
+}
+
 
 @click.group()
 def cli():
@@ -46,7 +53,7 @@ def depth_cmd(manifest, output_dir):
     (for Prism/replotting) and publication figures. See
     ``fluorostats.depth_batch`` for the manifest schema.
     """
-    from . import depth_batch
+    from . import depth_batch   # on use: the other commands never load the batch driver
     out = depth_batch.run(Path(manifest), output_dir)
     click.echo(f"Done. Outputs in {out}/")
 
@@ -68,7 +75,7 @@ def viability_cmd(manifest, output_dir):
     vs-3D coverage bias. Writes tidy CSVs. See ``fluorostats.viability_batch``
     for the manifest schema.
     """
-    from . import viability_batch
+    from . import viability_batch   # on use: the other commands never load the batch driver
     out = viability_batch.run(Path(manifest), output_dir)
     click.echo(f"Done. Outputs in {out}/")
 
@@ -80,7 +87,7 @@ def viability_cmd(manifest, output_dir):
 @cli.command()
 @click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .oib/.oif/.tif volumes")
 @click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results (not inside --input)")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", show_default=True, help="How to assign condition labels")
+@click.option("--condition-from", "condition_from", type=click.Choice(list(CONDITION_FROM)), default="parent", show_default=True, help="How to assign condition labels")
 @click.option("--channel", default=None, help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS")
 @click.option("--threshold", type=click.Choice(segment.METHODS), default="otsu", show_default=True,
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
@@ -151,7 +158,7 @@ def quant3d(
 @cli.command()
 @click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .png/.tif images")
 @click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results (not inside --input)")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", show_default=True, help="How to assign condition labels")
+@click.option("--condition-from", "condition_from", type=click.Choice(list(CONDITION_FROM)), default="parent", show_default=True, help="How to assign condition labels")
 @click.option("--channel", default=None, help="Channel to measure, by index (int) or name substring; default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS")
 @click.option("--threshold", type=click.Choice(segment.METHODS), default="li", show_default=True,
               help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize")
@@ -243,7 +250,7 @@ def _measure_volume(fpath, *, ch_override, no_skeleton, prune, min_branch_length
     # metrics are left out of plots and statistics instead of entering as zeros.
     skel = dict(skeleton.UNMEASURED_METRICS)
     if not no_skeleton:
-        skel = metrics_3d.skeleton_metrics(
+        skel = skeleton.skeleton_metrics(
             mask, voxel_size_um=voxel_size,
             prune=prune, min_branch_length_um=min_branch_length)
     if overlay_dir is not None:
@@ -400,13 +407,8 @@ def _find_files(root: Path, suffixes: set[str], directory_formats=()) -> list[Pa
 
 
 def _get_condition(fpath: Path, mode: str) -> str:
-    """Derive the experimental condition label from the file path."""
-    if mode == "parent":
-        return fpath.parent.name
-    if mode == "grandparent":
-        return fpath.parent.parent.name
-    # filename: strip extension, use as condition
-    return fpath.stem
+    """Derive the experimental condition label from the file path (:data:`CONDITION_FROM`)."""
+    return CONDITION_FROM[mode](fpath)
 
 
 class _ReplicateCounter:
