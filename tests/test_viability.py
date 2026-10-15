@@ -238,3 +238,10 @@ def test_count_all_has_the_same_top_level_keys():
     assert {"n_live", "n_dead", "viability"} <= set(out)
     assert np.isnan(out["n_live"]) and np.isnan(out["n_dead"])
     assert out["viability"] == out["consensus"]
+
+
+def test_regime_without_cells_is_nan_not_zero():
+    # Nothing segmented: SNR, crowding and radius were never measured -> NaN.
+    out = viability.choose_count_method(np.zeros((16, 16), np.float32))
+    assert out["n_cc"] == 0 and out["method"] == "cc"
+    assert np.isnan(out["snr"]) and np.isnan(out["crowding"]) and np.isnan(out["radius"])

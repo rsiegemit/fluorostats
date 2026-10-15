@@ -205,5 +205,8 @@ def test_isolated_points_measure_zero_without_warning():
         warnings.simplefilter("error")
         m = skeleton_metrics(_isolated_points())
         pruned = prune_skeleton(_isolated_points())
-    assert m == skeleton.EMPTY_METRICS
+    assert m.keys() == skeleton.EMPTY_METRICS.keys()
+    assert m["total_length_um"] == 0.0
+    assert m["n_branches"] == m["n_junctions"] == m["n_junction_nodes"] == 0
+    assert np.isnan(m["mean_branch_length_um"])          # mean of zero branches
     assert pruned.sum() == 3

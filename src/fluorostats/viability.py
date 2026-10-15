@@ -105,8 +105,9 @@ def _estimate_regime(channel: np.ndarray, **seg) -> dict:
     """
     seg = {**seg, "min_size": COUNT_MIN_SIZE}   # never let a large min_size hide cells
     mask = _mask(channel, **seg)
-    if not mask.any():
-        return {"radius": 0.0, "snr": 0.0, "crowding": 1.0, "n_cc": 0}
+    if not mask.any():                          # no cells: nothing was measured
+        return {"radius": float("nan"), "snr": float("nan"), "crowding": float("nan"),
+                "n_cc": 0}
     ch = np.asarray(channel, float)
     fg, bg = ch[mask], ch[~mask]
     snr = float((fg.mean() - bg.mean()) / (bg.std() + 1e-9))
@@ -138,8 +139,9 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
     crowded regime above, so to reproduce that headline pass ``method="maxima"`` explicitly
     to ``live_dead_by_count`` rather than relying on the regime default.
 
-    Returns dict: method, smooth_sigma, and the estimated regime metrics. The
-    radius and smooth_sigma are in voxels (isotropic voxels assumed).
+    Returns dict: method, smooth_sigma, and the estimated regime metrics (radius,
+    snr, crowding: NaN when no cell is segmented; n_cc). The radius and
+    smooth_sigma are in voxels (isotropic voxels assumed).
     """
     r = _estimate_regime(channel, **seg)
     # Conservative: default to the noise-robust method (CC), escalate to maxima
@@ -214,8 +216,9 @@ def live_dead_by_count(
     if method == "all":
         modes = COUNT_METHODS
         # auto-smooth the maxima channel from each channel's estimated radius
-        sig_l = choose_count_method(live, **rseg)["radius"] / 1.5
-        sig_d = choose_count_method(dead, **rseg)["radius"] / 1.5
+        # (no cells -> radius NaN -> no smoothing)
+        sig_l = float(np.nan_to_num(choose_count_method(live, **rseg)["radius"])) / 1.5
+        sig_d = float(np.nan_to_num(choose_count_method(dead, **rseg)["radius"])) / 1.5
         per = {}
         for m in modes:
             nl = _count_one(live, m, sig_l if m == "maxima" else 0.0)

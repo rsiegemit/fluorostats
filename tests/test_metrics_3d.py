@@ -8,8 +8,11 @@ from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skelet
 
 
 def test_metrics3d_empty_mask():
+    # nothing to measure: no components, and the largest-component share is NaN
+    # (not a measured 0.0)
     m = metrics_3d.connectivity_metrics(np.zeros((4, 4, 4), bool))
-    assert m["largest_component_fraction"] == 0.0
+    assert m["n_components"] == 0
+    assert np.isnan(m["largest_component_fraction"])
 
 
 class TestVolumeMetrics:
