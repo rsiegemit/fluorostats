@@ -31,6 +31,7 @@ Manifest schema (all fields except groups/stacks are optional)::
       "reducer": "mean",           # "mean" | "median" (per-slice spatial stat)
       "n_surface": 3,              # slices averaged for surface normalisation
       "fit_offset": false,         # true → 3-parameter exp fit with additive floor
+      "fit_r2_threshold": 0.85,    # minimum R² for an accepted λ fit (fit_ok)
       "parametric": false,         # true → also print Welch t-tests (Mann-Whitney is always reported)
       "auc_windows_um": [[0, 100], [0, 200], "full"],  # one or more windows
       "output_dir": "results/permeability",
@@ -98,6 +99,7 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("reducer", "mean")
     m.setdefault("n_surface", 3)
     m.setdefault("fit_offset", False)
+    m.setdefault("fit_r2_threshold", depth.FIT_R2_THRESHOLD)
     m.setdefault("parametric", False)
     # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`.
     if "auc_windows_um" not in m:
@@ -127,6 +129,9 @@ def _validate(m: dict) -> None:
 def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float, str]:
     """Load a stack: raw depth profile, z-step (µm) and where the calibration came from."""
     vol, meta = load_volume(path)
+    if cfg["channel"] >= vol.shape[0]:
+        raise ValueError(f"{Path(path).name}: channel {cfg['channel']} is out of range; the "
+                         f"stack has {vol.shape[0]} channel(s)")
     vz = float(meta.get("voxel_size_um", (1.0, 1.0, 1.0))[0])
     return (depth.intensity_depth_profile(vol, vz, channel=cfg["channel"], reducer=cfg["reducer"]),
             vz, meta.get("voxel_size_source", ""))
@@ -135,8 +140,15 @@ def _load_profile(path: Path, cfg: dict) -> tuple[depth.DepthProfile, float, str
 def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> dict:
     """Load one stack and compute raw/subtracted/normalised profiles + AUC + penetration (λ) fit."""
     raw, vz, vz_source = _load_profile(path, cfg)
+    need = 3 if cfg["fit_offset"] else 2
+    if raw.depth_um.size < need:
+        raise ValueError(f"{Path(path).name}: has {raw.depth_um.size} z-slice(s); the λ fit "
+                         f"needs at least {need} (3 with fit_offset)")
     subtracted = depth.subtract_background(raw, blank) if blank is not None else raw
-    normalized = depth.normalize_to_surface(subtracted, n_surface=cfg["n_surface"])
+    try:
+        normalized = depth.normalize_to_surface(subtracted, n_surface=cfg["n_surface"])
+    except ValueError as e:
+        raise ValueError(f"{Path(path).name}: {e}") from e
     norm_curve = normalized.normalized
     assert norm_curve is not None  # normalize_to_surface always sets it
 
@@ -160,9 +172,8 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
     # (background-subtracted) profile — λ is gain-independent so it is fit on
     # the absolute, not surface-normalised, curve. Added alongside AUC, not a
     # replacement; carries r_squared/fit_ok so a poor fit is never hidden.
-    fit = depth.fit_penetration_depth(
-        raw.depth_um, subtracted.mean, offset=cfg.get("fit_offset", False)
-    )
+    fit = depth.fit_penetration_depth(raw.depth_um, subtracted.mean, offset=cfg["fit_offset"],
+                                      r2_threshold=cfg["fit_r2_threshold"])
 
     return {
         "depth_um": raw.depth_um,
@@ -311,7 +322,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     previous = report.remove_outputs(_owned_outputs(out_dir))
     pubfig.apply_style("house")
 
-    cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}
+    cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset",
+                             "fit_r2_threshold")}
     windows = cfg["windows"]
     rows, colors, per_group_primary = _analyse_groups(m["groups"], cfg)
     aggregates = {g: aggregate_group(ps) for g, ps in per_group_primary.items()}

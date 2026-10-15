@@ -304,12 +304,16 @@ def _fit_exponential(z, y, offset: bool, i0_guess: float, lam_guess: float):
     return _exp_decay(z, *popt), float(popt[0]), float(popt[1]), None
 
 
+# Default minimum R² for an accepted λ fit (see `fit_penetration_depth`).
+FIT_R2_THRESHOLD = 0.85
+
+
 def fit_penetration_depth(
     depth_um: np.ndarray,
     intensity: np.ndarray,
     *,
     offset: bool = False,
-    r2_threshold: float = 0.85,
+    r2_threshold: float = FIT_R2_THRESHOLD,
 ) -> PenetrationFit:
     """Fit a single-exponential penetration constant λ to a depth profile.
 
@@ -330,9 +334,10 @@ def fit_penetration_depth(
     offset:
         Fit the 3-parameter model with an additive floor ``c``.
     r2_threshold:
-        Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default 0.85,
-        tuned against real hydrogel profiles: clean single-exponential decays
-        clear it, near-flat/non-exponential profiles do not).
+        Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default
+        :data:`FIT_R2_THRESHOLD` = 0.85, tuned against real hydrogel profiles:
+        clean single-exponential decays clear it, near-flat/non-exponential
+        profiles do not; the depth manifest's ``fit_r2_threshold``).
         An honest flag, not a hard gate: λ is always returned, but a poor
         fit means "single-exponential does not hold; use AUC".
 
@@ -446,6 +451,7 @@ __all__ = [
     "DepthProfile",
     "PenetrationFit",
     "REDUCERS",
+    "FIT_R2_THRESHOLD",
     "intensity_depth_profile",
     "resample_to_depth",
     "subtract_background",

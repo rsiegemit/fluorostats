@@ -414,7 +414,7 @@ def test_window_covered_um_is_clamped_at_zero(tmp_path):
     s0 = tmp_path / "s0.tif"
     _decay_stack(s0, n_z=11)                               # 0-10 µm at the 1 µm default
     cfg = {"channel": 0, "reducer": "mean", "n_surface": 2, "fit_offset": False,
-           "windows": [(5.0, 20.0), (50.0, 60.0)]}
+           "fit_r2_threshold": 0.85, "windows": [(5.0, 20.0), (50.0, 60.0)]}
     with pytest.warns(RuntimeWarning, match="only 0 µm of it"):
         res = depth_batch.analyse_stack(s0, None, cfg)
     assert res["auc"]["5_20um"]["covered_um"] == 5.0
@@ -485,3 +485,98 @@ def test_common_grid_never_extends_past_the_shallowest_stack():
     # a whole number of steps keeps its last point despite float rounding
     np.testing.assert_allclose(_common_grid([prof(11, 0.3)])[-1], 3.0)
     assert len(_common_grid([prof(11, 0.3)])) == 11
+
+
+# ---------------------------------------------------------------------------
+# Manifest fields: unknown names and non-bool flags are refused up front (ERR-1)
+# ---------------------------------------------------------------------------
+
+def test_load_manifest_rejects_unknown_fields_at_every_level(tmp_path):
+    # Regression: "chanel": 1 was ignored and the run measured channel 0.
+    s0 = tmp_path / "s0.tif"
+    s0.write_bytes(b"")
+    m = {"chanel": 1, "groups": [{"name": "A", "colour": "red",
+                                  "stacks": [{"label": "s0", "path": str(s0), "rol": "aux"}]}]}
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    with pytest.raises(ValueError) as e:
+        load_manifest(mpath)
+    msg = str(e.value)
+    assert "manifest: unknown field 'chanel' (allowed: title, signal_label, channel," in msg
+    assert "group 'A': unknown field 'colour' (allowed: name, color, background, stacks)" in msg
+    assert "group 'A': stack 's0': unknown field 'rol' (allowed: label, path, role)" in msg
+
+
+@pytest.mark.parametrize("field", ["fit_offset", "parametric"])
+def test_load_manifest_requires_real_bools(tmp_path, field):
+    # Regression: "fit_offset": "false" is a non-empty string, so it fitted the offset.
+    assert f"{field} must be true or false, got 'false'" in _manifest_errors(
+        tmp_path, **{field: "false"})
+
+
+@pytest.mark.parametrize("value", [0.0, 1, 0.5])
+def test_load_manifest_accepts_an_r2_threshold_in_0_1(tmp_path, value):
+    s0 = tmp_path / "s0.tif"
+    s0.write_bytes(b"")
+    m = {"fit_r2_threshold": value,
+         "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}]}
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    assert load_manifest(mpath)["fit_r2_threshold"] == value
+
+
+@pytest.mark.parametrize("value", [1.5, -0.1, "0.9", True])
+def test_load_manifest_rejects_a_bad_r2_threshold(tmp_path, value):
+    assert "fit_r2_threshold must be a number in [0, 1]" in _manifest_errors(
+        tmp_path, fit_r2_threshold=value)
+
+
+def test_r2_threshold_decides_fit_ok(tmp_path):
+    # The acceptance threshold was hard-wired at 0.85; it is now a manifest field.
+    s0 = tmp_path / "s0.tif"
+    z = np.arange(30)[:, None, None]
+    noise = np.random.default_rng(0).normal(0, 12, (30, 1, 1))
+    tifffile.imwrite(s0, np.broadcast_to(150 * np.exp(-z / 6.0) + noise + 20,
+                                         (30, 8, 8)).astype(np.float32))
+    cfg = {"channel": 0, "reducer": "mean", "n_surface": 2, "fit_offset": False,
+           "windows": [(0.0, 10.0)]}
+    r2 = depth_batch.analyse_stack(s0, None, {**cfg, "fit_r2_threshold": 0.0})["fit"].r_squared
+    assert 0.5 < r2 < 0.99
+    for thr, ok in ((r2 - 0.01, True), (r2 + 0.01, False)):
+        fit = depth_batch.analyse_stack(s0, None, {**cfg, "fit_r2_threshold": thr})["fit"]
+        assert fit.fit_ok is ok
+
+
+# ---------------------------------------------------------------------------
+# Problems found only once a stack is read name the file (ERR-1)
+# ---------------------------------------------------------------------------
+
+def _cfg(**kw):
+    return {"channel": 0, "reducer": "mean", "n_surface": 2, "fit_offset": False,
+            "fit_r2_threshold": 0.85, "windows": [(0.0, 10.0)], **kw}
+
+
+def test_out_of_range_channel_names_the_file(tmp_path):
+    # Regression: a bare IndexError ("index 3 is out of bounds for axis 0 with size 1").
+    s0 = tmp_path / "s0.tif"
+    _decay_stack(s0)
+    with pytest.raises(ValueError, match="s0.tif: channel 3 is out of range; the stack has "
+                                         "1 channel"):
+        depth_batch.analyse_stack(s0, None, _cfg(channel=3))
+
+
+@pytest.mark.parametrize("n_z,fit_offset,need", [(1, False, 2), (2, True, 3)])
+def test_too_few_slices_names_the_file(tmp_path, n_z, fit_offset, need):
+    s0 = tmp_path / "s0.tif"
+    tifffile.imwrite(s0, np.full((n_z, 1, 8, 8), 50.0, np.float32), imagej=True,
+                     metadata={"axes": "ZCYX"})
+    with pytest.raises(ValueError, match=f"s0.tif: has {n_z} z-slice.*needs at least {need}"):
+        depth_batch.analyse_stack(s0, None, _cfg(fit_offset=fit_offset))
+
+
+def test_non_positive_surface_reference_names_the_file(tmp_path):
+    s0 = tmp_path / "s0.tif"
+    _flat_stack(s0, value=5.0)
+    blank = depth.intensity_depth_profile(np.full((16, 8, 8), 9.0), 1.0)   # brighter than the stack
+    with pytest.raises(ValueError, match="s0.tif: near-surface reference is non-positive"):
+        depth_batch.analyse_stack(s0, blank, _cfg())
