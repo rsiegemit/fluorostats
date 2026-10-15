@@ -14,8 +14,9 @@ import numpy as np
 from scipy.ndimage import label
 from skimage.measure import euler_number
 
-# Skeleton morphometry lives in its own module (fluorostats.skeleton); it is
-# re-exported here for backwards compatibility.
+# Deprecated re-exports: skeleton morphometry lives in fluorostats.skeleton; these
+# names stay here for backwards compatibility only (the CLI still calls
+# metrics_3d.skeleton_metrics) and are to be removed once callers import skeleton.
 from .skeleton import skeleton_metrics, prune_skeleton, n_junction_nodes  # noqa: F401
 
 

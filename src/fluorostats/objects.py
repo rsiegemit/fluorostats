@@ -13,7 +13,7 @@ import warnings
 import numpy as np
 from scipy import ndimage as ndi
 from skimage.morphology import local_maxima, reconstruction
-from skimage.segmentation import watershed
+from skimage.segmentation import clear_border, watershed
 
 from .deprecation import ignored_keyword
 from .metrics_3d import density_per_mm3
@@ -175,7 +175,6 @@ def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
     Useful for count endpoints where partial edge objects bias the total
     (e.g. BBBC039 ground truth excludes border nuclei). Returns (labels, n).
     """
-    from skimage.segmentation import clear_border
     cleared = clear_border(labels)
     return label_3d(cleared > 0, min_size=0)
 

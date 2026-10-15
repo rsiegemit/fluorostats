@@ -122,6 +122,10 @@ def skeleton_metrics(
 
     Parameters
     ----------
+    mask : 2D or 3D bool array
+    voxel_size_um : (vz, vy, vx)
+        Voxel size in µm (a 2D mask uses the trailing ``(vy, vx)``). The default
+        ``(1, 1, 1)`` is uncalibrated: lengths are then in voxel units, not µm.
     prune : bool, default False
         If True, remove short spur branches before measuring (see
         :func:`prune_skeleton`). Default False preserves the original,

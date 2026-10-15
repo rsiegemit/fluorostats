@@ -38,6 +38,13 @@ THRESHOLD_METHODS: dict[str, Callable[..., Any]] = {
 # meta-methods that choose among them. The CLI builds its --threshold choices here.
 METHODS = (*THRESHOLD_METHODS, "auto", "consensus")
 
+# `choose_threshold_method`'s rule: Otsu has missed a dim, sparse foreground when it
+# keeps under AUTO_OTSU_MIN_FRACTION of the pixels while Li keeps more than
+# AUTO_LI_RATIO times as much. Hand-set heuristics (v0.7), checked only on the
+# synthetic sparse-signal case in tests/test_segment.py; no benchmark table chose them.
+AUTO_OTSU_MIN_FRACTION = 0.01
+AUTO_LI_RATIO = 3.0
+
 # Salt-noise opening applied after thresholding, by name: the footprint for a mask
 # of the given ndim, or None for no opening. "ball" (3x3x3 cross in 3D, disk(1) in
 # 2D) removes any structure thinner than 3 z-slices; "disk" opens each z-slice in
@@ -103,7 +110,7 @@ def choose_threshold_method(arr: np.ndarray) -> dict:
             fracs[name] = float("nan")
     otsu_f = fracs.get("otsu", 0.0)
     li_f = fracs.get("li", 0.0)
-    if otsu_f < 0.01 and li_f > 3 * otsu_f:
+    if otsu_f < AUTO_OTSU_MIN_FRACTION and li_f > AUTO_LI_RATIO * otsu_f:
         method, reason = "li", (
             f"Otsu keeps only {otsu_f:.4f} of pixels while Li finds {li_f:.4f} "
             f"— dim/sparse foreground Otsu misses")

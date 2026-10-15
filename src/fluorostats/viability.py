@@ -35,6 +35,14 @@ DEFAULT_SEG_METHOD = "otsu"
 AREA_MIN_SIZE = 32
 # Smallest object (voxels) kept when counting cells: counting keeps small real cells.
 COUNT_MIN_SIZE = 5
+# `choose_count_method`'s regime thresholds: SNR at or above CLEAN_SNR is clean, below
+# LOW_SNR is noisy; peaks per connected component above CROWDED is crowded. Hand-set
+# heuristics (v0.6), checked only on the synthetic regimes in tests/test_viability.py;
+# no benchmark table chose them, hence "auto" escalates to maxima only when an image
+# is both clearly clean and clearly crowded.
+CLEAN_SNR = 8.0
+LOW_SNR = 3.0
+CROWDED = 1.5
 
 
 def _mask(channel: np.ndarray | None, mask: np.ndarray | None = None,
@@ -169,11 +177,11 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
 
     Transparent heuristic (returns its reasoning; always overridable):
 
-    - low SNR (< 3): ``"cc"`` — connected-component counting is the most
+    - low SNR (< `LOW_SNR`): ``"cc"`` — connected-component counting is the most
       noise-robust; peak finding would count noise.
-    - crowded touching cells (peak count exceeds connected-components by >50%,
-      crowding > 1.5) with adequate SNR: ``"maxima"`` (with auto ``smooth_sigma`` ≈ radius/1.5) — peaks
-      separate overlapping cells that CC merges.
+    - crowded touching cells (crowding = peaks / connected components > `CROWDED`)
+      with a clean image (SNR >= `CLEAN_SNR`): ``"maxima"`` (with auto
+      ``smooth_sigma`` ≈ radius/1.5) — peaks separate overlapping cells that CC merges.
     - otherwise (well-separated): ``"cc"`` — exact and robust.
 
     NOTE: ``"maxima"`` is the mode validated against the published Fiji Live/Dead macro
@@ -192,10 +200,10 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
     # so we bias toward the safe method and avoid firing maxima on noisy data.
     if r["n_cc"] == 0:
         method, reason = "cc", "no cells detected"
-    elif r["snr"] >= 8.0 and r["crowding"] > 1.5:
+    elif r["snr"] >= CLEAN_SNR and r["crowding"] > CROWDED:
         method, reason = "maxima", (
             f"clean (SNR {r['snr']:.1f}) and crowded (peaks/CC {r['crowding']:.2f})")
-    elif r["snr"] < 3.0:
+    elif r["snr"] < LOW_SNR:
         method, reason = "cc", f"low SNR ({r['snr']:.1f}) — CC is noise-robust"
     else:
         method, reason = "cc", (
