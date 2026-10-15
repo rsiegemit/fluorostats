@@ -155,3 +155,24 @@ def test_a_quant_run_that_writes_nothing_leaves_no_output_folder(tmp_path, monke
     args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-overlays"]
     assert isinstance(CliRunner().invoke(cli, args).exception, RuntimeError)
     assert not (tmp_path / "new").exists()
+
+
+@pytest.mark.parametrize(
+    "cmd,maker,extra", [("quant2d", blob_2d, []), ("quant3d", blob_3d, ["--no-skeleton"])]
+)
+def test_quant_run_config_records_the_files_read(tmp_path, cmd, maker, extra, monkeypatch):
+    # Regression (M1): run_config.json was said to name the files read, but the quant
+    # commands dropped the file list.
+    make_dataset(tmp_path / "in", maker)
+    monkeypatch.chdir(tmp_path)
+    args = [cmd, "--input", "in", "--output", "out", "--no-plots", "--no-overlays", *extra]
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    cfg = json.loads((tmp_path / "out" / "run_config.json").read_text())
+    assert cfg["files_read"] == {
+        "files": [
+            str((tmp_path / "in" / c / f"s{i}.tif").resolve())
+            for c in ("GelMA", "Hybrid")
+            for i in range(3)
+        ],
+        "output_dir": str((tmp_path / "out").resolve()),
+    }

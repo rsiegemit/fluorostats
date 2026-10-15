@@ -448,13 +448,18 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
 
 def _finish(output_path: Path, config: dict, previous: list[Path], tool: str, failures, n) -> None:
     """Write ``failures.csv`` (file, condition, error) when files of the ``n`` failed,
-    record the run (last, so only a completed run claims the folder), name the earlier
+    record the run and the absolute paths it read (last, so only a completed run
+    claims the folder), name the earlier
     outputs it removed and did not write again, then exit 1 naming the failed files."""
     if failures:
         pd.DataFrame(failures, columns=["file", "condition", "error"]).to_csv(
             output_path / "failures.csv", index=False
         )
-    report.write_run_config(output_path, config, tool=tool)
+    read = {
+        "files": [str(f.resolve()) for f in config["files"]],
+        "output_dir": str(output_path.resolve()),
+    }
+    report.write_run_config(output_path, config, {"files_read": read}, tool=tool)
     for line in report.stale_notices(previous):
         click.echo(line)
     if failures:
