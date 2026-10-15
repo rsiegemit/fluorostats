@@ -35,6 +35,13 @@ EMPTY_METRICS = {
 # The result when the skeleton could not be measured: NaN, not a measured zero.
 UNMEASURED_METRICS = {k: float("nan") for k in EMPTY_METRICS}
 
+# Default spur-pruning threshold: DEFAULT_MIN_BRANCH_LENGTH_UM along the path when
+# the voxel size is known (skeleton_metrics, and the CLI's --min-branch-length),
+# else DEFAULT_MIN_BRANCH_LENGTH_VOXELS (prune_skeleton without a voxel size).
+# Hand-set; no benchmark table chose them.
+DEFAULT_MIN_BRANCH_LENGTH_UM = 5.0
+DEFAULT_MIN_BRANCH_LENGTH_VOXELS = 10.0
+
 
 def _neighbour_counts(s: np.ndarray) -> np.ndarray:
     """Number of foreground neighbours (full connectivity) of every voxel of ``s``."""
@@ -92,7 +99,7 @@ def _spurs(skeleton_obj, branch_data, junctions: np.ndarray, min_length: float) 
 @renamed_keyword("min_branch_length_px", "min_branch_length")
 def prune_skeleton(
     skel: np.ndarray,
-    min_branch_length: float = 10.0,
+    min_branch_length: float | None = None,
     max_iter: int = 5,
     *,
     voxel_size_um: tuple[float, ...] | None = None,
@@ -106,13 +113,19 @@ def prune_skeleton(
     through a junction or a whole structure. Branch length is measured along the path in voxels, or, when
     ``voxel_size_um`` (per-axis voxel size, one entry per ``skel`` axis) is given, in
     µm, in which case ``min_branch_length`` is a
-    length in those units. This is the standard clean-up step that skeleton
+    length in those units. Its default (None) is `DEFAULT_MIN_BRANCH_LENGTH_UM`
+    with a voxel size, else `DEFAULT_MIN_BRANCH_LENGTH_VOXELS` voxels. This is the standard clean-up step that skeleton
     analysers (AnalyzeSkeleton, AngioTool, REAVER) apply before counting
     branches/junctions; without it a rough segmentation yields many spurious
     short branches and junction nodes.
 
     Returns a new boolean skeleton; the input is not modified.
     """
+    if min_branch_length is None:
+        no_size = voxel_size_um is None
+        min_branch_length = (
+            DEFAULT_MIN_BRANCH_LENGTH_VOXELS if no_size else DEFAULT_MIN_BRANCH_LENGTH_UM
+        )
     s = np.array(skel > 0)
     for _ in range(max_iter):
         if s.sum() < 3 or not _has_branches(s):
@@ -157,7 +170,8 @@ def skeleton_metrics(
     min_branch_length_um : float or None
         Spur-length threshold in micrometres, compared with each spur's length
         along its path using the per-axis voxel size. Ignored unless
-        ``prune=True``; when None, the threshold is 10 voxels.
+        ``prune=True``; when None, `DEFAULT_MIN_BRANCH_LENGTH_UM` (5 µm; voxel
+        units when the voxel size is the uncalibrated default).
 
     Returns
     -------
@@ -182,10 +196,7 @@ def skeleton_metrics(
         spacing = tuple(voxel_size_um)[-skel.ndim :]
 
         if prune and skel.sum() > 0:
-            if min_branch_length_um is None:
-                skel = prune_skeleton(skel)
-            else:
-                skel = prune_skeleton(skel, min_branch_length_um, voxel_size_um=spacing)
+            skel = prune_skeleton(skel, min_branch_length_um, voxel_size_um=spacing)
 
         if not _has_branches(skel):  # empty, or isolated points only
             return dict(EMPTY_METRICS)

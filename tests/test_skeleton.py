@@ -274,7 +274,7 @@ def test_pruning_never_deletes_every_branch_of_a_junction():
     y[15, 15:23] = True  # 7-px arm
     for i in range(8):
         y[15 - i, 15 - i] = y[15 + i, 15 - i] = True  # two 9.9-px diagonal arms
-    pruned = skeleton_metrics(y, (1, 1), prune=True)
+    pruned = skeleton_metrics(y, (1, 1), prune=True, min_branch_length_um=10)
     assert pruned["total_length_um"] == pytest.approx(2 * 7 * np.sqrt(2), abs=0.5)
     assert pruned["n_branches"] == 1
 
@@ -317,3 +317,30 @@ def test_skeleton_metrics_with_a_uint8_0_255_skeleton(monkeypatch):
         warnings.simplefilter("error")
         assert skeleton_metrics(mask) == ref[0]
         assert skeleton_metrics(mask, prune=True, min_branch_length_um=8) == ref[1]
+
+
+def _line_with_spur(spur=7):
+    t = np.zeros((40, 60), bool)
+    t[20, 5:55] = True
+    t[20 - spur : 20, 30] = True
+    return t
+
+
+def test_pruning_default_is_one_micrometre_constant_with_a_voxel_fallback():
+    """With a voxel size the default spur threshold is DEFAULT_MIN_BRANCH_LENGTH_UM
+    (the CLI's); without one, prune_skeleton falls back to 10 voxels."""
+    from skimage.morphology import skeletonize
+
+    from fluorostats import skeleton
+
+    assert skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM == 5.0
+    m = _line_with_spur(7)  # a 7 um spur: kept at 5 um, removed at 10 voxels
+    default = skeleton_metrics(m, (1.0, 1.0), prune=True)
+    assert default == skeleton_metrics(m, (1.0, 1.0), prune=True, min_branch_length_um=5.0)
+    assert default["n_branches"] == 3
+    skel = skeletonize(m)
+    np.testing.assert_array_equal(prune_skeleton(skel), prune_skeleton(skel, 10))
+    np.testing.assert_array_equal(
+        prune_skeleton(skel, voxel_size_um=(1.0, 1.0)),
+        prune_skeleton(skel, 5.0, voxel_size_um=(1.0, 1.0)),
+    )
