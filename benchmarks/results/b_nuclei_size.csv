@@ -1,4 +1,4 @@
-method,median_diam_um,GT_median,pct_error
+method,median_diam_vox,GT_median,pct_error
 Otsu_1979,77.05,74.46,3.5
 Isodata_1978,77.05,74.46,3.5
 fluorostats(raw Otsu+CC),77.05,74.46,3.5

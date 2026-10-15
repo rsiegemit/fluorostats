@@ -19,8 +19,10 @@
       "min_size": 50,
       "sigma": 1.0,
       "bg_radius": 25
-    }
+    },
+    "small_object_rule": "keep >= min_size"
   },
+  "git_commit": "f59f659",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

@@ -2,6 +2,7 @@
   "table": "b_ve_agreement.csv",
   "producer": "benchmarks/producers/b_ve_agreement.py",
   "params": {},
+  "git_commit": "f59f659",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

@@ -1,0 +1,17 @@
+{
+  "table": "b_viability_external.csv",
+  "producer": "benchmarks/producers/b_viability_external.py",
+  "params": {
+    "min_size": 8,
+    "small_object_rule": "keep >= min_size",
+    "n_images": 65
+  },
+  "git_commit": "f59f659",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.8.2"
+  }
+}

@@ -4,4 +4,4 @@ Li_1993,0.841,0.594,0.186,0.111
 Otsu_1979,0.922,0.688,0.313,0.134
 Triangle_1977,0.0,0.0,0.0,0.0
 fluorostats(raw Otsu+CC),0.922,0.688,0.313,0.134
-fluorostats_watershed,0.922,0.688,0.313,0.134
+fluorostats_watershed,1.0,0.966,0.985,0.995

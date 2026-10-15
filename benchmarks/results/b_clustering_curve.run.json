@@ -10,8 +10,10 @@
     },
     "n_volumes": 5,
     "min_size": 30,
+    "small_object_rule": "keep >= min_size",
     "watershed_min_distance": 6
   },
+  "git_commit": "f59f659",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

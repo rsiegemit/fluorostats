@@ -4,9 +4,12 @@
   "params": {
     "n_images": 100,
     "min_size": 20,
+    "small_object_rule": "keep >= min_size",
     "iou_threshold": 0.5,
-    "watershed_min_distance": 4
+    "watershed_min_distance": 4,
+    "threshold_failures": {}
   },
+  "git_commit": "f59f659",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

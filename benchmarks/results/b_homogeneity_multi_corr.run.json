@@ -8,6 +8,7 @@
     "replicates": 10,
     "tiles": 8
   },
+  "git_commit": "f59f659",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",
