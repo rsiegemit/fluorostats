@@ -3,7 +3,9 @@
 First 100 BBBC039 images (sorted): seven global thresholds + connected
 components, fluorostats raw Otsu+CC (``common.raw_otsu_cc``) and distance-transform
 watershed (``objects.watershed_split``), each scored by ``validate.instance_f1``
-at IoU 0.5 against the reconstructed instance GT. Figure 2 plots this table.
+at IoU 0.5 against the reconstructed instance GT. A threshold that fails on an
+image (Minimum finds no two histogram peaks) scores NaN there, and run.json counts
+the failures per method. Figure 2 plots the derived table ``b2_nuclei_ci.csv``.
 Data: ``$FLUOROSTATS_DATA/BBBC039``.
 """
 from __future__ import annotations
@@ -31,9 +33,9 @@ def threshold_f1(im, fn, gt):
     try:
         lab = threshold_cc(im, fn, MIN_SIZE)
     except RuntimeError:
-        # threshold_minimum cannot find two histogram peaks on some images:
-        # the method produces no segmentation, scored as F1 = 0 (ERR-2: recorded).
-        return 0.0
+        # threshold_minimum cannot find two histogram peaks on some images: no
+        # segmentation, so no score (NaN; counted in run.json, ERR-3)
+        return float("nan")
     return instance_f1(lab, gt)["f1"]
 
 
@@ -49,7 +51,9 @@ def main():
             watershed_split(otsu, min_size=MIN_SIZE, min_distance=4)[0], gt)["f1"]
         rows.append(rec)
     df = pd.DataFrame(rows)
-    write_table(df, "b2_nuclei_methods_perimage", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "iou_threshold": 0.5, "watershed_min_distance": 4})
+    failed = {name: int(n) for name, n in df[list(THRESHOLDS)].isna().sum().items() if n}
+    write_table(df, "b2_nuclei_methods_perimage", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "iou_threshold": 0.5, "watershed_min_distance": 4,
+                                                   "threshold_failures": failed})
     print(df.drop(columns=["image"]).mean().round(3).sort_values(ascending=False).to_string())
 
 

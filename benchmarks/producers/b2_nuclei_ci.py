@@ -4,11 +4,14 @@ Summarises committed per-image tables (no raw data needed). Subset ``first100``:
 every method column of ``b2_nuclei_methods_perimage.csv`` (first 100 sorted
 images) and the StarDist / Cellpose / Omnipose per-image F1 of the same images,
 matched on ``image``. Subset ``all200``: the three DL tools on all 200 images.
-Images a DL table scores negative (no result) are left out. Each row is its own
+Images a DL table scores negative (no result) and images where a threshold
+failed (NaN in the per-image table) are left out, so ``n_images`` counts the
+scored images of each row. Each row is its own
 percentile bootstrap of the mean (10,000 resamples, a fresh seed-0 generator).
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from common import RESULTS, write_table
@@ -31,7 +34,7 @@ def dl_scores() -> dict[str, pd.DataFrame]:
 
 def ci_row(subset: str, method: str, x) -> dict:
     r = bootstrap_mean_ci(x, n_boot=N_BOOT, ci=0.95, seed=SEED)
-    return {"subset": subset, "method": method, "n_images": len(x),
+    return {"subset": subset, "method": method, "n_images": int(np.count_nonzero(~np.isnan(x))),
             "mean_F1": r["mean"], "CI_low": r["ci_low"], "CI_high": r["ci_high"]}
 
 
