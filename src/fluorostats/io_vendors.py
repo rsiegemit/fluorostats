@@ -314,7 +314,7 @@ def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
     # so reshape to (Z, C, H, W) THEN transpose to (C, Z, H, W). Reshaping straight to
     # (C, Z, ...) interleaves channels for multi-channel z-stacks (only 1-channel is safe).
     arr = np.array(frames).reshape(n_z, n_channels, h, w).transpose(1, 0, 2, 3)
-    arr = canonicalize_volume(arr, meta)
+    arr = canonicalize_volume(arr, meta, "CZYX")
     return arr, meta
 
 

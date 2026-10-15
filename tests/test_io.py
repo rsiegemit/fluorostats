@@ -328,7 +328,7 @@ def test_rgb_tiff_samples_become_channels(tmp_path):
 def test_unlabelled_tiff_keeps_shape_heuristic(tmp_path):
     # A plain TIFF has no axis names ('QQYX'), so the shape rule still applies.
     p = tmp_path / "plain.tif"
-    tifffile.imwrite(p, np.zeros((20, 8, 8, 3), np.uint8))
+    tifffile.imwrite(p, np.zeros((20, 8, 8, 3), np.uint8), photometric="minisblack")
     with pytest.warns(RuntimeWarning, match="assuming channel-last"):
         arr, _ = load_volume(p)
     assert arr.shape == (3, 20, 8, 8)

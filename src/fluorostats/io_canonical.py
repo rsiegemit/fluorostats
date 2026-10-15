@@ -60,6 +60,25 @@ def _by_axis_names(arr: np.ndarray, axes: str, index_axes: dict[str, str]) -> np
     return arr.reshape(-1, *arr.shape[2:])
 
 
+# tifffile's letters for an axis it cannot name (sequence, image index).
+_UNLABELLED_AXES = "QI"
+
+
+def _unlabelled_as_z(axes: str, shape: tuple[int, ...], index_axes: dict[str, str]) -> str:
+    """``axes`` with its one unlabelled axis renamed Z (announced), when that axis
+    is the only one, is longer than 1, and Y and X are labelled but Z is not;
+    otherwise ``axes`` unchanged (two unlabelled axes are left to the shape rule)."""
+    unlabelled = [i for i, a in enumerate(axes) if a in _UNLABELLED_AXES and a not in index_axes]
+    if (len(unlabelled) != 1 or len(axes) != len(shape) or shape[unlabelled[0]] == 1
+            or "Z" in axes or not {"Y", "X"} <= set(axes)):
+        return axes
+    i = unlabelled[0]
+    warnings.warn(f"the file labels axes {axes!r}; assuming the unlabelled axis of length "
+                  f"{shape[i]} is z. If it is not, save the file with all axes named.",
+                  RuntimeWarning, stacklevel=4)
+    return axes[:i] + "Z" + axes[i + 1:]
+
+
 # More channels than any realistic fluorescence acquisition: a labelled file with
 # this many channels and one z-slice is most likely a mislabelled z-stack (e.g.
 # tifffile's imagej=True writes a 3D array without axes as channels=N).
@@ -70,8 +89,10 @@ def canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
                         index_axes: dict[str, str] | None = None) -> np.ndarray:
     """Ensure array is (C, Z, Y, X): by axis name when the reader labels its axes
     (``axes``), otherwise by shape."""
-    named = _by_axis_names(arr, axes, index_axes or {}) if axes else None
-    arr = named if named is not None else _volume_by_shape(arr)
+    index_axes = index_axes or {}
+    axes = _unlabelled_as_z(axes, arr.shape, index_axes) if axes else None
+    named = _by_axis_names(arr, axes, index_axes) if axes else None
+    arr = named if named is not None else _checked(_volume_by_shape(arr))
     if named is not None and arr.shape[1] == 1 and arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
         warnings.warn(f"the file declares {arr.shape[0]} channels and one z-slice; if it is a "
                       f"z-stack, re-save it with axes 'ZYX' (or slices={arr.shape[0]}).",
@@ -80,6 +101,23 @@ def canonicalize_volume(arr: np.ndarray, meta: dict, axes: str | None = None,
     if len(meta["channel_names"]) < n_ch:
         for i in range(len(meta["channel_names"]), n_ch):
             meta["channel_names"].append(f"Ch{i + 1}")
+    return arr
+
+
+# The shape rule's guess is refused beyond these: no fluorescence acquisition has
+# more channels, and an image this narrow is a misread colour axis.
+_MAX_GUESSED_CHANNELS = 10
+_MIN_GUESSED_WIDTH = 5
+
+
+def _checked(arr: np.ndarray) -> np.ndarray:
+    """The shape rule's (C, Z, Y, X) ``arr``, or a ValueError when it is implausible."""
+    n_c, n_x = arr.shape[0], arr.shape[-1]
+    if n_c > _MAX_GUESSED_CHANNELS or n_x < _MIN_GUESSED_WIDTH:
+        raise ValueError(
+            f"the file names no usable axes, and its shape read as (C, Z, Y, X) = {arr.shape} "
+            f"gives {n_c} channels and X = {n_x}, which is not a plausible layout. Save it "
+            "with its axes named (OME-TIFF, or an ImageJ hyperstack).")
     return arr
 
 
