@@ -10,7 +10,7 @@ asks for parametric tests (EXP-2).
 from __future__ import annotations
 
 import csv
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +38,7 @@ def _lambda_by_group(rows) -> dict[str, list[float]]:
     return by_group
 
 
-def _mann_whitney_row(metric: str, window: str, by_group: dict[str, Sequence[float]]) -> dict:
+def _mann_whitney_row(metric: str, window: str, by_group: Mapping[str, Sequence[float]]) -> dict:
     """Two-sided Mann-Whitney between the two groups of ``by_group``, as a contrasts row."""
     (ga, va), (gb, vb) = by_group.items()
     mw = stats.mann_whitney(va, vb)
@@ -47,7 +47,7 @@ def _mann_whitney_row(metric: str, window: str, by_group: dict[str, Sequence[flo
             "cliffs_delta": mw["cliffs_delta"], "test": "Mann-Whitney U, two-sided"}
 
 
-def mann_whitney_contrasts(entries: Sequence[tuple[str, str, dict[str, Sequence[float]]]],
+def mann_whitney_contrasts(entries: Sequence[tuple[str, str, Mapping[str, Sequence[float]]]],
                            across: str | None = None) -> list[dict]:
     """Two-group contrast rows for any driver: one per ``(metric, window, by_group)``
     entry whose ``by_group`` (group name -> values, in order) has exactly two groups.
