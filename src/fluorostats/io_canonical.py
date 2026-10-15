@@ -242,6 +242,9 @@ def canonicalize_image(
                 stacklevel=3,
             )
     else:
-        raise ValueError(f"Unexpected 2D image shape: {arr.shape}")
+        raise ValueError(
+            f"Unexpected 2D image shape: {arr.shape}; if it is a z-stack, use load_volume "
+            "or load_auto (quant3d) instead."
+        )
 
     return arr, {**meta, "channel_names": _padded_names(names, arr.shape[0])}

@@ -27,7 +27,7 @@ def test_canonicalize_volume_high_ndim_recurses():
 
 
 def test_canonicalize_image_bad_ndim_raises():
-    with pytest.raises(ValueError, match="Unexpected 2D image shape"):
+    with pytest.raises(ValueError, match="Unexpected 2D image shape.*use load_volume"):
         io_canonical.canonicalize_image(np.zeros((2, 2, 2, 2)), {"channel_names": []})
 
 
