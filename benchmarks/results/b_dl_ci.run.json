@@ -8,7 +8,7 @@
     "small_object_rule": "keep >= min_size",
     "n_images": 200
   },
-  "git_commit": "f59f659",
+  "git_commit": "2455fa6",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

@@ -5,7 +5,7 @@
     "n_boot": 5000,
     "fold_change_seed": 0
   },
-  "git_commit": "f59f659",
+  "git_commit": "2455fa6",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",
