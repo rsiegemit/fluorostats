@@ -61,9 +61,10 @@ Every table in `results/` that the public data can regenerate has a producer in
 `producers/` named after it; it reads `$FLUOROSTATS_DATA`, measures with the
 `fluorostats` library, uses explicit seeds, and overwrites `results/<same name>`.
 Next to each table it writes `results/<same name>.run.json`: the producer, its
-parameters and the python / numpy / scipy / scikit-image / fluorostats versions
-(timing tables also record the CPU). A committed `.run.json` marks a table that was
-re-run with those versions and reproduced byte for byte.
+parameters (including `small_object_rule` wherever a `min_size` applies), the
+fluorostats git commit (`-dirty` when tracked files other than `results/` were
+modified) and the python / numpy / scipy / scikit-image / fluorostats versions
+(timing tables also record the CPU).
 
 ```bash
 # from the repo root

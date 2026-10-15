@@ -18,6 +18,7 @@ import glob
 import json
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 
@@ -67,10 +68,27 @@ EXAMPLE_FIELD = 500
 DL_CPU_MS = {"StarDist": 215.1, "Cellpose": 5547.0}
 
 
+def git_commit() -> str:
+    """Short SHA of the checkout the producer runs from, with ``-dirty`` when tracked
+    files outside ``benchmarks/results`` (the producers' own outputs) have changes;
+    ``unknown`` outside a git checkout."""
+    repo = Path(__file__).resolve().parents[2]
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True,
+                             text=True, check=True).stdout.strip()
+        changed = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", ".",
+                                  ":(exclude)benchmarks/results"], cwd=repo, capture_output=True,
+                                 text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return f"{sha}-dirty" if changed else sha
+
+
 def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) -> None:
     """Write ``results/<stem>.csv`` and its provenance record ``results/<stem>.run.json``.
 
-    The record names the producer, its ``params`` and the python / numpy /
+    The record names the producer, its ``params``, the fluorostats git commit
+    (``git_commit``) and the python / numpy /
     scipy / scikit-image / fluorostats versions; a ``timing`` table also records
     the CPU (``platform.machine()``, ``platform.processor()``). No host name,
     user or absolute path is written. ``csv_kw`` goes to ``DataFrame.to_csv``
@@ -78,7 +96,7 @@ def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) 
     """
     df.to_csv(RESULTS / f"{stem}.csv", **{"index": False, **csv_kw})
     record = {"table": f"{stem}.csv", "producer": f"benchmarks/producers/{Path(sys.argv[0]).name}",
-              "params": params,
+              "params": params, "git_commit": git_commit(),
               "versions": {"python": platform.python_version(), "numpy": np.__version__,
                            "scipy": scipy.__version__, "scikit-image": skimage.__version__,
                            "fluorostats": fluorostats.__version__}}
