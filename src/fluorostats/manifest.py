@@ -65,7 +65,7 @@ def check_groups(groups: list[dict], roles: tuple[str, ...] | None = None,
     return problems
 
 
-def _stack_problems(group: str, st: dict, roles, stack_keys) -> list[str]:
+def _stack_problems(group: str | None, st: dict, roles, stack_keys) -> list[str]:
     """Problems with one stack entry of group ``group``."""
     if "path" not in st or "label" not in st:
         return [f"group {group!r}: every stack needs 'path' and 'label': {st}"]
