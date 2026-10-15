@@ -4,6 +4,8 @@ Axis-name reordering is exercised end to end through the loaders in
 test_io.py (TIFF) and test_io_vendors.py (ND2, CZI fakes).
 """
 
+import warnings
+
 import numpy as np
 import pytest
 import tifffile
@@ -20,7 +22,7 @@ def test_canonicalize_volume_bad_ndim_raises():
 def test_canonicalize_volume_high_ndim_recurses():
     # 6D with leading singletons collapses to 4D via recursion
     arr = np.zeros((1, 1, 2, 3, 8, 8), dtype=np.uint16)
-    out = io_canonical.canonicalize_volume(arr, {"channel_names": []})
+    out, _ = io_canonical.canonicalize_volume(arr, {"channel_names": []})
     assert out.shape == (2, 3, 8, 8)
 
 
@@ -45,7 +47,7 @@ def test_squeeze_non_singleton_high_ndim():
 def test_canonicalize_volume_high_ndim_squeezes():
     # 6D non-singleton -> squeeze collapses to 4D
     arr = np.zeros((2, 2, 3, 4, 8, 8), dtype=np.uint16)
-    out = io_canonical.canonicalize_volume(arr, {"channel_names": []})
+    out, _ = io_canonical.canonicalize_volume(arr, {"channel_names": []})
     assert out.ndim == 4
 
 
@@ -92,7 +94,7 @@ def test_plain_z_stack_says_z_was_assumed(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "shape, said", [((8, 32, 32, 3), "X = 3"), ((12, 3, 16, 16), "16 channels")]
+    "shape, said", [((3, 8, 32, 4), "X = 4"), ((12, 3, 16, 16), "16 channels")]
 )
 def test_shape_fallback_refuses_implausible_layouts(shape, said):
     with pytest.raises(ValueError, match=said):
@@ -101,9 +103,35 @@ def test_shape_fallback_refuses_implausible_layouts(shape, said):
 
 def test_two_unlabelled_axes_keep_the_shape_rule_and_its_refusal(tmp_path):
     p = tmp_path / "qqyx.tif"
-    tifffile.imwrite(p, np.zeros((8, 32, 32, 3), np.uint8), photometric="minisblack")
-    with pytest.raises(ValueError, match="X = 3"):
+    tifffile.imwrite(p, np.zeros((3, 8, 32, 4), np.uint8), photometric="minisblack")
+    with pytest.raises(ValueError, match="X = 4.*axes named"):
         load_volume(p)
+
+
+@pytest.mark.parametrize("n_z", [6, 8])
+def test_unlabelled_channel_last_stack_with_few_slices_is_read(tmp_path, n_z):
+    # Regression: (Z <= 10, Y, X, C <= 4) was read as (C, Z, Y, X) with X = C and
+    # refused, with advice (name the axes) a .npy file cannot follow.
+    p = tmp_path / "zyxc.npy"
+    zyxc = np.zeros((n_z, 32, 40, 2), np.uint16)
+    zyxc[..., 1] = 7
+    np.save(p, zyxc)
+    with pytest.warns(RuntimeWarning, match="assuming channel-last"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (2, n_z, 32, 40) and arr[1].min() == 7 and arr[0].max() == 0
+
+
+def test_refused_guess_is_not_announced_first_and_advice_fits_npy(tmp_path):
+    # Regression: (12, 3, 16, 16) warned "transposing" and then refused; the advice
+    # named OME-TIFF for a .npy file.
+    p = tmp_path / "zcyx.npy"
+    np.save(p, np.zeros((12, 3, 16, 16), np.uint16))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match=r"16 channels.*\(C, Z, Y, X\) order") as e:
+            load_volume(p)
+    assert "OME-TIFF" not in str(e.value)
+    assert not [w for w in caught if "transposing" in str(w.message)]
 
 
 def test_single_plane_unlabelled_axis_needs_no_assumption():
@@ -111,7 +139,9 @@ def test_single_plane_unlabelled_axis_needs_no_assumption():
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        out = io_canonical.canonicalize_volume(np.zeros((1, 16, 16)), {"channel_names": []}, "QYX")
+        out, _ = io_canonical.canonicalize_volume(
+            np.zeros((1, 16, 16)), {"channel_names": []}, "QYX"
+        )
     assert out.shape == (1, 1, 16, 16)
 
 
@@ -119,18 +149,20 @@ def test_unlabelled_4d_guess_is_announced(tmp_path):
     # Regression: a 4D .npy with a leading axis <= 10 was taken as (C, Z, Y, X) silently.
     p = tmp_path / "czyx.npy"
     np.save(p, np.zeros((5, 8, 32, 32), np.uint16))
-    with pytest.warns(RuntimeWarning, match=r"read as \(C, Z, Y, X\) with 5 channels"):
+    with pytest.warns(RuntimeWarning, match=r"read as \(C, Z, Y, X\) with 5 channels") as w:
         arr, _ = load_volume(p)
+    assert all("OME-TIFF" not in str(x.message) for x in w)  # a .npy cannot name axes
     assert arr.shape == (5, 8, 32, 32)
 
 
-def test_channel_names_are_padded_into_a_new_list():
-    names = ["DAPI"]
-    meta = {"channel_names": names}
-    io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
-    assert meta["channel_names"] == ["DAPI", "Ch2", "Ch3"]
-    assert names == ["DAPI"]
-    image_meta = {"channel_names": names}
-    io_canonical.canonicalize_image(np.zeros((16, 16, 3)), image_meta)
+def test_channel_names_are_padded_into_a_new_meta():
+    # The caller's meta is not modified; the padded names are in the returned meta.
+    meta = {"channel_names": ["DAPI"], "format": "x"}
+    arr, out = io_canonical.canonicalize_volume(np.zeros((1, 2, 3, 16, 16)), meta, "CZSYX")
+    assert arr.shape == (3, 2, 16, 16)
+    assert out == {"channel_names": ["DAPI", "Ch2", "Ch3"], "format": "x"}
+    assert meta == {"channel_names": ["DAPI"], "format": "x"}
+    img, image_meta = io_canonical.canonicalize_image(np.zeros((16, 16, 3)), meta)
+    assert img.shape == (3, 16, 16)
     assert image_meta["channel_names"] == ["DAPI", "Ch2", "Ch3"]
-    assert names == ["DAPI"]
+    assert meta == {"channel_names": ["DAPI"], "format": "x"}

@@ -237,3 +237,15 @@ def test_choose_threshold_method_warns_when_a_method_fails():
     with pytest.warns(RuntimeWarning, match="otsu failed"):
         info = segment.choose_threshold_method(img)
     assert np.isnan(info["fractions"]["otsu"])
+
+
+def test_remove_small_labels_keeps_touching_objects_apart():
+    # Two touching labels: a mask-level filter would merge them into one object of
+    # 6 and keep it; per label, the 2-pixel object is dropped and the other is 1.
+    labels = np.zeros((3, 6), np.int32)
+    labels[1, :2] = 5
+    labels[1, 2:6] = 9
+    out, n = segment.remove_small_labels(labels, 3)
+    assert n == 1 and out.dtype == labels.dtype
+    np.testing.assert_array_equal(out[1], [0, 0, 1, 1, 1, 1])
+    assert segment.remove_small_labels(labels, 10)[1] == 0

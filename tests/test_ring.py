@@ -27,6 +27,14 @@ def test_ring_annulus_geometry():
     assert r["wall_thickness_mean"] == pytest.approx(30, abs=6)
 
 
+def test_ring_scalar_voxel_size_is_isotropic():
+    # Regression: a scalar voxel_size_um raised TypeError ('float' is not subscriptable).
+    m = _annulus()
+    assert ring.ring_morphometry(m, voxel_size_um=0.5) == ring.ring_morphometry(
+        m, voxel_size_um=(0.5, 0.5)
+    )
+
+
 def test_ring_offcentre_lumen_lowers_concentricity():
     m = _annulus(cy=100, cx=100, r_in=0, r_out=60)  # solid disk
     # carve an off-centre hole fully enclosed by the disk

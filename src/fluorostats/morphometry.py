@@ -73,14 +73,17 @@ def depth_profile(volume: np.ndarray, z_axis: int = 0) -> np.ndarray:
     return volume.mean(axis=tuple(a for a in range(volume.ndim) if a != z_axis))
 
 
-def _z_um(voxel_size_um: tuple[float, float, float] | None) -> float:
-    """The z voxel size (the first entry of ``(vz, vy, vx)``), NaN when uncalibrated."""
-    return float(voxel_size_um[0]) if voxel_size_um else float("nan")
+def _z_um(voxel_size_um: float | tuple[float, ...] | None, z_axis: int, ndim: int) -> float:
+    """The voxel size of axis ``z_axis`` (``voxel_size_um`` is per axis in array
+    order, or a scalar for isotropic voxels), NaN when uncalibrated."""
+    if voxel_size_um is None:
+        return float("nan")
+    return float(np.broadcast_to(np.asarray(voxel_size_um, dtype=float), (ndim,))[z_axis])
 
 
 def depth_span(
     volume: np.ndarray,
-    voxel_size_um: tuple[float, float, float] | None = None,
+    voxel_size_um: float | tuple[float, ...] | None = None,
     relative_threshold: float = 0.1,
     z_axis: int = 0,
 ) -> dict:
@@ -94,9 +97,10 @@ def depth_span(
     ----------
     volume : np.ndarray
         3D intensity volume.
-    voxel_size_um : (vz, vy, vx) or None
-        Voxel size; its z entry (the first, whatever ``z_axis`` is) converts the
-        span to micrometres.
+    voxel_size_um : per-axis tuple, scalar or None
+        Voxel size in µm per axis of ``volume``, in array order (``(vz, vy, vx)``
+        for the default ``z_axis=0``), or one number for isotropic voxels; its
+        ``z_axis`` entry converts the span to micrometres.
     relative_threshold : float
         Slices with mean intensity below this fraction of the peak are
         considered signal-free.
@@ -111,7 +115,7 @@ def depth_span(
         span_um : float — span in micrometres; NaN without ``voxel_size_um``.
     """
     profile = depth_profile(volume, z_axis=z_axis)
-    vz = _z_um(voxel_size_um)
+    vz = _z_um(voxel_size_um, z_axis, volume.ndim)
     if profile.max() == 0:
         return {"z_lo": 0, "z_hi": 0, "span_slices": 0, "span_um": 0.0 * vz}
     cutoff = relative_threshold * profile.max()
@@ -130,7 +134,7 @@ def depth_span(
 
 def depth_centroid(
     volume: np.ndarray,
-    voxel_size_um: tuple[float, float, float] | None = None,
+    voxel_size_um: float | tuple[float, ...] | None = None,
     z_axis: int = 0,
 ) -> dict:
     """Intensity-weighted depth centroid and percentile depths.
@@ -139,25 +143,30 @@ def depth_centroid(
     ----------
     volume : np.ndarray
         3D intensity volume.
-    voxel_size_um : (vz, vy, vx) or None
-        Voxel size; its z entry (the first, whatever ``z_axis`` is) gives the
-        ``_um`` keys.
+    voxel_size_um : per-axis tuple, scalar or None
+        Voxel size in µm per axis of ``volume``, in array order, or one number for
+        isotropic voxels (as in `depth_span`); its ``z_axis`` entry gives µm.
     z_axis : int
         Axis of ``volume`` that is depth.
 
     Returns
     -------
     dict with keys:
-        z_centroid : float — intensity-weighted mean z position, in slices.
-        z_p25, z_p50, z_p75 : float — depths (slices) above which 25/50/75 % of
-            cumulative intensity lies.
-        z_centroid_um, z_p25_um, z_p50_um, z_p75_um : float — the same in
+        z_centroid : float — intensity-weighted mean z position: µm when
+            ``voxel_size_um`` is given, slices otherwise (as in v0.8.2).
+        z_p25, z_p50, z_p75 : float — depths above which 25/50/75 % of
+            cumulative intensity lies, in the units of ``z_centroid``.
+        z_centroid_um, z_p25_um, z_p50_um, z_p75_um : float — the same, always in
             micrometres; NaN without ``voxel_size_um``.
+        z_centroid_slices, z_p25_slices, z_p50_slices, z_p75_slices : float — the
+            same, always in slices.
+
+        Every value is NaN for a volume without signal (all zero).
     """
     profile = depth_profile(volume, z_axis=z_axis)
     total = profile.sum()
     if total == 0:
-        slices = {"z_centroid": 0.0, "z_p25": 0.0, "z_p50": 0.0, "z_p75": 0.0}
+        slices = dict.fromkeys(("z_centroid", "z_p25", "z_p50", "z_p75"), float("nan"))
     else:
         z = np.arange(profile.size)
         cum = np.cumsum(profile) / total
@@ -172,5 +181,10 @@ def depth_centroid(
             "z_p50": _percentile(50),
             "z_p75": _percentile(75),
         }
-    vz = _z_um(voxel_size_um)
-    return {**slices, **{f"{k}_um": v * vz for k, v in slices.items()}}
+    vz = _z_um(voxel_size_um, z_axis, volume.ndim)
+    um = {k: v * vz for k, v in slices.items()}
+    return {
+        **(slices if voxel_size_um is None else um),
+        **{f"{k}_um": v for k, v in um.items()},
+        **{f"{k}_slices": v for k, v in slices.items()},
+    }

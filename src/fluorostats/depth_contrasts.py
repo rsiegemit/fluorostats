@@ -64,14 +64,15 @@ def mann_whitney_contrasts(
 
     With ``across`` (a noun such as ``"windows"``) the entries are one family and
     their p-values are BH-corrected together ("Benjamini-Hochberg FDR across n
-    <across>"); without it each row is its own test (q = p). ``window`` is free text
+    <across>", n counting the entries with a p-value); without it each row is its own test (q = p). ``window`` is free text
     (empty when it does not apply). Rows have the `write_contrasts_csv` columns.
     """
     rows = [_mann_whitney_row(metric, window, bg) for metric, window, bg in entries if len(bg) == 2]
     if across is None:
         return [{**c, "q": c["p"], "correction": "none (single test; q = p)"} for c in rows]
     qs = stats.bh_fdr([c["p"] for c in rows])
-    correction = f"Benjamini-Hochberg FDR across {len(rows)} {across}"
+    n_tested = sum(c["p"] == c["p"] for c in rows)  # bh_fdr leaves NaN p out
+    correction = f"Benjamini-Hochberg FDR across {n_tested} {across}"
     return [{**c, "q": float(q), "correction": correction} for c, q in zip(rows, qs)]
 
 

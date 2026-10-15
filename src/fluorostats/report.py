@@ -4,6 +4,7 @@ run_config.json record of how an output folder was produced."""
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -116,29 +117,50 @@ def write_per_condition_csv(
 def environment() -> dict:
     """Package versions + optional-reader availability, for the reproducibility record.
 
-    (The resolved per-file ``voxel_size_um`` is recorded per row in ``per_file.csv``.)
+    ``packages["fluorostats"]`` is the version of the code that ran
+    (``fluorostats.__version__``, not an installed distribution's), and
+    ``fluorostats_commit`` its git commit when it runs from a checkout (see
+    `_git_commit`), else None. (The resolved per-file ``voxel_size_um`` is
+    recorded per row in ``per_file.csv``.)
     """
     import importlib.metadata as _im
     import importlib.util as _iu
     import platform
 
-    pkgs: dict[str, str | None] = {}
-    for p in (
-        "fluorostats",
-        "numpy",
-        "scipy",
-        "scikit-image",
-        "tifffile",
-        "pandas",
-        "matplotlib",
-        "skan",
-    ):
+    from . import __version__
+
+    pkgs: dict[str, str | None] = {"fluorostats": __version__}
+    for p in ("numpy", "scipy", "scikit-image", "tifffile", "pandas", "matplotlib", "skan"):
         try:
             pkgs[p] = _im.version(p)
-        except _im.PackageNotFoundError:  # e.g. fluorostats run from source
+        except _im.PackageNotFoundError:
             pkgs[p] = None
     readers = {r: _iu.find_spec(r) is not None for r in OPTIONAL_READERS}
-    return {"python": platform.python_version(), "packages": pkgs, "optional_readers": readers}
+    return {
+        "python": platform.python_version(),
+        "packages": pkgs,
+        "fluorostats_commit": _git_commit(Path(__file__).parent),
+        "optional_readers": readers,
+    }
+
+
+def _git_commit(package_dir: Path) -> str | None:
+    """Short SHA of the git checkout ``package_dir`` is tracked in, with ``-dirty``
+    when tracked files under it have changes; None when it is not tracked by git
+    (an installed package) or git is unavailable."""
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=package_dir, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    try:
+        git("ls-files", "--error-unmatch", "__init__.py")
+        sha = git("rev-parse", "--short", "HEAD")
+        changed = git("status", "--porcelain", "--untracked-files=no", "--", ".")
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return f"{sha}-dirty" if changed else sha
 
 
 def write_run_config(output_dir: Path, params: dict, nested: dict | None = None) -> Path:

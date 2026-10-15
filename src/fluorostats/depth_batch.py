@@ -74,7 +74,7 @@ from . import depth, stats
 from .depth import parse_window, window_bounds, window_label, window_title
 from .depth_figures import group_color, plot_auc, plot_depth_curves, plot_retention_multiwindow
 from .io import load_volume
-from .manifest import check_depth
+from .manifest import check_depth, require_groups
 from . import pubfig, report
 from .depth_contrasts import contrasts, print_auc_summary, print_lambda_summary, write_contrasts_csv
 
@@ -107,6 +107,7 @@ def load_manifest(path: Path) -> dict:
     """Read a depth manifest (see the module docstring), filling defaults and parsing windows."""
     with open(path) as fh:
         m = json.load(fh)
+    require_groups(m)
     m.setdefault("title", "Depth-penetration analysis")
     m.setdefault("signal_label", "Signal")
     m.setdefault("channel", 0)
@@ -115,11 +116,10 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("fit_offset", False)
     m.setdefault("fit_r2_threshold", depth.FIT_R2_THRESHOLD)
     m.setdefault("parametric", False)
-    # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`.
+    # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`; a
+    # manifest giving both keeps both, and validation refuses it.
     if "auc_windows_um" not in m:
-        m["auc_windows_um"] = [m.get("auc_window_um", [0.0, 100.0])]
-    if "groups" not in m or not m["groups"]:
-        raise ValueError("manifest must define at least one group with stacks")
+        m["auc_windows_um"] = [m.pop("auc_window_um", [0.0, 100.0])]
     _validate(m)
     m["windows"] = [parse_window(w) for w in m["auc_windows_um"]]
     return m
@@ -129,7 +129,7 @@ def _validate(m: dict) -> None:
     """Check a depth manifest before any image is loaded; raise listing every problem."""
     problems = check_depth(m)
     for grp in m["groups"]:
-        c = grp.get("color")
+        c = grp.get("color") if isinstance(grp, dict) else None
         if c is not None and not is_color_like(c):
             problems.append(f"group {grp.get('name')!r}: color {c!r} is not a matplotlib colour")
     if problems:

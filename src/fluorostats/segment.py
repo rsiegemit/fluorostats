@@ -15,10 +15,10 @@ from skimage.filters import (
     threshold_triangle,
     threshold_yen,
 )
+from scipy import ndimage as ndi
 from skimage.morphology import (
     ball,
     disk,
-    remove_small_objects,
 )
 from skimage.morphology import opening as binary_opening
 
@@ -199,17 +199,28 @@ def binarize(
 
 def remove_small(mask: np.ndarray, min_size: int) -> np.ndarray:
     """Drop connected objects smaller than ``min_size`` pixels/voxels (objects of
-    exactly ``min_size`` are kept), identically on every scikit-image version.
+    exactly ``min_size`` are kept); a new bool mask.
 
-    The one small-object rule of the package (`binarize`, `objects.label_3d`);
+    Objects are face-connected components (`scipy.ndimage.label`), and the rule
+    is `remove_small_labels`, the one small-object rule of the package (also
+    used by `binarize`, `objects.label_3d` and `objects.watershed_split`);
     ``min_size <= 0`` returns the mask unchanged.
     """
     if min_size <= 0:
         return mask
-    try:
-        # skimage >= 0.26 renamed min_size -> max_size, which removes objects of that
-        # size *or fewer*; min_size - 1 keeps "smaller objects are removed".
-        # (its < 0.26 annotations lack max_size: mypy flags it there only)
-        return remove_small_objects(mask, max_size=min_size - 1)  # type: ignore[call-arg, unused-ignore]
-    except TypeError:  # pragma: no cover - environment-gated: runs only on skimage < 0.26
-        return remove_small_objects(mask, min_size=min_size)
+    return remove_small_labels(ndi.label(mask)[0], min_size)[0] > 0
+
+
+def remove_small_labels(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
+    """``(labels, n)`` with every label of fewer than ``min_size`` pixels/voxels
+    removed and the survivors relabelled 1..n in their original order (labels of
+    exactly ``min_size`` are kept). ``labels`` is an integer label image, 0 the
+    background; touching objects keep their own labels."""
+    sizes = np.bincount(labels.ravel())
+    keep = sizes >= min_size
+    keep[0] = False  # background
+    if not keep.any():
+        return np.zeros_like(labels), 0
+    remap = np.zeros(sizes.size, dtype=labels.dtype)
+    remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
+    return remap[labels], int(keep.sum())

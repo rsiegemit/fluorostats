@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 from fluorostats import metrics_3d
-from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
+from fluorostats.metrics_3d import volume_fraction, connectivity_metrics
+from fluorostats.skeleton import skeleton_metrics
 
 
 def test_metrics3d_empty_mask():

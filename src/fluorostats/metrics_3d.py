@@ -14,10 +14,14 @@ import numpy as np
 from scipy.ndimage import label
 from skimage.measure import euler_number
 
-# Deprecated re-exports: skeleton morphometry lives in fluorostats.skeleton; these
-# names stay here for backwards compatibility only (the CLI still calls
-# metrics_3d.skeleton_metrics) and are to be removed once callers import skeleton.
-from .skeleton import skeleton_metrics, prune_skeleton, n_junction_nodes  # noqa: F401
+from . import skeleton
+from .deprecation import moved_names
+
+# Deprecated names: skeleton morphometry lives in fluorostats.skeleton; these resolve
+# there with a DeprecationWarning, for one release.
+__getattr__ = moved_names(
+    __name__, ("skeleton_metrics", "prune_skeleton", "n_junction_nodes"), skeleton
+)
 
 
 def volume_fraction(mask: np.ndarray) -> float:

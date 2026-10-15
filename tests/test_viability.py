@@ -141,6 +141,18 @@ def test_live_dead_by_count_method_all_reports_consensus():
     assert out["method_live"] == out["method_dead"] == ""
 
 
+def test_method_all_spread_is_nan_when_one_method_gives_a_viability(monkeypatch):
+    # Regression: with one finite per-method viability the spread was 0.0 ("all
+    # methods agree"), not NaN like the other modes' "one method ran".
+    live, dead = _two_channel_stack()
+    for m in viability.COUNT_METHODS[1:]:
+        nothing = viability._Counter(lambda *args: 0, smoothed=False)  # finds nothing
+        monkeypatch.setitem(viability._COUNTERS, m, nothing)
+    out = viability.live_dead_by_count(live, dead, method="all")
+    first = viability.COUNT_METHODS[0]
+    assert out["consensus"] == out[f"viability_{first}"] and np.isnan(out["spread"])
+
+
 def test_live_dead_by_count_auto_reports_reasoning():
     live, dead = _two_channel_stack()
     out = viability.live_dead_by_count(live, dead, method="auto")

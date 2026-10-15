@@ -211,14 +211,14 @@ def _load_keyence_volume(path: Path) -> tuple[np.ndarray, dict]:
 def _load_npy_volume(path: Path) -> tuple[np.ndarray, dict]:
     data = np.load(str(path))
     meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "numpy"}
-    data = canonicalize_volume(data, meta)
+    data, meta = canonicalize_volume(data, meta)
     return data, meta
 
 
 def _load_npy_image(path: Path) -> tuple[np.ndarray, dict]:
     data = np.load(str(path))
     meta: dict = {"voxel_size_um": (1.0, 1.0), "channel_names": [], "format": "numpy"}
-    data = canonicalize_image(data, meta)
+    data, meta = canonicalize_image(data, meta)
     return data, meta
 
 
@@ -234,7 +234,7 @@ def _load_standard_image(path: Path) -> tuple[np.ndarray, dict]:
         "channel_names": [],
         "format": path.suffix.lstrip(".").lower(),
     }
-    data = canonicalize_image(data, meta)
+    data, meta = canonicalize_image(data, meta)
     return data, meta
 
 

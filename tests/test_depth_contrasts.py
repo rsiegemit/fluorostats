@@ -1,5 +1,6 @@
 """Tests for fluorostats.depth_contrasts (the depth driver's two-group statistics)."""
 
+import numpy as np
 import pytest
 
 from fluorostats import depth_contrasts, stats
@@ -102,3 +103,15 @@ def test_mann_whitney_contrasts_serve_any_driver():
     assert {r["correction"] for r in rows} == {"Benjamini-Hochberg FDR across 2 metrics"}
     single = depth_contrasts.mann_whitney_contrasts(entries[:1])
     assert single[0]["q"] == single[0]["p"] and single[0]["correction"].startswith("none")
+
+
+def test_correction_label_counts_only_the_tested_p_values():
+    # Regression: an untestable entry (NaN p, excluded by BH) was counted in the label.
+    entries = [
+        ("m", "w1", {"a": [1.0, 2.0, 3.0], "b": [4.0, 5.0, 6.0]}),
+        ("m", "w2", {"a": [1.0, 2.0, 3.0], "b": [4.0, 6.0, 5.0]}),
+        ("m", "w3", {"a": [1.0], "b": []}),
+    ]
+    rows = depth_contrasts.mann_whitney_contrasts(entries, across="windows")
+    assert np.isnan(rows[2]["p"]) and np.isnan(rows[2]["q"])
+    assert {r["correction"] for r in rows} == {"Benjamini-Hochberg FDR across 2 windows"}

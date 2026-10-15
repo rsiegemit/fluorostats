@@ -86,6 +86,22 @@ def test_load_manifest_rejects_malformed_singular_window(tmp_path):
     assert "entry 'deep' must be" in _manifest_errors(tmp_path, auc_window_um="deep")
 
 
+def test_load_manifest_refuses_both_window_fields(tmp_path):
+    # Regression: auc_window_um was silently ignored when auc_windows_um was given too.
+    msg = _manifest_errors(tmp_path, auc_window_um=[0, 50], auc_windows_um=[[0, 100]])
+    assert "give auc_windows_um or the older auc_window_um, not both" in msg
+
+
+@pytest.mark.parametrize(
+    "windows, label", [([[0, 100], [0, 100.0]], "0_100um"), (["full", [0, 5], "FULL"], "full")]
+)
+def test_load_manifest_refuses_repeated_windows(tmp_path, windows, label):
+    # Regression: two equal windows shared one label, so their figures overwrote each
+    # other and the window counted twice in the BH correction.
+    msg = _manifest_errors(tmp_path, auc_windows_um=windows)
+    assert f"AUC window {label} is given more than once" in msg
+
+
 def test_load_manifest_rejects_bad_group_color(tmp_path):
     s0 = tmp_path / "s0.tif"
     s0.write_bytes(b"")

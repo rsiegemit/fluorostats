@@ -54,11 +54,17 @@ def test_plus_has_one_junction_node_and_four_branches():
     assert m["n_junction_nodes"] == 1
 
 
-def test_reexport_matches_module():
-    """metrics_3d.skeleton_metrics is the same object as skeleton.skeleton_metrics."""
-    assert metrics_3d.skeleton_metrics is skeleton_metrics
-    assert metrics_3d.prune_skeleton is prune_skeleton
-    assert metrics_3d.n_junction_nodes is n_junction_nodes
+def test_reexport_matches_module_and_warns():
+    """metrics_3d.skeleton_metrics is skeleton.skeleton_metrics, with a DeprecationWarning."""
+    for name, func in (
+        ("skeleton_metrics", skeleton_metrics),
+        ("prune_skeleton", prune_skeleton),
+        ("n_junction_nodes", n_junction_nodes),
+    ):
+        with pytest.warns(DeprecationWarning, match=f"metrics_3d.{name} is deprecated"):
+            assert getattr(metrics_3d, name) is func
+    with pytest.raises(AttributeError, match="no attribute 'nope'"):
+        metrics_3d.nope
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +86,17 @@ def test_prune_preserves_main_length_roughly():
     pruned = skeleton_metrics(mask, prune=True, min_branch_length_um=10)
     # main line ~39 long; pruning a 3px spur keeps most length
     assert pruned["total_length_um"] > 30
+
+
+def test_prune_skeleton_accepts_an_array_voxel_size():
+    # Regression: `voxel_size_um or 1` raised "truth value ... is ambiguous" for an array.
+    from skimage.morphology import skeletonize
+
+    skel = skeletonize(_spurred_line())
+    np.testing.assert_array_equal(
+        prune_skeleton(skel, 10, voxel_size_um=np.array([1.0, 1.0])),
+        prune_skeleton(skel, 10, voxel_size_um=(1.0, 1.0)),
+    )
 
 
 def test_prune_skeleton_returns_new_array():

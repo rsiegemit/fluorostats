@@ -27,9 +27,9 @@ def test_import_does_not_load_pyplot(stmt):
 
 def test_figure_and_driver_modules_load_on_first_use():
     from fluorostats import pubfig
-    from fluorostats.plots import compute_pvalues
+    from fluorostats.plots import summary_panel
 
-    assert fluorostats.plots.compute_pvalues is compute_pvalues
+    assert fluorostats.plots.summary_panel is summary_panel
     assert fluorostats.pubfig is pubfig
     for name in (
         "render3d",

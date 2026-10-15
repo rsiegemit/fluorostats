@@ -13,7 +13,7 @@ R = Path(__file__).resolve().parent / "results"
 BLUE = OKABE["blue"]
 
 fig = plt.figure(figsize=(F.TW, 4.4), layout="constrained")
-fig.set_constrained_layout_pads(h_pad=0.02, w_pad=0.02)
+fig.get_layout_engine().set(h_pad=0.02, w_pad=0.02)
 gs = gridspec.GridSpec(2, 2, figure=fig, height_ratios=[0.72, 1.30],
                        width_ratios=[0.55, 1.45], hspace=0.05, wspace=0.30)
 

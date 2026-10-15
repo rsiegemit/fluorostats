@@ -194,7 +194,8 @@ def load_keyence_stack(
         ``downsample`` applied; an axis the ``.gci`` does not give is 1.0 — and
         ``n_slices_loaded``. Deprecated, kept for existing callers: ``px_um`` /
         ``z_step_um`` (the raw ``.gci`` values, ``px_um`` before downsampling)
-        and ``vox_xy_um`` / ``vox_z_um``; use ``voxel_size_um``.
+        and ``vox_xy_um`` / ``vox_z_um``; use ``voxel_size_um``. Reading them
+        gives no DeprecationWarning (a plain dict key cannot warn when read).
     """
     folder = Path(folder)
     files = sorted(glob.glob(str(folder / "*_CHF*.tif")), key=_z_index)

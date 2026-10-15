@@ -2,7 +2,8 @@
 
 `depth_batch` and `viability_batch` both describe their input as groups of
 stacks; `check_groups` validates that shared part before any image is loaded.
-`unknown_keys`, `is_int` and `is_number` are the field checks both use;
+`require_groups` checks a manifest's top-level shape first; `unknown_keys`,
+`is_int` and `is_number` are the field checks both use;
 `check_depth` checks the rest of a depth manifest.
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
+from .depth import parse_window, window_label
 from .stats import REDUCERS
 
 
@@ -40,45 +42,96 @@ def _repeated(values: list) -> list:
     return [v for i, v in enumerate(values) if v and v in values[i + 1 :] and v not in values[:i]]
 
 
+def require_groups(m) -> None:
+    """Raise ValueError unless ``m`` (a parsed manifest) is a JSON object with a
+    non-empty ``groups`` list; the batch loaders call it before reading any field."""
+    if not isinstance(m, dict):
+        raise ValueError(
+            f"a manifest must be a JSON object with a 'groups' list, got a {type(m).__name__}"
+        )
+    groups = m.get("groups")
+    if not isinstance(groups, list) or not groups:
+        raise ValueError(
+            "manifest needs a non-empty 'groups' list (at least one group with stacks), "
+            f"got {groups!r}"
+        )
+
+
 def check_groups(
     groups: list[dict],
     roles: tuple[str, ...] | None = None,
     group_keys: Iterable[str] | None = None,
     stack_keys: Iterable[str] | None = None,
 ) -> list[str]:
-    """Problems with a manifest's groups: names (present and unique), stacks (at least
-    one; labels unique within the group, paths present), background paths, and (when
-    given) each stack's role and unknown group / stack fields. Empty when all is well."""
+    """Problems with a manifest's groups: each an object, names (non-empty strings,
+    unique), stacks (a non-empty list of objects; labels unique within the group,
+    paths present), background paths, and (when given) each stack's role and
+    unknown group / stack fields. Empty when all is well."""
+    objects = [grp for grp in groups if isinstance(grp, dict)]
     problems = [
         f"group name {name!r} is used by more than one group; names must be unique"
-        for name in _repeated([grp.get("name") for grp in groups])
+        for name in _repeated([grp.get("name") for grp in objects])
     ]
     for gi, grp in enumerate(groups):
-        name = grp.get("name")
-        if not name:
-            problems.append(f"group {gi} has no 'name'")
-        if group_keys is not None:
-            problems += unknown_keys(f"group {name!r}", grp, group_keys)
-        if not grp.get("stacks"):
-            problems.append(f"group {name or gi!r} has no stacks")
-        bg = grp.get("background")
-        for bp in [bg] if isinstance(bg, str) else list(bg or []):
-            if not Path(bp).exists():
-                problems.append(f"group {name!r}: background {bp} does not exist")
-        problems += [
-            f"group {name!r}: stack label {label!r} is used by more than one stack; "
-            "labels must be unique within a group"
-            for label in _repeated([st.get("label") for st in grp.get("stacks", [])])
-        ]
-        for st in grp.get("stacks", []):
-            problems += _stack_problems(name, st, roles, stack_keys)
+        if not isinstance(grp, dict):
+            problems.append(f"group {gi} must be an object with 'name' and 'stacks', got {grp!r}")
+            continue
+        problems += _group_problems(gi, grp, roles, group_keys, stack_keys)
     return problems
 
 
-def _stack_problems(group: str | None, st: dict, roles, stack_keys) -> list[str]:
+def _group_problems(gi: int, grp: dict, roles, group_keys, stack_keys) -> list[str]:
+    """Problems with group number ``gi``, an object."""
+    name = grp.get("name")
+    problems = []
+    if not name:
+        problems.append(f"group {gi} has no 'name'")
+    elif not isinstance(name, str):
+        problems.append(f"group {gi}: name must be a non-empty string, got {name!r}")
+    if group_keys is not None:
+        problems += unknown_keys(f"group {name!r}", grp, group_keys)
+    stacks = grp.get("stacks")
+    if not stacks:
+        problems.append(f"group {name or gi!r} has no stacks")
+    elif not isinstance(stacks, list):
+        problems.append(f"group {name!r}: stacks must be a list of stack objects, got {stacks!r}")
+        stacks = []
+    problems += _background_problems(name, grp.get("background"))
+    objects = [st for st in stacks or [] if isinstance(st, dict)]
+    problems += [
+        f"group {name!r}: stack label {label!r} is used by more than one stack; "
+        "labels must be unique within a group"
+        for label in _repeated([st.get("label") for st in objects])
+    ]
+    for st in stacks or []:
+        problems += _stack_problems(name, st, roles, stack_keys)
+    return problems
+
+
+def _background_problems(group: str | None, bg) -> list[str]:
+    """Problems with a group's ``background``: absent, a path, or a list of paths."""
+    paths = [bg] if isinstance(bg, str) else bg if isinstance(bg, list) else None
+    if bg is not None and (paths is None or not all(isinstance(bp, str) for bp in paths)):
+        return [f"group {group!r}: background must be a path or a list of paths, got {bg!r}"]
+    return [
+        f"group {group!r}: background {bp} does not exist"
+        for bp in paths or []
+        if not Path(bp).exists()
+    ]
+
+
+def _stack_problems(group: str | None, st, roles, stack_keys) -> list[str]:
     """Problems with one stack entry of group ``group``."""
+    if not isinstance(st, dict):
+        return [
+            f"group {group!r}: every stack must be an object with 'path' and 'label', got {st!r}"
+        ]
     if "path" not in st or "label" not in st:
         return [f"group {group!r}: every stack needs 'path' and 'label': {st}"]
+    if not isinstance(st["path"], str):
+        return [f"group {group!r}: stack path must be a string, got {st['path']!r}"]
+    if not (isinstance(st["label"], str) or is_number(st["label"])):
+        return [f"group {group!r}: stack label must be a string or a number, got {st['label']!r}"]
     problems = []
     if stack_keys is not None:
         problems += unknown_keys(f"group {group!r}: stack {st['label']!r}", st, stack_keys)
@@ -114,8 +167,9 @@ _DEPTH_STACK_FIELDS = ("label", "path", "role")
 
 
 def check_depth(m: dict) -> list[str]:
-    """Problems with a depth manifest (`depth_batch`; defaults already filled), apart
-    from group colours, which `depth_batch` checks with matplotlib."""
+    """Problems with a depth manifest (`depth_batch`; defaults already filled, a lone
+    ``auc_window_um`` already folded into ``auc_windows_um``), apart from group
+    colours, which `depth_batch` checks with matplotlib."""
     problems = unknown_keys("manifest", m, _DEPTH_FIELDS)
     if not is_int(m["channel"]) or m["channel"] < 0:
         problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
@@ -132,6 +186,8 @@ def check_depth(m: dict) -> list[str]:
     r2 = m["fit_r2_threshold"]
     if not (is_number(r2) and 0 <= r2 <= 1):
         problems.append(f"fit_r2_threshold must be a number in [0, 1], got {r2!r}")
+    if "auc_window_um" in m:  # `depth_batch.load_manifest` folds a lone singular in
+        problems.append("give auc_windows_um or the older auc_window_um, not both")
     problems += _window_problems(m["auc_windows_um"])
     return problems + check_groups(
         m["groups"],
@@ -142,7 +198,8 @@ def check_depth(m: dict) -> list[str]:
 
 
 def _window_problems(windows) -> list[str]:
-    """Problems with ``auc_windows_um``: a list of [z0, z1] pairs (µm) and/or "full"."""
+    """Problems with ``auc_windows_um``: a list of distinct [z0, z1] pairs (µm) and/or
+    "full" (windows with one label, e.g. [0, 100] and [0, 100.0], are the same)."""
     form = "a list of [z0, z1] pairs (µm) and/or 'full', e.g. [[0, 100], 'full']"
     if not isinstance(windows, list) or not windows:
         return [f"auc_windows_um must be {form}; got {windows!r}"]
@@ -159,4 +216,9 @@ def _window_problems(windows) -> list[str]:
             )
         elif not 0 <= w[0] < w[1]:
             problems.append(f"AUC window {w!r} must be [z0, z1] with 0 <= z0 < z1 (µm)")
-    return problems
+    if problems:
+        return problems
+    return [
+        f"AUC window {label} is given more than once; each window must be distinct"
+        for label in _repeated([window_label(parse_window(w)) for w in windows])
+    ]

@@ -26,7 +26,8 @@ def test_orientation_flat_and_empty_mask():
     assert a["coherence"] == 0.0 and np.isnan(a["dominant_orientation_deg"])
     img = np.random.default_rng(0).random((32, 32))
     a2 = texture.orientation_anisotropy(img, mask=np.zeros((32, 32), bool))
-    assert a2["n_pixels"] == 0
+    # Regression: an empty mask measures nothing, so coherence is NaN (was 0.0).
+    assert a2["n_pixels"] == 0 and np.isnan(a2["coherence"])
 
 
 def test_orientation_mask_restricts():
