@@ -55,16 +55,22 @@ def watershed_split(
     Connected-component labeling merges touching nuclei/cells into one object
     (fluorostats' main under-count failure mode in crowded fields). This seeds
     a watershed at the h-maxima of the Euclidean distance transform (EDT), with
-    ``h = min_distance / 2``: a seed is a distance peak that rises at least
+    ``h = min_distance / 2``: a seed is a distance peak that rises more than
     ``min_distance / 2`` above the saddle joining it to any higher peak. Bumps
     of an irregular outline and the ridge of an elongated object are shallower
     than that, so they do not split one object.
 
     Geometrically, two touching objects whose inscribed radius is ``r`` and
     whose neck has half-width ``w`` (both in pixels/voxels) are split when
-    ``2r - 2w >= min_distance``: the constriction is at least ``min_distance``
-    narrower than the objects' inscribed diameter. Every connected component
-    keeps at least one seed, so objects too small to seed stay single objects.
+    ``2r - 2w > min_distance``: the constriction is more than ``min_distance``
+    narrower than the objects' inscribed diameter (a seed must rise *more* than
+    ``min_distance / 2``; at exactly ``min_distance / 2`` the peaks merge).
+    Every connected component keeps at least one seed, so objects too small to
+    seed stay single objects.
+
+    Connectivity is the same as `label_3d`'s: objects are face-connected (4 in
+    2D, 6 in 3D), so objects touching only at a corner or edge never share a
+    label, and with ``min_size=0`` the count is never below `label_3d`'s.
 
     Parameters
     ----------
@@ -75,7 +81,7 @@ def watershed_split(
         Drop objects below this voxel count after splitting.
     min_distance : int
         About the smallest object radius, in pixels/voxels: the neck-depth
-        criterion above (seed dynamics >= ``min_distance / 2``). Larger means
+        criterion above (seed dynamics > ``min_distance / 2``). Larger means
         fewer splits.
     footprint_size : deprecated
         Retired (the seeding uses no footprint); accepted, by keyword or as the
@@ -97,8 +103,13 @@ def watershed_split(
     # peaks joined above their saddle by less than h merge into one plateau, one seed.
     rec = reconstruction(dist - min_distance / 2, dist, method="dilation")
     peaks = local_maxima(rec, connectivity=m.ndim) & m
-    markers, n_seeds = ndi.label(peaks, structure=np.ones((3,) * m.ndim))
+    markers, _ = ndi.label(peaks, structure=np.ones((3,) * m.ndim))
     components, n_comp = ndi.label(m)
+    # A plateau joined across a corner can span two face-connected components:
+    # one seed per (plateau, component) piece, so no label crosses a corner.
+    pieces = markers[peaks] * (n_comp + 1) + components[peaks]
+    markers[peaks] = np.unique(pieces, return_inverse=True)[1] + 1
+    n_seeds = int(markers.max())
     unseeded = np.setdiff1d(np.arange(1, n_comp + 1), components[markers > 0])
     if unseeded.size:  # components too small to seed: one marker each
         pos = ndi.maximum_position(dist, components, unseeded)

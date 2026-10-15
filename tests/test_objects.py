@@ -175,7 +175,7 @@ def test_watershed_split_keeps_objects_smaller_than_min_distance():
 
 def test_watershed_split_neck_criterion():
     """Two r = 10 discs split when the neck is at least min_distance narrower than
-    their inscribed diameter (2r - 2w >= min_distance), and stay one otherwise."""
+    their inscribed diameter (2r - 2w > min_distance), and stay one otherwise."""
     yy, xx = np.mgrid[:40, :80]
 
     def pair(d):
@@ -464,3 +464,29 @@ def test_clear_border_labels_after_watershed_keeps_the_split():
     labels, n = objects.watershed_split(_touching_discs())
     assert n == 2
     assert objects.clear_border_labels(labels)[1] == 2
+
+
+@pytest.mark.parametrize("side,min_distance", [(5, 5), (3, 2), (3, 3)])
+def test_watershed_split_never_merges_corner_touching_objects(side, min_distance):
+    """Objects touching only at a corner are separate components for label_3d, so
+    watershed_split gives each its own face-connected label."""
+    from scipy import ndimage as ndi
+
+    m = np.zeros((4 + 2 * side, 4 + 2 * side), bool)
+    m[1 : 1 + side, 1 : 1 + side] = True
+    m[1 + side : 1 + 2 * side, 1 + side : 1 + 2 * side] = True
+    labels, n = objects.watershed_split(m, min_distance=min_distance)
+    assert n == label_3d(m)[1] == 2
+    assert all(ndi.label(labels == k)[1] == 1 for k in (1, 2))
+
+
+def test_watershed_split_rule_is_strict_at_equal_dynamics():
+    """Seed dynamics exactly min_distance / 2 merge (the documented strict rule)."""
+    from scipy import ndimage as ndi
+
+    yy, xx = np.indices((29, 29)).astype(float)
+    m = (np.hypot(yy - 14.5, xx - 10.25) <= 4.25) | (np.hypot(yy - 14.5, xx - 18.75) <= 4.25)
+    dist = ndi.distance_transform_edt(m)
+    assert dist.max() - dist[:, 14:16].max() == 2.0
+    assert objects.watershed_split(m, min_distance=4)[1] == 1
+    assert objects.watershed_split(m, min_distance=3)[1] == 2
