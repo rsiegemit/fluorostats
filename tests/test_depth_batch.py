@@ -265,55 +265,48 @@ def test_run_blank_trailing_zeros_trimmed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _print_summary and _print_lambda_summary Welch t-test branches  (lines 531-532, 552-559)
-# These are hit by a full run with 2 groups where >=2 primary stacks each have fit_ok.
+# Two-group contrasts: Mann-Whitney by default, Welch only when asked for (EXP-2)
 # ---------------------------------------------------------------------------
 
-def test_run_two_groups_prints_welch_and_mann_whitney_contrasts(tmp_path, capsys):
-    """Run with 2 groups, 2 stacks each where both groups have fit_ok=True -> λ t-test branch fires.
-
-    λ must be WITHIN the acquired depth range for fit_ok to be True.
-    With n_z=40 slices and default 1µm voxel spacing, max depth = 39µm.
-    Use lam=5 and lam=12, both < 39µm.
-    """
+def _two_group_manifest(tmp_path, **fields):
+    """2 groups x 2 stacks, every λ fit accepted (λ ≈ 5-6 and 12-13 µm in a 39 µm stack)."""
     blank = tmp_path / "blank.tif"
     _flat_stack(blank, value=2.0, n_z=40, yx=8)
-
-    stacks_a, stacks_b = [], []
-    for i in range(2):
-        pa = tmp_path / f"a_{i}.tif"
-        pb = tmp_path / f"b_{i}.tif"
-        # λ ≈ 5 and ≈ 12 are both well within the 39 µm depth range; replicates differ
-        # slightly so the rank tests see no ties
-        _decay_stack(pa, lam=5.0 + i, n_z=40)
-        _decay_stack(pb, lam=12.0 + i, n_z=40)
-        stacks_a.append({"label": f"a{i}", "path": str(pa)})
-        stacks_b.append({"label": f"b{i}", "path": str(pb)})
-
-    manifest = {
-        "channel": 0, "reducer": "mean", "n_surface": 2,
-        "auc_windows_um": [[0, 10], "full"],
-        "output_dir": str(tmp_path / "out"),
-        "groups": [
-            {"name": "fast", "background": str(blank), "stacks": stacks_a},
-            {"name": "slow", "background": str(blank), "stacks": stacks_b},
-        ],
-    }
+    groups = []
+    for name, lam in (("fast", 5.0), ("slow", 12.0)):
+        stacks = []
+        for i in range(2):
+            p = tmp_path / f"{name}_{i}.tif"
+            # replicates differ slightly so the rank tests see no ties
+            _decay_stack(p, lam=lam + i, n_z=40)
+            stacks.append({"label": f"{name}{i}", "path": str(p)})
+        groups.append({"name": name, "background": str(blank), "stacks": stacks})
+    m = {"channel": 0, "reducer": "mean", "n_surface": 2, "auc_windows_um": [[0, 10], "full"],
+         "output_dir": str(tmp_path / "out"), "groups": groups, **fields}
     mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(manifest))
+    mpath.write_text(json.dumps(m))
+    return mpath
 
-    out = depth_batch.run(mpath)
+
+def test_run_two_groups_prints_mann_whitney_contrasts_and_no_welch_by_default(tmp_path, capsys):
+    # Regression (EXP-2): a parametric Welch t-test was printed by default.
+    out = depth_batch.run(_two_group_manifest(tmp_path))
     assert (out / "auc_per_stack.csv").exists()
-    assert (out / "group_depth_summary.csv").exists()
     text = capsys.readouterr().out
-    # The Welch line is kept verbatim; the non-parametric contrast follows it.
-    assert text.count("Welch t-test fast vs slow: t=") == 2
-    assert "(n=2,2 — underpowered, descriptive only)" in text
-    assert "Welch t-test on λ, fast vs slow: t=" in text
+    assert "Welch" not in text
     # n=2 vs 2, complete separation: exact two-sided p = 2/C(4,2) = 1/3, δ = -1
     assert text.count("Mann-Whitney fast vs slow: U=0.0, p=0.3333, Cliff's δ=-1.00, "
                       "BH q=0.3333 across 2 windows (n=2,2)") == 2
     assert "Mann-Whitney on λ, fast vs slow: U=0.0, p=0.3333, Cliff's δ=-1.00 (n=2,2)" in text
+
+
+def test_run_prints_welch_only_when_the_manifest_asks_for_it(tmp_path, capsys):
+    depth_batch.run(_two_group_manifest(tmp_path, parametric=True))
+    text = capsys.readouterr().out
+    assert text.count("Welch t-test (parametric, requested) fast vs slow: t=") == 2
+    assert "(n=2,2 — underpowered, descriptive only)" in text
+    assert "Welch t-test (parametric, requested) on λ, fast vs slow: t=" in text
+    assert text.count("Mann-Whitney fast vs slow: U=0.0") == 2      # still reported
 
 
 def test_run_with_three_groups_says_contrasts_were_skipped(tmp_path, capsys):
@@ -376,6 +369,11 @@ def _manifest_errors(tmp_path, **fields):
 @pytest.mark.parametrize("field", ["channel", "n_surface"])
 def test_load_manifest_rejects_booleans_as_integers(tmp_path, field):
     assert f"{field} must be" in _manifest_errors(tmp_path, **{field: True})
+
+
+def test_load_manifest_requires_a_bool_for_parametric(tmp_path):
+    msg = _manifest_errors(tmp_path, parametric="false")
+    assert "parametric must be true or false, got 'false'" in msg
 
 
 @pytest.mark.parametrize("windows, expected", [

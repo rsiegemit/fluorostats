@@ -31,6 +31,7 @@ Manifest schema (all fields except groups/stacks are optional)::
       "reducer": "mean",           # "mean" | "median" (per-slice spatial stat)
       "n_surface": 3,              # slices averaged for surface normalisation
       "fit_offset": false,         # true → 3-parameter exp fit with additive floor
+      "parametric": false,         # true → also print Welch t-tests (Mann-Whitney is always reported)
       "auc_windows_um": [[0, 100], [0, 200], "full"],  # one or more windows
       "output_dir": "results/permeability",
       "groups": [
@@ -98,6 +99,7 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("reducer", "mean")
     m.setdefault("n_surface", 3)
     m.setdefault("fit_offset", False)
+    m.setdefault("parametric", False)
     # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`.
     if "auc_windows_um" not in m:
         m["auc_windows_um"] = [m.get("auc_window_um", [0.0, 100.0])]
@@ -121,6 +123,8 @@ def _validate(m: dict) -> None:
         problems.append(f"reducer must be one of {reducers}, got {m['reducer']!r}")
     if not _is_int(m["n_surface"]) or m["n_surface"] < 1:
         problems.append(f"n_surface must be a positive integer, got {m['n_surface']!r}")
+    if not isinstance(m["parametric"], bool):
+        problems.append(f"parametric must be true or false, got {m['parametric']!r}")
     problems += _window_problems(m["auc_windows_um"])
     for grp in m["groups"]:
         c = grp.get("color")
@@ -363,8 +367,8 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     write_group_summary_csv(out_dir / "group_depth_summary.csv", aggregates)
     _write_figures(rows, aggregates, colors, cfg, m["signal_label"], out_dir)
 
-    _print_summary(rows, windows)
-    _print_lambda_summary(rows)
+    _print_summary(rows, windows, m["parametric"])
+    _print_lambda_summary(rows, m["parametric"])
     # Written last, so only a completed run leaves a record claiming the folder.
     report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
     for line in report.stale_notices(previous):
@@ -472,7 +476,8 @@ def _write_figures(rows, aggregates, colors, cfg: dict, sig: str, out_dir: Path)
 
 
 def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
-    """Print a descriptive two-group Welch contrast (``by_group`` has 2 groups)."""
+    """Print a descriptive two-group Welch contrast (``by_group`` has 2 groups); only
+    when the manifest asks for parametric tests, the default being non-parametric (EXP-2)."""
     (ga, va), (gb, vb) = [(g, [v for v in vals if not np.isnan(v)])
                           for g, vals in by_group.items()]
     r = stats.welch_t(va, vb)
@@ -500,9 +505,9 @@ def _print_skipped(n_groups: int, which: str = "") -> None:
           "a two-group contrast needs exactly 2)")
 
 
-def _print_summary(rows, windows) -> None:
-    """Per-window normalised AUC by group; with two groups, Welch and Mann-Whitney
-    contrasts, the Mann-Whitney p-values BH-corrected across the windows."""
+def _print_summary(rows, windows, parametric: bool) -> None:
+    """Per-window normalised AUC by group; with two groups, Mann-Whitney contrasts
+    BH-corrected across the windows (preceded by Welch when ``parametric``)."""
     per_window = []
     for w in windows:
         lab = window_label(w)
@@ -523,13 +528,15 @@ def _print_summary(rows, windows) -> None:
         if mw is None:
             _print_skipped(len(by_group))
             continue
-        _print_welch("Welch t-test", by_group)
+        if parametric:
+            _print_welch("Welch t-test (parametric, requested)", by_group)
         _print_mann_whitney("Mann-Whitney", by_group, mw,
                             f", BH q={qs[i]:.4f} across {len(tested)} windows")
 
 
-def _print_lambda_summary(rows) -> None:
-    """Per-group penetration constant λ and descriptive Welch / Mann-Whitney contrasts."""
+def _print_lambda_summary(rows, parametric: bool) -> None:
+    """Per-group penetration constant λ and its Mann-Whitney contrast (Welch too when
+    ``parametric``)."""
     print("\n=== Penetration constant λ (single-exponential fit, absolute profile) ===")
     by_group: dict[str, list[float]] = {}
     for r in rows:
@@ -546,5 +553,6 @@ def _print_lambda_summary(rows) -> None:
     if len(by_group) != 2:
         _print_skipped(len(by_group), " with an accepted λ fit")
         return
-    _print_welch("Welch t-test on λ,", by_group)
+    if parametric:
+        _print_welch("Welch t-test (parametric, requested) on λ,", by_group)
     _print_mann_whitney("Mann-Whitney on λ,", by_group, _mann_whitney_pair(by_group))
