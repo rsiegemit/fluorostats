@@ -163,3 +163,8 @@ def test_lateral_homogeneity_uses_every_pixel_on_uneven_fields():
     assert res["n_tiles"] == 16
     assert res["lateral_gini"] == pytest.approx(stats.gini(tiles))
     assert res["lateral_gini"] > 0            # cropping would have seen a flat field
+
+
+def test_lateral_homogeneity_refuses_a_2d_image():
+    with pytest.raises(ValueError, match=r"3D \(Z, Y, X\) volume"):
+        morphometry.lateral_homogeneity(np.ones((16, 16)))

@@ -48,6 +48,9 @@ def ring_morphometry(
     Geometry keys are NaN when the mask has no foreground.
     """
     m = np.asarray(mask) > 0
+    if m.ndim != 2:
+        raise ValueError(f"ring_morphometry expects a 2D (Y, X) cross-section mask, got "
+                         f"shape {m.shape}")
     dy, dx = float(voxel_size_um[0]), float(voxel_size_um[1])
     pix_area = dy * dx
     nan = float("nan")

@@ -96,6 +96,9 @@ def denoise(arr: np.ndarray, sigma: float = 1.0) -> np.ndarray:
     blur) — cheap on memory and matched to confocal sampling, where the
     in-plane PSF dominates. Pass a single channel, not a (C, Z, Y, X) volume.
     """
+    if arr.ndim not in (2, 3):
+        raise ValueError(f"denoise expects a 2D (Y, X) image or a 3D (Z, Y, X) stack, got "
+                         f"shape {arr.shape}; pass one channel of a (C, Z, Y, X) volume")
     if arr.ndim == 2:
         return gaussian(arr, sigma=sigma, preserve_range=True)
 

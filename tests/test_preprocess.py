@@ -179,3 +179,9 @@ def test_green_channel_index_warns_only_when_guessing_by_position():
         assert green_channel_index([], 4) == 1                       # RGBA -> green
     with pytest.warns(RuntimeWarning, match="by position"):
         assert green_channel_index([], 5) == 0
+
+
+@pytest.mark.parametrize("shape", [(2, 3, 8, 8), (8,)])
+def test_denoise_refuses_other_than_2d_or_3d(shape):
+    with pytest.raises(ValueError, match=r"2D \(Y, X\) image or a 3D \(Z, Y, X\)"):
+        preprocess.denoise(np.zeros(shape))

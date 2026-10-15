@@ -47,6 +47,9 @@ def lateral_homogeneity(
     -------
     dict with keys: lateral_gini, lateral_cv, n_tiles.
     """
+    if volume.ndim != 3:
+        raise ValueError(f"lateral_homogeneity expects a 3D (Z, Y, X) volume, got shape "
+                         f"{volume.shape}; add a z axis to a 2D image (image[None])")
     xy = volume.mean(axis=z_axis)
     ny, nx = xy.shape
     if ny < tiles or nx < tiles:

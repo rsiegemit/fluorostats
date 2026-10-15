@@ -100,3 +100,8 @@ def test_orientation_order_aligned_vs_random():
     perp = texture.orientation_order(aligned, reference_deg=120.0)
     assert perp["alignment"] == pytest.approx(-1.0, abs=1e-6)
     assert texture.orientation_order(np.array([]))["n"] == 0
+
+
+def test_orientation_anisotropy_refuses_a_3d_volume():
+    with pytest.raises(ValueError, match=r"2D \(Y, X\) image"):
+        texture.orientation_anisotropy(np.random.default_rng(0).random((3, 16, 16)))

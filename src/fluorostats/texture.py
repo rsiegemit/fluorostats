@@ -50,6 +50,9 @@ def orientation_anisotropy(
     from skimage.feature import structure_tensor
 
     img = np.asarray(image, dtype=float)
+    if img.ndim != 2:
+        raise ValueError(f"orientation_anisotropy expects a 2D (Y, X) image, got shape "
+                         f"{img.shape}; project a stack first (e.g. its maximum over z)")
     if mask is not None:
         sel = np.asarray(mask) > 0
     else:
