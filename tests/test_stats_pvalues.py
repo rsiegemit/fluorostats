@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from fluorostats import stats
 
@@ -112,16 +113,18 @@ def test_compute_pvalues_skips_missing_metric():
     assert result.empty
 
 
-def test_compute_pvalues_mannwhitney_valueerror_via_mock():
-    """Mock mannwhitneyu to raise ValueError → except continue (lines 294-295)."""
-    df = pd.DataFrame(
-        {
-            "condition": ["a", "a", "a", "b", "b", "b"],
-            "metric": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        }
-    )
-    with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
+def test_compute_pvalues_reports_a_nan_p_as_not_computable():
+    df = pd.DataFrame({"condition": ["a", "a", "b", "b"], "metric": [1.0, 2.0, 3.0, 4.0]})
+    with patch("scipy.stats.mannwhitneyu", return_value=(1.0, float("nan"))):
         result = stats.compute_pvalues(df, ["metric"])
-    # ValueError was caught: the pair is kept, untested, with the reason
     assert result["reason"].tolist() == ["test not computable"]
     assert np.isnan(result["p_value"]).all()
+
+
+def test_compute_pvalues_leaves_out_unlabelled_rows_and_sorts_mixed_labels():
+    # Regression (S2): a NaN label, or int and str labels mixed (a CSV round trip),
+    # made sorted() raise TypeError.
+    df = pd.DataFrame({"condition": ["b", "b", 1, 1, np.nan], "metric": [1.0, 2.0, 3.0, 4.0, 5.0]})
+    with pytest.warns(RuntimeWarning, match="left out 1 row\\(s\\) with no condition label"):
+        result = stats.compute_pvalues(df, ["metric"])
+    assert (result.condition_a[0], result.condition_b[0], result.n_a[0]) == (1, "b", 2)

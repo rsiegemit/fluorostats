@@ -198,15 +198,14 @@ def test_add_pvalue_annotations_all_nonsig_returns_early():
     plt.close(fig)
 
 
-def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
-    """Mock mannwhitneyu to raise ValueError → except branch (lines 222-223)."""
-    # separated n=10 groups: "***" unless the failed test is skipped
+def test_add_pvalue_annotations_skips_a_pair_whose_p_is_nan():
+    # separated n=10 groups: "***" unless the uncomputed test is skipped
     data = [np.arange(10.0), np.arange(10.0) + 100]
     x = np.arange(2)
     conditions = ["a", "b"]
     fig, ax = _make_ax_with_ylim()
     # stats.mann_whitney calls scipy.stats.mannwhitneyu, so that is the patch target.
-    with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
+    with patch("scipy.stats.mannwhitneyu", return_value=(0.0, float("nan"))):
         _add_pvalue_annotations(ax, data, x, conditions)
     assert len(ax.texts) == 0
     plt.close(fig)

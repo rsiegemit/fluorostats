@@ -61,7 +61,10 @@ def test_write_contrasts_csv_formats_floats_and_keeps_text(tmp_path):
     out = tmp_path / "c.csv"
     depth_contrasts.write_contrasts_csv(out, depth_contrasts.contrasts(ROWS, WINDOWS))
     lines = out.read_text().splitlines()
-    assert lines[0] == "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction"
+    assert (
+        lines[0]
+        == "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction,reason"
+    )
     assert lines[1].startswith("auc_normalized,0_10um,a,b,4,3,0,")
     assert lines[3].startswith("lambda_um,,a,b,3,3,")
 
@@ -115,3 +118,11 @@ def test_correction_label_counts_only_the_tested_p_values():
     rows = depth_contrasts.mann_whitney_contrasts(entries, across="windows")
     assert np.isnan(rows[2]["p"]) and np.isnan(rows[2]["q"])
     assert {r["correction"] for r in rows} == {"Benjamini-Hochberg FDR across 2 windows"}
+
+
+def test_a_group_of_one_is_reported_untested_with_the_reason():
+    # Regression (M3): one accepted λ per group gave p = 1.0, reported as tested.
+    rows = [_row("a", 0, 1.0, 5.0), _row("b", 0, 2.0, 6.0), _row("b", 1, 3.0, 7.0)]
+    tests = depth_contrasts.contrasts(rows, WINDOWS)
+    assert all(np.isnan(c["p"]) and np.isnan(c["q"]) and c["reason"] == "n<2" for c in tests)
+    assert tests[0]["correction"] == "Benjamini-Hochberg FDR across 0 windows"

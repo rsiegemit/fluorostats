@@ -82,7 +82,9 @@ def test_run_writes_the_printed_contrasts_to_contrasts_csv(tmp_path, capsys):
         "cliffs_delta",
         "test",
         "correction",
+        "reason",
     ]
+    assert (c["reason"] == "").all()
     assert c[["metric", "window"]].values.tolist() == [
         ["auc_normalized", "0_10um"],
         ["auc_normalized", "full"],
@@ -112,7 +114,7 @@ def test_contrasts_csv_has_only_a_header_without_two_groups(tmp_path):
     mpath.write_text(json.dumps(m))
     out = depth_batch.run(mpath)
     assert (out / "contrasts.csv").read_text().splitlines() == [
-        "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction"
+        "metric,window,group_a,group_b,n_a,n_b,U,p,q,cliffs_delta,test,correction,reason"
     ]
 
 

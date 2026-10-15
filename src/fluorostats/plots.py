@@ -246,9 +246,7 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lo
 
     # Test the pairs, correct for multiplicity, keep the significant ones
     tested = []
-    for i, j in pairs:
-        if len(data[i]) < 2 or len(data[j]) < 2:
-            continue
+    for i, j in pairs:  # mann_whitney leaves a pair under stats.MIN_N untested (NaN)
         p = stats.mann_whitney(data[i], data[j])["p"]
         if not np.isnan(p):
             tested.append((i, j, p))

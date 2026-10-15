@@ -53,6 +53,7 @@ def _mann_whitney_row(metric: str, window: str, by_group: Mapping[str, Sequence[
         "p": mw["p"],
         "cliffs_delta": mw["cliffs_delta"],
         "test": "Mann-Whitney U, two-sided",
+        "reason": mw["reason"],
     }
 
 
@@ -65,7 +66,9 @@ def mann_whitney_contrasts(
     With ``across`` (a noun such as ``"windows"``) the entries are one family and
     their p-values are BH-corrected together ("Benjamini-Hochberg FDR across n
     <across>", n counting the entries with a p-value); without it each row is its own test (q = p). ``window`` is free text
-    (empty when it does not apply). Rows have the `write_contrasts_csv` columns.
+    (empty when it does not apply). ``reason`` is `stats.mann_whitney`'s: empty when
+    tested, else why p is NaN (e.g. "n<2": a group below `stats.MIN_N`, left out of
+    the BH family). Rows have the `write_contrasts_csv` columns.
     """
     rows = [_mann_whitney_row(metric, window, bg) for metric, window, bg in entries if len(bg) == 2]
     if across is None:
@@ -81,7 +84,7 @@ def contrasts(rows: list[dict], windows: list[tuple]) -> list[dict]:
 
     One row per AUC window on the primary stacks' normalised AUC, BH-corrected across
     the windows, and one on accepted λ fits (a single test: q = p). Columns: metric,
-    window, group_a, group_b, n_a, n_b, U, p, q, cliffs_delta, test, correction. The
+    window, group_a, group_b, n_a, n_b, U, p, q, cliffs_delta, test, correction, reason. The
     console summary prints these same rows; `write_contrasts_csv` writes them.
     """
     auc = [("auc_normalized", window_label(w), _auc_by_group(rows, w)) for w in windows]
@@ -103,6 +106,7 @@ _CONTRAST_COLUMNS = [
     "cliffs_delta",
     "test",
     "correction",
+    "reason",
 ]
 
 
