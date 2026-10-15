@@ -38,14 +38,15 @@ def read_tiff_volume_meta(path: Path) -> dict:
 
 
 def _tiff_volume_meta(tif: tifffile.TiffFile, axes: str = "zyx") -> dict:
-    """Volume ``meta`` from the OME-XML or ImageJ metadata of an open TIFF; only the
-    voxel sizes of ``axes`` are parsed (a 2D read passes ``"yx"``)."""
+    """Volume ``meta`` from the OME-XML or ImageJ metadata of an open TIFF; only
+    the voxel sizes of ``axes`` are read (a 2D read passes ``"yx"``, so a z size
+    it would discard is neither parsed nor warned about)."""
     meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "tiff"}
     if tif.ome_metadata:
         return {**_parse_ome_metadata(tif.ome_metadata, meta, axes), "format": "ome_tiff"}
     if tif.imagej_metadata:
         xy = _imagej_xy_um(tif, tif.imagej_metadata)
-        parsed = _parse_imagej_metadata(tif.imagej_metadata, meta, xy, axes)
+        parsed = _parse_imagej_metadata(tif.imagej_metadata, meta, xy, read_z="z" in axes)
         return {**parsed, "format": "imagej_tiff"}
     return meta
 
@@ -63,7 +64,7 @@ def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
     are read as `load_tiff_volume` reads them (OME-XML first, then ImageJ)."""
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
-        volume_meta = _tiff_volume_meta(tif, axes="yx")
+        volume_meta = _tiff_volume_meta(tif, "yx")
         _warn_first_series(tif, path)
     meta = {
         **volume_meta,
@@ -120,8 +121,8 @@ def _length_um(value: float, unit: str | None, axis: str) -> tuple[float, str]:
 
 
 def _parse_ome_metadata(ome_xml: str, meta: dict, axes: str = "zyx") -> dict:
-    """``meta`` plus the OME voxel size (converted to µm) and channel names, as a
-    new dict; ``meta`` itself is returned unchanged for unparseable XML."""
+    """``meta`` plus the OME voxel size of ``axes`` (converted to µm) and channel
+    names, as a new dict; ``meta`` itself is returned unchanged for unparseable XML."""
     try:
         root = ET.fromstring(ome_xml)
     except ET.ParseError as exc:
@@ -178,22 +179,22 @@ def _magnitude(value):
 
 
 def _parse_imagej_metadata(
-    ij_meta: dict, meta: dict, xy: dict | None = None, axes: str = "zyx"
+    ij_meta: dict, meta: dict, xy: dict | None = None, read_z: bool = True
 ) -> dict:
     """``meta`` plus the ImageJ voxel size converted to µm, as a new dict: z from
-    ``spacing`` (when ``"z"`` is in ``axes``), y/x from ``xy`` (see `_imagej_xy_um`)."""
+    ``spacing`` (unless not ``read_z``), y/x from ``xy`` (see `_imagej_xy_um`)."""
     size = dict(zip("zyx", meta["voxel_size_um"]))
     read, noted = set(), {}
     spacing = _magnitude(ij_meta.get("spacing"))  # negative: a stack acquired top-down
-    has_z = "z" in axes and "spacing" in ij_meta
-    if has_z and not valid_size(spacing):
+    has_spacing = read_z and "spacing" in ij_meta
+    if has_spacing and not valid_size(spacing):
         warnings.warn(
             f"ImageJ spacing {ij_meta['spacing']!r} is not a nonzero number; the z "
             "spacing is not read.",
             RuntimeWarning,
             stacklevel=3,
         )
-    elif has_z:
+    elif has_spacing:
         size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
         read.add("z")
         noted.update({} if source == "file" else {"z": source})
