@@ -210,3 +210,13 @@ def test_isolated_points_measure_zero_without_warning():
     assert m["n_branches"] == m["n_junctions"] == m["n_junction_nodes"] == 0
     assert np.isnan(m["mean_branch_length_um"])          # mean of zero branches
     assert pruned.sum() == 3
+
+
+def test_diagonally_touching_junction_voxels_are_one_node():
+    # Two degree-3 voxels that touch only at a corner are adjacent under the full
+    # connectivity the neighbour count uses, so they merge into one node.
+    s = np.zeros((9, 9), bool)
+    for r, c in [(0, 0), (1, 1), (2, 2), (3, 3), (2, 4), (1, 5), (0, 6),   # junction (3, 3)
+                 (4, 4), (5, 3), (6, 2), (7, 1), (5, 5), (6, 6), (7, 7)]:  # junction (4, 4)
+        s[r, c] = True
+    assert n_junction_nodes(s) == 1

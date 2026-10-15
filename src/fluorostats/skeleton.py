@@ -46,7 +46,8 @@ def _has_branches(s: np.ndarray) -> bool:
 
 def n_junction_nodes(skel: np.ndarray) -> int:
     """Number of skeleton junction NODES (skeleton voxels with >= 3 skeleton
-    neighbours), with adjacent junction voxels merged into a single node.
+    neighbours), with adjacent junction voxels (full connectivity: faces, edges
+    and corners, as for the neighbour count) merged into a single node.
 
     Matches the "branchpoint / junction" definition used by AngioTool, REAVER,
     and Fiji's AnalyzeSkeleton — distinct from ``skeleton_metrics``'
@@ -58,7 +59,8 @@ def n_junction_nodes(skel: np.ndarray) -> int:
     """
     s = skel > 0
     junction_vox = s & (_neighbour_counts(s) >= 3)
-    return int(label(junction_vox)[1])
+    # merge with the same full connectivity the neighbour count uses
+    return int(label(junction_vox, structure=np.ones((3,) * s.ndim))[1])
 
 
 @renamed_keyword("spacing", "voxel_size_um")
