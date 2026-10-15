@@ -58,6 +58,12 @@ def _safe_float(val, default: float) -> float:
         return default
 
 
+def _warn_unread(what: str, exc: Exception) -> None:
+    """Announce a metadata element that could not be read (its default is kept)."""
+    warnings.warn(f"{what} could not be read ({type(exc).__name__}: {exc}); the default "
+                  "is kept.", RuntimeWarning, stacklevel=3)
+
+
 def _positional_names(names: list[str | None]) -> list[str]:
     """Channel names in file order, an empty one becoming ``Ch<i+1>`` in place so
     every later name keeps its channel."""
@@ -88,11 +94,7 @@ def _parse_olympus_metadata(oif) -> dict:
         "channel_names": [],
     }
 
-    try:
-        settings = oif.mainfile
-    except Exception:
-        return meta
-
+    settings = oif.mainfile
     voxel_x, voxel_y, voxel_z = 1.0, 1.0, 1.0
     channel_names: list[str | None] = []
     read: set[str] = set()
@@ -194,11 +196,14 @@ def _czi_voxel_um(root):
     for dist in root.iter("Distance"):
         value_el = dist.find("Value")
         axis_id = dist.get("Id", "")
-        if value_el is not None and value_el.text:
-            val_um = float(value_el.text) * 1e6
-            if axis_id in size:
-                size[axis_id] = val_um
-                read.add(axis_id.lower())
+        if value_el is None or not value_el.text or axis_id not in size:
+            continue
+        try:
+            size[axis_id] = float(value_el.text) * 1e6
+        except ValueError as exc:
+            _warn_unread(f"CZI Distance {axis_id!r} value {value_el.text!r}", exc)
+            continue
+        read.add(axis_id.lower())
     return (size["Z"], size["Y"], size["X"]), read
 
 
@@ -216,16 +221,16 @@ def _parse_czi_metadata(czi) -> dict:
         "channel_names": [],
     }
 
+    xml_str = czi.metadata()
+    if not xml_str:
+        return meta
     try:
-        xml_str = czi.metadata()
-        if xml_str:
-            root = ET.fromstring(xml_str)
-
-            meta["voxel_size_um"], meta["_read_axes"] = _czi_voxel_um(root)
-            meta["channel_names"] = _czi_channel_names(root)
-    except Exception:
-        pass
-
+        root = ET.fromstring(xml_str)
+    except ET.ParseError as exc:
+        _warn_unread("CZI metadata XML", exc)
+        return meta
+    meta["voxel_size_um"], meta["_read_axes"] = _czi_voxel_um(root)
+    meta["channel_names"] = _czi_channel_names(root)
     return meta
 
 
@@ -267,25 +272,17 @@ def _parse_nd2_metadata(f) -> dict:
     }
 
     try:
-        if hasattr(f, "voxel_size"):
-            vs = f.voxel_size()
-            meta["_read_axes"] = _nd2_calibrated_axes(f, vs)
-            meta["voxel_size_um"] = (
-                _safe_float(getattr(vs, "z", 1.0), 1.0),
-                _safe_float(getattr(vs, "y", 1.0), 1.0),
-                _safe_float(getattr(vs, "x", 1.0), 1.0),
-            )
-    except Exception:
-        pass
-
+        vs = f.voxel_size()
+        meta["_read_axes"] = _nd2_calibrated_axes(f, vs)
+        meta["voxel_size_um"] = tuple(_safe_float(getattr(vs, a, 1.0), 1.0) for a in "zyx")
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError) as exc:
+        _warn_unread("ND2 voxel size", exc)
     try:
-        if hasattr(f, "metadata") and hasattr(f.metadata, "channels"):
-            meta["channel_names"] = _positional_names(
-                [getattr(ch.channel, "name", "") or getattr(ch, "name", "")
-                 for ch in f.metadata.channels])
-    except Exception:
-        pass
-
+        meta["channel_names"] = _positional_names(
+            [getattr(ch.channel, "name", "") or getattr(ch, "name", "")
+             for ch in f.metadata.channels or []])
+    except (AttributeError, TypeError) as exc:
+        _warn_unread("ND2 channel names", exc)
     return meta
 
 
@@ -336,34 +333,25 @@ def _parse_lif_metadata(img) -> dict:
         "channel_names": [],
     }
 
-    try:
-        # readlif's scale is (x, y, z, t) in pixels per µm for x, y and z (None when
-        # the file gives no length for an axis), so the voxel size is its reciprocal.
-        scale = img.scale
-        if scale:
-            def um(i: int):
-                s = scale[i] if len(scale) > i else None
-                return 1.0 / s if s and s > 0 else None
+    # readlif's scale is (x, y, z, t) in pixels per µm for x, y and z (None when
+    # the file gives no length for an axis), so the voxel size is its reciprocal.
+    scale = img.scale
+    if scale:
+        def um(i: int):
+            s = scale[i] if len(scale) > i else None
+            return 1.0 / s if s and s > 0 else None
 
-            voxel_x = um(0) or 1.0
-            voxel_y = um(1) or voxel_x
-            voxel_z = um(2) or 1.0
-            meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
-            meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
-                                  if len(scale) > i and scale[i] and scale[i] > 0}
-            if um(1) is None and um(0) is not None:
-                meta["_axis_source"] = {"y": "copied-from-x"}
-                warnings.warn(f"the LIF file gives no y length; y voxel size copied from x "
-                              f"({voxel_x} µm).", RuntimeWarning, stacklevel=3)
-    except Exception:
-        pass
-
-    try:
-        for i in range(img.channels):
-            meta["channel_names"].append(f"Ch{i + 1}")
-    except Exception:
-        pass
-
+        voxel_x = um(0) or 1.0
+        voxel_y = um(1) or voxel_x
+        voxel_z = um(2) or 1.0
+        meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
+        meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
+                              if len(scale) > i and scale[i] and scale[i] > 0}
+        if um(1) is None and um(0) is not None:
+            meta["_axis_source"] = {"y": "copied-from-x"}
+            warnings.warn(f"the LIF file gives no y length; y voxel size copied from x "
+                          f"({voxel_x} µm).", RuntimeWarning, stacklevel=3)
+    meta["channel_names"] = [f"Ch{i + 1}" for i in range(img.channels)]
     return meta
 
 

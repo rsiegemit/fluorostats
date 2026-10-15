@@ -129,18 +129,6 @@ def test_olympus_z_ignores_non_z_axis_and_zero_interval():
     assert io_vendors._parse_olympus_metadata(Oif())["voxel_size_um"][0] == 1.0
 
 
-def test_olympus_metadata_mainfile_raises(monkeypatch):
-    # If mainfile access raises, defaults are returned.
-    class BadOif:
-        @property
-        def mainfile(self):
-            raise RuntimeError("no mainfile")
-
-    meta = io_vendors._parse_olympus_metadata(BadOif())
-    assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
-    assert meta["channel_names"] == []
-
-
 def test_section_get_attr_and_error():
     # object with attribute
     class S:
@@ -253,22 +241,6 @@ def test_load_lif_empty_raises(monkeypatch, tmp_path):
     path.write_bytes(b"")
     with pytest.raises(ValueError, match="No images"):
         io.load_volume(path)
-
-
-def test_lif_metadata_exception_paths():
-    # scale access raising and channels raising -> defaults
-    class BadImg:
-        @property
-        def scale(self):
-            raise RuntimeError("no scale")
-
-        @property
-        def channels(self):
-            raise RuntimeError("no channels")
-
-    meta = io_vendors._parse_lif_metadata(BadImg())
-    assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
-    assert meta["channel_names"] == []
 
 
 def test_lif_metadata_scale_none():

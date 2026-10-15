@@ -68,14 +68,39 @@ def test_czi_dyename_fallback(monkeypatch, tmp_path):
     assert meta["channel_names"] == ["DAPI"]
 
 
-def test_czi_metadata_exception_path():
-    # metadata() raising -> defaults returned (except: pass)
+def test_czi_metadata_reader_error_is_not_swallowed():
     class Bad:
         def metadata(self):
             raise RuntimeError("x")
 
-    meta = io_vendors._parse_czi_metadata(Bad())
-    assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
+    with pytest.raises(RuntimeError):
+        io_vendors._parse_czi_metadata(Bad())
+
+
+def _czi(xml):
+    return types.SimpleNamespace(metadata=lambda: xml)
+
+
+def test_czi_unreadable_distance_keeps_the_rest_and_warns():
+    # Regression: one non-numeric Distance discarded x/y and the channel names silently.
+    xml = """<root>
+      <Distance Id="X"><Value>2.5e-7</Value></Distance>
+      <Distance Id="Y"><Value>2.5e-7</Value></Distance>
+      <Distance Id="Z"><Value>n/a</Value></Distance>
+      <Distance Id="T"><Value>1</Value></Distance>
+      <Channel Name="EGFP"/>
+    </root>"""
+    with pytest.warns(RuntimeWarning, match="CZI Distance 'Z' value 'n/a' could not be read"):
+        meta = io_vendors._parse_czi_metadata(_czi(xml))
+    assert meta["voxel_size_um"] == pytest.approx((1.0, 0.25, 0.25))
+    assert meta["_read_axes"] == {"x", "y"}
+    assert meta["channel_names"] == ["EGFP"]
+
+
+def test_czi_unparseable_xml_warns():
+    with pytest.warns(RuntimeWarning, match="CZI metadata XML could not be read"):
+        meta = io_vendors._parse_czi_metadata(_czi("<root"))
+    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
 
 
 def test_czi_metadata_empty_string():

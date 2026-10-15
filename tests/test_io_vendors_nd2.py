@@ -68,15 +68,18 @@ def test_load_nd2_volume(monkeypatch, tmp_path):
     assert meta["channel_names"] == ["405", "488"]
 
 
-def test_nd2_metadata_exception_paths():
-    # voxel_size raising and metadata missing channels -> defaults
+def test_nd2_unreadable_voxel_size_keeps_channel_names_and_warns():
     class F:
-        def voxel_size(self):
-            raise RuntimeError("nope")
+        metadata = types.SimpleNamespace(channels=[types.SimpleNamespace(
+            channel=types.SimpleNamespace(name="488"))])
 
-    meta = io_vendors._parse_nd2_metadata(F())
+        def voxel_size(self):
+            raise KeyError("Calibration")
+
+    with pytest.warns(RuntimeWarning, match="ND2 voxel size could not be read"):
+        meta = io_vendors._parse_nd2_metadata(F())
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
-    assert meta["channel_names"] == []
+    assert meta["channel_names"] == ["488"]
 
 
 def test_nd2_channel_name_fallback_to_ch():
@@ -98,19 +101,17 @@ def test_nd2_channel_name_fallback_to_ch():
     assert meta["channel_names"] == ["backup"]
 
 
-def test_nd2_channels_iteration_raises():
-    # metadata.channels present but iterating/attr access raises -> except: pass
-    class BadChannels:
-        def __iter__(self):
-            raise RuntimeError("bad")
-
-    class Meta:
-        channels = BadChannels()
-
+def test_nd2_unreadable_channel_names_keep_voxel_size_and_warn():
     class F:
-        metadata = Meta()
+        metadata = types.SimpleNamespace(channels=[types.SimpleNamespace(
+            volume=types.SimpleNamespace(axesCalibrated=(True, True, True)))])
 
-    meta = io_vendors._parse_nd2_metadata(F())
+        def voxel_size(self):
+            return types.SimpleNamespace(x=0.3, y=0.3, z=1.5)
+
+    with pytest.warns(RuntimeWarning, match="ND2 channel names could not be read"):
+        meta = io_vendors._parse_nd2_metadata(F())
+    assert meta["voxel_size_um"] == (1.5, 0.3, 0.3)
     assert meta["channel_names"] == []
 
 
