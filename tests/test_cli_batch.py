@@ -155,3 +155,26 @@ def test_a_depth_run_that_fails_leaves_no_output_folder(tmp_path):
     res = CliRunner().invoke(cli, ["depth", str(m), "--output", str(tmp_path / "out")])
     assert res.exit_code == 1 and "s0.tif: has 1 z-slice" in res.output
     assert not (tmp_path / "out").exists()
+
+
+def test_cli_viability_refuses_a_foreign_folder_unless_overwrite(tmp_path):
+    # M1 for viability: the command could not pass --overwrite to viability_batch.run.
+    p = tmp_path / "s0.npy"
+    _blob_stack_npy(p, seed=0)
+    manifest = {
+        "live_channel": 0,
+        "dead_channel": 1,
+        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(p)}]}],
+    }
+    mpath = tmp_path / "manifest.json"
+    mpath.write_text(json.dumps(manifest))
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "contrasts.csv").write_text("mine")
+    args = ["viability", str(mpath), "--output", str(out)]
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 1 and "--overwrite" in res.output
+    assert (out / "contrasts.csv").read_text() == "mine"
+    res = CliRunner().invoke(cli, args + ["--overwrite"])
+    assert res.exit_code == 0, res.output
+    assert json.loads((out / "run_config.json").read_text())["tool"] == "viability"

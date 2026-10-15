@@ -16,13 +16,14 @@ from . import (
     pubfig,
     report,
     segment,
+    skeleton,
     stats,
 )
 from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
 
 # REU-5: no committed benchmark table chose these result-changing defaults yet (an
-# open item): quant3d --threshold-scale 0.9 and --min-branch-length 5 µm, quant2d
-# --threshold li and --bg-radius 15.
+# open item): quant3d --threshold-scale 0.9, quant2d --threshold li and --bg-radius 15
+# (--min-branch-length is skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM, documented there).
 
 # Every command that writes an output folder takes the same --overwrite (CFG-1).
 _overwrite_option = click.option(
@@ -97,7 +98,8 @@ def depth_cmd(manifest, output_dir, overwrite):
     type=click.Path(),
     help="Output folder; default: the manifest's output_dir",
 )
-def viability_cmd(manifest, output_dir):
+@_overwrite_option
+def viability_cmd(manifest, output_dir, overwrite):
     """Live/Dead viability analysis from a JSON manifest.
 
     Quantifies two-channel Live/Dead z-stacks grouped by condition: area /
@@ -108,7 +110,7 @@ def viability_cmd(manifest, output_dir):
     """
     from . import viability_batch  # on use: the other commands never load the batch driver
 
-    out = _run_driver(viability_batch.run, manifest, output_dir)
+    out = _run_driver(viability_batch.run, manifest, output_dir, overwrite)
     click.echo(f"Done. Outputs in {out}/")
 
 
@@ -215,7 +217,7 @@ def _run_driver(run, manifest: str, *args) -> Path:
 @click.option(
     "--min-branch-length",
     type=click.FloatRange(min=0),
-    default=5.0,
+    default=skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM,
     show_default=True,
     help="Minimum branch length in µm for spur pruning when --prune is set (CAN AFFECT RESULTS)",
 )
