@@ -152,7 +152,7 @@ def _git_commit(package_dir: Path) -> str | None:
 
     def git(*args: str) -> str:
         return subprocess.run(
-            ["git", *args], cwd=package_dir, capture_output=True, text=True, check=True
+            ["git", *args], cwd=package_dir, capture_output=True, encoding="utf-8", check=True
         ).stdout.strip()
 
     try:
@@ -187,7 +187,7 @@ def write_run_config(
     config["_environment"] = environment()
 
     config_path = output_dir / "run_config.json"
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     return config_path
 
@@ -235,7 +235,7 @@ def _recorded_tool(record: Path) -> str | None:
     """The ``tool`` a run_config.json names; None when it names none or is unreadable
     (the caller then treats the folder as not this tool's)."""
     try:
-        tool = json.loads(record.read_text()).get("tool")
+        tool = json.loads(record.read_text(encoding="utf-8")).get("tool")
     except (OSError, ValueError, AttributeError):
         return None
     return tool if isinstance(tool, str) else None

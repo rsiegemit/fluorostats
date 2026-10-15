@@ -112,7 +112,7 @@ def __getattr__(name: str):
 
 def load_manifest(path: Path) -> dict:
     """Read a depth manifest (see the module docstring), filling defaults and parsing windows."""
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         m = json.load(fh)
     require_groups(m)
     m.setdefault("title", "Depth-penetration analysis")
@@ -288,7 +288,7 @@ def aggregate_group(primary: list[dict]) -> dict | None:
 
 def write_profiles_csv(out: Path, rows: list[dict]) -> None:
     """Long-form per-stack depth profiles: raw, background-subtracted and normalised."""
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(
             ["group", "stack", "role", "depth_um", "raw_mean", "bg_subtracted", "normalized"]
@@ -315,26 +315,15 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
     ``window_complete_<window>`` (1 when the stack covers the whole window, 0 when
     its AUC is over only ``window_covered_um`` of it)."""
     labels = [depth.window_label(w) for w in windows]
-    header = [
-        "group",
-        "stack",
-        "role",
-        "voxel_z_um",
-        "n_slices",
-        "max_depth_um",
-        "surface_intensity_subtracted",
-        "lambda_um",
-        "lambda_I0",
-        "lambda_offset",
-        "lambda_r_squared",
-        "lambda_rmse",
-        "lambda_fit_ok",
-    ]
+    header = (
+        "group stack role voxel_z_um n_slices max_depth_um surface_intensity_subtracted "
+        "lambda_um lambda_I0 lambda_offset lambda_r_squared lambda_rmse lambda_fit_ok"
+    ).split()
     for lab in labels:
         header += [f"auc_absolute_{lab}", f"auc_normalized_{lab}", f"window_covered_um_{lab}"]
     # appended last so existing column positions hold
     header += ["voxel_size_source"] + [f"window_complete_{lab}" for lab in labels]
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(header)
         for r in rows:
@@ -366,7 +355,7 @@ def write_auc_csv(out: Path, rows: list[dict], windows: list[tuple]) -> None:
 
 def write_group_summary_csv(out: Path, aggregates: dict) -> None:
     """Long-form group mean ± SEM profiles, with each group's λ repeated per depth row."""
-    with open(out, "w", newline="") as fh:
+    with open(out, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(
             [
@@ -422,7 +411,6 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     """
     m = load_manifest(manifest_path)
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
-    out_dir.mkdir(parents=True, exist_ok=True)
     previous = report.claim_output_dir(out_dir, "depth", _owned_outputs(out_dir), overwrite)
     pubfig.apply_style("house")
 
@@ -433,6 +421,7 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     windows = cfg["windows"]
     rows, colors, per_group_primary = _analyse_groups(m["groups"], cfg)
     aggregates = {g: aggregate_group(ps) for g, ps in per_group_primary.items()}
+    out_dir.mkdir(parents=True, exist_ok=True)  # only now: a failed run leaves no folder
 
     write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
     write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
@@ -444,13 +433,27 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     print_auc_summary(rows, windows, m["parametric"], tests)
     print_lambda_summary(rows, m["parametric"], tests)
     # Written last, so only a completed run leaves a record claiming the folder.
-    report.write_run_config(
-        out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m}, tool="depth"
-    )
+    nested = {"resolved": m, "files_read": _files_read(m["groups"], out_dir)}
+    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested, tool="depth")
     for line in report.stale_notices(previous):
         print(line)
     print(f"\nOutputs written to {out_dir}/")
     return out_dir
+
+
+def _files_read(groups: list[dict], out_dir: Path) -> dict:
+    """The absolute paths a run read and wrote (manifest paths resolve against the
+    working directory), so ``run_config.json`` names the files, not only the text."""
+    backgrounds = [g["background"] for g in groups if g.get("background")]
+    return {
+        "stacks": [str(Path(st["path"]).resolve()) for g in groups for st in g["stacks"]],
+        "backgrounds": [
+            str(Path(bp).resolve())
+            for bg in backgrounds
+            for bp in ([bg] if isinstance(bg, str) else bg)
+        ],
+        "output_dir": str(out_dir.resolve()),
+    }
 
 
 def _owned_outputs(out_dir: Path) -> list[Path]:
