@@ -25,12 +25,13 @@ def bland_altman(a: ArrayLike, b: ArrayLike) -> dict:
     """Bland-Altman agreement between two paired measurement vectors.
 
     Returns bias (mean difference), SD of differences, 95% limits of
-    agreement, and the per-point means/differences for plotting.
+    agreement, and the per-point means/differences for plotting. With fewer than
+    two pairs the SD and the limits are NaN.
     """
     a, b = _paired(a, b)
     diff = a - b
     bias = float(diff.mean()) if diff.size else float("nan")
-    sd = float(diff.std(ddof=1)) if diff.size > 1 else 0.0
+    sd = float(diff.std(ddof=1)) if diff.size > 1 else float("nan")   # n < 2: no spread
     return {
         "n": int(a.size),
         "bias": bias,
