@@ -502,3 +502,37 @@ def test_group_stats_leave_undefined_mean_and_sem_nan():
     data, means, sems = plots._group_stats(df, "m", ["A", "B", "C"])
     assert means[:2] == [2.0, 5.0] and np.isnan(means[2])
     assert sems[0] == pytest.approx(1.0) and np.isnan(sems[1]) and np.isnan(sems[2])
+
+
+@pytest.fixture
+def kept_figures(monkeypatch):
+    """Keep every figure a plot function saves open; yield a getter for the new ones."""
+    before = set(plt.get_fignums())
+    monkeypatch.setattr(plt, "close", lambda fig=None: None)
+    yield lambda: [plt.figure(n) for n in plt.get_fignums() if n not in before]
+    monkeypatch.undo()
+    plt.close("all")
+
+
+def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
+    # The bar + jittered-points block was copied into bar_mean_sem and summary_panel
+    # and drifted (jitter 0.12 vs 0.1, capsize 5 vs 4); one helper now draws both.
+    df = _replicate_df()
+    bar_mean_sem(df, "volume_fraction", tmp_path / "bar.png")
+    summary_panel(df, ["volume_fraction"], tmp_path / "panel.png")
+    boxplot_by_condition(df, "volume_fraction", tmp_path / "box.png")
+    bar_ax, panel_ax, box_ax = (f.axes[0] for f in kept_figures())
+
+    def points(ax):
+        from matplotlib.collections import PathCollection
+        return np.vstack([c.get_offsets() for c in ax.collections
+                          if isinstance(c, PathCollection)])
+
+    def caps(ax):
+        err = next(c for c in ax.containers if hasattr(c, "has_yerr"))
+        return [line.get_markersize() for line in err.lines[1]]
+
+    np.testing.assert_array_equal(points(bar_ax), points(panel_ax))
+    np.testing.assert_allclose(points(box_ax)[:, 0] - 1, points(bar_ax)[:, 0], atol=1e-12)
+    assert np.abs(points(bar_ax)[:, 0] - np.repeat([0, 1], 6)).max() <= 0.05
+    assert caps(bar_ax) == caps(panel_ax) == [8.0, 8.0]           # capsize 4 -> 2 * 4 pt

@@ -35,6 +35,23 @@ def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     return data, means, sems
 
 
+def _jittered_points(ax, x, data) -> None:
+    """Each condition's values as black dots spread ±0.05 around its ``x`` (seeded, so
+    a rerun draws the same figure)."""
+    rng = np.random.default_rng(42)
+    for xi, d in zip(x, data):
+        jitter = 0.1 * (rng.random(len(d)) - 0.5)
+        ax.scatter(np.full(len(d), xi) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+
+
+def _bars_with_points(ax, x, data, means, sems, colors) -> None:
+    """Mean ± SEM bars with every replicate value on top: the one bar style of
+    `bar_mean_sem` and `summary_panel`."""
+    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
+           linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
+    _jittered_points(ax, x, data)
+
+
 def _condition_colors(n: int) -> np.ndarray:
     """``n`` distinct RGBA colours: Set2 for up to its 8 colours, else ``n`` evenly
     spaced hues (Set2 would repeat colours past 8)."""
@@ -71,10 +88,7 @@ def boxplot_by_condition(
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
 
-    rng = np.random.default_rng(42)
-    for i, d in enumerate(data):
-        jitter = 0.1 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), i + 1) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+    _jittered_points(ax, range(1, len(conditions) + 1), data)
 
     ax.set_ylabel(ylabel or _label_for(metric))
     ax.set_title(f"{_label_for(metric)} by Condition")
@@ -113,14 +127,7 @@ def bar_mean_sem(
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
-    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-           linewidth=0.8, capsize=5, error_kw={"linewidth": 1.5})
-
-    # Overlay individual replicate points
-    rng = np.random.default_rng(42)
-    for i, d in enumerate(data):
-        jitter = 0.12 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=30, alpha=0.7, zorder=3)
+    _bars_with_points(ax, x, data, means, sems, colors)
 
     # P-value annotations
     if show_pvalues and len(conditions) > 1:
@@ -179,13 +186,7 @@ def summary_panel(
         ax = axes[idx]
         data, means, sems = _group_stats(df, metric, conditions)
 
-        ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-               linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
-
-        rng = np.random.default_rng(42)
-        for i, d in enumerate(data):
-            jitter = 0.1 * (rng.random(len(d)) - 0.5)
-            ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+        _bars_with_points(ax, x, data, means, sems, colors)
 
         if show_pvalues and len(conditions) > 1:
             _add_pvalue_annotations(ax, data, x, conditions,
