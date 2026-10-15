@@ -88,6 +88,17 @@ def test_prune_preserves_main_length_roughly():
     assert pruned["total_length_um"] > 30
 
 
+def test_prune_skeleton_accepts_an_array_voxel_size():
+    # Regression: `voxel_size_um or 1` raised "truth value ... is ambiguous" for an array.
+    from skimage.morphology import skeletonize
+
+    skel = skeletonize(_spurred_line())
+    np.testing.assert_array_equal(
+        prune_skeleton(skel, 10, voxel_size_um=np.array([1.0, 1.0])),
+        prune_skeleton(skel, 10, voxel_size_um=(1.0, 1.0)),
+    )
+
+
 def test_prune_skeleton_returns_new_array():
     from skimage.morphology import skeletonize
 

@@ -96,7 +96,7 @@ def prune_skeleton(
             break
         # Protect junction voxels so removing a spur never severs a through-path.
         junctions = s & (_neighbour_counts(s) >= 3)
-        skeleton_obj = skan.Skeleton(s, spacing=voxel_size_um or 1)
+        skeleton_obj = skan.Skeleton(s, spacing=1 if voxel_size_um is None else voxel_size_um)
         branch_data = skan.summarize(skeleton_obj, separator="_")
         spurs = branch_data.index[
             (branch_data["branch_type"] == 1) & (branch_data["branch_distance"] < min_branch_length)
