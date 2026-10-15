@@ -40,7 +40,8 @@ def orientation_anisotropy(
     Returns
     -------
     dict with keys:
-        coherence — 0 (isotropic) … 1 (fully aligned).
+        coherence — 0 (isotropic, or a flat image) … 1 (fully aligned); NaN
+            when ``mask`` selects no pixel.
         dominant_orientation_deg — preferred axis in [0, 180), in the same
             convention as ``objects.object_shape_metrics`` ``orientation_deg``
             (skimage regionprops: 0 = along the row axis, i.e. vertical; 90 =
@@ -61,7 +62,7 @@ def orientation_anisotropy(
         sel = np.ones(img.shape, bool)
     if not sel.any() or np.ptp(img) == 0:
         return {
-            "coherence": 0.0,
+            "coherence": float("nan") if not sel.any() else 0.0,
             "dominant_orientation_deg": float("nan"),
             "n_pixels": int(sel.sum()),
         }
