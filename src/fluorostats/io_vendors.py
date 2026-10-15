@@ -116,12 +116,19 @@ def load_olympus_volume(path: Path) -> tuple[np.ndarray, dict]:
 
 def _olympus_axis_sizes(mainfile) -> dict[str, int]:
     """``{axis code: MaxSize}`` of the mainfile's axes other than X and Y that the
-    image has (an absent axis is listed with MaxSize 0)."""
+    image has (an absent axis is listed with MaxSize 0; one without an AxisCode is
+    skipped)."""
     sizes = {}
     for name, section in mainfile.items():
         code = _section_get(section, "AxisCode")
         n = int(_safe_float(_section_get(section, "MaxSize"), 0))
-        if "Axis" in str(name) and "Parameters Common" in str(name) and code not in "XY" and n:
+        if (
+            "Axis" in str(name)
+            and "Parameters Common" in str(name)
+            and code
+            and code not in "XY"
+            and n
+        ):
             sizes[code] = n
     return sizes
 
@@ -445,13 +452,14 @@ def _parse_lif_metadata(img) -> dict:
 
     # readlif's scale is (x, y, z, t) in pixels per µm for x, y and z (None when
     # the file gives no length for an axis), so the voxel size is its reciprocal.
-    # A negative length (a stack acquired top-down) gives its magnitude.
+    # A negative length (a stack acquired top-down) gives its magnitude; a zero or
+    # non-finite one is no length.
     scale = img.scale
     if scale:
 
         def um(i: int):
             s = scale[i] if len(scale) > i else None
-            return 1.0 / abs(s) if s else None
+            return 1.0 / abs(s) if s and np.isfinite(s) else None
 
         voxel_x = um(0) or 1.0
         voxel_y = um(1) or voxel_x

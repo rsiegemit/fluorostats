@@ -370,6 +370,29 @@ def test_lif_metadata_scale_none():
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0])
+def test_lif_metadata_ignores_a_non_finite_or_zero_scale(bad):
+    # Regression (L2): a NaN scale became a NaN voxel size, an infinite one 1.0 µm,
+    # both recorded as read from the file.
+    class Img:
+        scale = (2.0, 2.0, bad, None)
+        channels = 0
+
+    meta = io_vendors._parse_lif_metadata(Img())
+    assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)
+    assert meta["_read_axes"] == {"x", "y"}
+
+
+def test_olympus_axis_sizes_skips_an_axis_without_a_code():
+    # Regression (L1): an axis section without AxisCode raised TypeError.
+    main = {
+        "Axis 0 Parameters Common": {"AxisCode": "X", "MaxSize": "512"},
+        "Axis 3 Parameters Common": {"AxisCode": "Z", "MaxSize": "4"},
+        "Axis 9 Parameters Common": {"MaxSize": "3"},
+    }
+    assert io_vendors._olympus_axis_sizes(main) == {"Z": 4}
+
+
 def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
     fake = _make_fake_readlif(1, 2, [2.0, 2.0, 0.5])
     base = fake.LifFile
