@@ -197,6 +197,9 @@ CLI and drivers
 - `keyence.load_keyence_stack` returns `voxel_size_um`; its `px_um`/`z_step_um`/
   `vox_*` keys are deprecated.
 - Metric labels: `n_junctions` is "Junction-to-Junction Branches".
+- **An output folder written before 0.9 needs `--overwrite` once**: its
+  `run_config.json` names no tool, so a rerun refuses it as not this tool's (the
+  message says so); after one `--overwrite` run the folder is recorded as the tool's.
 
 ### Benchmarks and examples
 - The external-viability peak-count comparator is named `skimage_peakcount` (it is a

@@ -187,7 +187,10 @@ def test_claim_output_dir_removes_an_earlier_run_of_the_same_tool(tmp_path):
 
 @pytest.mark.parametrize(
     "record, expected",
-    [({"tool": "viability"}, "written by fluorostats viability"), ({}, "an unrecorded run")],
+    [
+        ({"tool": "viability"}, "written by fluorostats viability"),
+        ({"_environment": {}}, "an earlier fluorostats version .* --overwrite once"),
+    ],
 )
 def test_claim_output_dir_refuses_a_folder_another_run_wrote(tmp_path, record, expected):
     # Regression (M1): a depth run deleted and overwrote another tool's (or a

@@ -212,7 +212,7 @@ def claim_output_dir(
 
     ``owned`` are the paths the tool writes (``run_config.json`` among them). The
     folder's ``run_config.json`` must name ``tool``: a folder another tool, or a run
-    that recorded no tool, wrote is refused, and so is one that holds any owned name
+    that recorded no tool (one from before 0.9), wrote is refused, and so is one that holds any owned name
     but no record (files the user put there, or a run that failed part-way). Then
     `remove_outputs` deletes the owned files. ``overwrite`` replaces them anyway,
     with a warning naming the files that were not this tool's. ValueError otherwise.
@@ -221,24 +221,36 @@ def claim_output_dir(
     record = Path(out_dir) / "run_config.json"
     present = sorted(p.name for p in owned if p.exists() and p != record)
     if record.exists():
-        recorded = _recorded_tool(record)
-        if recorded != tool:
-            who = f"written by fluorostats {recorded}" if recorded else "an unrecorded run"
-            return _foreign(out_dir, tool, owned, overwrite, f"holds {who} (run_config.json)")
+        recorded = _read_record(record)
+        if recorded is None or recorded.get("tool") != tool:
+            return _foreign(out_dir, tool, owned, overwrite, f"holds {_whose(recorded)}")
     elif present:
         found = f"holds {', '.join(present)} but no run_config.json"
         return _foreign(out_dir, tool, owned, overwrite, found)
     return remove_outputs(owned)
 
 
-def _recorded_tool(record: Path) -> str | None:
-    """The ``tool`` a run_config.json names; None when it names none or is unreadable
+def _read_record(record: Path) -> dict | None:
+    """A run_config.json's contents; None when it is unreadable or not a JSON object
     (the caller then treats the folder as not this tool's)."""
     try:
-        tool = json.loads(record.read_text(encoding="utf-8")).get("tool")
-    except (OSError, ValueError, AttributeError):
+        data = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return None
-    return tool if isinstance(tool, str) else None
+    return data if isinstance(data, dict) else None
+
+
+def _whose(record: dict | None) -> str:
+    """Who wrote a folder whose run_config.json holds ``record`` (None: unreadable)."""
+    if record is not None and "tool" not in record:
+        return (
+            "a run from an earlier fluorostats version (its run_config.json names no "
+            "tool; pass --overwrite once to rerun there)"
+        )
+    recorded = None if record is None else record["tool"]
+    if isinstance(recorded, str):
+        return f"written by fluorostats {recorded} (run_config.json)"
+    return "an unrecorded run (run_config.json)"
 
 
 def _foreign(out_dir: Path, tool: str, owned: list[Path], overwrite: bool, found: str):
