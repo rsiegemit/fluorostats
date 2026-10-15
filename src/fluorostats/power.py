@@ -30,8 +30,11 @@ def _sim_pvalues(
 
     The one resampling and seeding rule of this module: every power estimate (one
     metric at one ``n``) draws from a fresh ``np.random.default_rng(seed)``, so a
-    metric's power at ``n`` is the same from every entry point.
+    metric's power at ``n`` is the same from every entry point. Raises ValueError
+    for ``n_sims < 1``.
     """
+    if n_sims < 1:
+        raise ValueError(f"n_sims must be at least 1, got {n_sims}")
     a = np.asarray(samples_a, dtype=float)
     b = np.asarray(samples_b, dtype=float)
     a = a[~np.isnan(a)]
@@ -121,9 +124,12 @@ def fdr_power_curve(
     with no measured value in a group has NaN power and takes no part in the
     correction.
 
-    Returns a long DataFrame with columns ``n``, ``metric``, ``power``.
+    Returns a long DataFrame with columns ``n``, ``metric``, ``power``. Raises
+    ValueError for an empty metric set or ``n_sims < 1``.
     """
     metrics = list(samples_per_metric_a.keys())
+    if not metrics:
+        raise ValueError("fdr_power_curve: no metric given (empty samples_per_metric_a)")
     rows = []
     for n in ns:
         sims = {

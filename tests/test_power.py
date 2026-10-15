@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from fluorostats import power
 from fluorostats.power import bootstrap_power, power_curve, fdr_power_curve
@@ -74,3 +75,20 @@ def test_one_metric_has_one_power_whichever_entry_point():
     for i, n in enumerate(ns):
         single = bootstrap_power(a, b, n=n, n_sims=120, seed=5)
         assert curve["power"].iloc[i] == single == fdr["power"].iloc[i]
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: bootstrap_power([1, 2], [3, 4], n=3, n_sims=0),
+        lambda: fdr_power_curve({"a": [1, 2]}, {"a": [3, 4]}, [3], n_sims=0),
+    ],
+)
+def test_power_rejects_zero_simulations(call):
+    with pytest.raises(ValueError, match="n_sims"):
+        call()
+
+
+def test_fdr_power_curve_rejects_an_empty_metric_set():
+    with pytest.raises(ValueError, match="metric"):
+        fdr_power_curve({}, {}, [3], n_sims=5)
