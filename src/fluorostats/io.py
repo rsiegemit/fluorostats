@@ -164,8 +164,6 @@ def supported_formats() -> dict[str, str]:
 
 def _load_keyence_volume(path: Path) -> tuple[np.ndarray, dict]:
     arr, meta = keyence.load_keyence_stack(path)
-    px, zs = meta.get("px_um") or 1.0, meta.get("z_step_um") or 1.0
-    meta["voxel_size_um"] = (zs, px, px)
     meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
         {"z"} if meta.get("z_step_um") else set())
     # keyence.parse_gci warns that the Stack/Pitch unit is assumed.

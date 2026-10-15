@@ -72,6 +72,13 @@ def test_load_stack_single_channel_and_downsample(keyence_folder):
     arr, meta = keyence.load_keyence_stack(keyence_folder, downsample=2, channel=0)
     assert arr.shape == (3, 12, 16)                      # (Z, Y, X), XY halved
     assert meta["vox_xy_um"] == pytest.approx(0.8)
+    assert meta["voxel_size_um"] == pytest.approx((2.5, 0.8, 0.8))
+
+
+def test_voxel_size_without_gci_is_the_placeholder(keyence_folder):
+    (keyence_folder / "Image .gci").unlink()
+    _, meta = keyence.load_keyence_stack(keyence_folder, downsample=2)
+    assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
 def test_missing_files(tmp_path):
