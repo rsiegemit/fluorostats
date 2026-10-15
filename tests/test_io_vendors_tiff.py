@@ -19,7 +19,7 @@ def test_ome_metadata_parse_error():
 def test_imagej_metadata_unparseable_spacing_warns():
     # spacing present but non-float -> announced, defaults kept
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    with pytest.warns(RuntimeWarning, match="'notanumber' is not a number"):
+    with pytest.warns(RuntimeWarning, match="'notanumber' is not a positive number"):
         out = io_vendors._parse_imagej_metadata({"spacing": "notanumber"}, meta)
     assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
 
@@ -141,3 +141,35 @@ def test_2d_ome_tiff_reads_calibration_and_channel_names(tmp_path):
     assert arr[meta["channel_names"].index("GFP")].max() == 5
     _, auto_meta = io.load_auto(p)
     assert {k: auto_meta[k] for k in meta} == meta
+
+
+@pytest.mark.parametrize("spacing", [0.0, -2.0, float("nan")])
+def test_imagej_non_positive_spacing_is_not_calibration(tmp_path, spacing):
+    # Regression: spacing 0 or negative was taken as the z voxel size, labelled 'file'.
+    p = tmp_path / "ij.tif"
+    tifffile.imwrite(
+        p,
+        np.zeros((3, 8, 8), np.uint16),
+        imagej=True,
+        resolution=(2.0, 2.0),
+        metadata={"axes": "ZYX", "spacing": spacing, "unit": "um"},
+    )
+    with pytest.warns(RuntimeWarning, match="not a positive number"):
+        vol, meta = io.load_volume(p)
+    assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)
+    assert meta["voxel_size_source"] == "z:default,y:file,x:file"
+    with pytest.warns(RuntimeWarning, match="not a positive number"):
+        assert io.read_voxel_size(p) == ((1.0, 0.5, 0.5), "z:default,y:file,x:file")
+
+
+def test_imagej_inch_unit_is_converted(tmp_path):
+    # Regression: 'inch' (ImageJ's unit for DPI-tagged images) was kept as µm.
+    p = tmp_path / "inch.tif"
+    tifffile.imwrite(
+        p, np.zeros((8, 9), np.uint8), imagej=True, metadata={"unit": "inch"}, resolution=(72, 72)
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _, meta = io.load_image(p)
+    assert meta["voxel_size_um"] == pytest.approx((25400 / 72, 25400 / 72))
+    assert meta["voxel_size_source"] == "y:file,x:file"

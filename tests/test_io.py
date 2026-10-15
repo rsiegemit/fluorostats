@@ -407,7 +407,7 @@ def test_imagej_spacing_unit_converted_to_um(tmp_path, unit, z_um):
     assert meta["voxel_size_source"].startswith("z:file,")
 
 
-@pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "inch"}, "'inch'")])
+@pytest.mark.parametrize("extra, said", [({}, "no length unit"), ({"unit": "ell"}, "'ell'")])
 def test_imagej_spacing_without_known_unit_is_flagged(tmp_path, extra, said):
     p = tmp_path / "ij.tif"
     tifffile.imwrite(

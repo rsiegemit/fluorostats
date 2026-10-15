@@ -467,6 +467,7 @@ _UM_PER_UNIT: dict[str | None, float] = {
     "mm": 1e3,
     "cm": 1e4,
     "m": 1e6,
+    "inch": 25400.0,
 }
 
 
@@ -543,20 +544,18 @@ def _parse_imagej_metadata(ij_meta: dict, meta: dict, xy: dict | None = None) ->
     ``spacing``, y/x from ``xy`` (see `_imagej_xy_um`)."""
     size = dict(zip("zyx", meta["voxel_size_um"]))
     read, noted = set(), {}
-    if "spacing" in ij_meta:
-        try:
-            spacing = float(ij_meta["spacing"])
-        except (TypeError, ValueError):
-            warnings.warn(
-                f"ImageJ spacing {ij_meta['spacing']!r} is not a number; the z "
-                "spacing is not read.",
-                RuntimeWarning,
-                stacklevel=3,
-            )
-        else:
-            size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
-            read.add("z")
-            noted.update({} if source == "file" else {"z": source})
+    if "spacing" in ij_meta and not _valid_size(ij_meta["spacing"]):
+        warnings.warn(
+            f"ImageJ spacing {ij_meta['spacing']!r} is not a positive number; the z "
+            "spacing is not read.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    elif "spacing" in ij_meta:
+        spacing = float(ij_meta["spacing"])
+        size["z"], source = _length_um(spacing, ij_meta.get("zunit", ij_meta.get("unit")), "z")
+        read.add("z")
+        noted.update({} if source == "file" else {"z": source})
     for axis, (value, source) in (xy or {}).items():
         size[axis] = value
         read.add(axis)
