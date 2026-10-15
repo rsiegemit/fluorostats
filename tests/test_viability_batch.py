@@ -448,3 +448,28 @@ def test_run_config_records_the_absolute_stack_paths_read(tmp_path, monkeypatch)
         {"group": "g", "stack": "s", "path": str((tmp_path / "s.npy").resolve())}
     ]
     assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s.npy"  # as given
+
+
+def test_run_refuses_a_folder_another_tool_or_the_user_wrote(tmp_path, capsys):
+    """M1: a viability run must not silently replace files it did not write."""
+    mp = _one_stack_manifest(tmp_path)
+    out = tmp_path / "o"
+    out.mkdir()
+    (out / "contrasts.csv").write_text("mine", encoding="utf-8")
+    with pytest.raises(ValueError, match="holds contrasts.csv but no run_config.json"):
+        viability_batch.run(mp)
+    assert (out / "contrasts.csv").read_text(encoding="utf-8") == "mine"
+    with pytest.warns(RuntimeWarning, match="replacing contrasts.csv"):
+        viability_batch.run(mp, overwrite=True)
+    cfg = json.loads((out / "run_config.json").read_text(encoding="utf-8"))
+    assert cfg["tool"] == "viability"
+    viability_batch.run(mp)  # a rerun of its own folder rewrites its tables
+    (out / "run_config.json").write_text(json.dumps({"tool": "depth"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="depth"):
+        viability_batch.run(mp)
+
+
+@pytest.mark.parametrize("key", ["title", "output_dir"])
+def test_manifest_rejects_non_string_text_fields(tmp_path, key):
+    with pytest.raises(ValueError, match=f"{key} must be a string"):
+        viability_batch.load_manifest(_one_stack_manifest(tmp_path, **{key: 5}))

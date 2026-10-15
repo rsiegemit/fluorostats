@@ -65,7 +65,9 @@ per group), ``contrasts.csv`` (the printed two-group statistics, in the columns 
 `depth_batch`'s contrasts.csv) and, written last, ``run_config.json`` (the manifest
 as given, plus ``stacks_read``: the absolute path of every stack read; relative
 stack paths resolve against the working directory). Text files are UTF-8. A run
-first removes those files left by an earlier run in the output folder.
+first removes those files left by an earlier viability run in the output folder; it
+refuses a folder whose run_config.json names another tool, or that holds those
+names with no run_config.json, unless ``overwrite`` is set.
 
 Segmentation: ``seg.method`` thresholds everything, the cell counts included
 (``count_seg_method`` in run_config.json). ``min_size`` differs by readout:
@@ -95,7 +97,7 @@ import numpy as np
 from .io import load_volume
 from . import stats
 from .depth_contrasts import mann_whitney_contrasts, write_contrasts_csv
-from .manifest import check_groups, is_int, require_groups, is_number, unknown_keys
+from .manifest import check_groups, is_int, is_number, not_strings, require_groups, unknown_keys
 from . import report
 from . import segment
 from . import viability as viab
@@ -145,7 +147,7 @@ def load_manifest(path: Path) -> dict:
 
 def _validate(m: dict) -> None:
     """Check a viability manifest before any image is loaded; raise listing every problem."""
-    problems = unknown_keys("manifest", m, _FIELDS)
+    problems = unknown_keys("manifest", m, _FIELDS) + not_strings(m, ("title", "output_dir"))
     for key in ("live_channel", "dead_channel"):
         v = m[key]
         if v is not None and (not is_int(v) or v < 0):
@@ -257,16 +259,20 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     return row
 
 
-def run(manifest_path: Path, output_override: str | None = None) -> Path:
+def run(manifest_path: Path, output_override: str | None = None, overwrite: bool = False) -> Path:
     """Analyse every stack in a manifest; write per-stack, group-summary and contrast
-    CSVs, then ``run_config.json`` (last, so only a completed run leaves a record)."""
+    CSVs, then ``run_config.json`` (last, so only a completed run leaves a record).
+
+    The output folder must be empty of its outputs or hold an earlier viability
+    run's (`report.claim_output_dir`); ``overwrite`` replaces another run's files
+    anyway."""
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)
-    # every name is written again by a completed run, so none is ever left stale
-    # (no report.stale_notices); removing them first keeps a failed run from
-    # leaving an earlier run's tables next to an absent run_config.json
-    report.remove_outputs(out / name for name in _OUTPUTS)
+    # removing the earlier outputs first keeps a failed run from leaving an
+    # earlier run's tables next to an absent run_config.json; a completed run
+    # writes every name again, so none is ever stale (no report.stale_notices)
+    report.claim_output_dir(out, "viability", [out / n for n in _OUTPUTS], overwrite)
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
@@ -299,6 +305,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         out,
         {"manifest": Path(manifest_path), "count_seg_method": count_seg},
         nested={"resolved": m, "mip_columns": MIP_COLUMNS, "stacks_read": read},
+        tool="viability",
     )
     print(f"\nOutputs written to {out}/")
     return out
