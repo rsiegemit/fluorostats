@@ -48,6 +48,16 @@ fluorostats never reports instance AP or CTC SEG/DET/TRA.
   bifurcating trees (`results/b_skeleton_tree.csv`). No side-by-side comparison with Fiji
   AnalyzeSkeleton is recorded here.
 
+## Viability against synthetic ground truth
+
+On the Kerkhoff synthetic Live/Dead set (exact ground-truth viability),
+`live_dead_by_count(method="maxima")` and the other viability modes are scored against
+ground truth (Lin's CCC, MAE: `results/b_viability_external_agreement.csv`). The
+`skimage_peakcount` column is a direct `skimage.feature.peak_local_max` call with the
+library's parameters, so it equals the maxima mode by construction. The Fiji Live/Dead
+macro published with the set (Find Maxima, default prominence 20, after a mean filter) was not
+run, so no agreement with it is claimed.
+
 ## Reproducing these numbers
 
 The DL per-image outputs are shipped in `results/` (so the tables/figures regenerate without

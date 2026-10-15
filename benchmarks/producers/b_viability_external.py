@@ -2,7 +2,8 @@
 
 Each synthetic Live/Dead image (Zenodo 10395753, "N Live; M Dead" in the file
 name gives the exact viability; ch 1 live, ch 0 dead) is scored by:
-the Kerkhoff Fiji macro equivalent (Find-Maxima peak count), fluorostats
+a direct skimage peak count with the library's parameters (``skimage_peak_count``;
+the same algorithm as the maxima mode, so identical to it by construction), fluorostats
 watershed object count (``objects.watershed_split``), area fraction
 (``viability.live_dead_fractions``), native peak counting
 (``viability.live_dead_by_count(method="maxima")``) and plain Otsu-CC counts.
@@ -19,7 +20,7 @@ import pandas as pd
 import tifffile
 from skimage import filters
 
-from common import (DATA, KERKHOFF_MIN_DISTANCE, KERKHOFF_THRESHOLD_REL, SMALL_OBJECT_RULE, kerkhoff_peak_count, require,
+from common import (DATA, MAXIMA_MIN_DISTANCE, MAXIMA_THRESHOLD_REL, SMALL_OBJECT_RULE, skimage_peak_count, require,
                     threshold_cc, write_table)
 from fluorostats.objects import watershed_split
 from fluorostats.segment import remove_small
@@ -36,11 +37,11 @@ def score(path):
     n_ws = [watershed_split(m, min_size=MIN_SIZE, min_distance=3)[0].max() for m in (lm, dm)]
     n_cc = [threshold_cc(im, filters.threshold_otsu, MIN_SIZE).max() for im in (live, dead)]
     return {
-        "Kerkhoff_macro_peakcount": live_ratio(kerkhoff_peak_count(live), kerkhoff_peak_count(dead)),
+        "skimage_peakcount": live_ratio(skimage_peak_count(live), skimage_peak_count(dead)),
         "fluorostats_objcount": live_ratio(*n_ws),
         "fluorostats_areafrac": live_dead_fractions(live, dead, method="otsu", min_size=MIN_SIZE)["viability"],
-        "fluorostats_maxima": live_dead_by_count(live, dead, method="maxima", min_distance=KERKHOFF_MIN_DISTANCE,
-                                                 threshold_rel=KERKHOFF_THRESHOLD_REL)["viability"],
+        "fluorostats_maxima": live_dead_by_count(live, dead, method="maxima", min_distance=MAXIMA_MIN_DISTANCE,
+                                                 threshold_rel=MAXIMA_THRESHOLD_REL)["viability"],
         "Otsu_CC_count": live_ratio(*n_cc),
     }
 
