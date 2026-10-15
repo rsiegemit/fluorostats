@@ -62,8 +62,10 @@ apart, whose only value is "primary") is refused, a group ``background`` include
 
 Outputs: ``viability_per_stack.csv``, ``viability_group_summary.csv`` (mean and SEM
 per group), ``contrasts.csv`` (the printed two-group statistics, in the columns of
-`depth_batch`'s contrasts.csv) and, written last, ``run_config.json``. A run first
-removes those files left by an earlier run in the output folder.
+`depth_batch`'s contrasts.csv) and, written last, ``run_config.json`` (the manifest
+as given, plus ``stacks_read``: the absolute path of every stack read; relative
+stack paths resolve against the working directory). Text files are UTF-8. A run
+first removes those files left by an earlier run in the output folder.
 
 Segmentation: ``seg.method`` thresholds everything, the cell counts included
 (``count_seg_method`` in run_config.json). ``min_size`` differs by readout:
@@ -130,7 +132,7 @@ _OUTPUTS = (
 
 def load_manifest(path: Path) -> dict:
     """Read a viability manifest (see the module docstring), filling defaults."""
-    m = json.loads(Path(path).read_text())
+    m = json.loads(Path(path).read_text(encoding="utf-8"))
     require_groups(m)
     m.setdefault("live_channel", None)  # None: resolved from channel names
     m.setdefault("dead_channel", None)
@@ -268,16 +270,20 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
+    read: list[dict] = []  # the absolute file each stack was read from
     for grp in m["groups"]:
         gname = grp["name"]
         for st in grp["stacks"]:
             print(f"  [{gname}] {st['label']}")
             r = analyse_stack(Path(st["path"]), cfg)
             rows.append({"group": gname, "stack": st["label"], **r})
+            read.append(
+                {"group": gname, "stack": st["label"], "path": str(Path(st["path"]).resolve())}
+            )
 
     # per-stack CSV (load_manifest guarantees every group has stacks)
     fields = list(rows[0].keys())
-    with open(out / "viability_per_stack.csv", "w", newline="") as f:
+    with open(out / "viability_per_stack.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)
@@ -292,7 +298,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     report.write_run_config(
         out,
         {"manifest": Path(manifest_path), "count_seg_method": count_seg},
-        nested={"resolved": m, "mip_columns": MIP_COLUMNS},
+        nested={"resolved": m, "mip_columns": MIP_COLUMNS, "stacks_read": read},
     )
     print(f"\nOutputs written to {out}/")
     return out
@@ -309,7 +315,7 @@ def _write_group_summary(path: Path, rows: list[dict], groups: list[str]) -> Non
     metrics = [
         k for k in rows[0] if k not in ("group", "stack") and not isinstance(rows[0][k], str)
     ]  # numeric columns only
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         sw = csv.writer(f)
         sw.writerow(["group", "n", "metric", "mean", "sem"])
         for g in groups:

@@ -403,3 +403,48 @@ def test_coverage_is_reported_as_a_fraction_with_deprecated_percent_columns(tmp_
         frac = float(row[f"{ch}_cov_frac"])
         assert 0 < frac < 1
         assert float(row[f"{ch}_cov_pct"]) == pytest.approx(100 * frac)
+
+
+def test_run_reads_and_writes_text_as_utf8(tmp_path):
+    """A non-ASCII group / label (e.g. "µ") must not depend on the platform's default
+    encoding: every text open names UTF-8 (no EncodingWarning under -X
+    warn_default_encoding)."""
+    import subprocess
+    import sys
+
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text(encoding="utf-8"))
+    man["groups"][0]["name"] = "Gel 5 µm"
+    man["groups"][0]["stacks"][0]["label"] = "Zelle é"
+    mp.write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
+    code = (
+        "import warnings, sys; from pathlib import Path; "
+        "from fluorostats import viability_batch; "
+        "warnings.filterwarnings('error', category=EncodingWarning, module='fluorostats.viability_batch'); "
+        "viability_batch.run(Path(sys.argv[1]))"
+    )
+    res = subprocess.run(
+        [sys.executable, "-X", "warn_default_encoding", "-c", code, str(mp)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert res.returncode == 0, res.stderr[-800:]
+    rows = (tmp_path / "o" / "viability_per_stack.csv").read_text(encoding="utf-8")
+    assert "Gel 5 µm" in rows and "Zelle é" in rows
+
+
+def test_run_config_records_the_absolute_stack_paths_read(tmp_path, monkeypatch):
+    """Relative stack paths still resolve against the working directory; the record
+    names the absolute files that were read."""
+    mp = _one_stack_manifest(tmp_path)
+    man = json.loads(mp.read_text(encoding="utf-8"))
+    man["groups"][0]["stacks"][0]["path"] = "s.npy"
+    mp.write_text(json.dumps(man), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    out = viability_batch.run(mp)
+    cfg = json.loads((out / "run_config.json").read_text(encoding="utf-8"))
+    assert cfg["stacks_read"] == [
+        {"group": "g", "stack": "s", "path": str((tmp_path / "s.npy").resolve())}
+    ]
+    assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s.npy"  # as given
