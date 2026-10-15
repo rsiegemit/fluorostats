@@ -229,9 +229,9 @@ def canonicalize_image(
     elif arr.ndim == 2:
         arr = arr[np.newaxis]
     elif arr.ndim == 3:
-        if arr.shape[2] <= 4:
+        if arr.shape[2] <= _MAX_PLAUSIBLE_CHANNELS:
             arr = np.moveaxis(arr, -1, 0)
-        elif arr.shape[0] > 4:
+        elif arr.shape[0] > _MAX_PLAUSIBLE_CHANNELS:
             warnings.warn(
                 f"3D array of shape {arr.shape} read as a 2D image: its {arr.shape[0]} "
                 "planes are treated as channels. If it is a z-stack, load it with "
