@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
+from .depth import parse_window, window_label
 from .stats import REDUCERS
 
 
@@ -166,8 +167,9 @@ _DEPTH_STACK_FIELDS = ("label", "path", "role")
 
 
 def check_depth(m: dict) -> list[str]:
-    """Problems with a depth manifest (`depth_batch`; defaults already filled), apart
-    from group colours, which `depth_batch` checks with matplotlib."""
+    """Problems with a depth manifest (`depth_batch`; defaults already filled, a lone
+    ``auc_window_um`` already folded into ``auc_windows_um``), apart from group
+    colours, which `depth_batch` checks with matplotlib."""
     problems = unknown_keys("manifest", m, _DEPTH_FIELDS)
     if not is_int(m["channel"]) or m["channel"] < 0:
         problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
@@ -184,6 +186,8 @@ def check_depth(m: dict) -> list[str]:
     r2 = m["fit_r2_threshold"]
     if not (is_number(r2) and 0 <= r2 <= 1):
         problems.append(f"fit_r2_threshold must be a number in [0, 1], got {r2!r}")
+    if "auc_window_um" in m:  # `depth_batch.load_manifest` folds a lone singular in
+        problems.append("give auc_windows_um or the older auc_window_um, not both")
     problems += _window_problems(m["auc_windows_um"])
     return problems + check_groups(
         m["groups"],
@@ -194,7 +198,8 @@ def check_depth(m: dict) -> list[str]:
 
 
 def _window_problems(windows) -> list[str]:
-    """Problems with ``auc_windows_um``: a list of [z0, z1] pairs (µm) and/or "full"."""
+    """Problems with ``auc_windows_um``: a list of distinct [z0, z1] pairs (µm) and/or
+    "full" (windows with one label, e.g. [0, 100] and [0, 100.0], are the same)."""
     form = "a list of [z0, z1] pairs (µm) and/or 'full', e.g. [[0, 100], 'full']"
     if not isinstance(windows, list) or not windows:
         return [f"auc_windows_um must be {form}; got {windows!r}"]
@@ -211,4 +216,9 @@ def _window_problems(windows) -> list[str]:
             )
         elif not 0 <= w[0] < w[1]:
             problems.append(f"AUC window {w!r} must be [z0, z1] with 0 <= z0 < z1 (µm)")
-    return problems
+    if problems:
+        return problems
+    return [
+        f"AUC window {label} is given more than once; each window must be distinct"
+        for label in _repeated([window_label(parse_window(w)) for w in windows])
+    ]

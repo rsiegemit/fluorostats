@@ -116,9 +116,10 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("fit_offset", False)
     m.setdefault("fit_r2_threshold", depth.FIT_R2_THRESHOLD)
     m.setdefault("parametric", False)
-    # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`.
+    # Accept singular `auc_window_um` (back-compat) or plural `auc_windows_um`; a
+    # manifest giving both keeps both, and validation refuses it.
     if "auc_windows_um" not in m:
-        m["auc_windows_um"] = [m.get("auc_window_um", [0.0, 100.0])]
+        m["auc_windows_um"] = [m.pop("auc_window_um", [0.0, 100.0])]
     _validate(m)
     m["windows"] = [parse_window(w) for w in m["auc_windows_um"]]
     return m
