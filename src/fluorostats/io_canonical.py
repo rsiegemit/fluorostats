@@ -127,16 +127,19 @@ def _volume_by_shape(arr: np.ndarray) -> np.ndarray:
     if ndim == 3:
         arr = arr[np.newaxis]
     elif ndim == 4:
-        # Axis-order heuristic: a leading axis larger than this is far more likely to be
-        # Z (many slices) than C (few channels), so treat the array as channel-LAST and
-        # move the trailing axis to front. This is genuinely ambiguous for a channel-last
-        # stack with few z-slices — pass explicit channel metadata upstream to be sure.
-        _MAX_LEADING_CHANNELS = 10
-        if arr.shape[0] > _MAX_LEADING_CHANNELS:
-            warnings.warn(f"4D array leading axis = {arr.shape[0]} (> {_MAX_LEADING_CHANNELS}); "
+        # Axis-order heuristic: a leading axis longer than any channel count is far more
+        # likely to be Z than C, so the array is taken as channel-LAST. Either way the
+        # layout is a guess, and it is announced.
+        if arr.shape[0] > _MAX_GUESSED_CHANNELS:
+            warnings.warn(f"4D array leading axis = {arr.shape[0]} (> {_MAX_GUESSED_CHANNELS}); "
                           "assuming channel-last and transposing to (C, Z, Y, X).",
                           RuntimeWarning, stacklevel=3)
             arr = np.moveaxis(arr, -1, 0)
+        elif arr.shape[0] > 1:
+            warnings.warn(f"4D array of shape {arr.shape} has no axis labels; read as "
+                          f"(C, Z, Y, X) with {arr.shape[0]} channels. If it is (Z, Y, X, C) "
+                          "or (Z, C, Y, X), save it with its axes named (OME-TIFF, or an "
+                          "ImageJ hyperstack) to avoid the guess.", RuntimeWarning, stacklevel=3)
     elif ndim == 5:
         if arr.shape[0] > 1:
             warnings.warn(f"5D array of shape {arr.shape}: keeping only the first of "

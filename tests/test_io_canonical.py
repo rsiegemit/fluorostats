@@ -110,3 +110,12 @@ def test_single_plane_unlabelled_axis_needs_no_assumption():
         warnings.simplefilter("error")
         out = io_canonical.canonicalize_volume(np.zeros((1, 16, 16)), {"channel_names": []}, "QYX")
     assert out.shape == (1, 1, 16, 16)
+
+
+def test_unlabelled_4d_guess_is_announced(tmp_path):
+    # Regression: a 4D .npy with a leading axis <= 10 was taken as (C, Z, Y, X) silently.
+    p = tmp_path / "czyx.npy"
+    np.save(p, np.zeros((5, 8, 32, 32), np.uint16))
+    with pytest.warns(RuntimeWarning, match=r"read as \(C, Z, Y, X\) with 5 channels"):
+        arr, _ = load_volume(p)
+    assert arr.shape == (5, 8, 32, 32)
