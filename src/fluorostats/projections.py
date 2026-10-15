@@ -229,16 +229,10 @@ def depth_coded_mip(
     vol_norm = pubfig.imnorm(volume, *percentile_clip) ** gamma
     mip = vol_norm.max(axis=z_axis)
     nz = volume.shape[z_axis]
-    # intensity-weighted depth
-    z_idx = np.arange(nz)
-    if z_axis == 0:
-        depth = (vol_norm * z_idx[:, None, None]).sum(axis=0) / np.where(
-            vol_norm.sum(axis=0) == 0, 1, vol_norm.sum(axis=0)
-        )
-    else:
-        depth = (
-            vol_norm * np.arange(nz).reshape([1] * z_axis + [-1] + [1] * (volume.ndim - z_axis - 1))
-        ).sum(axis=z_axis) / np.where(vol_norm.sum(axis=z_axis) == 0, 1, vol_norm.sum(axis=z_axis))
+    # intensity-weighted depth, along whichever axis is z
+    z_idx = np.arange(nz).reshape([nz if a == z_axis else 1 for a in range(volume.ndim)])
+    weight = vol_norm.sum(axis=z_axis)
+    depth = (vol_norm * z_idx).sum(axis=z_axis) / np.where(weight == 0, 1, weight)
     depth_norm = depth / max(1, nz - 1)
     cmap_obj = plt.get_cmap(cmap)
     color = cmap_obj(depth_norm)[..., :3]

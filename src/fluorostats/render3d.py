@@ -249,10 +249,11 @@ def _style_mesh_axes(ax, box, theme: dict, grid: bool) -> None:
 
 
 def _laplacian_smooth(verts: np.ndarray, faces: np.ndarray, n_iter: int = 1) -> np.ndarray:
-    """Average each vertex toward the centroid of its face-neighbours.
+    """Move each vertex halfway toward the centroid of its face-neighbours.
 
-    Cheap Taubin-like smoothing — softens the marching-cubes staircase
-    without melting away fine branches when ``n_iter`` is small (1–3).
+    Plain Laplacian smoothing (no Taubin inflation step, so every pass shrinks the
+    mesh slightly) — softens the marching-cubes staircase without melting away
+    fine branches when ``n_iter`` is small (1–3).
     """
     v = verts.astype(np.float64).copy()
     n_v = v.shape[0]
