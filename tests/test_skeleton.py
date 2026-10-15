@@ -265,3 +265,25 @@ def test_diagonally_touching_junction_voxels_are_one_node():
     ]:  # junction (4, 4)
         s[r, c] = True
     assert n_junction_nodes(s) == 1
+
+
+def test_pruning_never_deletes_every_branch_of_a_junction():
+    """A Y whose three arms are all shorter than the threshold keeps a path: only
+    the shortest arm goes, so the structure is not reported as a measured zero."""
+    y = np.zeros((30, 30), bool)
+    y[15, 15:23] = True  # 7-px arm
+    for i in range(8):
+        y[15 - i, 15 - i] = y[15 + i, 15 - i] = True  # two 9.9-px diagonal arms
+    pruned = skeleton_metrics(y, (1, 1), prune=True)
+    assert pruned["total_length_um"] == pytest.approx(2 * 7 * np.sqrt(2), abs=0.5)
+    assert pruned["n_branches"] == 1
+
+
+def test_pruning_keeps_a_through_path_at_a_junction():
+    """A 5 um line (x spacing 0.1 um) with an 8 um side branch, pruned at 5 um: both
+    line halves are short, but only one may go, leaving the 2.5 um + 8 um path."""
+    t = np.zeros((41, 61), bool)
+    t[20, 5:56] = True
+    t[12:20, 30] = True
+    r = skeleton_metrics(t, (1.0, 0.1), prune=True, min_branch_length_um=5)
+    assert r["total_length_um"] == pytest.approx(10.5, abs=0.2)

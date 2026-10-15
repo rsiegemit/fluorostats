@@ -68,6 +68,27 @@ def n_junction_nodes(skel: np.ndarray) -> int:
     return int(label(junction_vox, structure=np.ones((3,) * s.ndim))[1])
 
 
+def _spurs(skeleton_obj, branch_data, junctions: np.ndarray, min_length: float) -> list:
+    """Indices of the spurs (junction-to-endpoint branches shorter than
+    ``min_length``) to remove: at each junction the shortest ones, but never so
+    many that the junction keeps fewer than two branches, so pruning always leaves
+    a through-path and never deletes a whole structure."""
+    cluster = label(junctions, structure=np.ones((3,) * junctions.ndim))[0]
+    coords = skeleton_obj.coordinates.astype(int)
+    src = cluster[tuple(coords[branch_data["node_id_src"]].T)]
+    dst = cluster[tuple(coords[branch_data["node_id_dst"]].T)]
+    joining = src != dst  # a branch inside one junction cluster joins nothing
+    n_at = np.bincount(np.r_[src[joining], dst[joining]], minlength=cluster.max() + 1)
+    junction_end = np.where(src > 0, src, dst)
+    length = branch_data["branch_distance"]
+    spur = ((branch_data["branch_type"] == 1) & (length < min_length)).to_numpy()
+    remove: list = []
+    for j in np.unique(junction_end[spur]):
+        shortest_first = length[spur & (junction_end == j)].sort_values()
+        remove += list(shortest_first.index[: max(int(n_at[j]) - 2, 0)])
+    return remove
+
+
 @renamed_keyword("min_branch_length_px", "min_branch_length")
 def prune_skeleton(
     skel: np.ndarray,
@@ -80,7 +101,9 @@ def prune_skeleton(
 
     Iteratively drops junction-to-endpoint branches shorter than
     ``min_branch_length`` and re-thins, until none remain or ``max_iter``
-    is reached. Branch length is measured along the path in voxels, or, when
+    is reached. A junction always keeps two branches (its longest short ones
+    when it has fewer than two long ones), so pruning never removes the path
+    through a junction or a whole structure. Branch length is measured along the path in voxels, or, when
     ``voxel_size_um`` (per-axis voxel size, one entry per ``skel`` axis) is given, in
     µm, in which case ``min_branch_length`` is a
     length in those units. This is the standard clean-up step that skeleton
@@ -98,9 +121,7 @@ def prune_skeleton(
         junctions = s & (_neighbour_counts(s) >= 3)
         skeleton_obj = skan.Skeleton(s, spacing=1 if voxel_size_um is None else voxel_size_um)
         branch_data = skan.summarize(skeleton_obj, separator="_")
-        spurs = branch_data.index[
-            (branch_data["branch_type"] == 1) & (branch_data["branch_distance"] < min_branch_length)
-        ]
+        spurs = _spurs(skeleton_obj, branch_data, junctions, min_branch_length)
         if len(spurs) == 0:
             break
         remove = np.zeros_like(s)
