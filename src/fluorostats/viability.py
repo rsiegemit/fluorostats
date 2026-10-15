@@ -463,7 +463,7 @@ def viability_2d_vs_3d(
     volume is segmented once in 3D, then projected), so a voxel counts as covered
     if any slice above it is foreground. Segmenting the intensity MIP instead
     (``live_dead_fractions(live.max(z_axis))``, as `viability_batch`'s
-    ``live_cov_pct`` does) thresholds the projected intensities and generally
+    ``live_cov_frac`` does) thresholds the projected intensities and generally
     gives a different fraction.
     """
     lm = _mask(live, live_mask, **seg)

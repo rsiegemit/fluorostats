@@ -16,8 +16,12 @@ the quantitative viability readouts the library exposes, from one JSON config:
   - **2D-vs-3D bias** (``viability.viability_2d_vs_3d``): how much a MIP overstates
     coverage relative to the full volume. Its MIP is the projection of the 3D
     MASK (the stack is segmented in 3D, then max-projected), so ``live_frac_mip``
-    is not ``live_cov_pct / 100``, which segments the intensity MIP. Both are kept;
+    is not ``live_cov_frac``, which segments the intensity MIP. Both are kept;
     `MIP_COLUMNS` (also written to run_config.json) states which column is which.
+
+Coverage is a fraction in [0, 1] (``live_cov_frac``, ``dead_cov_frac``). The
+percent columns ``live_cov_pct`` / ``dead_cov_pct`` (the same values times 100)
+are deprecated and will be removed in a later release.
 
 Everything is scale-aware: cells are counted on the surface maximum-intensity
 projection (surface culture is a quasi-monolayer), and a per-FOV cell density is
@@ -97,9 +101,10 @@ from . import viability as viab
 DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE}
 # The two maximum-intensity-projection definitions in the per-stack table.
 MIP_COLUMNS = {
-    "live_cov_pct": "percent of the intensity MIP segmented live: each channel is "
-    "max-projected over z, then thresholded (likewise dead_cov_pct, "
-    "viability_area and the cell counts)",
+    "live_cov_frac": "fraction of the intensity MIP segmented live: each channel is "
+    "max-projected over z, then thresholded (likewise dead_cov_frac, the "
+    "deprecated live_cov_pct / dead_cov_pct = 100 x these, viability_area "
+    "and the cell counts)",
     "live_frac_mip": "fraction of the MIP of the 3D live mask: the stack is "
     "thresholded in 3D, then the mask is max-projected "
     "(viability.viability_2d_vs_3d; overestimate_mip = live_frac_mip "
@@ -113,7 +118,7 @@ _GROUP_FIELDS = ("name", "stacks")
 _STACK_FIELDS = ("label", "path", "role")
 _SEG_FIELDS = ("method", "min_size", "threshold_scale", "opening")
 # The metrics of the two-group contrast (console and contrasts.csv).
-_CONTRAST_METRICS = ("live_cov_pct", "live_density_permm2", "viability_area")
+_CONTRAST_METRICS = ("live_cov_frac", "live_density_permm2", "viability_area")
 # Every file a run writes; an earlier run's copies are removed when a run starts.
 _OUTPUTS = (
     "viability_per_stack.csv",
@@ -228,8 +233,10 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "n_xy": nx,
         "fov_mm2": fov_mm2,
         # area / coverage on the intensity MIP (segment the projection; MIP_COLUMNS)
-        "live_cov_pct": 100.0 * area["live_fraction"],
-        "dead_cov_pct": 100.0 * area["dead_fraction"],
+        "live_cov_frac": area["live_fraction"],
+        "dead_cov_frac": area["dead_fraction"],
+        "live_cov_pct": 100.0 * area["live_fraction"],  # deprecated: live_cov_frac x 100
+        "dead_cov_pct": 100.0 * area["dead_fraction"],  # deprecated: dead_cov_frac x 100
         "viability_area": area["viability"],
         # 2D vs full-3D coverage bias; this MIP projects the 3D mask (MIP_COLUMNS)
         "live_frac_mip": bias["live_fraction_mip"],
@@ -240,13 +247,8 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "regime_crowding": regime["crowding"],
         "regime_method": regime["method"],
     }
-    row.update(
-        {
-            _COUNT_COLUMNS.get(k, k): v
-            for k, v in counts.items()
-            if k not in ("viability", "by_method")
-        }
-    )
+    skip = ("viability", "by_method")
+    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items() if k not in skip})
     # density from the single count, or (method "all": no single count) the CC count
     n_live_ref = counts["n_live"] if counts["n_live"] == counts["n_live"] else counts["n_live_cc"]
     row["live_density_permm2"] = n_live_ref / fov_mm2 if fov_mm2 > 0 else float("nan")
@@ -326,7 +328,7 @@ def _by_group(rows: list[dict], groups: list[str], metric: str) -> dict[str, lis
 def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
     """The two-group statistics of a run, as `depth_contrasts.mann_whitney_contrasts`
     rows (the contrasts.csv columns; ``window`` empty): two-sided Mann-Whitney with
-    Cliff's delta on each of ``live_cov_pct``, ``live_density_permm2`` and
+    Cliff's delta on each of ``live_cov_frac``, ``live_density_permm2`` and
     ``viability_area`` (NaN stacks dropped; a metric with an empty group is skipped),
     BH-FDR across those metrics. None unless there are exactly two groups."""
     entries = []
@@ -340,8 +342,8 @@ def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
 def _print_summary(rows: list[dict], groups: list[str], tests: list[dict]) -> None:
     print("\n=== Group means (mean +/- SEM) ===")
     key_metrics = [
-        "live_cov_pct",
-        "dead_cov_pct",
+        "live_cov_frac",
+        "dead_cov_frac",
         "viability_area",
         "viability_count_consensus",
         "live_density_permm2",

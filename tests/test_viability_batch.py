@@ -333,7 +333,7 @@ def test_contrasts_csv_has_the_depth_columns(tmp_path):
     hdr = tmp_path / "hdr.csv"
     write_contrasts_csv(hdr, [])
     assert list(rows[0]) == hdr.read_text().strip().split(",")
-    assert [r["metric"] for r in rows] == ["live_cov_pct", "live_density_permm2", "viability_area"]
+    assert [r["metric"] for r in rows] == ["live_cov_frac", "live_density_permm2", "viability_area"]
     ps = []
     for r in rows:
         a = [float(p[r["metric"]]) for p in per if p["group"] == "sparse"]
@@ -390,3 +390,16 @@ def test_seg_opening_disk_measures_single_slice_cells_in_3d(tmp_path):
     stack = m["groups"][1]["stacks"][0]["path"]
     row = viability_batch.analyse_stack(Path(stack), {**m, "seg": m["seg"]})
     assert row["live_frac_3d"] > 0
+
+
+def test_coverage_is_reported_as_a_fraction_with_deprecated_percent_columns(tmp_path):
+    """EXP-1: coverage columns are fractions; the _pct columns (deprecated) are
+    the same values times 100."""
+    import csv
+
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    row = next(csv.DictReader(open(out / "viability_per_stack.csv")))
+    for ch in ("live", "dead"):
+        frac = float(row[f"{ch}_cov_frac"])
+        assert 0 < frac < 1
+        assert float(row[f"{ch}_cov_pct"]) == pytest.approx(100 * frac)
