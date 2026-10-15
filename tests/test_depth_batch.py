@@ -364,7 +364,33 @@ def test_rerun_removes_stale_figures_and_writes_run_config_last(tmp_path, capsys
     monkeypatch.setattr(depth_batch, "analyse_stack", fail)
     with pytest.raises(RuntimeError, match="analysis failed"):
         depth_batch.run(mpath)
-    assert not (out / "run_config.json").exists()
+    marker = {"tool": "depth", "status": "incomplete"}  # M3: still this tool's folder
+    assert json.loads((out / "run_config.json").read_text()) == marker
+
+
+def test_an_interrupted_run_leaves_a_marker_and_the_rerun_is_accepted(tmp_path, monkeypatch):
+    # Regression (M3): a run killed after writing outputs left no run_config.json, so
+    # the next run of the same tool refused the folder.
+    decay_stack(tmp_path / "s0.tif")
+    m = {
+        "output_dir": str(tmp_path / "out"),
+        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(tmp_path / "s0.tif")}]}],
+    }
+    (tmp_path / "m.json").write_text(json.dumps(m))
+
+    def interrupted(*a, **k):
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as mp:
+        mp.setattr(depth_batch, "write_contrasts_csv", interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            depth_batch.run(tmp_path / "m.json")
+    out = tmp_path / "out"
+    assert (out / "auc_per_stack.csv").exists()
+    marker = {"tool": "depth", "status": "incomplete"}
+    assert json.loads((out / "run_config.json").read_text()) == marker
+    depth_batch.run(tmp_path / "m.json")
+    assert json.loads((out / "run_config.json").read_text())["status"] == "complete"
 
 
 def test_common_grid_never_extends_past_the_shallowest_stack():

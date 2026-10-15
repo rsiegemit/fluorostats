@@ -170,13 +170,14 @@ def write_run_config(
     """Write ``run_config.json``: the run's parameters plus `environment`, so an
     output folder says how it was produced.
 
-    ``tool`` (the command that ran, e.g. ``"depth"``) is the first key; it is how
+    ``tool`` (the command that ran, e.g. ``"depth"``) is the first key, then
+    ``"status": "complete"`` (replacing `mark_output_dir`'s marker); the tool is how
     `claim_output_dir` knows which tool's outputs a folder holds. From ``params``
     only paths (as strings) and plain scalars are kept. ``nested`` adds structured
     values verbatim (e.g. a batch driver's resolved manifest); anything not
     JSON-native in it is written as its string form.
     """
-    config: dict = {} if tool is None else {"tool": tool}
+    config: dict = {} if tool is None else {"tool": tool, "status": "complete"}
     for k, v in params.items():
         if isinstance(v, Path):
             config[k] = str(v)
@@ -196,13 +197,25 @@ def remove_outputs(paths: Iterable[Path]) -> list[Path]:
     """Delete those of ``paths`` that exist (an earlier run's outputs); return them sorted.
 
     A tool calls this at the start of a run with the names it writes, so no earlier
-    result sits next to this run's, and writes ``run_config.json`` last, so a run that
-    fails part-way leaves no record claiming the folder. Only the given paths are touched.
+    result sits next to this run's. Only the given paths are touched.
     """
     removed = sorted(p for p in paths if p.exists())
     for path in removed:
         path.unlink()
     return removed
+
+
+def mark_output_dir(out_dir: Path, tool: str) -> None:
+    """Create ``out_dir`` and write the ``run_config.json`` marker
+    ``{"tool": tool, "status": "incomplete"}``.
+
+    A run marks its folder before its first output, so a folder that an interrupted
+    or failed run left is still recognised as ``tool``'s on rerun; `write_run_config`
+    replaces the marker with the full record (``"status": "complete"``) at the end.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    marker = {"tool": tool, "status": "incomplete"}
+    (out_dir / "run_config.json").write_text(json.dumps(marker, indent=2), encoding="utf-8")
 
 
 def claim_output_dir(
@@ -212,22 +225,31 @@ def claim_output_dir(
 
     ``owned`` are the paths the tool writes (``run_config.json`` among them). The
     folder's ``run_config.json`` must name ``tool``: a folder another tool, or a run
-    that recorded no tool (one from before 0.9), wrote is refused, and so is one that holds any owned name
-    but no record (files the user put there, or a run that failed part-way). Then
-    `remove_outputs` deletes the owned files. ``overwrite`` replaces them anyway,
-    with a warning naming the files that were not this tool's. ValueError otherwise.
+    that recorded no tool (one from before 0.9), wrote is refused, and so is one that
+    holds any owned name but no record (files the user put there). Then
+    `remove_outputs` deletes the owned files and, when the folder exists,
+    `mark_output_dir` marks it as ``tool``'s. ``overwrite`` replaces the files
+    anyway, with a warning naming those that were not this tool's. ValueError
+    otherwise.
     """
+    out_dir = Path(out_dir)
     owned = list(owned)
-    record = Path(out_dir) / "run_config.json"
+    record = out_dir / "run_config.json"
     present = sorted(p.name for p in owned if p.exists() and p != record)
+    found = None
     if record.exists():
         recorded = _read_record(record)
         if recorded is None or recorded.get("tool") != tool:
-            return _foreign(out_dir, tool, owned, overwrite, f"holds {_whose(recorded)}")
+            found = f"holds {_whose(recorded)}"
     elif present:
         found = f"holds {', '.join(present)} but no run_config.json"
-        return _foreign(out_dir, tool, owned, overwrite, found)
-    return remove_outputs(owned)
+    if found is None:
+        removed = remove_outputs(owned)
+    else:
+        removed = _foreign(out_dir, tool, owned, overwrite, found)
+    if out_dir.is_dir():
+        mark_output_dir(out_dir, tool)
+    return removed
 
 
 def _read_record(record: Path) -> dict | None:

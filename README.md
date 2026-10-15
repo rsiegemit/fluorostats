@@ -129,7 +129,11 @@ Then inspect:
   two-sided Mann-Whitney U, Cliff's δ and Benjamini–Hochberg q-values, which the
   summary panel's stars use; pairs that cannot be tested are listed with a `reason`
 - `run_config.json` — the tool, parameters, package versions and code commit that produced the
-  folder and the files it read (written last, so a failed run leaves none)
+  folder and the files it read. A run first writes it as a marker
+  (`{"tool": ..., "status": "incomplete"}`) and replaces it with the full record
+  (`"status": "complete"`) when it finishes, so a folder an interrupted or failed run left
+  says so and is still recognised as that tool's on rerun. When every file fails, the
+  run writes only `failures.csv` and the marker
 - `failures.csv` — only when a file could not be read or measured: the file and the error; the
   other files are still measured and the command exits with status 1
 

@@ -114,7 +114,10 @@ CLI and drivers
   refused.
 - **`quant2d`/`quant3d` refuse an `--output` inside `--input`**; reruns remove the
   tool's own earlier plots, overlays and (depth) figures, naming each, and every
-  command writes `run_config.json` last, so a failed run leaves none. An input
+  command marks its folder with an "incomplete" `run_config.json` before its first
+  output and writes the full record (`"status": "complete"`) last, so a folder an
+  interrupted or failed run left is still recognised on rerun; a quant run where
+  every file fails writes only `failures.csv` and the marker. An input
   folder with nothing to measure exits 2.
 - **QC overlays of same-named files in different condition folders no longer
   overwrite each other**; **fractional depth AUC windows** no longer overwrite each

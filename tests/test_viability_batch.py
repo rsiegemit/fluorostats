@@ -354,8 +354,8 @@ def test_one_group_writes_a_header_only_contrasts_csv(tmp_path):
 
 
 def test_a_failed_rerun_leaves_no_earlier_outputs_or_run_config(tmp_path, monkeypatch):
-    # Earlier outputs are removed at the start and run_config.json is written last,
-    # so a run that fails part-way leaves no record claiming the folder.
+    # Earlier outputs are removed at the start and the full run_config.json is written
+    # last, so a run that fails part-way leaves only the "incomplete" marker.
     mp = _one_stack_manifest(tmp_path)
     out = viability_batch.run(mp)
     names = (
@@ -372,7 +372,13 @@ def test_a_failed_rerun_leaves_no_earlier_outputs_or_run_config(tmp_path, monkey
     monkeypatch.setattr(viability_batch, "analyse_stack", boom)
     with pytest.raises(RuntimeError, match="unreadable stack"):
         viability_batch.run(mp)
-    assert not any((out / n).exists() for n in names)
+    assert not any((out / n).exists() for n in names[:-1])
+    marker = {"tool": "viability", "status": "incomplete"}  # M3: still this tool's folder
+    assert json.loads((out / "run_config.json").read_text()) == marker
+    monkeypatch.undo()
+    assert json.loads((viability_batch.run(mp) / "run_config.json").read_text())["status"] == (
+        "complete"
+    )
 
 
 def test_manifest_seg_opening_is_validated(tmp_path):

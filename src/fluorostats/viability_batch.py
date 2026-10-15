@@ -65,7 +65,8 @@ per group), ``contrasts.csv`` (the printed two-group statistics, in the columns 
 `depth_batch`'s contrasts.csv) and, written last, ``run_config.json`` (the manifest
 as given, plus ``files_read``: the absolute paths of every stack read and of the
 output folder; relative paths resolve against the working directory). The output
-folder is created only once every stack has been analysed. Text files are UTF-8. A run
+folder is created only once every stack has been analysed, with an "incomplete"
+``run_config.json`` marker that the full record replaces. Text files are UTF-8. A run
 first removes those files left by an earlier viability run in the output folder; it
 refuses a folder whose run_config.json names another tool, or that holds those
 names with no run_config.json, unless ``overwrite`` is set.
@@ -262,7 +263,7 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
 
 def run(manifest_path: Path, output_override: str | None = None, overwrite: bool = False) -> Path:
     """Analyse every stack in a manifest; write per-stack, group-summary and contrast
-    CSVs, then ``run_config.json`` (last, so only a completed run leaves a record).
+    CSVs, then ``run_config.json`` (last, replacing the "incomplete" marker).
 
     The output folder must be empty of its outputs or hold an earlier viability
     run's (`report.claim_output_dir`); ``overwrite`` replaces another run's files
@@ -270,7 +271,7 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     # removing the earlier outputs first keeps a failed run from leaving an
-    # earlier run's tables next to an absent run_config.json; a completed run
+    # earlier run's tables next to its "incomplete" marker; a completed run
     # writes every name again, so none is ever stale (no report.stale_notices)
     report.claim_output_dir(out, "viability", [out / n for n in _OUTPUTS], overwrite)
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
@@ -282,7 +283,7 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
             print(f"  [{gname}] {st['label']}")
             r = analyse_stack(Path(st["path"]), cfg)
             rows.append({"group": gname, "stack": st["label"], **r})
-    out.mkdir(parents=True, exist_ok=True)  # only now: a failed run leaves no folder
+    report.mark_output_dir(out, "viability")  # only now: a failed run leaves no new folder
 
     # per-stack CSV (load_manifest guarantees every group has stacks)
     fields = list(rows[0].keys())

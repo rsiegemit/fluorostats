@@ -144,12 +144,12 @@ def test_a_file_that_cannot_be_measured_is_listed_and_the_run_exits_1(tmp_path):
 
 def test_a_quant_run_that_writes_nothing_leaves_no_output_folder(tmp_path, monkeypatch):
     # Regression (C3): the output folder was created before anything was written.
-    from fluorostats import cli as cli_mod
+    from fluorostats import cli_measure
 
     def fail(*a, **k):
-        raise RuntimeError("reporting failed")
+        raise RuntimeError("measuring failed")
 
-    monkeypatch.setattr(cli_mod, "_report_and_plot", fail)
+    monkeypatch.setattr(cli_measure, "quantify_files", fail)
     make_dataset(tmp_path / "in", blob_2d)
     out = tmp_path / "new" / "out"
     args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-overlays"]
@@ -176,3 +176,42 @@ def test_quant_run_config_records_the_files_read(tmp_path, cmd, maker, extra, mo
         ],
         "output_dir": str((tmp_path / "out").resolve()),
     }
+
+
+@pytest.mark.parametrize("overlays", [True, False])
+def test_an_interrupted_quant_run_leaves_a_marker_and_the_rerun_is_accepted(
+    tmp_path, monkeypatch, overlays
+):
+    # Regression (M3): a run killed after writing overlays or tables left no
+    # run_config.json, so the next run of the same tool refused the folder.
+    from fluorostats import cli as cli_mod
+
+    make_dataset(tmp_path / "in", blob_2d)
+    out = tmp_path / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
+    args += [] if overlays else ["--no-overlays"]
+    with monkeypatch.context() as mp:
+        mp.setattr(cli_mod, "_finish", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt))
+        CliRunner().invoke(cli, args)
+    assert (out / "per_file.csv").exists()
+    marker = {"tool": "quant2d", "status": "incomplete"}
+    assert json.loads((out / "run_config.json").read_text()) == marker
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 0, res.output
+    assert json.loads((out / "run_config.json").read_text())["status"] == "complete"
+
+
+def test_a_quant_run_where_every_file_fails_writes_failures_and_the_marker_only(tmp_path):
+    # Regression (L5): a run that measured nothing wrote empty tables and a full
+    # record claiming the folder.
+    for cond in ("A", "B"):
+        (tmp_path / "in" / cond).mkdir(parents=True)
+        (tmp_path / "in" / cond / "broken.tif").write_bytes(b"not a tiff")
+    out = tmp_path / "out"
+    res = CliRunner().invoke(
+        cli, ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out)]
+    )
+    assert res.exit_code == 1 and "2 of 2 file(s) could not be measured" in res.output
+    assert sorted(p.name for p in out.iterdir()) == ["failures.csv", "run_config.json"]
+    marker = {"tool": "quant2d", "status": "incomplete"}
+    assert json.loads((out / "run_config.json").read_text()) == marker

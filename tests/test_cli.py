@@ -524,7 +524,8 @@ def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monke
     monkeypatch.setattr(cli_mod, "_report_and_plot", fail)
     res = CliRunner().invoke(cli, args)
     assert isinstance(res.exception, RuntimeError)
-    assert not (out / "run_config.json").exists()
+    marker = {"tool": "quant2d", "status": "incomplete"}  # not the new configuration
+    assert json.loads((out / "run_config.json").read_text()) == marker
 
 
 def test_cli_plots_are_drawn_in_the_house_theme(tmp_path, monkeypatch):

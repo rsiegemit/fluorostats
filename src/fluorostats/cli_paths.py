@@ -93,9 +93,11 @@ def output_outside_input(input_path: Path, output_path: Path) -> Path:
     return output_path
 
 
-def claim_output(output_path: Path, tool: str, overwrite: bool) -> list[Path]:
+def claim_output(output_path: Path, tool: str, overwrite: bool, mark: bool) -> list[Path]:
     """`report.claim_output_dir` for a quant command (a refusal is a usage error):
     delete the files an earlier run of ``tool`` wrote; return the paths deleted.
+    ``mark`` (the run writes overlays as it measures) creates and marks the folder
+    now (`report.mark_output_dir`), not only when it already exists.
 
     Only names this tool writes are touched (``per_file.csv``, ``per_condition.csv``,
     ``failures.csv``,
@@ -119,6 +121,9 @@ def claim_output(output_path: Path, tool: str, overwrite: bool) -> list[Path]:
     ]
     owned += (output_path / "overlays").rglob("*_overlay.png")
     try:
-        return report.claim_output_dir(output_path, tool, owned, overwrite)
+        removed = report.claim_output_dir(output_path, tool, owned, overwrite)
     except ValueError as e:
         raise click.UsageError(str(e)) from e
+    if mark:
+        report.mark_output_dir(output_path, tool)
+    return removed

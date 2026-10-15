@@ -421,7 +421,7 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     windows = cfg["windows"]
     rows, colors, per_group_primary = _analyse_groups(m["groups"], cfg)
     aggregates = {g: aggregate_group(ps) for g, ps in per_group_primary.items()}
-    out_dir.mkdir(parents=True, exist_ok=True)  # only now: a failed run leaves no folder
+    report.mark_output_dir(out_dir, "depth")  # only now: a failed run leaves no new folder
 
     write_profiles_csv(out_dir / "depth_profiles_long.csv", rows)
     write_auc_csv(out_dir / "auc_per_stack.csv", rows, windows)
@@ -432,7 +432,7 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
 
     print_auc_summary(rows, windows, m["parametric"], tests)
     print_lambda_summary(rows, m["parametric"], tests)
-    # Written last, so only a completed run leaves a record claiming the folder.
+    # The full record, last: it replaces the "incomplete" marker.
     nested = {"resolved": m, "files_read": _files_read(m["groups"], out_dir)}
     report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested, tool="depth")
     for line in report.stale_notices(previous):

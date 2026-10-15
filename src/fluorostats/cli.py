@@ -256,7 +256,7 @@ def quant3d(
     if not files:
         raise click.UsageError(f"No volume files found in {input_path}")
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
-    previous = cli_paths.claim_output(output_path, "quant3d", overwrite)
+    previous = cli_paths.claim_output(output_path, "quant3d", overwrite, not no_overlays)
 
     click.echo(f"Found {len(files)} volume file(s)")
 
@@ -281,9 +281,11 @@ def quant3d(
 
     # Every reported metric is plotted except n_branches, as in earlier releases.
     plotted = [m for m in report.METRICS_3D if m != "n_branches"]
-    _report_and_plot(
-        rows, output_path, "3d", plotted, no_plots, "3D Confocal Quantification Summary"
-    )
+    report.mark_output_dir(output_path, "quant3d")  # before the first table
+    if rows:  # no file measured: no tables, and the marker stays (_finish)
+        _report_and_plot(
+            rows, output_path, "3d", plotted, no_plots, "3D Confocal Quantification Summary"
+        )
     _finish(output_path, config, previous, "quant3d", failures, len(files))
 
 
@@ -395,7 +397,7 @@ def quant2d(
             "`quant3d`."
         )
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
-    previous = cli_paths.claim_output(output_path, "quant2d", overwrite)
+    previous = cli_paths.claim_output(output_path, "quant2d", overwrite, not no_overlays)
 
     click.echo(f"Found {len(files)} image file(s)")
 
@@ -412,9 +414,11 @@ def quant2d(
         input_root=input_path,
     )
     rows, failures = cli_measure.quantify_files(files, condition_from, "Processing images", measure)
-    _report_and_plot(
-        rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
-    )
+    report.mark_output_dir(output_path, "quant2d")  # before the first table
+    if rows:  # no file measured: no tables, and the marker stays (_finish)
+        _report_and_plot(
+            rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
+        )
     _finish(output_path, config, previous, "quant2d", failures, len(files))
 
 
@@ -447,19 +451,20 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
 
 
 def _finish(output_path: Path, config: dict, previous: list[Path], tool: str, failures, n) -> None:
-    """Write ``failures.csv`` (file, condition, error) when files of the ``n`` failed,
-    record the run and the absolute paths it read (last, so only a completed run
-    claims the folder), name the earlier
-    outputs it removed and did not write again, then exit 1 naming the failed files."""
+    """Write ``failures.csv`` (file, condition, error) when files of the ``n`` failed;
+    unless all failed, record the run and the absolute paths it read (last: the
+    record replaces the "incomplete" marker); name the earlier outputs it removed and
+    did not write again; then exit 1 naming the failed files."""
     if failures:
         pd.DataFrame(failures, columns=["file", "condition", "error"]).to_csv(
             output_path / "failures.csv", index=False
         )
-    read = {
-        "files": [str(f.resolve()) for f in config["files"]],
-        "output_dir": str(output_path.resolve()),
-    }
-    report.write_run_config(output_path, config, {"files_read": read}, tool=tool)
+    if len(failures) < n:
+        read = {
+            "files": [str(f.resolve()) for f in config["files"]],
+            "output_dir": str(output_path.resolve()),
+        }
+        report.write_run_config(output_path, config, {"files_read": read}, tool=tool)
     for line in report.stale_notices(previous):
         click.echo(line)
     if failures:

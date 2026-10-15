@@ -182,7 +182,20 @@ def test_claim_output_dir_removes_an_earlier_run_of_the_same_tool(tmp_path):
     (tmp_path / "mine.txt").write_text("user")
     assert report.claim_output_dir(tmp_path, "depth", owned) == sorted(owned[::2])
     assert not owned[0].exists() and (tmp_path / "mine.txt").exists()
-    assert report.claim_output_dir(tmp_path / "new", "depth", owned) == []
+    marker = {"tool": "depth", "status": "incomplete"}  # M3: the folder stays the tool's
+    assert json.loads((tmp_path / "run_config.json").read_text()) == marker
+    new = tmp_path / "new"
+    assert report.claim_output_dir(new, "depth", [new / p.name for p in owned]) == []
+    assert not new.exists()  # created by the run's first write, not here
+
+
+def test_mark_output_dir_creates_the_folder_and_the_record_completes_it(tmp_path):
+    out = tmp_path / "a" / "out"
+    report.mark_output_dir(out, "quant2d")
+    marker = {"tool": "quant2d", "status": "incomplete"}
+    assert json.loads((out / "run_config.json").read_text()) == marker
+    cfg = json.loads(report.write_run_config(out, {"x": 1}, tool="quant2d").read_text())
+    assert list(cfg)[:2] == ["tool", "status"] and cfg["status"] == "complete"
 
 
 @pytest.mark.parametrize(
