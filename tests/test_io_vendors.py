@@ -1,17 +1,17 @@
-"""Vendor-format loader tests using mocked third-party libraries.
+"""Vendor-format loader tests using mocked third-party libraries: Olympus and
+Leica LIF, plus the shared helpers. CZI, ND2 and TIFF have their own files
+(test_io_vendors_<format>.py).
 
-The real vendor libs (oiffile/czifile/nd2/readlif) may be installed, but we
-inject minimal fakes via monkeypatch.setitem(sys.modules, ...) so the loaders
-run on synthetic arrays + metadata and return the canonical (C,Z,Y,X) form
-without needing real vendor files.
-"""
+The real vendor libs (oiffile/readlif) may be installed, but we inject minimal
+fakes via monkeypatch.setitem(sys.modules, ...) so the loaders run on synthetic
+arrays + metadata and return the canonical (C,Z,Y,X) form without needing real
+vendor files."""
 
 import sys
 import types
 
 import numpy as np
 import pytest
-import tifffile
 
 from fluorostats import io, io_vendors
 
@@ -140,167 +140,10 @@ def test_section_get_attr_and_error():
     assert io_vendors._section_get(object(), "Missing") is None
 
 
-# ---------------------------------------------------------------------------
-# Zeiss .czi
-# ---------------------------------------------------------------------------
-
-def _make_fake_czifile(xml, arr):
-    fake = types.ModuleType("czifile")
-
-    class CziFile:
-        def __init__(self, path):
-            self.path = path
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def asarray(self):
-            return arr
-
-        def metadata(self):
-            return xml
-
-    fake.CziFile = CziFile
-    return fake
-
-
-def test_load_czi_volume(monkeypatch, tmp_path):
-    xml = """<root>
-      <Distance Id="X"><Value>2.5e-7</Value></Distance>
-      <Distance Id="Y"><Value>2.5e-7</Value></Distance>
-      <Distance Id="Z"><Value>1e-6</Value></Distance>
-      <Channel Name="EGFP"/>
-      <Channel Name="mCherry"/>
-    </root>"""
-    arr = np.zeros((1, 1, 2, 3, 8, 8), dtype=np.uint16)  # extra singleton dims
-    monkeypatch.setitem(sys.modules, "czifile", _make_fake_czifile(xml, arr))
-    path = tmp_path / "s.czi"
-    path.write_bytes(b"")
-    out, meta = io.load_volume(path)
-    assert out.shape == (2, 3, 8, 8)
-    assert meta["format"] == "zeiss_czi"
-    assert meta["channel_names"] == ["EGFP", "mCherry"]
-    assert meta["voxel_size_um"][0] == pytest.approx(1.0)
-    assert meta["voxel_size_um"][2] == pytest.approx(0.25)
-
-
-def test_czi_dyename_fallback(monkeypatch, tmp_path):
-    xml = """<root>
-      <DyeName>DAPI</DyeName>
-    </root>"""
-    arr = np.zeros((1, 4, 8, 8), dtype=np.uint16)
-    monkeypatch.setitem(sys.modules, "czifile", _make_fake_czifile(xml, arr))
-    path = tmp_path / "d.czi"
-    path.write_bytes(b"")
-    _, meta = io.load_volume(path)
-    assert meta["channel_names"] == ["DAPI"]
-
-
-def test_czi_metadata_exception_path():
-    # metadata() raising -> defaults returned (except: pass)
-    class Bad:
-        def metadata(self):
-            raise RuntimeError("x")
-
-    meta = io_vendors._parse_czi_metadata(Bad())
-    assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
-
-
-def test_czi_metadata_empty_string():
-    class Empty:
-        def metadata(self):
-            return ""
-
-    meta = io_vendors._parse_czi_metadata(Empty())
-    assert meta["channel_names"] == []
-
-
-# ---------------------------------------------------------------------------
-# Nikon .nd2
-# ---------------------------------------------------------------------------
-
-def _make_fake_nd2(arr, voxel, channels):
-    fake = types.ModuleType("nd2")
-
-    class VS:
-        x, y, z = voxel
-
-    class ChObj:
-        def __init__(self, name):
-            self.name = name
-
-    class ChMeta:
-        def __init__(self, name):
-            self.channel = ChObj(name)
-
-    class Metadata:
-        def __init__(self):
-            self.channels = [ChMeta(n) for n in channels]
-
-    class ND2File:
-        def __init__(self, path):
-            self.metadata = Metadata()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def asarray(self):
-            return arr
-
-        def voxel_size(self):
-            return VS()
-
-    fake.ND2File = ND2File
-    return fake
-
-
-def test_load_nd2_volume(monkeypatch, tmp_path):
-    arr = np.zeros((2, 5, 8, 8), dtype=np.uint16)
-    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), ["405", "488"])
-    monkeypatch.setitem(sys.modules, "nd2", fake)
-    path = tmp_path / "s.nd2"
-    path.write_bytes(b"")
-    out, meta = io.load_volume(path)
-    assert out.shape == (2, 5, 8, 8)
-    assert meta["format"] == "nikon_nd2"
-    assert meta["voxel_size_um"] == (1.5, 0.3, 0.3)
-    assert meta["channel_names"] == ["405", "488"]
-
-
-def test_nd2_metadata_exception_paths():
-    # voxel_size raising and metadata missing channels -> defaults
-    class F:
-        def voxel_size(self):
-            raise RuntimeError("nope")
-
-    meta = io_vendors._parse_nd2_metadata(F())
-    assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
-    assert meta["channel_names"] == []
-
-
-def test_nd2_channel_name_fallback_to_ch():
-    # ch.channel.name empty -> fall back to ch.name
-    class ChObj:
-        name = ""
-
-    class ChMeta:
-        channel = ChObj()
-        name = "backup"
-
-    class Meta:
-        channels = [ChMeta()]
-
-    class F:
-        metadata = Meta()
-
-    meta = io_vendors._parse_nd2_metadata(F())
-    assert meta["channel_names"] == ["backup"]
+def test_safe_float_paths():
+    assert io_vendors._safe_float("2.5", 1.0) == 2.5
+    assert io_vendors._safe_float("-1", 9.0) == 9.0  # non-positive -> default
+    assert io_vendors._safe_float("abc", 7.0) == 7.0  # unparseable -> default
 
 
 # ---------------------------------------------------------------------------
@@ -426,52 +269,6 @@ def test_lif_metadata_scale_none():
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
 
-# ---------------------------------------------------------------------------
-# supported_formats optional-present branch (already installed) + load_auto
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# canonicalization edge cases
-# ---------------------------------------------------------------------------
-
-
-def test_nd2_channels_iteration_raises():
-    # metadata.channels present but iterating/attr access raises -> except: pass
-    class BadChannels:
-        def __iter__(self):
-            raise RuntimeError("bad")
-
-    class Meta:
-        channels = BadChannels()
-
-    class F:
-        metadata = Meta()
-
-    meta = io_vendors._parse_nd2_metadata(F())
-    assert meta["channel_names"] == []
-
-
-def test_ome_metadata_parse_error():
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io_vendors._parse_ome_metadata("<not valid xml", meta)
-    assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
-
-
-def test_imagej_metadata_unparseable_spacing_warns():
-    # spacing present but non-float -> announced, defaults kept
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    with pytest.warns(RuntimeWarning, match="'notanumber' is not a number"):
-        out = io_vendors._parse_imagej_metadata({"spacing": "notanumber"}, meta)
-    assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
-
-
-def test_safe_float_paths():
-    assert io_vendors._safe_float("2.5", 1.0) == 2.5
-    assert io_vendors._safe_float("-1", 9.0) == 9.0  # non-positive -> default
-    assert io_vendors._safe_float("abc", 7.0) == 7.0  # unparseable -> default
-
-
 def test_lif_warns_when_extra_images_are_ignored(monkeypatch, tmp_path):
     fake = _make_fake_readlif(1, 2, [2.0, 2.0, 0.5])
     base = fake.LifFile
@@ -501,93 +298,6 @@ def test_lif_missing_z_length_keeps_xy_calibration(monkeypatch, tmp_path):
     assert meta["voxel_size_um"] == (1.0, 0.5, 0.5)
 
 
-# ---------------------------------------------------------------------------
-# Readers that label their axes are reordered by name, not by shape
-# ---------------------------------------------------------------------------
-
-def _zc_stack(n_z=5, n_c=2):
-    """(Z, C, Y, X) stack whose channel c holds the value c + 1."""
-    return np.stack([np.full((n_z, 8, 8), c + 1, np.uint16) for c in range(n_c)], axis=1)
-
-
-def test_nd2_zcyx_is_reordered_by_axis_name(monkeypatch, tmp_path):
-    fake = _make_fake_nd2(_zc_stack(), (0.3, 0.3, 1.5), ["405", "488"])
-    fake.ND2File.sizes = {"Z": 5, "C": 2, "Y": 8, "X": 8}
-    monkeypatch.setitem(sys.modules, "nd2", fake)
-    path = tmp_path / "s.nd2"
-    path.write_bytes(b"")
-    out, _ = io.load_volume(path)
-    assert out.shape == (2, 5, 8, 8)
-    assert (out[0].mean(), out[1].mean()) == (1, 2)
-
-
-def test_nd2_time_and_position_keep_first_index(monkeypatch, tmp_path):
-    arr = np.stack([np.stack([_zc_stack(), _zc_stack() + 10])] * 3, axis=1)   # (T, P, Z, C, Y, X)
-    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
-    fake.ND2File.sizes = {"T": 2, "P": 3, "Z": 5, "C": 2, "Y": 8, "X": 8}
-    monkeypatch.setitem(sys.modules, "nd2", fake)
-    path = tmp_path / "tp.nd2"
-    path.write_bytes(b"")
-    with pytest.warns(RuntimeWarning, match="time point 0 of 2") as rec:
-        out, _ = io.load_volume(path)
-    assert any("position 0 of 3" in str(w.message) for w in rec)
-    assert out.shape == (2, 5, 8, 8)
-    assert (out[0].mean(), out[1].mean()) == (1, 2)
-
-
-def test_nd2_rgb_samples_become_channels(monkeypatch, tmp_path):
-    arr = np.stack([np.full((4, 8, 8), v, np.uint8) for v in (10, 20, 30)], -1)   # (Z, Y, X, S)
-    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
-    fake.ND2File.sizes = {"Z": 4, "Y": 8, "X": 8, "S": 3}
-    monkeypatch.setitem(sys.modules, "nd2", fake)
-    path = tmp_path / "rgb.nd2"
-    path.write_bytes(b"")
-    out, _ = io.load_volume(path)
-    assert out.shape == (3, 4, 8, 8)
-    assert [out[c].mean() for c in range(3)] == [10, 20, 30]
-
-
-def test_czi_scene_axes_reorder_by_name(monkeypatch, tmp_path):
-    # czifile >= 2026 reads the first scene and labels it ('S' = colour samples).
-    fake = _make_fake_czifile("", _zc_stack())
-    scene = types.SimpleNamespace(axes="ZCYX")
-    fake.CziFile.scenes = {0: scene}
-    monkeypatch.setitem(sys.modules, "czifile", fake)
-    path = tmp_path / "s.czi"
-    path.write_bytes(b"")
-    out, _ = io.load_volume(path)
-    assert out.shape == (2, 5, 8, 8)
-    assert (out[0].mean(), out[1].mean()) == (1, 2)
-
-
-def test_czi_legacy_axes_with_time_and_scene(monkeypatch, tmp_path):
-    # Older czifile labels the whole file: 'S' = scene, '0' = colour samples.
-    t0 = _zc_stack()[None, :, :, :, :, None]                     # (S, Z, C, Y, X, 0)
-    arr = np.stack([np.concatenate([t0, t0 + 10]), np.concatenate([t0, t0 + 10]) + 20], axis=1)
-    fake = _make_fake_czifile("", arr)                            # (S, T, Z, C, Y, X, 0)
-    fake.CziFile.axes = "STZCYX0"
-    monkeypatch.setitem(sys.modules, "czifile", fake)
-    path = tmp_path / "old.czi"
-    path.write_bytes(b"")
-    with pytest.warns(RuntimeWarning, match="scene 0 of 2") as rec:
-        out, _ = io.load_volume(path)
-    assert any("time point 0 of 2" in str(w.message) for w in rec)
-    assert out.shape == (2, 5, 8, 8)
-    assert (out[0].mean(), out[1].mean()) == (1, 2)
-
-
-def test_labelled_axes_with_unknown_name_fall_back_to_shape(monkeypatch, tmp_path):
-    arr = np.zeros((3, 2, 5, 8, 8), np.uint16)
-    fake = _make_fake_nd2(arr, (0.3, 0.3, 1.5), [])
-    fake.ND2File.sizes = {"U": 3, "C": 2, "Z": 5, "Y": 8, "X": 8}
-    monkeypatch.setitem(sys.modules, "nd2", fake)
-    path = tmp_path / "u.nd2"
-    path.write_bytes(b"")
-    with pytest.warns(RuntimeWarning, match="first of 3 entries"):
-        out, _ = io.load_volume(path)
-    assert out.shape == (2, 5, 8, 8)
-
-
 def test_lif_y_copied_from_x_is_said_and_recorded(monkeypatch, tmp_path):
     fake = _make_fake_readlif(1, 2, [2.0, None, 0.5])
     monkeypatch.setitem(sys.modules, "readlif", fake)
@@ -598,63 +308,3 @@ def test_lif_y_copied_from_x_is_said_and_recorded(monkeypatch, tmp_path):
     assert not [w for w in rec if "no y calibration" in str(w.message)]
     assert meta["voxel_size_um"] == (2.0, 0.5, 0.5)
     assert meta["voxel_size_source"] == "z:file,y:copied-from-x,x:file"
-
-
-def test_ome_metadata_channel_name_append():
-    ome_xml = (
-        '<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06">'
-        '<Image><Pixels PhysicalSizeX="0.5" PhysicalSizeY="0.5" PhysicalSizeZ="2.0">'
-        '<Channel Name="EGFP"/>'
-        '<Channel Fluor="mCherry"/>'
-        '</Pixels></Image></OME>'
-    )
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io_vendors._parse_ome_metadata(ome_xml, meta)
-    assert out["channel_names"] == ["EGFP", "mCherry"]
-    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
-    assert meta == {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}   # not mutated
-
-
-def test_ome_metadata_without_pixels_returns_meta_unchanged():
-    meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    assert io_vendors._parse_ome_metadata("<OME><Image/></OME>", meta) == meta
-
-
-def test_imagej_metadata_returns_new_dict():
-    meta = {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
-    out = io_vendors._parse_imagej_metadata({"spacing": 2.0, "unit": "micron"}, meta)
-    assert out["voxel_size_um"] == (2.0, 0.5, 0.5)
-    assert meta == {"voxel_size_um": (1.0, 0.5, 0.5), "channel_names": []}
-    assert io_vendors._parse_imagej_metadata({}, meta) is meta
-
-
-
-@pytest.mark.parametrize("unit, scale", [("micron", 1.0), ("nm", 1e-3)])
-def test_imagej_xy_resolution_is_read_with_its_unit(tmp_path, unit, scale):
-    """ImageJ stores x/y pixel size as resolution tags (pixels per `unit`)."""
-    p = tmp_path / "ij.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), imagej=True, resolution=(2.0, 4.0),
-                     metadata={"axes": "ZYX", "spacing": 3.0, "unit": unit})
-    vol, meta = io.load_volume(p)
-    assert meta["voxel_size_um"] == pytest.approx((3.0 * scale, 0.25 * scale, 0.5 * scale))
-    assert meta["voxel_size_source"] == "z:file,y:file,x:file"
-    img, imeta = io.load_image(p)
-    assert imeta["voxel_size_um"] == pytest.approx((0.25 * scale, 0.5 * scale))
-    assert imeta["voxel_size_source"] == "y:file,x:file"
-
-
-def test_imagej_resolution_without_a_unit_is_not_calibration(tmp_path):
-    """No unit is ImageJ's uncalibrated 'pixel': the tags say nothing about µm."""
-    p = tmp_path / "ij.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), imagej=True, resolution=(2.0, 4.0),
-                     metadata={"axes": "ZYX"})
-    with pytest.warns(RuntimeWarning, match="no y/x calibration"):
-        img, imeta = io.load_image(p)
-    assert imeta["voxel_size_um"] == (1.0, 1.0)
-
-
-@pytest.mark.parametrize("tags", [{}, {"XResolution": types.SimpleNamespace(value=(0, 1)),
-                                       "YResolution": types.SimpleNamespace(value=(0, 1))}])
-def test_imagej_xy_missing_or_zero_resolution_is_not_calibration(tags):
-    tif = types.SimpleNamespace(pages=[types.SimpleNamespace(tags=tags)])
-    assert io_vendors._imagej_xy_um(tif, {"unit": "micron"}) is None
