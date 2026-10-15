@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fluorostats import stats
+from fluorostats import stats, stats_combine
 from fluorostats.stats import (
     cliffs_delta,
     bh_fdr,
@@ -418,7 +418,10 @@ def test_all_lists_every_public_function():
         for n, f in inspect.getmembers(stats, inspect.isfunction)
         if f.__module__ == stats.__name__ and not n.startswith("_")
     }
-    assert set(stats.__all__) - {"REDUCERS", "MIN_N"} == public  # plus the constants
+    # plus the constants and the pooled/two-factor tests re-exported from stats_combine
+    reexported = set(stats_combine.__all__)
+    assert set(stats.__all__) - {"REDUCERS", "MIN_N"} == public | reexported
+    assert all(getattr(stats, n) is getattr(stats_combine, n) for n in reexported)
 
 
 def test_bootstrap_mean_ci_drops_nan_like_the_fold_change_bootstrap():
