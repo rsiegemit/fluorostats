@@ -181,8 +181,12 @@ def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
 
     Useful for count endpoints where partial edge objects bias the total
     (e.g. BBBC039 ground truth excludes border nuclei). Touching objects keep
-    their own labels, so a `watershed_split` result stays split. Returns (labels, n).
+    their own labels, so a `watershed_split` result stays split. A boolean or 0/1
+    mask is labelled first (`label_3d`). Returns (labels, n).
     """
+    labels = np.asarray(labels)
+    if labels.dtype == bool or labels.max(initial=0) <= 1:
+        labels = label_3d(labels)[0]
     return remove_small_labels(clear_border(labels), 1)
 
 

@@ -460,6 +460,19 @@ def test_clear_border_labels_keeps_touching_objects_apart():
     assert (cleared[5:10, 5:10] == 1).all() and (cleared[10:15, 5:10] == 2).all()
 
 
+@pytest.mark.parametrize("dtype", [bool, np.uint8])
+def test_clear_border_labels_accepts_a_mask(dtype):
+    # Regression (M4): a boolean mask raised IndexError, and a 0/1 mask counted
+    # every object as one label; a mask is labelled first, as before.
+    mask = np.zeros((30, 30), dtype)
+    mask[0:5, 10:15] = 1  # touches the border
+    mask[12:18, 2:8] = 1
+    mask[12:18, 20:26] = 1
+    cleared, n = objects.clear_border_labels(mask)
+    assert n == 2 and set(np.unique(cleared)) == {0, 1, 2}
+    assert not cleared[0:5, 10:15].any()
+
+
 def test_clear_border_labels_after_watershed_keeps_the_split():
     labels, n = objects.watershed_split(_touching_discs())
     assert n == 2
