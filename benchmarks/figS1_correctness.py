@@ -48,7 +48,7 @@ VERM = OKABE["vermillion"]
 # caption: 6.5 in overall. constrained-layout padding pulled in tight so the three
 # stacked panels use the reduced height without empty gaps between rows.
 fig = plt.figure(figsize=(figstyle.TW, 6.5), layout="constrained")
-fig.set_constrained_layout_pads(h_pad=0.02, w_pad=0.02, hspace=0.03, wspace=0.02)
+fig.get_layout_engine().set(h_pad=0.02, w_pad=0.02, hspace=0.03, wspace=0.02)
 gs = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.0, 1.15])
 axA = fig.add_subplot(gs[0, 0])
 axB = fig.add_subplot(gs[1, 0])
