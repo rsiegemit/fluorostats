@@ -105,7 +105,8 @@ Measurements and statistics
 CLI and drivers
 - **A run refuses an output folder holding files it did not write** (`--overwrite` to
   replace them) and records which tool wrote the folder; files it wrote earlier are
-  replaced and named.
+  replaced and named (relative to the output folder). A folder at an output name is
+  refused with a message, and a symlink there is removed, never written through.
 - **One unreadable file no longer stops `quant2d`/`quant3d`**: failures go to
   `failures.csv`, the rest are measured, and the command exits 1. Errors from bad
   manifests or options print as messages, not tracebacks; a failed run leaves no

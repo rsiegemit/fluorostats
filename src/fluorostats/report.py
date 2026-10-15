@@ -4,6 +4,7 @@ run_config.json record of how an output folder was produced."""
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import warnings
 from collections.abc import Iterable
@@ -197,9 +198,10 @@ def remove_outputs(paths: Iterable[Path]) -> list[Path]:
     """Delete those of ``paths`` that exist (an earlier run's outputs); return them sorted.
 
     A tool calls this at the start of a run with the names it writes, so no earlier
-    result sits next to this run's. Only the given paths are touched.
+    result sits next to this run's. Only the given paths are touched: a symlink is
+    removed itself, never followed.
     """
-    removed = sorted(p for p in paths if p.exists())
+    removed = sorted(p for p in paths if os.path.lexists(p))
     for path in removed:
         path.unlink()
     return removed
@@ -229,20 +231,27 @@ def claim_output_dir(
     holds any owned name but no record (files the user put there). Then
     `remove_outputs` deletes the owned files and, when the folder exists,
     `mark_output_dir` marks it as ``tool``'s. ``overwrite`` replaces the files
-    anyway, with a warning naming those that were not this tool's. ValueError
-    otherwise.
+    anyway, with a warning naming those that were not this tool's. Files are named
+    relative to ``out_dir``. ValueError otherwise, and for a folder at an owned name
+    (``overwrite`` or not: a run deletes files only).
     """
     out_dir = Path(out_dir)
     owned = list(owned)
+    folders = [p for p in owned if p.is_dir() and not p.is_symlink()]
+    if folders:
+        raise ValueError(
+            f"output folder {out_dir}: {_names(folders, out_dir)} is a folder, where "
+            f"fluorostats {tool} writes a file. Move or rename it, or choose another folder."
+        )
     record = out_dir / "run_config.json"
-    present = sorted(p.name for p in owned if p.exists() and p != record)
+    present = [p for p in owned if os.path.lexists(p) and p != record]
     found = None
     if record.exists():
         recorded = _read_record(record)
         if recorded is None or recorded.get("tool") != tool:
             found = f"holds {_whose(recorded)}"
     elif present:
-        found = f"holds {', '.join(present)} but no run_config.json"
+        found = f"holds {_names(present, out_dir)} but no run_config.json"
     if found is None:
         removed = remove_outputs(owned)
     else:
@@ -283,13 +292,18 @@ def _foreign(out_dir: Path, tool: str, owned: list[Path], overwrite: bool, found
             f"output folder {out_dir} {found}; fluorostats {tool} would replace files it "
             "did not write. Choose another folder, or pass --overwrite (overwrite=True)."
         )
-    names = ", ".join(sorted(p.name for p in owned if p.exists()))
+    names = _names([p for p in owned if os.path.lexists(p)], out_dir)
     warnings.warn(
         f"{out_dir}: replacing {names}, not written by an earlier fluorostats {tool} run.",
         RuntimeWarning,
         stacklevel=3,
     )
     return remove_outputs(owned)
+
+
+def _names(paths: list[Path], out_dir: Path) -> str:
+    """``paths`` relative to ``out_dir``, sorted and comma-separated, for a message."""
+    return ", ".join(sorted(p.relative_to(out_dir).as_posix() for p in paths))
 
 
 def stale_notices(removed: list[Path]) -> list[str]:

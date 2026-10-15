@@ -232,3 +232,42 @@ def test_claim_output_dir_treats_an_unreadable_record_as_unrecorded(tmp_path, te
     (tmp_path / "run_config.json").write_text(text)
     with pytest.raises(ValueError, match="an unrecorded run"):
         report.claim_output_dir(tmp_path, "depth", [tmp_path / "run_config.json"])
+
+
+@pytest.mark.parametrize("overwrite", [False, True])
+def test_claim_output_dir_refuses_a_folder_at_an_output_name(tmp_path, overwrite):
+    # Regression (L6): a folder named like an output crashed with PermissionError.
+    (tmp_path / "contrasts.csv").mkdir()
+    owned = [tmp_path / "contrasts.csv", tmp_path / "run_config.json"]
+    with pytest.raises(ValueError, match="contrasts.csv is a folder"):
+        report.claim_output_dir(tmp_path, "depth", owned, overwrite=overwrite)
+    assert (tmp_path / "contrasts.csv").is_dir()
+
+
+def test_claim_output_dir_removes_a_symlink_at_an_output_name_not_its_target(tmp_path):
+    # Regression (L7): a dangling symlink was kept, so the run wrote through it to a
+    # file outside the output folder.
+    out = tmp_path / "out"
+    out.mkdir()
+    _record(out, tool="depth")
+    (tmp_path / "kept.csv").write_text("theirs")
+    (out / "a.csv").symlink_to(tmp_path / "kept.csv")
+    (out / "b.csv").symlink_to(tmp_path / "absent.csv")
+    owned = [out / "a.csv", out / "b.csv", out / "run_config.json"]
+    assert report.claim_output_dir(out, "depth", owned) == owned
+    assert not any(p.is_symlink() for p in owned)
+    assert (tmp_path / "kept.csv").read_text() == "theirs"
+    assert not (tmp_path / "absent.csv").exists()
+
+
+def test_claim_output_dir_names_files_relative_to_the_folder(tmp_path):
+    # Regression (L8): same-named overlays in different subfolders were listed by
+    # base name only, so they read as duplicates.
+    owned = [tmp_path / c / "s0_overlay.png" for c in ("A", "B")]
+    for p in owned:
+        p.parent.mkdir()
+        p.write_bytes(b"x")
+    with pytest.raises(ValueError, match="holds A/s0_overlay.png, B/s0_overlay.png but no"):
+        report.claim_output_dir(tmp_path, "quant2d", owned)
+    with pytest.warns(RuntimeWarning, match="replacing A/s0_overlay.png, B/s0_overlay.png,"):
+        report.claim_output_dir(tmp_path, "quant2d", owned, overwrite=True)

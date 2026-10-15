@@ -215,3 +215,18 @@ def test_a_quant_run_where_every_file_fails_writes_failures_and_the_marker_only(
     assert sorted(p.name for p in out.iterdir()) == ["failures.csv", "run_config.json"]
     marker = {"tool": "quant2d", "status": "incomplete"}
     assert json.loads((out / "run_config.json").read_text()) == marker
+
+
+def test_a_rerun_does_not_follow_a_symlinked_folder_under_overlays(tmp_path):
+    # Regression (L7): on Python 3.10-3.12 rglob followed directory symlinks, so a
+    # rerun deleted *_overlay.png files outside the output folder.
+    make_dataset(tmp_path / "in", blob_2d)
+    out = tmp_path / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x_overlay.png").write_bytes(b"theirs")
+    (out / "overlays" / "linked").symlink_to(elsewhere, target_is_directory=True)
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    assert (elsewhere / "x_overlay.png").read_bytes() == b"theirs"
