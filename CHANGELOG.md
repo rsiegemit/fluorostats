@@ -208,6 +208,12 @@ CLI and drivers
   message says so); after one `--overwrite` run the folder is recorded as the tool's.
 
 ### Benchmarks and examples
+- Fig 2 (d) plots measured deep-learning lines on the BBBC024 crowding series
+  (Cellpose 3D mode; StarDist per plane, stitched in z with settings chosen on
+  held-out volumes) in place of a typed reference value, and (f) plots the measured
+  F1 gap to Cellpose in place of a hand-drawn scope map. Fig S4 (c) adds every
+  method on the 2D mid planes. New: `cluster/bbbc024_dl_infer.py`,
+  `producers/b_clustering_curve_dl.py`, `b_stardist3d_tuning.py`, `zstitch.py`.
 - The external-viability peak-count comparator is named `skimage_peakcount` (it is a
   direct scikit-image peak count with the library's parameters, not the Fiji macro);
   figure and docs wording follow.

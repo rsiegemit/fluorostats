@@ -1,6 +1,6 @@
 """Figure S4 — Generalization across datasets.
 
-Two panels showing that fluorostats, being training-free, holds up across
+Three panels showing that fluorostats, being training-free, holds up across
 independent public datasets and imaging modalities it was never tuned on:
 
 (a) DSB2018 fluorescence-nuclei subset (StarDist's own training dataset):
@@ -11,6 +11,10 @@ independent public datasets and imaging modalities it was never tuned on:
 
 (b) Cell Tracking Challenge 3D foreground Dice on two unseen modalities
     (Fluo-C3DH-A549, Fluo-N3DH-CHO), fluorostats vs threshold baselines.
+
+(c) BBBC024 crowding series on 2D mid planes, where the 2D deep-learning models
+    run as published: instance F1 of fluorostats, classical thresholds, StarDist
+    and Cellpose on the identical planes (b_clustering_curve_2d).
 
 Run:  python3.13 benchmarks/figS4_generalization.py (from any directory)
 Outputs PDF+PNG to figures/supplementary/ plus a .txt caption.
@@ -185,20 +189,59 @@ def panel_b(ax):
               handletextpad=0.4, fontsize=6)
 
 
+LEVELS = ["c00", "c25", "c50", "c75"]
+PLANE_LINES = {   # method in b_clustering_curve_2d -> (label, colour, linestyle, marker)
+    "fluorostats(raw Otsu+CC)": ("fluorostats default", figstyle.OKABE["blue"], "-", "o"),
+    "fluorostats_watershed": ("fluorostats watershed", figstyle.OKABE["sky"], "--", "s"),
+    "Cellpose": ("Cellpose", figstyle.TOOL["Cellpose"]["c"], figstyle.TOOL["Cellpose"]["ls"],
+                 figstyle.TOOL["Cellpose"]["m"]),
+    "StarDist": ("StarDist", figstyle.TOOL["StarDist"]["c"], figstyle.TOOL["StarDist"]["ls"],
+                 figstyle.TOOL["StarDist"]["m"]),
+}
+
+
+def plane_table() -> pd.DataFrame:
+    return pd.read_csv(os.path.join(RESULTS, "b_clustering_curve_2d.csv"))
+
+
+def panel_c(ax):
+    """Mean F1 +/- SD over the mid planes at each crowding level, every method."""
+    tab = plane_table()
+    x = [int(lv[1:]) for lv in LEVELS]
+    for m, g in tab.groupby("method"):
+        g = g.set_index("clustering").loc[LEVELS]
+        if m in PLANE_LINES or g["mean_F1"].sum() == 0:
+            continue
+        ax.plot(x, g["mean_F1"], marker=".", ms=3, color="0.6", lw=0.8, alpha=0.7, zorder=1)
+    for i, (m, (lab, col, ls, mk)) in enumerate(PLANE_LINES.items()):
+        g = tab[tab["method"] == m].set_index("clustering").loc[LEVELS]
+        ax.errorbar([v + (i - 1.5) * 0.8 for v in x], g["mean_F1"], yerr=g["sd_F1"], marker=mk,
+                    ms=4, color=col, ls=ls, lw=1.3, capsize=1.5, elinewidth=0.7, label=lab,
+                    zorder=3 + i)
+    ax.plot([], [], marker=".", ms=3, color="0.6", lw=0.8, label="classical")
+    ax.legend(fontsize=5, loc="lower left", frameon=False, ncol=1, handlelength=1.6)
+    ax.set_xticks(x)
+    ax.set_xlabel("nuclear overlap (%)")
+    ax.set_ylabel("instance F1 (mid plane)")
+    ax.set_ylim(0, 1.06)
+
+
 def main():
     figstyle.apply_style()
     # Author at the text width (TW = 5.147 in) for a 1:1 include.
     # At this narrower canvas the former 1x2 row is too cramped, so stack the two
     # panels vertically: (a) DSB2018 ranking on top, (b) CTC grouped bars below.
-    fig = plt.figure(figsize=(figstyle.TW, 5.116))
-    gs = fig.add_gridspec(2, 1, height_ratios=[1.0, 1.02],
-                          hspace=0.327, left=0.235, right=0.965,
-                          top=0.9628, bottom=0.1096)
-    axes = [fig.add_subplot(gs[0]), fig.add_subplot(gs[1])]
+    fig = plt.figure(figsize=(figstyle.TW, 7.4))
+    gs = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.02, 0.9],
+                          hspace=0.46, left=0.235, right=0.965,
+                          top=0.974, bottom=0.062)
+    axes = [fig.add_subplot(gs[0]), fig.add_subplot(gs[1]), fig.add_subplot(gs[2])]
     panel_a(axes[0])
     panel_b(axes[1])
+    panel_c(axes[2])
     figstyle.panel(axes[0], "a", "DSB2018 — StarDist\u2019s own dataset", xanchor=0.0315)   # row-leader
     figstyle.panel(axes[1], "b", "unseen 3D modalities (training-free)", xanchor=0.0315)   # row-leader
+    figstyle.panel(axes[2], "c", "BBBC024 crowding, 2D mid planes", xanchor=0.0315)   # row-leader
     figstyle.save(fig, "figS4_generalization", figstyle.SUPP, tight=False)
 
     dsb = pd.read_csv(os.path.join(RESULTS, "b_dsb2018.csv")).set_index("method")
@@ -230,11 +273,31 @@ def main():
         f"{ctc_seg['Fluo-N3DH-CHO']:.3f} (CHO); these are instance "
         "SEG scores from trained pipelines and are not directly comparable to the "
         "training-free foreground-Dice values plotted here, and so are reported in "
-        "text rather than overlaid. Grey bars use distinct shades to remain separable "
+        "text rather than overlaid. "
+        + panel_c_caption() +
+        " Grey bars use distinct shades to remain separable "
         "in greyscale; the Okabe-Ito palette is colourblind-safe."
     )
     figstyle.caption("figS4_generalization", caption, figstyle.SUPP)
     print("caption written")
+
+
+def panel_c_caption() -> str:
+    tab = plane_table().set_index(["method", "clustering"])
+    n = int(tab["n"].min())
+
+    def span(m):
+        v = tab.loc[m, "mean_F1"].loc[LEVELS]
+        return f"{v.iloc[0]:.2f} to {v.iloc[-1]:.2f}"
+    return (
+        f"(c) Instance F1 (IoU 0.5, mean \u00b1 SD over the mid z plane of {n} volumes per "
+        "level) on the BBBC024 crowding series, every method on the identical planes, "
+        "where the 2D deep-learning models run as published (StarDist 2D_versatile_fluo, "
+        "Cellpose 3 nuclei, pretrained, diameter estimated). From no overlap to 75% "
+        f"overlap: Cellpose {span('Cellpose')}, StarDist {span('StarDist')}, the "
+        f"fluorostats watershed split {span('fluorostats_watershed')} and the fluorostats "
+        f"default (Otsu+CC) {span('fluorostats(raw Otsu+CC)')}; classical thresholds grey. "
+        "Fig. 2d shows the same series on whole 3D volumes.")
 
 
 if __name__ == "__main__":

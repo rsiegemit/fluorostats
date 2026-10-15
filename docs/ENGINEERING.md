@@ -193,16 +193,15 @@ Now compliant (measured, not estimated):
 - DAT/REU: figure scripts read committed tables (recorded DAT-3 exceptions: live
   determinism runs and display overlays), and every table regenerates from HEAD
   except those `benchmarks/README.md` marks as not regenerated (cluster-only,
-  wall-clock timing and collaborator tables).
+  wall-clock timing and collaborator tables). Every plotted value comes from a
+  table or a cited publication: the Fig 2 deep-learning lines are measured
+  (`b_clustering_curve_dl`, with the StarDist stitch chosen on held-out volumes).
 
 Open, each needing an owner decision:
 
 - [ ] `benchmarks/figS2_runtime.py`: panel (c) plots a typed value, not a measured
   one; the platform label and the deep-learning timings are typed (cluster-only,
   no run record).
-- [ ] Typed figure annotations in `fig2_nuclei.py` (the deep-learning reference
-  line and the panel (f) crossover/scope map), which the watershed line in panel (d)
-  now contradicts.
 - [ ] `benchmarks/results/ve_crops.npz` (a display panel) has no producer.
 - [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default
   (existing manifests rely on it); `examples/keyence_tube_analysis.py` and

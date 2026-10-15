@@ -30,6 +30,14 @@ URLs verified 2026-09-24.
   Folder names the producers expect: `BBBC039/`, `BBBC024/`, `BBBC024_c25/`,
   `BBBC024_c50/`, `BBBC024_c75/`, `dsb2018/test/`, `CTC/<dataset>/`, `REAVER/`,
   `sproutangio/`, `viability/`, `kerkhoff_lda/synthetic/`, `vesselexpress/`.
+- **BBBC024 deep-learning predictions** (`BBBC024_dl/`, read by
+  `b_clustering_curve_dl.py`): derived, not downloaded. Copy the first 5 volumes of
+  each BBBC024 set to `in/3d/<set>/` and the mid z plane (`shape[0] // 2`) of all 30
+  to `in/2d/<set>/`, then on a node with Cellpose 3 and StarDist run
+  `python cluster/bbbc024_dl_infer.py {cellpose,stardist} {3d,2d} in/<mode>/<set>
+  BBBC024_dl/<mode>/<tool>/<set>` for each set. Each output folder holds one label
+  TIFF per input and a `versions.json` (model, library versions, settings) that the
+  producer copies into its `.run.json`.
 - **SproutAngio subset:** `b_vascular_sproutangio_multi.csv` covers 12 of the record's
   53 files: `group1-07..10`, `group3-04, -05, -09, -10`, `group5-03, -06, -10, -11` (`.czi`).
   Its producer reads every `.czi` in `sproutangio/`, so download exactly these.

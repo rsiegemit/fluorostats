@@ -35,9 +35,8 @@ PERIMAGE = run_params("b2_nuclei_methods_perimage")   # BBBC039 min_size, IoU th
 CLUSTER = run_params("b_clustering_curve")            # BBBC024 min_size, volumes per level
 N_BOOT = run_params("b2_nuclei_ci")["n_boot"]
 IOU = PERIMAGE["iou_threshold"]
-# DL reference level of panel (d): typed, not measured here (no DL results table
-# exists for the BBBC024 crowding sets)
-DL_REF_F1 = 0.96
+DL3D = run_params("b_clustering_curve_dl")           # StarDist settings of panel (d)
+SD_TUNED = "StarDist (tuned on volumes 5-9)"
 
 
 def ci_of(subset, method):
@@ -212,15 +211,16 @@ for row, (im, gt, stem) in enumerate(crops):
         if col == 0 and row == 0:
             F.scalebar(ax, round(20 / F.BBBC039_UM_PER_PX), "20 µm")
             panel(ax, "c", xanchor=0.0315)   # row-leader
-# (d) F1 vs crowding — the fluorostats default (Otsu+CC) and the fluorostats watershed
-# split as two labelled lines, the classical thresholds grey, and the DL reference
-# line (dashed). Line labels carry the c00 -> c75 values read from the table.
+# (d) F1 vs crowding (3D volumes) — the fluorostats default (Otsu+CC) and the
+# fluorostats watershed split, the classical thresholds grey, and the measured deep
+# learning lines (b_clustering_curve_dl: Cellpose 3D mode, StarDist per plane with the
+# stitch tuned on held-out volumes).
 axd = fig.add_subplot(gs[3, :2])
 cc = pd.read_csv(R/"b_clustering_curve.csv").set_index("method")
 LEVELS = ["c00", "c25", "c50", "c75"]
 x = [int(lv[1:]) for lv in LEVELS]
-FS_LINES = {F.RAW_OTSU_CC: ("fluorostats\ndefault", OKABE["blue"], "-", "o"),
-            "fluorostats_watershed": ("fluorostats\nwatershed", OKABE["sky"], "--", "s")}
+FS_LINES = {F.RAW_OTSU_CC: ("fluorostats default", OKABE["blue"], "-", "o"),
+            "fluorostats_watershed": ("fluorostats watershed", OKABE["sky"], "--", "s")}
 for m, r in cc.iterrows():
     if m in FS_LINES or r[LEVELS].sum() == 0:   # fluorostats drawn below; skip an all-zero row
         continue
@@ -228,13 +228,16 @@ for m, r in cc.iterrows():
 for i, (m, (lab, col, ls, mk)) in enumerate(FS_LINES.items()):
     y = cc.loc[m, LEVELS]
     axd.plot(x, y, marker=mk, ms=4, color=col, lw=1.6, ls=ls, zorder=3 + i, label=lab)
-axd.axhline(DL_REF_F1, ls="--", color=OKABE["black"], lw=1.0)
-axd.text(74, DL_REF_F1 - 0.10, f"DL reference $\\approx${DL_REF_F1}", fontsize=5.0, color="black",
-         ha="right", va="top")
+dl = pd.read_csv(R/"b_clustering_curve_dl.csv").set_index("method")
+DL_LINES = {"Cellpose": ("Cellpose 3D", TOOL["Cellpose"]["c"], TOOL["Cellpose"]["ls"],
+                         TOOL["Cellpose"]["m"]),
+            SD_TUNED: ("StarDist per plane", TOOL["StarDist"]["c"], TOOL["StarDist"]["ls"],
+                       TOOL["StarDist"]["m"])}
+for m, (lab, col, ls, mk) in DL_LINES.items():
+    axd.plot(x, dl.loc[m, LEVELS], marker=mk, ms=3.5, color=col, lw=1.2, ls=ls, zorder=2, label=lab)
 axd.plot([], [], marker=".", ms=3, color=GREY, lw=0.8, label="classical")
-# short labels keep the legend in the empty lower-left corner, clear of the curves
-axd.legend(fontsize=4.5, loc="lower left", frameon=False, handlelength=1.4, labelspacing=0.3,
-           borderaxespad=0.2)
+axd.legend(fontsize=4.5, loc="center right", bbox_to_anchor=(-0.42, 0.5), frameon=False,
+           handlelength=1.4, labelspacing=0.35, borderaxespad=0)   # in the empty left margin
 axd.set_xlabel("nuclear overlap (%)")
 axd.set_ylabel("instance F1")
 axd.set_ylim(0, 1.06)   # room for markers at F1 = 1.0
@@ -255,20 +258,29 @@ for i, (fp, ttl) in enumerate([(str(DL/"BBBC024/image-final_0000.tif"), "separat
     if i == 0:
         panel(ax, "e")
 
-# (f) scope decision map
+# (f) measured gap to deep learning: fluorostats minus Cellpose at each crowding
+# level, 3D volumes (filled, panel d) and 2D mid planes (open, b_clustering_curve_2d).
 axf = fig.add_subplot(gs[3, 4:])
-axf.axvspan(0, 30, color=OKABE["green"], alpha=0.14)
-axf.axvspan(30, 50, color=OKABE["yellow"], alpha=0.16)
-axf.axvspan(50, 100, color=OKABE["vermillion"], alpha=0.14)
-axf.axvline(40, ls="--", color="black", lw=1.0, ymax=0.92)
-axf.text(43, 0.5, "measured\ncrossover $\\approx$40%", fontsize=5.0)
-axf.text(15, 0.82, "fluorostats\n= DL", ha="center", fontsize=6.0, color=OKABE["green"])
-axf.text(75, 0.82, "use trained\nsegmenter", ha="center", fontsize=6.0, color=OKABE["vermillion"])
-axf.set_xlim(0,100)
-axf.set_ylim(0,1)
-axf.set_yticks([])
-axf.set_xlabel("overlap / crowding (%)")
-panel(axf, "f", "when to use which")
+c2d = pd.read_csv(R/"b_clustering_curve_2d.csv").pivot(index="method", columns="clustering",
+                                                        values="mean_F1")
+gap3d = {m: cc.loc[m, LEVELS] - dl.loc["Cellpose", LEVELS] for m in FS_LINES}
+gap2d = {m: c2d.loc[m, LEVELS] - c2d.loc["Cellpose", LEVELS] for m in FS_LINES}
+axf.axhline(0, color=OKABE["vermillion"], lw=0.9, ls="-.")
+axf.text(x[-1], 0.03, "Cellpose", fontsize=5.0, color=OKABE["vermillion"], ha="right", va="bottom")
+for i, (m, (lab, col, ls, mk)) in enumerate(FS_LINES.items()):
+    off = (i - 0.5) * 3
+    axf.plot([v + off for v in x], gap3d[m], marker=mk, ms=4, color=col, lw=1.2, ls=ls)
+    axf.plot([v + off for v in x], gap2d[m], marker=mk, ms=4, color=col, lw=0.6, ls=ls,
+             mfc="white", alpha=0.9)
+axf.plot([], [], marker="o", ms=3.5, color="grey", lw=0, label="3D")
+axf.plot([], [], marker="o", ms=3.5, color="grey", mfc="white", lw=0, label="2D plane")
+axf.legend(fontsize=4.5, loc="lower left", frameon=False, handletextpad=0.2, borderaxespad=0.2)
+axf.set_xticks(x)
+axf.set_xlim(-8, 83)
+axf.set_ylim(-0.95, 0.12)
+axf.set_xlabel("nuclear overlap (%)")
+axf.set_yticks([0, -0.4, -0.8])
+panel(axf, "f", "$\\Delta$F1 to deep learning")
 
 # caption numbers derived from the same per-image data the panels plot (never hand-typed)
 sd_m, cp_m, om_m = (ci_of("first100", k)[0] for k in ("StarDist", "Cellpose", "Omnipose"))
@@ -289,6 +301,27 @@ def change(m):
     return f"{'falls' if b < a else 'rises' if b > a else 'stays'} from {a:.2f} to {b:.2f}"
 
 
+sd = DL3D["stardist_tuned"]
+sd_prob = "model default" if sd["prob_thresh"] == "default" else sd["prob_thresh"]
+n_grid = len(pd.read_csv(R/"b_stardist3d_tuning.csv"))
+N_2D = int(pd.read_csv(R/"b_clustering_curve_2d.csv")["n"].min())
+
+
+def dl_span(m):
+    """'F1 a-b' over the four crowding levels for a deep-learning row of panel (d)."""
+    v = dl.loc[m, LEVELS]
+    return f"F1 {v.min():.2f}-{v.max():.2f}" if v.min() != v.max() else f"F1 {v.min():.2f}"
+
+
+def worst_gap(m):
+    return float(max((-gap3d[m]).max(), (-gap2d[m]).max()))
+
+
+def gap_txt(m):
+    return (f"{-gap3d[m]['c00']:.2f} (3D) and {-gap2d[m]['c00']:.2f} (2D) without overlap and "
+            f"{-gap3d[m]['c75']:.2f} and {-gap2d[m]['c75']:.2f} at 75% overlap")
+
+
 classical = cc.drop(index=list(FS_LINES))
 classical = classical[classical[LEVELS].sum(axis=1) > 0]   # the rows panel (d) draws
 cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
@@ -306,11 +339,20 @@ cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
  f"to 75% overlap the fluorostats default (Otsu+CC, blue) {change(F.RAW_OTSU_CC)} and the fluorostats "
  f"watershed split (light blue, dashed) {change('fluorostats_watershed')}; the watershed seeding parameters "
  f"were chosen on BBBC024. Classical thresholds (grey) reach {classical['c75'].min():.2f}-"
- f"{classical['c75'].max():.2f} at 75% overlap; the dashed line is a DL reference level of {DL_REF_F1}. "
+ f"{classical['c75'].max():.2f} at 75% overlap. Deep learning, scored the same way on the same volumes: "
+ f"Cellpose (vermillion; pretrained nuclei model, its 3D mode) {dl_span('Cellpose')}; StarDist "
+ f"(orange; 2D_versatile_fluo, which has no pretrained 3D fluorescence counterpart) run per plane "
+ f"and stitched in z reaches {dl_span(SD_TUNED)}, with the detection threshold ({sd_prob}), stitch IoU "
+ f"({sd['stitch_iou']}) and minimum z extent ({sd['min_planes']} planes) chosen on held-out "
+ f"volumes 5-9 from {n_grid} settings (b_stardist3d_tuning; the choice lies at the grid's loosest "
+ f"stitch and longest filter); with the default "
+ f"settings it reaches "
+ f"{dl_span('StarDist (default stitch)')}, segmenting the defocus haze above and below each nucleus. "
  "(e) fluorostats overlay on a "
  "well-separated (c00) and a crowded (c75) field, showing connected-component merging under overlap. "
- "(f) Data-anchored scope map: fluorostats is at parity with trained segmenters up to ~40% crowding "
- "(green), beyond which a trained instance segmenter is preferred (red).")
+ f"(f) Gap to Cellpose (\u0394F1 = fluorostats F1 minus Cellpose F1), filled: 3D volumes of (d); open: the mid z plane of all {N_2D} volumes per level, "
+ f"where StarDist runs as published (Fig. S4c). The fluorostats default trails Cellpose by "
+ f"{gap_txt(F.RAW_OTSU_CC)}; the fluorostats watershed by at most {worst_gap('fluorostats_watershed'):.3f}.")
 save(fig, "fig2_nuclei_boundary", tight=False)
 caption("fig2_nuclei_boundary", cap)
 print("Figure 2 done")

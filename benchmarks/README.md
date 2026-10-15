@@ -85,6 +85,8 @@ reproduces it byte for byte.
 | `b3_viability_multi.csv` | `b3_viability_multi.py` | S-BIAD2130 | EXACT |
 | `b4_reaver_ranking_perimage.csv` | `b4_reaver_ranking_perimage.py` | REAVER | EXACT |
 | `b_clustering_curve.csv` | `b_clustering_curve.py` | BBBC024 (+ c25/c50/c75) | EXACT |
+| `b_stardist3d_tuning.csv` | `b_stardist3d_tuning.py` (run before `b_clustering_curve_dl.py`) | BBBC024 volumes 5-9 and the StarDist per-plane predictions in `BBBC024_dl/sd_grid/` | EXACT given the predictions |
+| `b_clustering_curve_dl.csv`, `b_clustering_curve_2d.csv` | `b_clustering_curve_dl.py` | BBBC024 (+ c25/c50/c75) and the `BBBC024_dl/` predictions of `cluster/bbbc024_dl_infer.py` (`DATA_MANIFEST.md`) | EXACT given the predictions |
 | `b_denoising.csv` | `b_denoising.py` | BBBC024 | EXACT |
 | `b_density_normalization.csv`, `b_density_normalization_cv.csv` | `b_density_normalization.py` | BBBC024 | EXACT |
 | `b_dl_ci.csv` | `b_dl_ci.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`) | BBBC039 | EXACT |
