@@ -51,8 +51,14 @@ Manifest schema (all fields except groups/stacks optional)::
       ]
     }
 
-Stack labels must be unique within a group; a group ``background`` is rejected
-(viability runs subtract no background).
+Validation is strict, as for depth manifests: any field not shown above (``role``
+apart, whose only value is "primary") is refused, a group ``background`` included
+(viability runs subtract none), and stack labels must be unique within a group.
+
+Outputs: ``viability_per_stack.csv``, ``viability_group_summary.csv`` (mean and SEM
+per group), ``contrasts.csv`` (the printed two-group statistics, in the columns of
+`depth_batch`'s contrasts.csv) and, written last, ``run_config.json``. A run first
+removes those files left by an earlier run in the output folder.
 
 Segmentation: ``seg.method`` thresholds everything, the cell counts included
 (``count_seg_method`` in run_config.json). ``min_size`` differs by readout:
@@ -76,7 +82,8 @@ import numpy as np
 
 from .io import load_volume
 from . import stats
-from .manifest import check_groups
+from .depth_batch import write_contrasts_csv
+from .manifest import check_groups, is_int, is_number, unknown_keys
 from . import report
 from . import segment
 from . import viability as viab
@@ -94,6 +101,17 @@ MIP_COLUMNS = {
 }
 # Viability runs analyse every stack; there is no auxiliary stack role.
 _ROLES = ("primary",)
+# Every field a manifest, group, stack and seg block may have (anything else is refused).
+_FIELDS = ("title", "live_channel", "dead_channel", "seg", "count_method", "output_dir",
+           "groups")
+_GROUP_FIELDS = ("name", "stacks")
+_STACK_FIELDS = ("label", "path", "role")
+_SEG_FIELDS = ("method", "min_size", "threshold_scale")
+# The metrics of the two-group contrast (console and contrasts.csv).
+_CONTRAST_METRICS = ("live_cov_pct", "live_density_permm2", "viability_area")
+# Every file a run writes; an earlier run's copies are removed when a run starts.
+_OUTPUTS = ("viability_per_stack.csv", "viability_group_summary.csv", "contrasts.csv",
+            "run_config.json")
 
 
 def load_manifest(path: Path) -> dict:
@@ -112,10 +130,10 @@ def load_manifest(path: Path) -> dict:
 
 def _validate(m: dict) -> None:
     """Check a viability manifest before any image is loaded; raise listing every problem."""
-    problems = []
+    problems = unknown_keys("manifest", m, _FIELDS)
     for key in ("live_channel", "dead_channel"):
         v = m[key]
-        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v < 0):
+        if v is not None and (not is_int(v) or v < 0):
             problems.append(f"{key} must be a non-negative integer, got {v!r}")
     if m["live_channel"] is not None and m["live_channel"] == m["dead_channel"]:
         problems.append(f"live_channel and dead_channel are both {m['live_channel']}")
@@ -123,14 +141,8 @@ def _validate(m: dict) -> None:
     if m["count_method"] not in methods:
         problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
     problems += _check_seg(m["seg"])
-    problems += check_groups(m["groups"], roles=_ROLES)
-    for grp in m["groups"]:
-        name = grp.get("name")
-        if "background" in grp:
-            problems.append(f"group {name!r}: 'background' is not used by viability runs")
-        labels = [st.get("label") for st in grp.get("stacks", [])]
-        for lab in sorted({lb for lb in labels if lb is not None and labels.count(lb) > 1}):
-            problems.append(f"group {name!r}: label {lab!r} is used by more than one stack")
+    problems += check_groups(m["groups"], roles=_ROLES, group_keys=_GROUP_FIELDS,
+                             stack_keys=_STACK_FIELDS)
     if problems:
         raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
 
@@ -139,17 +151,14 @@ def _check_seg(seg) -> list[str]:
     """Problems with the manifest's ``seg`` block (keyword arguments of `segment.binarize`)."""
     if not isinstance(seg, dict):
         return [f"seg must be an object of segmentation settings, got {seg!r}"]
-    problems = []
-    unknown = sorted(set(seg) - {"method", "min_size", "threshold_scale"})
-    if unknown:
-        problems.append(f"seg has unknown keys {unknown} (use method, min_size, threshold_scale)")
+    problems = unknown_keys("seg", seg, _SEG_FIELDS)
     if "method" in seg and seg["method"] not in segment.METHODS:
         problems.append(f"seg.method must be one of {segment.METHODS}, got {seg['method']!r}")
     ms = seg.get("min_size", 0)
-    if not isinstance(ms, int) or isinstance(ms, bool) or ms < 0:
+    if not is_int(ms) or ms < 0:
         problems.append(f"seg.min_size must be a non-negative integer, got {ms!r}")
     ts = seg.get("threshold_scale", 1.0)
-    if not isinstance(ts, (int, float)) or isinstance(ts, bool) or ts <= 0:
+    if not is_number(ts) or ts <= 0:
         problems.append(f"seg.threshold_scale must be a positive number, got {ts!r}")
     return problems
 
@@ -213,20 +222,16 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     return row
 
 
-def _mean_sem(vals: list[float]) -> tuple[float, float, int]:
-    """Mean, SEM and n of the non-NaN values (`stats.describe`: SEM NaN for n < 2)."""
-    d = stats.describe(vals)
-    return d["mean"], d["sem"], d["n"]
-
-
 def run(manifest_path: Path, output_override: str | None = None) -> Path:
-    """Analyse every stack in a manifest; write per-stack and group-summary CSVs."""
+    """Analyse every stack in a manifest; write per-stack, group-summary and contrast
+    CSVs, then ``run_config.json`` (last, so only a completed run leaves a record)."""
     m = load_manifest(Path(manifest_path))
     out = Path(output_override or m["output_dir"])
     out.mkdir(parents=True, exist_ok=True)
-    count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)   # counts use seg.method too
-    report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
-                            nested={"resolved": m, "mip_columns": MIP_COLUMNS})
+    # every name is written again by a completed run, so none is ever left stale
+    # (no report.stale_notices); removing them first keeps a failed run from
+    # leaving an earlier run's tables next to an absent run_config.json
+    report.remove_outputs(out / name for name in _OUTPUTS)
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []
@@ -244,53 +249,79 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
         w.writeheader()
         w.writerows(rows)
 
-    # group summary CSV (mean +/- SEM for the numeric metrics)
-    metrics = [k for k in fields if k not in ("group", "stack")
-               and not isinstance(rows[0][k], str)]      # numeric columns only
     groups = [g["name"] for g in m["groups"]]
-    with open(out / "viability_group_summary.csv", "w", newline="") as f:
-        sw = csv.writer(f)
-        sw.writerow(["group", "n", "metric", "mean", "sem"])
-        for g in groups:
-            gr = [r for r in rows if r["group"] == g]
-            for mk in metrics:
-                mean, sem, n = _mean_sem([r[mk] for r in gr])
-                sw.writerow([g, n, mk, f"{mean:.5g}", f"{sem:.5g}"])
+    _write_group_summary(out / "viability_group_summary.csv", rows, groups)
+    tests = contrasts(rows, groups)
+    write_contrasts_csv(out / "contrasts.csv", tests)
 
-    _print_summary(rows, groups)
+    _print_summary(rows, groups, tests)
+    count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)   # counts use seg.method too
+    report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
+                            nested={"resolved": m, "mip_columns": MIP_COLUMNS})
     print(f"\nOutputs written to {out}/")
     return out
 
 
-def _print_summary(rows: list[dict], groups: list[str]) -> None:
+def _describe(rows: list[dict], group: str, metrics: list[str]) -> dict:
+    """`stats.describe` of each metric over one group's stacks (arrays over ``metrics``)."""
+    vals = np.array([[r[mk] for mk in metrics] for r in rows if r["group"] == group], float)
+    return stats.describe(vals, axis=0)
+
+
+def _write_group_summary(path: Path, rows: list[dict], groups: list[str]) -> None:
+    """Mean and SEM (`stats.describe`: NaN SEM for n < 2) of every numeric column, by group."""
+    metrics = [k for k in rows[0] if k not in ("group", "stack")
+               and not isinstance(rows[0][k], str)]      # numeric columns only
+    with open(path, "w", newline="") as f:
+        sw = csv.writer(f)
+        sw.writerow(["group", "n", "metric", "mean", "sem"])
+        for g in groups:
+            d = _describe(rows, g, metrics)
+            for i, mk in enumerate(metrics):
+                sw.writerow([g, int(d["n"][i]), mk, f"{d['mean'][i]:.5g}", f"{d['sem'][i]:.5g}"])
+
+
+def contrasts(rows: list[dict], groups: list[str]) -> list[dict]:
+    """The two-group statistics of a run, as `depth_batch.contrasts` rows (same columns;
+    ``window`` empty): two-sided Mann-Whitney with Cliff's delta on each of
+    ``live_cov_pct``, ``live_density_permm2`` and ``viability_area`` (NaN stacks
+    dropped), BH-FDR across those metrics. None unless there are exactly two groups."""
+    if len(groups) != 2:
+        return []
+    out = []
+    for mk in _CONTRAST_METRICS:
+        a, b = ([r[mk] for r in rows if r["group"] == g and r[mk] == r[mk]] for g in groups)
+        if a and b:
+            mw = stats.mann_whitney(a, b)
+            out.append({"metric": mk, "window": "", "group_a": groups[0], "group_b": groups[1],
+                        "n_a": mw["n_x"], "n_b": mw["n_y"], "U": mw["u"], "p": mw["p"],
+                        "cliffs_delta": mw["cliffs_delta"], "test": "Mann-Whitney U, two-sided",
+                        "fold": float(np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")})
+    qs = stats.bh_fdr([c["p"] for c in out])
+    return [{**c, "q": float(q), "correction": f"Benjamini-Hochberg FDR across {len(out)} metrics"}
+            for c, q in zip(out, qs)]
+
+
+def _print_summary(rows: list[dict], groups: list[str], tests: list[dict]) -> None:
     print("\n=== Group means (mean +/- SEM) ===")
     key_metrics = ["live_cov_pct", "dead_cov_pct", "viability_area",
                    "viability_count_consensus", "live_density_permm2", "overestimate_mip"]
-    for mk in key_metrics:
-        parts = []
-        for g in groups:
-            mean, sem, n = _mean_sem([r[mk] for r in rows if r["group"] == g])
-            parts.append(f"{g}: {mean:.3g}±{sem:.2g} (n={n})")
+    by_group = {g: _describe(rows, g, key_metrics) for g in groups}
+    for i, mk in enumerate(key_metrics):
+        parts = [f"{g}: {d['mean'][i]:.3g}±{d['sem'][i]:.2g} (n={int(d['n'][i])})"
+                 for g, d in by_group.items()]
         print(f"  {mk:<26} " + "   ".join(parts))
-    _print_contrast(rows, groups)
+    _print_contrast(groups, tests)
 
 
-def _print_contrast(rows: list[dict], groups: list[str]) -> None:
-    """Two-group Mann-Whitney U with Cliff's delta, BH-FDR across the printed tests."""
+def _print_contrast(groups: list[str], tests: list[dict]) -> None:
+    """Print the `contrasts` rows (the same rows contrasts.csv holds)."""
     if len(groups) != 2:
         print(f"\n(two-group contrast skipped: {len(groups)} group(s); it compares exactly two)")
         return
-    g0, g1 = groups
-    tests = []
-    for mk in ("live_cov_pct", "live_density_permm2", "viability_area"):
-        a = [r[mk] for r in rows if r["group"] == g0 and r[mk] == r[mk]]
-        b = [r[mk] for r in rows if r["group"] == g1 and r[mk] == r[mk]]
-        if len(a) >= 1 and len(b) >= 1:
-            fold = (np.mean(b) / np.mean(a)) if np.mean(a) else float("nan")
-            tests.append((mk, stats.mann_whitney(a, b), fold))
-    q = stats.bh_fdr(np.array([mw["p"] for _, mw, _ in tests]))
     print("\n=== Two-group contrast (Mann-Whitney U, two-sided; Cliff's delta; "
           "BH-FDR q across these tests) ===")
-    for (mk, mw, fold), qv in zip(tests, q):
-        print(f"  {mk:<26} {g0} vs {g1}: U={mw['u']:.0f}, p={mw['p']:.4g}, q={qv:.4g}, "
-              f"delta={mw['cliffs_delta']:+.2f}, fold={fold:.2f}x (n={mw['n_x']},{mw['n_y']})")
+    for c in tests:
+        print(f"  {c['metric']:<26} {c['group_a']} vs {c['group_b']}: U={c['U']:.0f}, "
+              f"p={c['p']:.4g}, q={c['q']:.4g}, delta={c['cliffs_delta']:+.2f}, "
+              f"fold={c['fold']:.2f}x (n={c['n_a']},{c['n_b']})")

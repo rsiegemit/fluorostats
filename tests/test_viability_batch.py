@@ -140,7 +140,7 @@ def test_manifest_rejects_aux_role(tmp_path):
     ({"min_size": -1}, "seg.min_size must be a non-negative integer"),
     ({"min_size": 2.5}, "seg.min_size must be a non-negative integer"),
     ({"threshold_scale": 0}, "seg.threshold_scale must be a positive number"),
-    ({"sigma": 1.0}, "seg has unknown keys"),
+    ({"sigma": 1.0}, "seg: unknown field 'sigma'"),
     ("otsu", "seg must be an object"),
 ])
 def test_manifest_rejects_bad_seg_block(tmp_path, seg, msg):
@@ -258,14 +258,69 @@ def test_unnamed_channels_fall_back_to_0_1_with_a_warning(tmp_path):
     assert (row["live_channel_name"], row["dead_channel_name"]) == ("Ch1", "Ch2")
 
 
-def test_manifest_rejects_duplicate_labels_and_background(tmp_path):
+def test_manifest_rejects_duplicate_labels_and_unknown_fields(tmp_path):
+    # Strict like depth: a misspelt or unused field (e.g. a group "background",
+    # which viability never subtracts) is refused instead of silently ignored.
     mp = _one_stack_manifest(tmp_path)
     man = json.loads(mp.read_text())
     st = man["groups"][0]["stacks"][0]
-    man["groups"][0]["stacks"].append(dict(st))
+    man["groups"][0]["stacks"].append({**st, "colour": "red"})
     man["groups"][0]["background"] = st["path"]
+    man["live_chanel"] = 0
     mp.write_text(json.dumps(man))
     with pytest.raises(ValueError) as err:
         viability_batch.load_manifest(mp)
-    assert "label 's' is used by more than one stack" in str(err.value)
-    assert "'background' is not used by viability" in str(err.value)
+    msg = str(err.value)
+    assert msg.count("stack label 's' is used by more than one stack") == 1
+    assert "group 'g': unknown field 'background'" in msg
+    assert "manifest: unknown field 'live_chanel'" in msg
+    assert "stack 's': unknown field 'colour'" in msg
+
+
+def test_contrasts_csv_has_the_depth_columns(tmp_path):
+    from fluorostats import stats
+    from fluorostats.depth_batch import write_contrasts_csv
+    import csv
+    out = viability_batch.run(_manifest(tmp_path))
+    rows = list(csv.DictReader(open(out / "contrasts.csv")))
+    per = list(csv.DictReader(open(out / "viability_per_stack.csv")))
+    hdr = (tmp_path / "hdr.csv")
+    write_contrasts_csv(hdr, [])
+    assert list(rows[0]) == hdr.read_text().strip().split(",")
+    assert [r["metric"] for r in rows] == ["live_cov_pct", "live_density_permm2",
+                                           "viability_area"]
+    ps = []
+    for r in rows:
+        a = [float(p[r["metric"]]) for p in per if p["group"] == "sparse"]
+        b = [float(p[r["metric"]]) for p in per if p["group"] == "dense"]
+        mw = stats.mann_whitney(a, b)
+        assert (r["group_a"], r["group_b"], r["n_a"], r["n_b"]) == ("sparse", "dense", "3", "3")
+        assert float(r["p"]) == pytest.approx(mw["p"], rel=1e-5)
+        assert float(r["cliffs_delta"]) == pytest.approx(mw["cliffs_delta"], rel=1e-5)
+        ps.append(mw["p"])
+    q = stats.bh_fdr(ps)
+    assert [float(r["q"]) for r in rows] == pytest.approx(list(q), rel=1e-5)
+    assert rows[0]["correction"] == "Benjamini-Hochberg FDR across 3 metrics"
+
+
+def test_one_group_writes_a_header_only_contrasts_csv(tmp_path):
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    assert len((out / "contrasts.csv").read_text().strip().splitlines()) == 1
+
+
+def test_a_failed_rerun_leaves_no_earlier_outputs_or_run_config(tmp_path, monkeypatch):
+    # Earlier outputs are removed at the start and run_config.json is written last,
+    # so a run that fails part-way leaves no record claiming the folder.
+    mp = _one_stack_manifest(tmp_path)
+    out = viability_batch.run(mp)
+    names = ("viability_per_stack.csv", "viability_group_summary.csv", "contrasts.csv",
+             "run_config.json")
+    assert all((out / n).exists() for n in names)
+
+    def boom(path, cfg):
+        raise RuntimeError("unreadable stack")
+
+    monkeypatch.setattr(viability_batch, "analyse_stack", boom)
+    with pytest.raises(RuntimeError, match="unreadable stack"):
+        viability_batch.run(mp)
+    assert not any((out / n).exists() for n in names)
