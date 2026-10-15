@@ -513,3 +513,15 @@ def test_object_mask_association_3d_voxel_size_on_a_2d_mask():
     r = objects.object_mask_association(cents, mask2d, voxel_size_um=(2.0, 0.5, 0.5))
     assert r["median_distance"] == pytest.approx(5.0)  # 10 px * 0.5 um
     assert r["frac_within"] == 0.0
+
+
+def test_radial_distribution_points_at_the_centre_fill_the_inner_shell():
+    """Fractions always sum to 1: points all at the centre are in the inner shell."""
+    z = objects.radial_distribution(np.array([[5.0, 5.0], [5.0, 5.0]]), (5, 5), n_bins=4)
+    np.testing.assert_array_equal(z["fractions"], [1.0, 0.0, 0.0, 0.0])
+    assert z["mean_norm_radius"] == 0.0 and z["n"] == 2
+
+
+def test_radial_distribution_rejects_a_non_positive_r_max():
+    with pytest.raises(ValueError, match="r_max"):
+        objects.radial_distribution(np.array([[1.0, 2.0]]), (0, 0), r_max=0.0)

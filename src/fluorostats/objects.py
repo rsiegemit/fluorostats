@@ -489,7 +489,11 @@ def radial_distribution(
         mean_norm_radius — mean radius normalised to ``r_max`` (0 = centre).
         r_max — the radius used for normalisation.
         n — number of points.
+    Points all at the centre (``r_max`` 0 from the data) are in the inner shell;
+    an explicit ``r_max <= 0`` raises ValueError.
     """
+    if r_max is not None and r_max <= 0:
+        raise ValueError(f"radial_distribution: r_max must be positive, got {r_max}")
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0:
         return {
@@ -500,14 +504,7 @@ def radial_distribution(
         }
     r = np.hypot(pts[:, -2] - center[0], pts[:, -1] - center[1])
     rmax = float(r_max) if r_max is not None else float(r.max())
-    if rmax <= 0:
-        return {
-            "fractions": np.zeros(n_bins),
-            "mean_norm_radius": 0.0,
-            "r_max": rmax,
-            "n": int(pts.shape[0]),
-        }
-    rn = np.clip(r / rmax, 0.0, 1.0)
+    rn = np.clip(r / rmax, 0.0, 1.0) if rmax > 0 else np.zeros_like(r)  # all at the centre
     counts, _ = np.histogram(rn, bins=n_bins, range=(0.0, 1.0))
     return {
         "fractions": counts / counts.sum(),
