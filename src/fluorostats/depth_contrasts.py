@@ -29,10 +29,13 @@ def _auc_by_group(rows, w) -> dict[str, list[float]]:
     return by_group
 
 
-def _n_partial(rows, w) -> int:
-    """Primary stacks with an AUC over window ``w`` that covers only part of it."""
+def _n_partial(rows, w, groups: tuple[str, str]) -> int:
+    """Primary stacks of the tested ``groups`` with an AUC over window ``w`` that
+    covers only part of it."""
     lab = window_label(w)
-    aucs = [r["result"]["auc"][lab] for r in rows if r["role"] == "primary"]
+    aucs = [
+        r["result"]["auc"][lab] for r in rows if r["role"] == "primary" and r["group"] in groups
+    ]
     return sum(a["normalized"] == a["normalized"] and a["covered_um"] < a["width_um"] for a in aucs)
 
 
@@ -101,9 +104,11 @@ def contrasts(rows: list[dict], windows: list[tuple]) -> list[dict]:
     `write_contrasts_csv` writes them.
     """
     auc = [("auc_normalized", window_label(w), _auc_by_group(rows, w)) for w in windows]
-    partial = {window_label(w): _n_partial(rows, w) for w in windows}
-    auc_rows = mann_whitney_contrasts(auc, across="windows")
-    auc_rows = [{**c, "n_partial": partial[c["window"]]} for c in auc_rows]
+    by_label = {window_label(w): w for w in windows}
+    auc_rows = [
+        {**c, "n_partial": _n_partial(rows, by_label[c["window"]], (c["group_a"], c["group_b"]))}
+        for c in mann_whitney_contrasts(auc, across="windows")
+    ]
     return auc_rows + mann_whitney_contrasts([("lambda_um", "", _lambda_by_group(rows))])
 
 
@@ -142,9 +147,9 @@ def _print_welch(label: str, by_group: dict[str, list[float]]) -> None:
     when the manifest asks for parametric tests, the default being non-parametric (EXP-2)."""
     (ga, va), (gb, vb) = [(g, [v for v in vals if not np.isnan(v)]) for g, vals in by_group.items()]
     r = stats.welch_t(va, vb)
+    result = f"not tested ({r['reason']})" if r["reason"] else f"t={r['t']:.3f}, p={r['p']:.4f}"
     print(
-        f"  {label} {ga} vs {gb}: t={r['t']:.3f}, p={r['p']:.4f} "
-        f"(n={len(va)},{len(vb)} — underpowered, descriptive only)"
+        f"  {label} {ga} vs {gb}: {result} (n={len(va)},{len(vb)} — underpowered, descriptive only)"
     )
 
 

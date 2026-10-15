@@ -181,16 +181,22 @@ def welch_t(x: Sequence[float] | np.ndarray, y: Sequence[float] | np.ndarray) ->
     """Welch's unequal-variance t-test, two-sided.
 
     Parametric, so not this package's default (see `mann_whitney`); provided for
-    descriptive contrasts that name it. Values are passed to scipy unchanged, so
-    NaN propagates into the result.
+    descriptive contrasts that name it. Returns ``t``, ``p``, ``n_x``, ``n_y`` and
+    ``reason``: empty when tested, ``"n<2"`` when a group has fewer than
+    :data:`MIN_N` values (``t`` and ``p`` NaN, not tested). Values are passed to
+    scipy unchanged, so NaN propagates into the result.
     """
+    n = {"n_x": len(x), "n_y": len(y)}
+    if min(len(x), len(y)) < MIN_N:
+        return {"t": float("nan"), "p": float("nan"), **n, "reason": f"n<{MIN_N}"}
     t, p = sps.ttest_ind(x, y, equal_var=False)
-    return {"t": float(t), "p": float(p), "n_x": len(x), "n_y": len(y)}
+    return {"t": float(t), "p": float(p), **n, "reason": ""}
 
 
 # The fewest values per group a two-group test is run on: a group of one has no spread.
-# Every two-group entry point (`mann_whitney` and the grids built on it) reports such a
-# pair as untested (p NaN, reason "n<2"), so it never enters a BH denominator.
+# Every two-group entry point (`mann_whitney`, the grids built on it, and `welch_t`)
+# reports such a pair as untested (p NaN, reason "n<2"), so it never enters a BH
+# denominator.
 MIN_N = 2
 _ALTERNATIVES = ("two-sided", "less", "greater")
 

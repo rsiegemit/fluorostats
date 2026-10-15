@@ -70,11 +70,12 @@ Segmentation and objects
 
 Measurements and statistics
 - **Cliff's delta ignores NaN** (NaN counted as a tie); **one minimum-n rule** for
-  every two-group test (a group with fewer than 2 values is untested, p NaN, not
-  p = 1.0); `compute_pvalues` no longer crashes on missing or mixed-type labels.
+  every two-group test, `welch_t` included (a group with fewer than 2 values is
+  untested, p NaN with `reason` "n<2", not p = 1.0); `compute_pvalues` no longer crashes on missing or mixed-type labels.
 - **The λ fit no longer depends on the intensity scale** (tiny intensities gave a
   wrong λ with `fit_ok` true) and refuses a λ below the z-step.
-- Depth windows a stack covers only partly are flagged (`n_partial`), and retention
+- Depth windows a stack covers only partly are flagged (`n_partial`, counted over
+  the two tested groups), and retention
   divides by the covered depth; power estimates refuse empty inputs.
 - **A value that was never measured is NaN, not 0**: a skeleton that cannot be
   measured; `largest_component_fraction` and cluster areas of an empty mask; the

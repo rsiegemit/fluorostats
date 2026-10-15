@@ -552,3 +552,12 @@ def test_bootstraps_refuse_degenerate_sizes_by_name(call, match):
     # Regression (S4): n_boot=0 raised IndexError, ci>1 numpy's quantile error.
     with pytest.raises(ValueError, match=match):
         call()
+
+
+@pytest.mark.parametrize("x,y", [([1.0], [2.0, 3.0]), ([1.0, 2.0], [])])
+def test_welch_t_follows_the_minimum_n_rule(x, y):
+    # Regression (L3): a group of one gave p NaN with no reason.
+    res = stats.welch_t(x, y)
+    assert np.isnan(res["t"]) and np.isnan(res["p"])
+    assert (res["n_x"], res["n_y"], res["reason"]) == (len(x), len(y), f"n<{stats.MIN_N}")
+    assert stats.welch_t([1.0, 2.0], [3.0, 5.0])["reason"] == ""

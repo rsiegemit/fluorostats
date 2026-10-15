@@ -141,3 +141,15 @@ def test_contrasts_count_the_stacks_that_cover_a_window_only_partly(capsys):
     depth_contrasts.print_auc_summary(rows, WINDOWS, False, tests)
     out = capsys.readouterr().out
     assert out.count("1 stack(s) cover only part of it; see window_covered_um") == 1
+
+
+def test_n_partial_counts_only_the_tested_groups():
+    # Regression (L9): every primary stack was counted, not only the two groups tested.
+    rows = [_row("a", 0, 1.0, 5.0, covered=4.0), _row("c", 0, 1.0, 5.0, covered=4.0)]
+    rows += [_row("b", 0, 1.0, 5.0), _row("b", 1, 1.0, 5.0, covered=4.0, role="aux")]
+    assert depth_contrasts._n_partial(rows, (0.0, 10.0), ("a", "b")) == 1
+
+
+def test_welch_print_says_why_a_pair_is_not_tested(capsys):
+    depth_contrasts._print_welch("Welch", {"a": [1.0], "b": [2.0, float("nan"), 3.0]})
+    assert "Welch a vs b: not tested (n<2) (n=1,2" in capsys.readouterr().out
