@@ -175,3 +175,13 @@ def test_mip_overlay_composites_with_the_qc_rule():
     expected = qc.overlay_rgb(intensity.max(0), mask.any(0), (220, 60, 220), 0.6)
     np.testing.assert_array_equal(ax.images[0].get_array(), expected)
     plt.close(fig)
+
+
+@pytest.mark.parametrize(
+    "name", ["mip_overlay", "live_dead_mip", "mip_grid", "depth_coded_mip", "layer_split_mip"]
+)
+def test_render3d_still_provides_the_moved_panels(name):
+    """The panels moved to projections; render3d keeps the v0.8.2 names."""
+    from fluorostats import projections, render3d
+
+    assert getattr(render3d, name) is getattr(projections, name)
