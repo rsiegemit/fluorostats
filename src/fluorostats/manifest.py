@@ -2,7 +2,8 @@
 
 `depth_batch` and `viability_batch` both describe their input as groups of
 stacks; `check_groups` validates that shared part before any image is loaded.
-`unknown_keys`, `is_int` and `is_number` are the field checks both use;
+`require_groups` checks a manifest's top-level shape first; `unknown_keys`,
+`is_int` and `is_number` are the field checks both use;
 `check_depth` checks the rest of a depth manifest.
 """
 
@@ -40,45 +41,96 @@ def _repeated(values: list) -> list:
     return [v for i, v in enumerate(values) if v and v in values[i + 1 :] and v not in values[:i]]
 
 
+def require_groups(m) -> None:
+    """Raise ValueError unless ``m`` (a parsed manifest) is a JSON object with a
+    non-empty ``groups`` list; the batch loaders call it before reading any field."""
+    if not isinstance(m, dict):
+        raise ValueError(
+            f"a manifest must be a JSON object with a 'groups' list, got a {type(m).__name__}"
+        )
+    groups = m.get("groups")
+    if not isinstance(groups, list) or not groups:
+        raise ValueError(
+            "manifest needs a non-empty 'groups' list (at least one group with stacks), "
+            f"got {groups!r}"
+        )
+
+
 def check_groups(
     groups: list[dict],
     roles: tuple[str, ...] | None = None,
     group_keys: Iterable[str] | None = None,
     stack_keys: Iterable[str] | None = None,
 ) -> list[str]:
-    """Problems with a manifest's groups: names (present and unique), stacks (at least
-    one; labels unique within the group, paths present), background paths, and (when
-    given) each stack's role and unknown group / stack fields. Empty when all is well."""
+    """Problems with a manifest's groups: each an object, names (non-empty strings,
+    unique), stacks (a non-empty list of objects; labels unique within the group,
+    paths present), background paths, and (when given) each stack's role and
+    unknown group / stack fields. Empty when all is well."""
+    objects = [grp for grp in groups if isinstance(grp, dict)]
     problems = [
         f"group name {name!r} is used by more than one group; names must be unique"
-        for name in _repeated([grp.get("name") for grp in groups])
+        for name in _repeated([grp.get("name") for grp in objects])
     ]
     for gi, grp in enumerate(groups):
-        name = grp.get("name")
-        if not name:
-            problems.append(f"group {gi} has no 'name'")
-        if group_keys is not None:
-            problems += unknown_keys(f"group {name!r}", grp, group_keys)
-        if not grp.get("stacks"):
-            problems.append(f"group {name or gi!r} has no stacks")
-        bg = grp.get("background")
-        for bp in [bg] if isinstance(bg, str) else list(bg or []):
-            if not Path(bp).exists():
-                problems.append(f"group {name!r}: background {bp} does not exist")
-        problems += [
-            f"group {name!r}: stack label {label!r} is used by more than one stack; "
-            "labels must be unique within a group"
-            for label in _repeated([st.get("label") for st in grp.get("stacks", [])])
-        ]
-        for st in grp.get("stacks", []):
-            problems += _stack_problems(name, st, roles, stack_keys)
+        if not isinstance(grp, dict):
+            problems.append(f"group {gi} must be an object with 'name' and 'stacks', got {grp!r}")
+            continue
+        problems += _group_problems(gi, grp, roles, group_keys, stack_keys)
     return problems
 
 
-def _stack_problems(group: str | None, st: dict, roles, stack_keys) -> list[str]:
+def _group_problems(gi: int, grp: dict, roles, group_keys, stack_keys) -> list[str]:
+    """Problems with group number ``gi``, an object."""
+    name = grp.get("name")
+    problems = []
+    if not name:
+        problems.append(f"group {gi} has no 'name'")
+    elif not isinstance(name, str):
+        problems.append(f"group {gi}: name must be a non-empty string, got {name!r}")
+    if group_keys is not None:
+        problems += unknown_keys(f"group {name!r}", grp, group_keys)
+    stacks = grp.get("stacks")
+    if not stacks:
+        problems.append(f"group {name or gi!r} has no stacks")
+    elif not isinstance(stacks, list):
+        problems.append(f"group {name!r}: stacks must be a list of stack objects, got {stacks!r}")
+        stacks = []
+    problems += _background_problems(name, grp.get("background"))
+    objects = [st for st in stacks or [] if isinstance(st, dict)]
+    problems += [
+        f"group {name!r}: stack label {label!r} is used by more than one stack; "
+        "labels must be unique within a group"
+        for label in _repeated([st.get("label") for st in objects])
+    ]
+    for st in stacks or []:
+        problems += _stack_problems(name, st, roles, stack_keys)
+    return problems
+
+
+def _background_problems(group: str | None, bg) -> list[str]:
+    """Problems with a group's ``background``: absent, a path, or a list of paths."""
+    paths = [bg] if isinstance(bg, str) else bg if isinstance(bg, list) else None
+    if bg is not None and (paths is None or not all(isinstance(bp, str) for bp in paths)):
+        return [f"group {group!r}: background must be a path or a list of paths, got {bg!r}"]
+    return [
+        f"group {group!r}: background {bp} does not exist"
+        for bp in paths or []
+        if not Path(bp).exists()
+    ]
+
+
+def _stack_problems(group: str | None, st, roles, stack_keys) -> list[str]:
     """Problems with one stack entry of group ``group``."""
+    if not isinstance(st, dict):
+        return [
+            f"group {group!r}: every stack must be an object with 'path' and 'label', got {st!r}"
+        ]
     if "path" not in st or "label" not in st:
         return [f"group {group!r}: every stack needs 'path' and 'label': {st}"]
+    if not isinstance(st["path"], str):
+        return [f"group {group!r}: stack path must be a string, got {st['path']!r}"]
+    if not (isinstance(st["label"], str) or is_number(st["label"])):
+        return [f"group {group!r}: stack label must be a string or a number, got {st['label']!r}"]
     problems = []
     if stack_keys is not None:
         problems += unknown_keys(f"group {group!r}: stack {st['label']!r}", st, stack_keys)

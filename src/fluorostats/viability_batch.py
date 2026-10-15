@@ -83,7 +83,7 @@ import numpy as np
 from .io import load_volume
 from . import stats
 from .depth_contrasts import mann_whitney_contrasts, write_contrasts_csv
-from .manifest import check_groups, is_int, is_number, unknown_keys
+from .manifest import check_groups, is_int, require_groups, is_number, unknown_keys
 from . import report
 from . import segment
 from . import viability as viab
@@ -120,8 +120,7 @@ _OUTPUTS = (
 def load_manifest(path: Path) -> dict:
     """Read a viability manifest (see the module docstring), filling defaults."""
     m = json.loads(Path(path).read_text())
-    if "groups" not in m or not m["groups"]:
-        raise ValueError("manifest needs a non-empty 'groups' list")
+    require_groups(m)
     m.setdefault("live_channel", None)  # None: resolved from channel names
     m.setdefault("dead_channel", None)
     m.setdefault("seg", dict(DEFAULT_SEG))

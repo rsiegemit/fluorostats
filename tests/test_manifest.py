@@ -159,3 +159,53 @@ def test_unknown_keys_names_the_place_and_the_allowed_fields():
         "manifest: unknown field 'chanel' (allowed: title, channel)"
     ]
     assert unknown_keys("manifest", {"title": "t"}, ("title",)) == []
+
+
+@pytest.mark.parametrize("loader", [depth_batch.load_manifest, viability_batch.load_manifest])
+@pytest.mark.parametrize(
+    "m, expected",
+    [
+        ([{"name": "g"}], "must be a JSON object"),
+        ({"groups": {"name": "g"}}, "non-empty 'groups' list"),
+        ({"groups": "g"}, "non-empty 'groups' list"),
+    ],
+)
+def test_manifest_of_the_wrong_shape_is_reported_not_a_traceback(tmp_path, loader, m, expected):
+    # Regression: these raised AttributeError / TypeError from inside the loader.
+    with pytest.raises(ValueError, match=expected):
+        loader(_write(tmp_path, m))
+
+
+def test_check_groups_reports_fields_of_the_wrong_type(tmp_path):
+    # Regression: a group or stack that is not an object, a numeric background or
+    # path crashed with a traceback, and a list name was accepted.
+    ok = tmp_path / "a.tif"
+    ok.write_bytes(b"")
+    st = {"path": str(ok), "label": "a"}
+    groups = [
+        "g0",
+        {"name": ["A"], "stacks": [st]},
+        {"name": "b", "background": 5, "stacks": [st]},
+        {"name": "c", "background": [str(ok), 7], "stacks": [st]},
+        {"name": "d", "stacks": "a.tif"},
+        {
+            "name": "e",
+            "stacks": ["a.tif", {"path": 3, "label": "x"}, {"path": str(ok), "label": []}],
+        },
+    ]
+    assert check_groups(groups) == [
+        "group 0 must be an object with 'name' and 'stacks', got 'g0'",
+        "group 1: name must be a non-empty string, got ['A']",
+        "group 'b': background must be a path or a list of paths, got 5",
+        "group 'c': background must be a path or a list of paths, got [" + repr(str(ok)) + ", 7]",
+        "group 'd': stacks must be a list of stack objects, got 'a.tif'",
+        "group 'e': every stack must be an object with 'path' and 'label', got 'a.tif'",
+        "group 'e': stack path must be a string, got 3",
+        "group 'e': stack label must be a string or a number, got []",
+    ]
+
+
+def test_depth_manifest_with_a_non_object_group_is_reported(tmp_path):
+    m = {"groups": ["g"]}
+    with pytest.raises(ValueError, match="group 0 must be an object"):
+        depth_batch.load_manifest(_write(tmp_path, m))
