@@ -1,5 +1,7 @@
 """Tests for segmentation: known-geometry synthetic volumes."""
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -259,3 +261,21 @@ def test_binarize_rejects_non_finite_input(method):
     a[5, 5] = np.nan
     with pytest.raises(ValueError, match="finite"):
         binarize(a, method=method, min_size=0, opening="none")
+
+
+@pytest.mark.parametrize("method", ["otsu", "consensus"])
+def test_binarize_warns_when_scaling_a_non_positive_threshold(method):
+    """On zero-centred data the threshold is negative and threshold_scale > 1 keeps
+    MORE pixels, the opposite of its documented direction: say so."""
+    a = np.full((20, 20), -100.0)
+    a[5:10, 5:10] = -10.0
+    with pytest.warns(RuntimeWarning, match="not positive"):
+        binarize(a, method=method, threshold_scale=2.0, opening="none", min_size=0)
+
+
+def test_binarize_scale_one_on_negative_data_does_not_warn():
+    a = np.full((20, 20), -100.0)
+    a[5:10, 5:10] = -10.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert binarize(a, opening="none", min_size=0).sum() == 25

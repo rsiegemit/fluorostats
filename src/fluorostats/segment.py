@@ -127,6 +127,19 @@ def choose_threshold_method(arr: np.ndarray) -> dict:
     return {"method": method, "reason": reason, "skew": skew, "fractions": fracs}
 
 
+def _scaled(thresh: float, threshold_scale: float) -> float:
+    """``thresh * threshold_scale``, with a RuntimeWarning when the scale flips
+    direction: for a threshold <= 0 a scale > 1 keeps more pixels, not fewer."""
+    if thresh <= 0 and threshold_scale != 1.0:
+        warnings.warn(
+            f"binarize: the threshold {thresh:g} is not positive, so threshold_scale="
+            f"{threshold_scale:g} moves it the opposite way (> 1 keeps more pixels)",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return thresh * threshold_scale
+
+
 def binarize(
     arr: np.ndarray,
     method: str = "otsu",
@@ -149,7 +162,9 @@ def binarize(
         Minimum object size in pixels/voxels. Smaller objects are removed.
     threshold_scale : float
         Multiply the computed threshold by this factor. Values < 1.0
-        capture more dim signal; values > 1.0 are more conservative.
+        capture more dim signal; values > 1.0 are more conservative. This
+        assumes a positive threshold: for a threshold <= 0 (zero-centred or
+        background-subtracted data) the direction flips, with a RuntimeWarning.
     opening : {"ball", "disk", "none"}
         Salt-noise opening after thresholding (see `OPENINGS`). The default
         ``"ball"`` opens 3D masks with a 3x3x3 cross, which erases any structure
@@ -174,7 +189,7 @@ def binarize(
         votes = np.zeros(arr_float.shape, dtype=np.uint8)
         for name, fn in THRESHOLD_METHODS.items():
             try:
-                votes += (arr_float > fn(arr_float) * threshold_scale).astype(np.uint8)
+                votes += (arr_float > _scaled(fn(arr_float), threshold_scale)).astype(np.uint8)
             except Exception as exc:
                 # A failed method still counts toward the majority, i.e. it votes
                 # background everywhere; say so rather than skipping it silently.
@@ -190,7 +205,7 @@ def binarize(
             method = choose_threshold_method(arr_float)["method"]
         if method not in THRESHOLD_METHODS:
             raise ValueError(f"Unknown threshold method: {method!r}")
-        thresh = THRESHOLD_METHODS[method](arr_float) * threshold_scale
+        thresh = _scaled(THRESHOLD_METHODS[method](arr_float), threshold_scale)
         mask = arr_float > thresh
 
     if opening not in OPENINGS:
