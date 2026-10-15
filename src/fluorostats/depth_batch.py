@@ -221,16 +221,17 @@ def analyse_stack(path: Path, blank: depth.DepthProfile | None, cfg: dict) -> di
 
 
 def _common_grid(profiles: list[dict]) -> np.ndarray:
-    """Shared depth axis for group aggregation (finest step, full overlap range).
+    """Shared depth axis for group aggregation.
 
-    Spans 0 to the shallowest stack's max depth so every stack contributes
-    at every grid point (no extrapolation). Independent of the AUC window —
-    AUC is computed per stack on full-resolution data.
+    The step is the median of the stacks' (median) z-steps. The grid starts at 0 and
+    stops at the last whole step within the shallowest stack's max depth, so every
+    stack contributes at every grid point (no extrapolation). Independent of the AUC
+    window — AUC is computed per stack on full-resolution data.
     """
     steps = [np.median(np.diff(p["depth_um"])) for p in profiles if p["depth_um"].size >= 2]
     step = float(np.median(steps)) if steps else 1.0   # guard single-slice stacks (np.diff -> [])
     top = min(p["max_depth_um"] for p in profiles)
-    n = int(round(top / step)) + 1
+    n = int(np.floor(top / step + 1e-9)) + 1   # 1e-9: a whole number of steps keeps its end
     return np.arange(n) * step
 
 

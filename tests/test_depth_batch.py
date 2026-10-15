@@ -471,3 +471,19 @@ def test_rerun_removes_stale_figures_and_writes_run_config_last(tmp_path, capsys
     with pytest.raises(RuntimeError, match="analysis failed"):
         depth_batch.run(mpath)
     assert not (out / "run_config.json").exists()
+
+
+def test_common_grid_never_extends_past_the_shallowest_stack():
+    # Regression: the point count was rounded, so a shallowest depth that is not a
+    # whole number of steps put a grid point past it (np.interp then held the last
+    # value: extrapolation the docstring ruled out).
+    def prof(n, step):
+        z = np.arange(n) * step
+        return {"depth_um": z, "max_depth_um": float(z[-1])}
+
+    short = {"depth_um": np.linspace(0, 38, 11), "max_depth_um": 38.0}   # 3.8 µm steps
+    grid = _common_grid([prof(16, 4.0), prof(16, 4.0), short])     # median step 4 µm
+    np.testing.assert_array_equal(grid, np.arange(10) * 4.0)       # 0-36 µm, not 0-40
+    # a whole number of steps keeps its last point despite float rounding
+    np.testing.assert_allclose(_common_grid([prof(11, 0.3)])[-1], 3.0)
+    assert len(_common_grid([prof(11, 0.3)])) == 11
