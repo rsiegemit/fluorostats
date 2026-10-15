@@ -8,6 +8,8 @@ checks (complementary to intensity-based `morphometry.lateral_homogeneity`).
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy import ndimage as ndi
 from skimage.morphology import local_maxima, reconstruction
@@ -281,7 +283,9 @@ def nearest_neighbor_stats(
     dict with keys:
         mean_nn_dist, median_nn_dist — nearest-neighbour distance.
         clark_evans_R — observed / CSR-expected mean NN (<1 clustered, ≈1 random,
-            >1 dispersed/regular); NaN if D not in {2, 3}.
+            >1 dispersed/regular), using the 2D or 3D CSR formula for the number
+            of axes with non-zero range (a constant axis is dropped); NaN if that
+            number is not 2 or 3 (with a warning when it is below 2).
         pattern — "clustered" | "random" | "dispersed" from ``clark_evans_R``.
         n — number of points.
     """
@@ -297,13 +301,18 @@ def nearest_neighbor_stats(
     nn = cKDTree(xy).query(xy, k=2)[0][:, 1]      # distance to nearest other point
     mean_nn = float(nn.mean())
     ranges = xy.max(0) - xy.min(0)
-    vol = float(np.prod(ranges[ranges > 0]))
-    lam = n / vol if vol > 0 else 0.0
-    if lam > 0 and d == 2:
+    # The pattern's dimension is the number of axes the points actually span: 3D
+    # centroids in one z-plane are a 2D pattern and take the 2D CSR constant.
+    d_eff = int((ranges > 0).sum())
+    lam = n / float(np.prod(ranges[ranges > 0]))
+    if d_eff == 2:
         expected = 0.5 / np.sqrt(lam)
-    elif lam > 0 and d == 3:
+    elif d_eff == 3:
         expected = 0.55396 / lam ** (1.0 / 3.0)
     else:
+        if d_eff < 2:
+            warnings.warn(f"nearest_neighbor_stats: the points span fewer than 2 axes "
+                          f"({d_eff}); clark_evans_R is NaN.", RuntimeWarning, stacklevel=2)
         expected = float("nan")
     R = mean_nn / expected if expected and expected == expected else float("nan")
     pattern = "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")

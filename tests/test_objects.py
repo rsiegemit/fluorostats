@@ -365,6 +365,29 @@ def test_nearest_neighbor_3d_and_degenerate():
     assert np.isnan(r4["clark_evans_R"]) and r4["mean_nn_dist"] > 0
 
 
+def test_nearest_neighbor_flat_axis_uses_the_matching_dimension():
+    # 3D centroids all in one z-plane are a 2D pattern: same R as the 2D points
+    # (the 3D Clark-Evans constant on an area made random points look dispersed).
+    rng = np.random.default_rng(2)
+    p2 = rng.uniform(0, 100, (200, 2))
+    p3 = np.column_stack([np.full(200, 4.0), p2])
+    r2 = objects.nearest_neighbor_stats(p2)
+    r3 = objects.nearest_neighbor_stats(p3)
+    assert r3["clark_evans_R"] == pytest.approx(r2["clark_evans_R"])
+    assert r3["pattern"] == r2["pattern"] == "random"
+
+
+@pytest.mark.parametrize("pts", [
+    np.column_stack([np.zeros(5), np.arange(5.0)]),       # collinear: one axis varies
+    np.ones((4, 3)),                                      # coincident: none varies
+])
+def test_nearest_neighbor_fewer_than_two_varying_axes_is_nan(pts):
+    with pytest.warns(RuntimeWarning, match="fewer than 2 axes"):
+        r = objects.nearest_neighbor_stats(pts)
+    assert np.isnan(r["clark_evans_R"]) and r["pattern"] == "n/a"
+    assert r["n"] == len(pts)
+
+
 # Regression (release hardening): label gaps produced spurious zero-volume objects.
 def test_object_volumes_ignore_label_gaps():
     """Non-contiguous label images must not yield spurious zero-volume objects."""
