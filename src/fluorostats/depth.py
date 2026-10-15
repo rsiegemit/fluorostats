@@ -375,8 +375,10 @@ def fit_penetration_depth(
     resid = y - model
     ss_res = float(np.sum(resid ** 2))
     ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-    # A profile with no variance has no R² (0/0): NaN, which also fails the threshold.
-    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+    # A profile with no spread has no R² (0/0): NaN, which also fails the threshold.
+    # Test the spread itself: rounding in the mean makes ss_tot a tiny positive number
+    # for a constant profile, which would give an R² of about -1e20.
+    r_squared = 1.0 - ss_res / ss_tot if np.ptp(y) > 0 else float("nan")
     rmse = float(np.sqrt(np.mean(resid ** 2)))
 
     # A decay length longer than the acquired depth is NOT constrained by the

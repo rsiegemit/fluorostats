@@ -316,7 +316,8 @@ def test_fit_lam_guess_when_all_below_threshold():
     z = np.linspace(0, 100, 20)
     y = np.full(20, 0.001)   # tiny flat — all below any reasonable I0/e
     fit = fit_penetration_depth(z, y)
-    assert hasattr(fit, "fit_ok")
+    assert not fit.fit_ok and np.isnan(fit.lambda_um)
+    assert np.isnan(fit.r_squared)        # no spread: R² undefined (rounding made it -1e20)
 
 
 def test_fit_of_a_flat_profile_has_no_r_squared():
@@ -333,7 +334,9 @@ def test_fit_all_points_below_threshold_at_surface():
     z = np.linspace(0.0, 50.0, 10)
     y = 0.001 * np.exp(-z / 5.0)
     fit = fit_penetration_depth(z, y)
-    assert hasattr(fit, "n_points")
+    assert fit.fit_ok and fit.n_points == 10
+    assert fit.lambda_um == pytest.approx(5.0, rel=1e-6)
+    assert fit.I0 == pytest.approx(0.001, rel=1e-6)
 
 
 # ---------------------------------------------------------------------------
