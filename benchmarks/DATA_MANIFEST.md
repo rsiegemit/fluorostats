@@ -42,8 +42,8 @@ URLs verified 2026-09-24.
   GPU/ROCm cluster; their per-image outputs are shipped as CSVs in `results/`, so the
   comparison figures and tables regenerate without re-running the networks. See
   `VALIDATION.md`.
-- **Application confocal data (Fig 6: FITC-dextran penetration time-course; HUVEC/GelMA
-  Live/Dead series)** are the originating laboratory's own microscopy. It remains with that
+- **Application confocal data (the `fig6_*` tables: FITC-dextran penetration time-course;
+  HUVEC/GelMA Live/Dead series)** are the originating laboratory's own microscopy. It remains with that
   laboratory and is available on request; it is not deposited. The closest public analogue
   listed above is S-BIAD2130. The derived per-stack tables *are* bundled as
   `results/fig6_*.csv`, so the quantitative panels can be recomputed without the raw stacks;

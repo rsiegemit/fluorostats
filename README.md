@@ -175,7 +175,7 @@ Keyence BZ-X exports a z-stack as one OME-TIFF per slice (all channels inside ea
 from fluorostats import keyence
 
 arr, meta = keyence.load_keyence_stack("path/to/stack_folder")   # (C, Z, Y, X) + metadata
-# arr[0], arr[1] = acquired channels; meta = {px_um, z_step_um, channels, ...}
+# arr[0], arr[1] = acquired channels; meta = {voxel_size_um, channels, ...}
 
 # ...or just pass the folder to the generic loader — it auto-detects Keyence:
 from fluorostats.io import load_volume

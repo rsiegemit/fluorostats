@@ -94,8 +94,8 @@ reproduces it byte for byte.
 | `b_nuclei_count_agreement.csv` | `b_nuclei_count_agreement.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv`) | BBBC039 | EXACT |
 | `b_nuclei_size.csv` | `b_nuclei_size.py` | BBBC024 | EXACT |
 | `b_skeleton_tree.csv` | `b_skeleton_tree.py` | none (synthetic) | EXACT |
-| `b_timing.csv` | `b_timing.py` | BBBC039 | re-run differs (wall-clock) |
-| `b_timing_all_metrics.csv` | `b_timing_all_metrics.py` | BBBC024, BBBC039, Kerkhoff | re-run differs (wall-clock) |
+| `b_timing.csv` | `b_timing.py` | BBBC039 | not regenerated: the original wall-clock measurement (labels renamed by hand); no `.run.json`, so its machine is not recorded; a re-run gives this machine's times |
+| `b_timing_all_metrics.csv` | `b_timing_all_metrics.py` | BBBC024, BBBC039, Kerkhoff | not regenerated (as `b_timing.csv`) |
 | `b_vascular_phantom_3d.csv` | `b_vascular_phantom_3d.py` | none (synthetic) | EXACT |
 | `b_vascular_sproutangio_multi.csv` | `b_vascular_sproutangio_multi.py` | SproutAngio | EXACT |
 | `b_ve_metrics.csv` | `b_ve_metrics.py` | VesselExpress Figure 2C–E volumes | not run (data not downloaded locally; produced on the cluster) |
@@ -131,9 +131,9 @@ measured on the cluster CPU (`producers/common.py`, `DL_CPU_MS`).
 
 The cluster scripts that produced the DL tables are not part of this repository.
 
-## Collaborator application figure (Fig 6)
+## Collaborator application tables (`fig6_*`)
 
-Fig 6 is built from the originating laboratory's own confocal data — a FITC-dextran
+The `fig6_*` tables come from the originating laboratory's own confocal data — a FITC-dextran
 penetration time-course and a HUVEC/GelMA Live/Dead series. The raw microscopy remains
 with that laboratory and is available on request; it is not deposited. The derived
 per-stack tables are bundled here so the quantitative panels can be recomputed:
@@ -149,4 +149,7 @@ per-stack tables are bundled here so the quantitative panels can be recomputed:
 
 The representative micrograph panel cannot be regenerated from these tables — it
 renders the raw stacks directly. The analysis runs through the same `fluorostats`
-modules as everything above.
+modules as everything above. These tables were produced on 2026-09-24 (commit
+784729c) with the depth and viability drivers of that version and are not
+regenerated here (the raw stacks are not deposited), so they lack columns added
+since (`voxel_size_source`, channel names, flat count keys) and carry no `.run.json`.

@@ -153,8 +153,10 @@ CLI and drivers
 
 ### Benchmarks and examples
 - Every locally reproducible results table is regenerated with this library
-  (watershed columns change materially; others in the 3rd-4th decimal);
-  cluster-only tables (deep-learning timings, `b_ve_metrics`) are unchanged. Every
+  (watershed columns change materially; others in the 3rd-4th decimal). Not
+  regenerated, and marked so in `benchmarks/README.md`: cluster-only tables
+  (deep-learning evaluations, `b_ve_metrics`), the wall-clock timing tables, and
+  the collaborator `fig6_*` tables (raw data not deposited). Every
   producer writes `<table>.run.json` (parameters, library versions, git commit).
 - Producers use the library's small-object rule; a failed threshold scores NaN; the
   two fluorostats Otsu+CC pipelines are named in the tables; new count-agreement

@@ -1,8 +1,8 @@
 """End-to-end multi-condition analysis using only FluoroStats.
 
-Reproduces the kind of analysis we ran on the Extrusion bioprinting
-project (GelMA vs Hybrid × Day 1/7/14 × Top/Middle/Bottom) using only
-the FluoroStats library — no project-specific helpers.
+A worked example of a multi-condition design (material × day × region,
+e.g. GelMA vs Hybrid × Day 1/7/14 × Top/Middle/Bottom) using only the
+FluoroStats library — no project-specific helpers.
 
 Pipeline:
 

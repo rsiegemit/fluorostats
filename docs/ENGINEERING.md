@@ -173,7 +173,8 @@ Now compliant (measured, not estimated):
   plotting backend; no private access across modules outside a module's own test
   file.
 - MOD-5: one voxel-size argument, `voxel_size_um`; one key set per function
-  (`live_dead_by_count` returns the same flat keys in every mode); renamed or
+  (`live_dead_by_count` returns the same flat keys in every mode; `method="all"`
+  also keeps the deprecated `by_method`); renamed or
   retired arguments keep working for one release with a DeprecationWarning.
 - GEN-2/GEN-3: axis order and channel names from the file's labels; lengths
   converted from their stated unit; every defaulted, copied or assumed calibration
@@ -189,7 +190,8 @@ Now compliant (measured, not estimated):
   mypy clean; CI runs all of it on every push.
 - DAT/REU: figure scripts read committed tables (recorded DAT-3 exceptions: live
   determinism runs and display overlays), and every table regenerates from HEAD
-  except the cluster-only ones marked in `benchmarks/README.md`.
+  except those `benchmarks/README.md` marks as not regenerated (cluster-only,
+  wall-clock timing and collaborator tables).
 
 Open, each needing an owner decision:
 
