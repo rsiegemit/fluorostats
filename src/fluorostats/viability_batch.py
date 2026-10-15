@@ -155,7 +155,8 @@ def _check_seg(seg) -> list[str]:
 
 
 # `live_dead_by_count` keys written under another column name; every other key is
-# written as is, and its ``viability`` equals ``consensus`` so it is not repeated.
+# written as is, except ``viability`` (equals ``consensus``, not repeated) and the
+# deprecated nested ``by_method`` (its values are the per-method keys).
 _COUNT_COLUMNS = {"consensus": "viability_count_consensus",
                   "spread": "viability_count_spread",
                   "method_live": "count_method_live", "method_dead": "count_method_dead",
@@ -204,7 +205,8 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "regime_crowding": regime["crowding"],
         "regime_method": regime["method"],
     }
-    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items() if k != "viability"})
+    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items()
+                if k not in ("viability", "by_method")})
     # density from the single count, or (method "all": no single count) the CC count
     n_live_ref = counts["n_live"] if counts["n_live"] == counts["n_live"] else counts["n_live_cc"]
     row["live_density_permm2"] = n_live_ref / fov_mm2 if fov_mm2 > 0 else float("nan")

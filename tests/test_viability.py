@@ -262,6 +262,8 @@ def test_live_dead_by_count_has_one_flat_contract(method):
     # did not compute is NaN or "".
     live, dead = _two_channel_dots(12, 5)
     out = live_dead_by_count(live, dead, method=method)
+    by_method = out.pop("by_method", None)              # deprecated, "all" only
+    assert (by_method is not None) == (method == "all")
     assert set(out) == _FLAT_KEYS
     assert all(isinstance(v, (int, float, str, np.integer, np.floating)) for v in out.values())
     if method in viability.COUNT_METHODS:
@@ -305,3 +307,14 @@ def test_live_dead_channels_explicit_and_fallback():
         viability.live_dead_channels(["Ch1", "Calcein"], live=None, dead=None)
     with pytest.raises(ValueError, match="has 2 channels"):
         viability.live_dead_channels(["a", "b"], live=0, dead=2)
+
+
+def test_count_all_keeps_the_deprecated_by_method():
+    # v0.8.2 callers read out["by_method"][m]: kept (deprecated) with the same values
+    # as the flat per-method keys.
+    live, dead = _two_channel_dots(12, 5)
+    out = live_dead_by_count(live, dead, method="all")
+    assert set(out["by_method"]) == set(viability.COUNT_METHODS)
+    for m, d in out["by_method"].items():
+        assert set(d) == {"n_live", "n_dead", "viability"}
+        assert all(d[k] == out[f"{k}_{m}"] for k in d)

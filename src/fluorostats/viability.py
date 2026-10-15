@@ -259,6 +259,10 @@ def live_dead_by_count(
       method used on each channel and (``auto``) why ("" for ``all``);
     - ``n_live_<m>``, ``n_dead_<m>``, ``viability_<m>`` for every ``m`` in
       `COUNT_METHODS` — the per-method counts that were computed.
+
+    Deprecated: ``method="all"`` also returns ``by_method`` (``{m: {n_live, n_dead,
+    viability}}``), the v0.8.2 nested form of the per-method keys; it will be
+    removed in a later release, so read ``n_live_<m>`` etc. instead.
     """
     methods = ("auto", "all", *COUNT_METHODS)
     if method not in methods:
@@ -291,6 +295,9 @@ def live_dead_by_count(
         if vals:
             out["consensus"] = out["viability"] = float(np.median(vals))
             out["spread"] = float(max(vals) - min(vals))
+        # deprecated v0.8.2 nested form of the per-method keys
+        out["by_method"] = {m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")}
+                            for m in COUNT_METHODS}
         return out
 
     def _count(ch):
