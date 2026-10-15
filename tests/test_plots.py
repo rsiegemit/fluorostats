@@ -81,9 +81,10 @@ def test_compute_pvalues_names_test_correction_and_effect_size():
     pvals = compute_pvalues(df, ["volume_fraction", "n_components"])
     assert list(pvals.columns) == ["metric", "condition_a", "condition_b", "n_a", "n_b",
                                    "p_value", "q_value", "significance", "cliffs_delta",
-                                   "test", "correction"]
+                                   "test", "correction", "reason"]
+    assert (pvals["reason"] == "").all()
     assert (pvals["test"] == "Mann-Whitney U, two-sided").all()
-    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all rows").all()
+    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all tested rows").all()
     for row in pvals.itertuples():
         a = df.loc[df["condition"] == row.condition_a, row.metric].dropna()
         b = df.loc[df["condition"] == row.condition_b, row.metric].dropna()
@@ -257,15 +258,25 @@ def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
 # compute_pvalues — lines 294-295 (ValueError continue)
 # ---------------------------------------------------------------------------
 
-def test_compute_pvalues_skips_too_small_groups():
-    """Groups with < 2 samples are skipped in compute_pvalues."""
+def test_compute_pvalues_keeps_untestable_pairs_with_a_reason():
+    # Regression: pairs that could not be tested were dropped silently, so pvalues.csv
+    # did not show that a comparison had been attempted.
     df = pd.DataFrame({
-        "condition": ["a", "b", "b", "b"],
-        "metric": [1.0, 2.0, 3.0, 4.0],
+        "condition": ["a", "b", "b", "b", "c", "c", "c", "d", "d"],
+        "metric": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 5.0, 6.0],
     })
     result = compute_pvalues(df, ["metric"])
-    # 'a' has only 1 sample → skipped
-    assert result.empty
+    rows = {(r.condition_a, r.condition_b): r for r in result.itertuples()}
+    assert len(rows) == 6                                     # every pair is listed
+    assert rows[("a", "b")].reason == "n<2" and rows[("a", "b")].n_a == 1
+    assert rows[("b", "c")].reason == "all values tied"
+    for pair in (("a", "b"), ("b", "c")):
+        assert np.isnan(rows[pair].p_value) and np.isnan(rows[pair].q_value)
+        assert rows[pair].significance == ""
+    assert rows[("b", "d")].reason == "" and rows[("b", "d")].p_value > 0
+    tested = result[result["reason"] == ""]
+    from fluorostats import stats
+    assert list(tested["q_value"]) == list(stats.bh_fdr(tested["p_value"].to_numpy()))
 
 
 def test_compute_pvalues_skips_missing_metric():
@@ -397,8 +408,9 @@ def test_compute_pvalues_mannwhitney_valueerror_via_mock():
     })
     with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
         result = compute_pvalues(df, ["metric"])
-    # ValueError was caught → no rows appended → empty result
-    assert result.empty
+    # ValueError was caught: the pair is kept, untested, with the reason
+    assert result["reason"].tolist() == ["test not computable"]
+    assert np.isnan(result["p_value"]).all()
 
 
 # ---------------------------------------------------------------------------

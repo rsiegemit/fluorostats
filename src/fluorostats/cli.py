@@ -328,10 +328,11 @@ def _finish(output_path: Path, config: dict, previous: list[Path]) -> None:
 def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
     """Draw the per-metric plots, the summary panel and pvalues.csv into ``plot_dir``."""
     has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
+    # unmeasured metrics (e.g. skeleton columns under --no-skeleton) are neither
+    # plotted nor listed as untestable pairs in pvalues.csv
+    metrics = [m for m in metrics if m in df.columns and df[m].notna().any()]
 
     for metric in metrics:
-        if metric not in df.columns or not df[metric].notna().any():
-            continue
         if has_replicates:
             plots.bar_mean_sem(df, metric, plot_dir / f"{metric}_bar.png")
         plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
