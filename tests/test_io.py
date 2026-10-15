@@ -211,9 +211,10 @@ def test_voxel_size_source_records_defaulted_axes_and_warns(tmp_path):
     import tifffile
 
     p = tmp_path / "plain.tif"
-    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16))
+    tifffile.imwrite(p, np.zeros((3, 8, 8), np.uint16), photometric="minisblack")   # 3 slices
     with pytest.warns(RuntimeWarning, match="no z/y/x calibration"):
-        _, meta = load_volume(p)
+        arr, meta = load_volume(p)
+    assert arr.shape == (1, 3, 8, 8)
     assert meta["voxel_size_source"] == "z:default,y:default,x:default"
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
 
