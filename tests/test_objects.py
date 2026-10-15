@@ -490,3 +490,15 @@ def test_watershed_split_rule_is_strict_at_equal_dynamics():
     assert dist.max() - dist[:, 14:16].max() == 2.0
     assert objects.watershed_split(m, min_distance=4)[1] == 1
     assert objects.watershed_split(m, min_distance=3)[1] == 2
+
+
+def test_object_centroids_one_row_per_present_label():
+    """A label image with id gaps (e.g. filtered Cellpose masks) gives one centroid
+    per object, not NaN rows for the missing ids."""
+    lab = np.zeros((1, 40, 40), int)
+    lab[0, 30:33, 30:33] = 1
+    lab[0, 35:38, 35:38] = 5
+    c = object_centroids(lab)
+    np.testing.assert_allclose(c, [[0, 31, 31], [0, 36, 36]])
+    assert centroid_homogeneity(c, lab.shape, tiles=4)["n_objects"] == 2
+    assert objects.nearest_neighbor_stats(c)["n"] == 2

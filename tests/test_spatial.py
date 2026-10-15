@@ -111,3 +111,8 @@ def test_tile_cv_is_the_population_cv_like_the_other_homogeneity_metrics():
     assert spatial.coverage_heterogeneity(mask)["coverage_tile_cv"] == pytest.approx(
         coefficient_of_variation(tiles)
     )
+
+
+def test_tile_point_density_rejects_non_finite_points():
+    with pytest.raises(ValueError, match="finite"):
+        spatial.tile_point_density(np.array([[1.0, np.nan]]), (10, 10))

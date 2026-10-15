@@ -211,11 +211,12 @@ def equivalent_diameters_um(
 
 def object_centroids(labels: np.ndarray) -> np.ndarray:
     """Centroid per object in voxel units, shape (N, labels.ndim): (z, y, x) for a
-    3D label image, (y, x) for 2D."""
-    n = int(labels.max())
-    if n == 0:
+    3D label image, (y, x) for 2D. One row per label present, in label order;
+    ids missing from a non-contiguous label image give no row."""
+    ids = np.unique(labels[labels > 0])
+    if ids.size == 0:
         return np.zeros((0, labels.ndim), dtype=float)
-    centers = ndi.center_of_mass(labels > 0, labels, np.arange(1, n + 1))
+    centers = ndi.center_of_mass(labels > 0, labels, ids)
     return np.asarray(centers, dtype=float)
 
 
