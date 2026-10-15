@@ -21,6 +21,9 @@ boolean masks, or raw channels plus a ``threshold``/``method`` to segment here.
 
 from __future__ import annotations
 
+import re
+import warnings
+
 import numpy as np
 
 from .objects import count_local_maxima, label_3d, watershed_split
@@ -60,6 +63,45 @@ def _count_maxima(ch, sig, cseg, min_distance, threshold_rel) -> int:
 # reports them (and `viability_batch` writes their columns).
 _COUNTERS = {"cc": _count_cc, "watershed": _count_watershed, "maxima": _count_maxima}
 COUNT_METHODS = tuple(_COUNTERS)
+
+
+# Well-known Live/Dead dyes, matched in channel names when a run does not give its
+# channel indices. Live: calcein, FITC, GFP, Alexa Fluor 488. Dead: propidium iodide,
+# ethidium homodimer. Other dyes (e.g. DAPI, far-red labels) are never guessed.
+LIVE_DYES = re.compile(r"calcein|fitc|gfp|alexa.*488|af\s*488", re.IGNORECASE)
+DEAD_DYES = re.compile(r"propidium|\bpi\b|ethd|ethidium", re.IGNORECASE)
+
+
+def live_dead_channels(channel_names: list[str], live: int | None = None,
+                       dead: int | None = None) -> tuple[int, int]:
+    """Indices ``(live, dead)`` of the live and dead channels among ``channel_names``.
+
+    An index given explicitly is used as is. Otherwise the first channel whose name
+    matches `LIVE_DYES` / `DEAD_DYES` is chosen; with no match the channel is a guess
+    (live 0, dead 1), announced with a RuntimeWarning. Raises ValueError if both
+    resolve to one channel or an index is past the channel count.
+    """
+    def pick(given, pattern, default, role):
+        if given is not None:
+            return given
+        for i, name in enumerate(channel_names):
+            if pattern.search(name):
+                return i
+        warnings.warn(f"no channel name identifies the {role} channel among "
+                      f"{channel_names}; using channel {default} by position. Set "
+                      f"{role}_channel in the manifest if that is wrong.",
+                      RuntimeWarning, stacklevel=3)
+        return default
+
+    li = pick(live, LIVE_DYES, 0, "live")
+    di = pick(dead, DEAD_DYES, 1, "dead")
+    if li == di:
+        raise ValueError(f"live and dead are both channel {li} of {channel_names}; set "
+                         "live_channel and dead_channel explicitly")
+    if max(li, di) >= len(channel_names):
+        raise ValueError(f"channel {max(li, di)} requested but the file has "
+                         f"{len(channel_names)} channels {channel_names}")
+    return li, di
 
 
 def live_ratio(n_live: float | np.integer, n_dead: float | np.integer) -> float:
@@ -364,6 +406,7 @@ def attenuation_correct(
 
 
 __all__ = [
+    "live_dead_channels",
     "live_ratio",
     "live_dead_fractions",
     "live_dead_by_count",

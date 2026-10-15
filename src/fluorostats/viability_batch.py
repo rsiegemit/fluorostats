@@ -36,10 +36,13 @@ Manifest schema (all fields except groups/stacks optional)::
     {
       "title": "...",
       "live_channel": 0,          # channel index of the live (e.g. Calcein/AF488) signal
-      "dead_channel": 1,          # channel index of the dead (e.g. PI) signal
+      "dead_channel": 1,          # channel index of the dead (e.g. PI) signal; when
+                                  # omitted, each is found from the file's channel
+                                  # names (viability.live_dead_channels), else 0 / 1
+                                  # with a warning. The names used are written to
+                                  # live_channel_name / dead_channel_name.
       "seg": {"method": "otsu", "min_size": 32},   # segment.binarize kwargs: method,
-                                  # min_size, threshold_scale. Cell counts always
-                                  # threshold with otsu (recorded in run_config.json).
+                                  # min_size, threshold_scale (see "Segmentation").
       "count_method": "all",      # live_dead_by_count method: all | cc | watershed | maxima | auto
       "output_dir": "viability_out",
       "groups": [
@@ -47,6 +50,20 @@ Manifest schema (all fields except groups/stacks optional)::
         {"name": "Day 5", "stacks": [...]}
       ]
     }
+
+Stack labels must be unique within a group; a group ``background`` is rejected
+(viability runs subtract no background).
+
+Segmentation: ``seg.method`` thresholds everything, the cell counts included
+(``count_seg_method`` in run_config.json). ``min_size`` differs by readout:
+
+  - area / coverage and the 2D-vs-3D bias use ``seg.min_size``, or
+    `viability.AREA_MIN_SIZE` when the ``seg`` block gives none;
+  - the counts use ``seg.min_size`` when given (so the default ``seg`` block's 32
+    applies to them too), else `viability.COUNT_MIN_SIZE`; the ``cc`` count then
+    also drops labelled objects below `viability.COUNT_MIN_SIZE`;
+  - the regime estimate (``regime_*`` columns, and ``auto``'s choice) always uses
+    `viability.COUNT_MIN_SIZE`, whatever ``seg.min_size`` is.
 """
 
 from __future__ import annotations
@@ -84,8 +101,8 @@ def load_manifest(path: Path) -> dict:
     m = json.loads(Path(path).read_text())
     if "groups" not in m or not m["groups"]:
         raise ValueError("manifest needs a non-empty 'groups' list")
-    m.setdefault("live_channel", 0)
-    m.setdefault("dead_channel", 1)
+    m.setdefault("live_channel", None)         # None: resolved from channel names
+    m.setdefault("dead_channel", None)
     m.setdefault("seg", dict(DEFAULT_SEG))
     m.setdefault("count_method", "all")
     m.setdefault("output_dir", "viability_out")
@@ -97,15 +114,23 @@ def _validate(m: dict) -> None:
     """Check a viability manifest before any image is loaded; raise listing every problem."""
     problems = []
     for key in ("live_channel", "dead_channel"):
-        if not isinstance(m[key], int) or isinstance(m[key], bool) or m[key] < 0:
-            problems.append(f"{key} must be a non-negative integer, got {m[key]!r}")
-    if m["live_channel"] == m["dead_channel"]:
+        v = m[key]
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v < 0):
+            problems.append(f"{key} must be a non-negative integer, got {v!r}")
+    if m["live_channel"] is not None and m["live_channel"] == m["dead_channel"]:
         problems.append(f"live_channel and dead_channel are both {m['live_channel']}")
     methods = ("all", "auto", *viab.COUNT_METHODS)
     if m["count_method"] not in methods:
         problems.append(f"count_method must be one of {methods}, got {m['count_method']!r}")
     problems += _check_seg(m["seg"])
     problems += check_groups(m["groups"], roles=_ROLES)
+    for grp in m["groups"]:
+        name = grp.get("name")
+        if "background" in grp:
+            problems.append(f"group {name!r}: 'background' is not used by viability runs")
+        labels = [st.get("label") for st in grp.get("stacks", [])]
+        for lab in sorted({lb for lb in labels if lb is not None and labels.count(lb) > 1}):
+            problems.append(f"group {name!r}: label {lab!r} is used by more than one stack")
     if problems:
         raise ValueError("invalid viability manifest:\n  - " + "\n  - ".join(problems))
 
@@ -142,8 +167,10 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     vol, meta = load_volume(Path(path))                 # (C, Z, Y, X)
     if vol.ndim != 4:  # pragma: no cover — load_volume always canonicalises to (C,Z,Y,X)
         raise ValueError(f"{path.name}: expected 4D (C,Z,Y,X), got shape {vol.shape}")
-    live = vol[cfg["live_channel"]].astype(np.float32)   # (Z, Y, X)
-    dead = vol[cfg["dead_channel"]].astype(np.float32)
+    names = meta["channel_names"]
+    li, di = viab.live_dead_channels(names, cfg["live_channel"], cfg["dead_channel"])
+    live = vol[li].astype(np.float32)   # (Z, Y, X)
+    dead = vol[di].astype(np.float32)
     seg = cfg["seg"]
 
     # surface culture -> analyse the maximum-intensity projection (quasi-monolayer)
@@ -162,6 +189,7 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
     bias = viab.viability_2d_vs_3d(live, **seg)                    # MIP vs full 3D
 
     row = {
+        "live_channel_name": names[li], "dead_channel_name": names[di],
         "px_um": px, "voxel_size_source": meta.get("voxel_size_source", ""), "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
         # area / coverage on the intensity MIP (segment the projection; MIP_COLUMNS)
         "live_cov_pct": 100.0 * area["live_fraction"],

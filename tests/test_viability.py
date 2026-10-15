@@ -280,3 +280,28 @@ def test_live_dead_by_count_auto_fills_the_chosen_methods_columns():
     assert out[f"n_live_{ml}"] == out["n_live"] and out[f"n_dead_{md}"] == out["n_dead"]
     assert out["reason_live"] and out["reason_dead"]
     assert out["consensus"] == out["viability"] and np.isnan(out["spread"])
+
+
+@pytest.mark.parametrize("names,expected", [
+    (["Calcein AM", "PI"], (0, 1)),
+    (["Propidium iodide", "Alexa Fluor 488"], (1, 0)),
+    (["DAPI", "FITC", "EthD-1"], (1, 2)),
+    (["GFP", "ethidium homodimer"], (0, 1)),
+])
+def test_live_dead_channels_from_dye_names(names, expected):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert viability.live_dead_channels(names) == expected
+
+
+def test_live_dead_channels_explicit_and_fallback():
+    assert viability.live_dead_channels(["PI", "Calcein"], live=0, dead=1) == (0, 1)
+    with pytest.warns(RuntimeWarning, match="no channel name identifies the live"):
+        assert viability.live_dead_channels(["DAPI", "AF647"], dead=1) == (0, 1)
+    with pytest.warns(RuntimeWarning, match="dead channel"):
+        assert viability.live_dead_channels(["Ch1", "Ch2"], live=0) == (0, 1)
+    with pytest.raises(ValueError, match="both channel 1"):
+        viability.live_dead_channels(["Ch1", "Calcein"], live=None, dead=None)
+    with pytest.raises(ValueError, match="has 2 channels"):
+        viability.live_dead_channels(["a", "b"], live=0, dead=2)
