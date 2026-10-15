@@ -94,6 +94,33 @@ def test_plot_retention_multiwindow_bars_are_mean_retained_fraction(tmp_path, la
     assert _saved(out_base) == [True, True]
 
 
+def test_plot_auc_drops_a_nan_auc_instead_of_drawing_a_nan_bar(tmp_path, last_axes):
+    # Regression: a stack whose window lies past its depth has AUC NaN, and the inline
+    # np.mean made the whole group's bar and error bar NaN (the printed summary, which
+    # uses stats.describe, said n=2, mean 5).
+    window = parse_window([0, 10])
+    rows = [_auc_row("A", i, [window], v) for i, v in enumerate((0.4, 0.6, np.nan))]
+    plot_auc(rows, {"A": "#3F6AB3"}, window, tmp_path / "auc_nan", use_normalized=True)
+    ax = last_axes()
+    assert ax.patches[0].get_height() == pytest.approx(5.0)
+    (seg,) = ax.containers[1].lines[2][0].get_segments()          # the SEM whisker
+    np.testing.assert_allclose(seg[:, 1], [4.0, 6.0])              # SEM of (4, 6) = 1
+
+
+def test_retention_draws_no_whisker_for_a_single_stack(tmp_path, last_axes):
+    # Regression: a group with one primary stack got an SEM of 0.0 (a drawn zero-length
+    # whisker with caps), claiming a precision nobody measured; it is undefined (NaN).
+    windows = [parse_window([0, 10]), parse_window([0, 20])]
+    rows = [_auc_row("A", i, windows, v) for i, v in enumerate((0.4, 0.6))]
+    rows += [_auc_row("B", 0, windows, 0.9)]
+    plot_retention_multiwindow(rows, {"A": "#3F6AB3", "B": "#B33F3F"}, windows,
+                               tmp_path / "ret", title="t")
+    ax = last_axes()
+    a_err, b_err = (c for c in ax.containers if hasattr(c, "has_yerr"))
+    assert np.isfinite(a_err.lines[2][0].get_segments()).all()
+    assert np.isnan(b_err.lines[2][0].get_segments()).all()
+
+
 def test_fractional_window_names_keep_their_suffix(tmp_path):
     """'0.5_10um' and '0.25_10um' used to both save as 'fig_auc_0.png' and overwrite."""
     windows = [parse_window([0.5, 10]), parse_window([0.25, 10])]
