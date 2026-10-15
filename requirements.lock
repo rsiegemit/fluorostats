@@ -1,7 +1,7 @@
-# Pinned dependency versions — reproducibility lockfile for fluorostats 0.8.0.
+# Pinned dependency versions — reproducibility lockfile for fluorostats.
 #
-# These are the exact versions used to produce the benchmark numbers and figures
-# in the methods paper. pyproject.toml carries permissive lower bounds (>=) for
+# These are the exact versions used to produce the benchmark tables and figures
+# in benchmarks/ (each table's .run.json records them too). pyproject.toml carries permissive lower bounds (>=) for
 # normal installation; this file records the tested, frozen environment so the
 # published results can be reproduced bit-for-bit.
 #

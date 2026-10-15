@@ -30,7 +30,7 @@ publication_figures/
 cli_test*/
 .claude/
 
-# methods paper: paper-specific drafts, handoffs, competitor research, and
+# local work: drafts, handoffs, competitor research, and
 # benchmark scripts that hardcode local dataset paths — kept on disk, not public.
 # Reusable code lives in src/fluorostats/; a self-contained figure demo lives in
 # examples/publication_figure/ (curated, self-contained assets).
