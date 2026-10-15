@@ -13,7 +13,8 @@ from fluorostats import io, io_vendors
 # Nikon .nd2
 # ---------------------------------------------------------------------------
 
-def _make_fake_nd2(arr, voxel, channels):
+def _make_fake_nd2(arr, voxel, channels, calibrated=(True, True, True), legacy=False):
+    """Fake nd2 module; ``voxel`` and ``calibrated`` are (x, y, z) as nd2 gives them."""
     fake = types.ModuleType("nd2")
 
     class VS:
@@ -26,12 +27,15 @@ def _make_fake_nd2(arr, voxel, channels):
     class ChMeta:
         def __init__(self, name):
             self.channel = ChObj(name)
+            self.volume = types.SimpleNamespace(axesCalibrated=calibrated)
 
     class Metadata:
         def __init__(self):
             self.channels = [ChMeta(n) for n in channels]
 
     class ND2File:
+        is_legacy = legacy
+
         def __init__(self, path):
             self.metadata = Metadata()
 
@@ -175,3 +179,30 @@ def test_nd2_unnamed_channel_keeps_its_position(monkeypatch, tmp_path):
     path.write_bytes(b"")
     _, meta = io.load_volume(path)
     assert meta["channel_names"] == ["Ch1", "488"]
+
+
+def _load_nd2(monkeypatch, tmp_path, voxel, calibrated, legacy=False):
+    fake = _make_fake_nd2(np.zeros((1, 5, 8, 8), np.uint16), voxel, ["488"], calibrated, legacy)
+    monkeypatch.setitem(sys.modules, "nd2", fake)
+    path = tmp_path / "c.nd2"
+    path.write_bytes(b"")
+    return io.load_volume(path)[1]
+
+
+def test_nd2_uncalibrated_axes_are_recorded_as_default(monkeypatch, tmp_path):
+    # Regression: nd2 returns 1 for an axis it cannot determine, and every axis was
+    # recorded 'file', so an uncalibrated ND2 never warned.
+    with pytest.warns(RuntimeWarning, match="no z/y/x calibration"):
+        meta = _load_nd2(monkeypatch, tmp_path, (1, 1, 1), (False, False, False))
+    assert meta["voxel_size_source"] == "z:default,y:default,x:default"
+    with pytest.warns(RuntimeWarning, match="no z calibration"):
+        meta = _load_nd2(monkeypatch, tmp_path, (0.3, 0.3, 1), (True, True, False))
+    assert meta["voxel_size_source"] == "z:default,y:file,x:file"
+    assert meta["voxel_size_um"] == (1.0, 0.3, 0.3)
+
+
+@pytest.mark.parametrize("z, source", [(2.0, "z:file"), (1, "z:default")])
+def test_nd2_legacy_z_is_read_only_when_nd2_found_a_step(monkeypatch, tmp_path, z, source):
+    # The legacy reader never flags z as calibrated; it writes 1 when it finds no step.
+    meta = _load_nd2(monkeypatch, tmp_path, (0.3, 0.3, z), (True, True, False), legacy=True)
+    assert meta["voxel_size_source"] == f"{source},y:file,x:file"

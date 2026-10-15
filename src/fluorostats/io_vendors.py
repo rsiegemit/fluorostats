@@ -248,6 +248,18 @@ def load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
     return arr, meta
 
 
+def _nd2_calibrated_axes(f, vs) -> set[str]:
+    """Axes whose voxel size the ND2 file calibrates. ``voxel_size()`` gives 1 for
+    an axis nd2 cannot determine, so the first channel's ``volume.axesCalibrated``
+    (x, y, z) decides. The legacy reader never flags z and gives 1 when it finds
+    no z step, so there z counts as read when it is not 1."""
+    channels = getattr(f.metadata, "channels", None) or []
+    flags = dict(zip("xyz", channels[0].volume.axesCalibrated if channels else (False,) * 3))
+    if getattr(f, "is_legacy", False):
+        flags["z"] = getattr(vs, "z", 1) != 1
+    return {a for a in "zyx" if flags[a] and _valid_size(getattr(vs, a, None))}
+
+
 def _parse_nd2_metadata(f) -> dict:
     meta: dict = {
         "voxel_size_um": (1.0, 1.0, 1.0),
@@ -257,7 +269,7 @@ def _parse_nd2_metadata(f) -> dict:
     try:
         if hasattr(f, "voxel_size"):
             vs = f.voxel_size()
-            meta["_read_axes"] = {a for a in "zyx" if _valid_size(getattr(vs, a, None))}
+            meta["_read_axes"] = _nd2_calibrated_axes(f, vs)
             meta["voxel_size_um"] = (
                 _safe_float(getattr(vs, "z", 1.0), 1.0),
                 _safe_float(getattr(vs, "y", 1.0), 1.0),
