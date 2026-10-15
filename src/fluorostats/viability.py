@@ -304,6 +304,13 @@ def viability_2d_vs_3d(
     Returns dict: live_fraction_midplane, live_fraction_mip, live_fraction_3d,
     overestimate_mip = mip / 3d (>1 means the 2D MIP overstates coverage), and
     overestimate_midplane = midplane / 3d.
+
+    Projection: the MIP here is the maximum projection of the 3D live MASK (the
+    volume is segmented once in 3D, then projected), so a voxel counts as covered
+    if any slice above it is foreground. Segmenting the intensity MIP instead
+    (``live_dead_fractions(live.max(z_axis))``, as `viability_batch`'s
+    ``live_cov_pct`` does) thresholds the projected intensities and generally
+    gives a different fraction.
     """
     lm = _mask(live, live_mask, **seg)
     nz = lm.shape[z_axis]

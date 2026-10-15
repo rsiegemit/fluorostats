@@ -3,8 +3,9 @@
 Turns a set of Live/Dead z-stacks (grouped by condition, e.g. culture day) into
 the quantitative viability readouts the library exposes, from one JSON config:
 
-  - **area / coverage** (``viability.live_dead_fractions`` on the surface MIP):
-    live and dead area fraction and area-based viability;
+  - **area / coverage** (``viability.live_dead_fractions`` on the intensity MIP:
+    each channel is max-projected over z, then segmented): live and dead area
+    fraction and area-based viability;
   - **counts** (``viability.live_dead_by_count``, ``method="all"`` by default):
     connected-component / watershed / maxima cell counts, their consensus viability
     and spread (disagreement flags a crowded regime the counting choice matters in).
@@ -13,7 +14,10 @@ the quantitative viability readouts the library exposes, from one JSON config:
   - **regime** (``viability.choose_count_method``): SNR + crowding + the method
     the heuristic would auto-pick, so the choice is transparent;
   - **2D-vs-3D bias** (``viability.viability_2d_vs_3d``): how much a MIP overstates
-    coverage relative to the full volume.
+    coverage relative to the full volume. Its MIP is the projection of the 3D
+    MASK (the stack is segmented in 3D, then max-projected), so ``live_frac_mip``
+    is not ``live_cov_pct / 100``, which segments the intensity MIP. Both are kept;
+    `MIP_COLUMNS` (also written to run_config.json) states which column is which.
 
 Everything is scale-aware: cells are counted on the surface maximum-intensity
 projection (surface culture is a quasi-monolayer), and a per-FOV cell density is
@@ -61,6 +65,16 @@ from . import segment
 from . import viability as viab
 
 DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE}
+# The two maximum-intensity-projection definitions in the per-stack table.
+MIP_COLUMNS = {
+    "live_cov_pct": "percent of the intensity MIP segmented live: each channel is "
+                    "max-projected over z, then thresholded (likewise dead_cov_pct, "
+                    "viability_area and the cell counts)",
+    "live_frac_mip": "fraction of the MIP of the 3D live mask: the stack is "
+                     "thresholded in 3D, then the mask is max-projected "
+                     "(viability.viability_2d_vs_3d; overestimate_mip = live_frac_mip "
+                     "/ live_frac_3d)",
+}
 # Viability runs analyse every stack; there is no auxiliary stack role.
 _ROLES = ("primary",)
 
@@ -149,11 +163,11 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
 
     row = {
         "px_um": px, "voxel_size_source": meta.get("voxel_size_source", ""), "n_z": nz, "n_xy": nx, "fov_mm2": fov_mm2,
-        # area / coverage on the surface MIP
+        # area / coverage on the intensity MIP (segment the projection; MIP_COLUMNS)
         "live_cov_pct": 100.0 * area["live_fraction"],
         "dead_cov_pct": 100.0 * area["dead_fraction"],
         "viability_area": area["viability"],
-        # 2D (MIP) vs full-3D coverage bias
+        # 2D vs full-3D coverage bias; this MIP projects the 3D mask (MIP_COLUMNS)
         "live_frac_mip": bias["live_fraction_mip"],
         "live_frac_3d": bias["live_fraction_3d"],
         "overestimate_mip": bias["overestimate_mip"],
@@ -182,7 +196,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     count_seg = m["seg"].get("method", viab.DEFAULT_SEG_METHOD)   # counts use seg.method too
     report.write_run_config(out, {"manifest": Path(manifest_path), "count_seg_method": count_seg},
-                            nested={"resolved": m})
+                            nested={"resolved": m, "mip_columns": MIP_COLUMNS})
     cfg = {k: m[k] for k in ("live_channel", "dead_channel", "seg", "count_method")}
 
     rows: list[dict] = []

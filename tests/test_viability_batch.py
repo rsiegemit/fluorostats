@@ -200,3 +200,21 @@ def test_single_stack_group_has_no_sem(tmp_path, capsys):
     assert rows and all(r["sem"] == "nan" for r in rows)
     assert {r["n"] for r in rows} <= {"0", "1"} and any(r["n"] == "1" for r in rows)
     assert "±nan (n=1)" in capsys.readouterr().out
+
+
+def test_the_two_mip_columns_are_the_documented_definitions(tmp_path):
+    # live_cov_pct segments the intensity MIP; live_frac_mip projects the 3D mask.
+    import csv
+    from fluorostats import viability
+    from fluorostats.segment import binarize
+    out = viability_batch.run(_one_stack_manifest(tmp_path))
+    row = next(csv.DictReader(open(out / "viability_per_stack.csv")))
+    vol = _blob_stack(3, 3)
+    seg = viability_batch.DEFAULT_SEG
+    live = vol[0].astype(np.float32)
+    intensity_mip = viability.live_dead_fractions(live.max(0), **seg)["live_fraction"]
+    mask_mip = binarize(live, **seg).max(0).mean()
+    assert float(row["live_cov_pct"]) == pytest.approx(100 * intensity_mip)
+    assert float(row["live_frac_mip"]) == pytest.approx(mask_mip)
+    cfg = json.loads((out / "run_config.json").read_text())
+    assert cfg["mip_columns"] == viability_batch.MIP_COLUMNS
