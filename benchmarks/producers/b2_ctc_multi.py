@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile
-from common import DATA, YEAR_LABELS, require, thresholds, write_table
+from common import DATA, SMALL_OBJECT_RULE, YEAR_LABELS, require, thresholds, write_table
 from fluorostats.segment import segment_channel
 from fluorostats.validate import dice
 
@@ -62,7 +62,8 @@ def main():
         rows += [{"dataset": ds, "method": m, "mean_dice": round(float(np.mean(v)), 3), "ctc_top_SEG": top}
                  for m, v in scores.items()]
     df = pd.DataFrame(rows)
-    write_table(df, "b2_ctc_multi", {"datasets": [d for d, _ in DATASETS], "thresholds": list(THRESHOLDS), "fluorostats": SEG})
+    write_table(df, "b2_ctc_multi", {"datasets": [d for d, _ in DATASETS], "thresholds": list(THRESHOLDS), "fluorostats": SEG,
+                                     "small_object_rule": SMALL_OBJECT_RULE})
     print(df.to_string(index=False))
 
 

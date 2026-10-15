@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from common import load_sbiad2130_channel, write_table
+from common import SMALL_OBJECT_RULE, load_sbiad2130_channel, write_table
 from fluorostats.viability import attenuation_correct, viability_depth_profile
 
 Z_UM = 5.5
@@ -25,7 +25,8 @@ def main():
     z = np.arange(len(prof))
     df = pd.DataFrame({"z_slice": z, "depth_um": z * Z_UM,
                        "live_fraction_raw": prof, "live_fraction_attn_corrected": prof_corr})
-    write_table(df, "b3_viability_depth_profile", {"live_channel": LIVE_CH, "z_um": Z_UM, "xy_downsample": 8, "seg": SEG})
+    write_table(df, "b3_viability_depth_profile", {"live_channel": LIVE_CH, "z_um": Z_UM, "xy_downsample": 8, "seg": SEG,
+                                                         "small_object_rule": SMALL_OBJECT_RULE})
     print(df.describe().to_string())
 
 

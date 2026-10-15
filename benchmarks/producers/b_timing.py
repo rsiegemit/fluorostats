@@ -18,21 +18,21 @@ import numpy as np
 import pandas as pd
 import tifffile
 from skimage import filters
-from skimage.morphology import remove_small_objects
 
-from common import (DENOISED_OTSU_CC, DL_CPU_MS, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc, threshold_cc,
-                    thresholds, write_table)
+from common import (DENOISED_OTSU_CC, DL_CPU_MS, SMALL_OBJECT_RULE, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc,
+                    threshold_cc, thresholds, write_table)
 from fluorostats.objects import watershed_split
+from fluorostats.segment import remove_small
 
 N_IMAGES = 50
 MIN_SIZE = 20
 
 METHODS = {
     DENOISED_OTSU_CC: lambda im: denoised_otsu_cc(im, MIN_SIZE),
-    **{name: (lambda im, fn=fn: threshold_cc(im, fn, max_size=MIN_SIZE))
+    **{name: (lambda im, fn=fn: threshold_cc(im, fn, MIN_SIZE))
        for name, fn in thresholds(["otsu", "li", "isodata", "triangle"], YEAR_LABELS).items()},
     "Watershed_1991": lambda im: watershed_split(
-        remove_small_objects(im > filters.threshold_otsu(im), MIN_SIZE), min_size=MIN_SIZE, min_distance=4)[0],
+        remove_small(im > filters.threshold_otsu(im), MIN_SIZE), min_size=MIN_SIZE, min_distance=4)[0],
 }
 
 
@@ -58,7 +58,7 @@ def main():
                  "ms_per_image": DL_CPU_MS["Cellpose"],
                  "images_per_sec": round(1000 / DL_CPU_MS["Cellpose"], 2)})
     df = pd.DataFrame(rows).sort_values("ms_per_image")
-    write_table(df, "b_timing", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "dl_cpu_ms": DL_CPU_MS}, timing=True)
+    write_table(df, "b_timing", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "dl_cpu_ms": DL_CPU_MS}, timing=True)
     print(df.to_string(index=False))
 
 

@@ -27,7 +27,7 @@ from skimage import filters, restoration
 from skimage.feature import peak_local_max
 from skimage.filters import median
 from skimage.measure import euler_number
-from skimage.morphology import medial_axis, remove_small_objects, skeletonize, thin
+from skimage.morphology import medial_axis, skeletonize, thin
 from skimage.segmentation import watershed
 
 from common import (DATA, DL_CPU_MS, bbbc024_volumes, bbbc039_pairs, clark_evans, kerkhoff_peak_count,
@@ -41,7 +41,7 @@ SLOW = ["rolling", "average_precision", "median_filter", "watershed", "instance_
 def load_inputs():
     fp, gp = bbbc024_volumes(n=1)[0]
     vol = tifffile.imread(fp).astype(np.float32)
-    mask = remove_small_objects(vol > filters.threshold_otsu(vol), 20)
+    mask = segment.remove_small(vol > filters.threshold_otsu(vol), 20)
     mid = vol[vol.shape[0] // 2]
     kerk = [x for x in glob.glob(str(require(DATA / "kerkhoff_lda" / "synthetic") / "**" / "*.tif"),
                                  recursive=True) if "700 Live; 700 Dead-1" in x][0]

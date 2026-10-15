@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile
-from common import DATA, require, threshold_cc, thresholds, write_table
+from common import DATA, SMALL_OBJECT_RULE, require, threshold_cc, thresholds, write_table
 from fluorostats.agreement import lins_ccc
 from fluorostats.objects import label_3d
 from fluorostats.segment import binarize
@@ -30,8 +30,7 @@ def seg_fluorostats(img, method):
 def seg_threshold(img, thresh_fn):
     if img.max() <= img.min():   # constant image: some estimators fail; nothing to segment
         return np.zeros(img.shape, dtype=np.int32)
-    # max_size = MIN_SIZE - 1 keeps the "smaller than MIN_SIZE" cleanup used by binarize.
-    return threshold_cc(img, thresh_fn, max_size=MIN_SIZE - 1)
+    return threshold_cc(img, thresh_fn, MIN_SIZE)
 
 
 METHODS = {
@@ -84,7 +83,8 @@ def main():
     rows.sort(key=lambda r: r["mean_f1@0.5"], reverse=True)
     df = pd.DataFrame(rows)
     df.insert(0, "rank", range(1, len(df) + 1))
-    write_table(df, "b_dsb2018", {"min_size": MIN_SIZE, "iou_threshold": 0.5, "n_images": len(pairs)},
+    write_table(df, "b_dsb2018", {"min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "iou_threshold": 0.5,
+                                  "n_images": len(pairs)},
                 lineterminator="\r\n")  # csv-module line endings of the committed table
     print(df.to_string(index=False))
 

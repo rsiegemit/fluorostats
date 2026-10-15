@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import tifffile
 
-from common import DATA, require, write_table
+from common import DATA, SMALL_OBJECT_RULE, require, write_table
 from fluorostats.metrics_3d import volume_fraction
 from fluorostats.segment import binarize
 
@@ -39,7 +39,7 @@ def main():
         rows.append({"volume": name, "VesselExpress_VF": round(volume_fraction(ve), 5),
                      "fluorostats_VF": round(volume_fraction(fs), 5)})
     df = pd.DataFrame(rows)
-    write_table(df, "b_ve_metrics", {"method": "auto", "min_size": 50})
+    write_table(df, "b_ve_metrics", {"method": "auto", "min_size": 50, "small_object_rule": SMALL_OBJECT_RULE})
     print(df.to_string(index=False))
 
 

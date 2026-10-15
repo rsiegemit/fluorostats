@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 import tifffile
 
-from common import (DENOISED_OTSU_CC, RESULTS, bbbc039_gt_instances, bbbc039_pairs, denoised_otsu_cc,
-                    write_table)
+from common import (DENOISED_OTSU_CC, RESULTS, SMALL_OBJECT_RULE, bbbc039_gt_instances, bbbc039_pairs,
+                    denoised_otsu_cc, write_table)
 from fluorostats.stats import bootstrap_mean_ci
 from fluorostats.validate import instance_f1
 
@@ -54,7 +54,8 @@ def main():
         rows.append({"method": name, "mean_F1": round(m, 4), "CI_low": round(lo, 4),
                      "CI_high": round(hi, 4), "diff_significant": sig})
     out = pd.DataFrame(rows)
-    write_table(out, "b_dl_ci", {"seed": SEED, "n_boot": N_BOOT, "min_size": MIN_SIZE, "n_images": len(df)})
+    write_table(out, "b_dl_ci", {"seed": SEED, "n_boot": N_BOOT, "min_size": MIN_SIZE,
+                                 "small_object_rule": SMALL_OBJECT_RULE, "n_images": len(df)})
     print(f"n = {len(df)} matched images")
     print(out.to_string(index=False))
 

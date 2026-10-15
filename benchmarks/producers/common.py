@@ -30,12 +30,11 @@ from scipy import ndimage as ndi
 from scipy.spatial import cKDTree
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_minimum
-from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
 
 import fluorostats
 from fluorostats.objects import label_3d
-from fluorostats.segment import THRESHOLD_METHODS, segment_channel
+from fluorostats.segment import THRESHOLD_METHODS, remove_small, segment_channel
 
 DATA = Path(os.environ.get(
     "FLUOROSTATS_DATA", str(Path(__file__).resolve().parents[2] / "data" / "downloads")))
@@ -55,6 +54,10 @@ YEAR_LABELS = {"otsu": "Otsu_1979", "li": "Li_1993", "isodata": "Isodata_1978",
 # named by what they run (helpers below); used as column / row labels.
 RAW_OTSU_CC = "fluorostats(raw Otsu+CC)"
 DENOISED_OTSU_CC = "fluorostats(denoised Otsu+CC)"
+
+# The one small-object rule every producer applies (``segment.remove_small``),
+# recorded in each run.json that has a min_size.
+SMALL_OBJECT_RULE = "keep >= min_size"
 
 # Side (px) of the square field of the example point patterns.
 EXAMPLE_FIELD = 500
@@ -140,15 +143,14 @@ def thresholds(names, labels: dict[str, str] | None = None) -> dict:
     return {labels.get(n, n): THRESHOLD_FNS[n] for n in names}
 
 
-def threshold_cc(img: np.ndarray, threshold_fn, max_size: int) -> np.ndarray:
-    """Global threshold -> drop objects of <= ``max_size`` px -> connected-component labels."""
-    return label_3d(remove_small_objects(img > threshold_fn(img), max_size=max_size))[0]
+def threshold_cc(img: np.ndarray, threshold_fn, min_size: int) -> np.ndarray:
+    """Global threshold -> drop objects smaller than ``min_size`` px -> connected-component labels."""
+    return label_3d(remove_small(img > threshold_fn(img), min_size))[0]
 
 
 def raw_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:
-    """RAW_OTSU_CC: Otsu on the raw image -> drop objects of <= ``min_size`` px -> label."""
-    return label_3d(remove_small_objects(img > THRESHOLD_FNS["otsu"](img), max_size=min_size),
-                    min_size=min_size)[0]
+    """RAW_OTSU_CC: Otsu on the raw image -> drop objects smaller than ``min_size`` px -> label."""
+    return threshold_cc(img, THRESHOLD_FNS["otsu"], min_size)
 
 
 def denoised_otsu_cc(img: np.ndarray, min_size: int) -> np.ndarray:

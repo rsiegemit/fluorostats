@@ -14,10 +14,9 @@ from pathlib import Path
 import czifile
 import numpy as np
 import pandas as pd
-from skimage.morphology import remove_small_objects
 
-from common import DATA, YEAR_LABELS, require, thresholds, write_table
-from fluorostats.segment import segment_channel
+from common import DATA, SMALL_OBJECT_RULE, YEAR_LABELS, require, thresholds, write_table
+from fluorostats.segment import remove_small, segment_channel
 
 MIN_SIZE = 100
 SEG = dict(method="otsu", threshold_scale=0.9, min_size=MIN_SIZE, sigma=1.0, bg_radius=15)
@@ -29,13 +28,13 @@ def main():
     for fp in sorted(glob.glob(str(require(DATA / "sproutangio") / "*.czi"))):
         fa = np.squeeze(czifile.imread(fp)).astype(np.float32)[0]
         row = {"group": int(re.search(r"group(\d)", Path(fp).name).group(1))}
-        row.update({name: float(remove_small_objects(fa > fn(fa), max_size=MIN_SIZE).mean())
+        row.update({name: float(remove_small(fa > fn(fa), MIN_SIZE).mean())
                     for name, fn in THRESHOLDS.items()})
         _, mask = segment_channel(fa, **SEG)
         row["fluorostats"] = float(mask.mean())
         recs.append(row)
     df = pd.DataFrame(recs)
-    write_table(df, "b_vascular_sproutangio_multi", {"min_size": MIN_SIZE, "fluorostats": SEG})
+    write_table(df, "b_vascular_sproutangio_multi", {"min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "fluorostats": SEG})
     print(df.groupby("group").mean().round(4).to_string())
 
 
