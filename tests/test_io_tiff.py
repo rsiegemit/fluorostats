@@ -241,3 +241,26 @@ def test_ome_reading_the_first_of_several_series_is_announced(tmp_path):
     assert vol.shape == (1, 3, 8, 8) and vol.max() == 1
     with pytest.warns(RuntimeWarning, match="the first of 2 series only"):
         io.load_image(p)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"imagej": True, "metadata": {"axes": "ZYX", "spacing": 2.0, "unit": "um", "zunit": "ell"}},
+        {"imagej": True, "metadata": {"axes": "ZYX", "spacing": 0.0, "unit": "um"}},
+        {
+            "ome": True,
+            "metadata": {"axes": "ZYX", "PhysicalSizeZ": 2.0, "PhysicalSizeZUnit": "ell"},
+        },
+    ],
+)
+def test_2d_read_does_not_warn_about_the_z_spacing(tmp_path, kwargs):
+    # Regression: load_image parsed the z spacing it then discards, and warned about it.
+    p = tmp_path / "zstack.tif"
+    tifffile.imwrite(p, np.zeros((5, 8, 8), np.uint16), resolution=(2.0, 2.0), **kwargs)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        io.load_image(p)
+    assert not [w for w in rec if "z voxel size" in str(w.message) or "spacing" in str(w.message)]
+    with pytest.warns(RuntimeWarning, match="z voxel size|spacing"):
+        io.load_volume(p)  # the volume read still says it
