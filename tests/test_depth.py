@@ -319,6 +319,15 @@ def test_fit_lam_guess_when_all_below_threshold():
     assert hasattr(fit, "fit_ok")
 
 
+def test_fit_of_a_flat_profile_has_no_r_squared():
+    # Regression: a profile with no variance (ss_tot == 0) reported r_squared = 0.0, a
+    # measured-looking "explains nothing" for a quantity that is undefined there.
+    z = np.linspace(0, 100, 20)
+    fit = fit_penetration_depth(z, np.full(20, 5.0))
+    assert np.isnan(fit.r_squared)
+    assert not fit.fit_ok
+
+
 def test_fit_all_points_below_threshold_at_surface():
     """Profile that starts below I0/e at z=0 (below[0] == 0 path)."""
     z = np.linspace(0.0, 50.0, 10)

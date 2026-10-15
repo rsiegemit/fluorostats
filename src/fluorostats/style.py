@@ -1,10 +1,10 @@
-"""Publication-style matplotlib defaults and palette helpers.
+"""The house figure theme and palette: a compatibility layer over `pubfig`.
 
-Call :func:`apply_style` at the top of a script (or in the matplotlib
-rc file) to opt every figure into the FluoroStats look:
+`fluorostats.pubfig` is the one figure style module; this module keeps the names
+earlier code imports from here::
 
     from fluorostats.style import apply_style, PALETTE
-    apply_style()
+    apply_style()            # pubfig.apply_style("house")
     ax.set_facecolor(PALETTE["background"])
 
 The palette is intentionally small and bioscience-friendly:
@@ -22,137 +22,17 @@ that other code can override.
 
 from __future__ import annotations
 
-import matplotlib as mpl
-from matplotlib.rcsetup import cycler
+from . import pubfig
+from .pubfig import DARK_PALETTE, MATERIAL_COLORS, PALETTE, darken, lighten, material_color
 
 
-PALETTE = {
-    "primary":   "#3F6AB3",  # cool slate blue
-    "accent":    "#E25C5C",  # warm coral red
-    "highlight": "#E8A946",  # soft amber
-    "muted":     "#9AA4B0",  # cool grey
-    "ink":       "#1F2937",  # deep blue-grey for text
-    "paper":     "#FCFCFA",  # off-white background
-    "grid":      "#E5E7EB",  # very light grey gridlines
-    "background": "#FCFCFA",
-    "panel":     "#FFFFFF",
-}
-
-MATERIAL_COLORS = {
-    "GelMA": PALETTE["primary"],
-    "Hybrid": PALETTE["accent"],
-    "Control": PALETTE["muted"],
-}
-
-# Dark render palette (presentation slides)
-DARK_PALETTE = {
-    "background": "#000000",
-    "mesh":       "#F5C518",   # rich yellow
-    "grid":       "#3A3A3A",
-    "ink":        "#FFFFFF",
-    "scalebar":   "#FFFFFF",
-}
-
-
-# exception MOD-6: the body is one rcParams table (data, not logic); splitting it
-# would scatter related settings without making any of them easier to read.
 def apply_style(font_scale: float = 1.0) -> None:
-    """Configure matplotlib for clean, modern publication figures.
+    """Configure matplotlib for the house figure look: ``pubfig.apply_style("house")``.
 
     Idempotent — safe to call multiple times. ``font_scale`` multiplies
     every font size (useful for talks vs print).
     """
-    base = 11.0 * font_scale
-    mpl.rcParams.update({
-        # Figure
-        "figure.facecolor": PALETTE["paper"],
-        "figure.edgecolor": PALETTE["paper"],
-        "figure.dpi": 110,
-        "savefig.dpi": 220,
-        "savefig.bbox": "tight",
-        "savefig.facecolor": PALETTE["paper"],
-        "savefig.edgecolor": "none",
-        # Axes
-        "axes.facecolor": PALETTE["panel"],
-        "axes.edgecolor": PALETTE["ink"],
-        "axes.labelcolor": PALETTE["ink"],
-        "axes.titlecolor": PALETTE["ink"],
-        "axes.titleweight": "semibold",
-        "axes.titlepad": 10,
-        "axes.labelpad": 6,
-        "axes.linewidth": 0.9,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.grid": True,
-        "axes.grid.axis": "y",
-        "axes.axisbelow": True,
-        "axes.prop_cycle": cycler(color=[
-            PALETTE["primary"], PALETTE["accent"], PALETTE["highlight"],
-            PALETTE["muted"], "#6BAA75", "#9A6FB0",
-        ]),
-        # Grid
-        "grid.color": PALETTE["grid"],
-        "grid.linewidth": 0.7,
-        "grid.linestyle": "-",
-        # Ticks
-        "xtick.color": PALETTE["ink"],
-        "ytick.color": PALETTE["ink"],
-        "xtick.direction": "out",
-        "ytick.direction": "out",
-        "xtick.major.size": 4,
-        "ytick.major.size": 4,
-        "xtick.major.width": 0.8,
-        "ytick.major.width": 0.8,
-        # Typography
-        "font.family": "sans-serif",
-        "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial",
-                            "DejaVu Sans"],
-        "font.size": base,
-        "axes.titlesize": base * 1.15,
-        "axes.labelsize": base * 1.0,
-        "xtick.labelsize": base * 0.85,
-        "ytick.labelsize": base * 0.85,
-        "legend.fontsize": base * 0.9,
-        "figure.titlesize": base * 1.4,
-        "figure.titleweight": "semibold",
-        # Legend
-        "legend.frameon": False,
-        "legend.handlelength": 1.6,
-        "legend.handletextpad": 0.6,
-        "legend.borderpad": 0.4,
-        # Lines / markers
-        "lines.linewidth": 1.8,
-        "lines.markersize": 6,
-        "lines.markeredgewidth": 0.6,
-        "patch.linewidth": 0.6,
-        "patch.edgecolor": PALETTE["ink"],
-        # Image
-        "image.cmap": "viridis",
-    })
-
-
-def material_color(name: str, fallback: str | None = None) -> str:
-    """Look up the canonical color for a condition/material label."""
-    if name in MATERIAL_COLORS:
-        return MATERIAL_COLORS[name]
-    for key, color in MATERIAL_COLORS.items():
-        if key.lower() in str(name).lower():
-            return color
-    return fallback or PALETTE["muted"]
-
-
-def darken(color: str, amount: float = 0.2) -> str:
-    """Return a slightly darker version of a hex color."""
-    import matplotlib.colors as mcolors
-    r, g, b = mcolors.to_rgb(color)
-    return mcolors.to_hex((max(0, r - amount), max(0, g - amount), max(0, b - amount)))
-
-
-def lighten(color: str, amount: float = 0.2) -> str:
-    """Return a slightly lighter version of a hex color."""
-    import matplotlib.colors as mcolors
-    r, g, b = mcolors.to_rgb(color)
-    return mcolors.to_hex((min(1, r + amount), min(1, g + amount), min(1, b + amount)))
+    pubfig.apply_style("house", font_scale=font_scale)
 
 
 __all__ = ["apply_style", "PALETTE", "MATERIAL_COLORS", "DARK_PALETTE",

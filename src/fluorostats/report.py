@@ -4,6 +4,7 @@ run_config.json record of how an output folder was produced."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -140,3 +141,21 @@ def write_run_config(output_dir: Path, params: dict, nested: dict | None = None)
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
     return config_path
+
+
+def remove_outputs(paths: Iterable[Path]) -> list[Path]:
+    """Delete those of ``paths`` that exist (an earlier run's outputs); return them sorted.
+
+    A tool calls this at the start of a run with the names it writes, so no earlier
+    result sits next to this run's, and writes ``run_config.json`` last, so a run that
+    fails part-way leaves no record claiming the folder. Only the given paths are touched.
+    """
+    removed = sorted(p for p in paths if p.exists())
+    for path in removed:
+        path.unlink()
+    return removed
+
+
+def stale_notices(removed: list[Path]) -> list[str]:
+    """One line per removed earlier output that this run did not write again."""
+    return [f"Removed stale {p} (not produced by this run)" for p in removed if not p.exists()]

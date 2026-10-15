@@ -6,6 +6,11 @@ grid, suitable for side-by-side material/condition comparisons.
 Both renderers downsample the mask first (configurable per axis) to
 keep mesh sizes manageable; pass ``downsample=(1, 1, 1)`` for full
 resolution.
+
+The µm axis labels and scale bars assume a calibrated ``voxel_size_um``
+(``(z, y, x)`` in µm, e.g. ``meta["voxel_size_um"]`` from `fluorostats.io`). The
+default ``(1, 1, 1)`` means voxel units: the axes then count voxels and a
+"100 µm" bar is 100 voxels long.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import marching_cubes
 
 from .qc import overlay_rgb
-from .style import DARK_PALETTE, PALETTE
+from .pubfig import DARK_PALETTE, PALETTE, save_figure
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +94,8 @@ def render_isosurface(
         fig = plt.figure(figsize=(6, 5))
         ax = fig.add_subplot(111, projection="3d")
     ds = block_reduce_max(mask.astype(np.uint8), downsample)
-    bg, grid_color, text_color, scalebar_color = _theme_colors(style)
+    theme = _theme(style)
+    bg, text_color, scalebar_color = theme["background"], theme["text"], theme["scalebar"]
 
     if ds.sum() < 100:
         ax.set_facecolor(bg)
@@ -107,7 +113,7 @@ def render_isosurface(
     ax.add_collection3d(_isosurface_mesh(ds, spacing, smooth_iter, shade, color, alpha))
     nz, ny, nx = ds.shape
     box = (nx * spacing[2], ny * spacing[1], nz * spacing[0])
-    _style_mesh_axes(ax, box, style, bg, grid_color, text_color, grid)
+    _style_mesh_axes(ax, box, theme, grid)
     ax.view_init(elev=elev, azim=azim)
     if scalebar_um:
         ax.plot([10, 10 + scalebar_um], [10, 10], [0, 0],
@@ -121,15 +127,22 @@ def render_isosurface(
     return ax
 
 
-def _theme_colors(style: str) -> tuple[str, str, str, str]:
-    """(background, grid, text, scale-bar) colours for the "light"/"dark" style."""
-    styles = ("light", "dark")
-    if style not in styles:
-        raise ValueError(f"style must be one of {styles}, got {style!r}")
-    if style == "dark":
-        return (DARK_PALETTE["background"], DARK_PALETTE["grid"],
-                DARK_PALETTE["ink"], DARK_PALETTE["scalebar"])
-    return "white", "#cccccc", PALETTE["ink"], PALETTE["ink"]
+# Isosurface themes by ``style`` name: colours, and whether the axes are bare (no
+# ticks or µm labels, bounding box drawn instead) as on dark slides.
+_THEMES = {
+    "light": {"background": "white", "grid": "#cccccc", "text": PALETTE["ink"],
+              "scalebar": PALETTE["ink"], "bare_axes": False},
+    "dark": {"background": DARK_PALETTE["background"], "grid": DARK_PALETTE["grid"],
+             "text": DARK_PALETTE["ink"], "scalebar": DARK_PALETTE["scalebar"],
+             "bare_axes": True},
+}
+
+
+def _theme(style: str) -> dict:
+    """The :data:`_THEMES` entry for ``style``; ValueError naming the valid styles."""
+    if style not in _THEMES:
+        raise ValueError(f"style must be one of {tuple(_THEMES)}, got {style!r}")
+    return _THEMES[style]
 
 
 def _isosurface_mesh(ds, spacing, smooth_iter: int, shade: bool, color: str, alpha: float):
@@ -171,9 +184,9 @@ def _isosurface_mesh(ds, spacing, smooth_iter: int, shade: bool, color: str, alp
                             edgecolor="none", linewidth=0)
 
 
-def _style_mesh_axes(ax, box, style: str, bg: str, grid_color: str,
-                     text_color: str, grid: bool) -> None:
+def _style_mesh_axes(ax, box, theme: dict, grid: bool) -> None:
     """Physical-µm limits, aspect, panes, grid and labels for an isosurface axis."""
+    bg, grid_color, text_color = theme["background"], theme["grid"], theme["text"]
     ax.set_xlim(0, box[0])
     ax.set_ylim(0, box[1])
     ax.set_zlim(0, box[2])
@@ -188,7 +201,7 @@ def _style_mesh_axes(ax, box, style: str, bg: str, grid_color: str,
     ax.xaxis.label.set_color(text_color)
     ax.yaxis.label.set_color(text_color)
     ax.zaxis.label.set_color(text_color)
-    if style == "dark":
+    if theme["bare_axes"]:
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_zticks([])
@@ -545,10 +558,8 @@ def save_isosurface(
     fig = plt.figure(figsize=(6, 5))
     ax = fig.add_subplot(111, projection="3d")
     render_isosurface(mask, voxel_size_um=voxel_size_um, ax=ax, **kwargs)
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    save_figure(fig, {out_path: 180}, bbox_inches="tight")
 
 
 __all__ = [

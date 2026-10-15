@@ -6,7 +6,9 @@ Public API surface, grouped by module:
   - ``keyence`` — assemble a z-stack from a Keyence BZ-X folder of per-slice
     OME-TIFFs (load_keyence_stack) and parse the ``.gci`` acquisition metadata.
   - ``preprocess`` — channel selection, denoising, background subtraction.
-  - ``segment`` — binarisation (Otsu, percentile, manual).
+  - ``segment`` — binarisation by a named threshold method (THRESHOLD_METHODS:
+    otsu, li, isodata, triangle, yen, mean; or auto / consensus over them),
+    segment_channel (denoise, background-subtract, threshold), remove_small.
   - ``metrics_3d`` — volume_fraction, connectivity_metrics, fov_volume_mm3,
     normalise_skeleton_metrics (skeleton_metrics re-exported from ``skeleton``).
   - ``skeleton`` — skeleton_metrics (opt-in spur pruning), prune_skeleton,
@@ -47,8 +49,9 @@ Public API surface, grouped by module:
     top/bottom layer split for image panels.
   - ``plots`` — bar/box/strip plots, summary panels, effect-size heatmaps,
     forest plots, modality panels.
-  - ``style`` — publication matplotlib defaults, palette, and per-condition
-    color lookup (light) plus the dark palette for reference-style renders.
+  - ``pubfig`` — the one figure style: named rcParams themes (compact, house),
+    palettes, panel/image helpers and the figure writer; ``style`` keeps its
+    earlier names as a thin layer over it.
   - ``qc`` — segmentation QC overlays.
   - ``report`` — per-condition aggregation.
 """

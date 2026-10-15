@@ -27,12 +27,12 @@ The volume may be 3D ``(Z, Y, X)`` or 4D ``(C, Z, Y, X)``; pass
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any
 
 import numpy as np
 
+from . import stats
 from .deprecation import renamed_keyword
 
 
@@ -78,8 +78,9 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
     return arr.astype(np.float64, copy=False)
 
 
-# Per-slice spatial statistics, selectable by name (``reducer=``).
-REDUCERS: dict[str, Callable[..., Any]] = {"mean": np.mean, "median": np.median}
+# Per-slice spatial statistics, selectable by name (``reducer=``): the one
+# registry in `stats`, re-exported here.
+REDUCERS = stats.REDUCERS
 
 
 @renamed_keyword("voxel_size_z_um", "voxel_size_um")
@@ -119,10 +120,7 @@ def intensity_depth_profile(
     flat = stack.reshape(n_slices, -1)
     n_px = flat.shape[1]
 
-    if not isinstance(reducer, str) or reducer not in REDUCERS:
-        names = " or ".join(repr(k) for k in REDUCERS)
-        raise ValueError(f"reducer must be {names}, got {reducer!r}")
-    per_slice = REDUCERS[reducer](flat, axis=1)
+    per_slice = stats.reducer(reducer)(flat, axis=1)
 
     std = flat.std(axis=1, ddof=0)
     sem = std / np.sqrt(n_px)
@@ -234,7 +232,8 @@ class PenetrationFit:
         Fitted additive floor ``c`` if the 3-parameter model was used,
         else ``None``.
     r_squared:
-        Coefficient of determination of the fit (1 = perfect).
+        Coefficient of determination of the fit (1 = perfect); NaN for a profile
+        with no variance, where it is undefined.
     rmse:
         Root-mean-square residual, in the profile's intensity units.
     n_points:
@@ -305,12 +304,16 @@ def _fit_exponential(z, y, offset: bool, i0_guess: float, lam_guess: float):
     return _exp_decay(z, *popt), float(popt[0]), float(popt[1]), None
 
 
+# Default minimum R² for an accepted λ fit (see `fit_penetration_depth`).
+FIT_R2_THRESHOLD = 0.85
+
+
 def fit_penetration_depth(
     depth_um: np.ndarray,
     intensity: np.ndarray,
     *,
     offset: bool = False,
-    r2_threshold: float = 0.85,
+    r2_threshold: float = FIT_R2_THRESHOLD,
 ) -> PenetrationFit:
     """Fit a single-exponential penetration constant λ to a depth profile.
 
@@ -331,9 +334,10 @@ def fit_penetration_depth(
     offset:
         Fit the 3-parameter model with an additive floor ``c``.
     r2_threshold:
-        Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default 0.85,
-        tuned against real hydrogel profiles: clean single-exponential decays
-        clear it, near-flat/non-exponential profiles do not).
+        Minimum ``r_squared`` for ``fit_ok`` to be ``True`` (default
+        :data:`FIT_R2_THRESHOLD` = 0.85, tuned against real hydrogel profiles:
+        clean single-exponential decays clear it, near-flat/non-exponential
+        profiles do not; the depth manifest's ``fit_r2_threshold``).
         An honest flag, not a hard gate: λ is always returned, but a poor
         fit means "single-exponential does not hold; use AUC".
 
@@ -371,7 +375,8 @@ def fit_penetration_depth(
     resid = y - model
     ss_res = float(np.sum(resid ** 2))
     ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    # A profile with no variance has no R² (0/0): NaN, which also fails the threshold.
+    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
     rmse = float(np.sqrt(np.mean(resid ** 2)))
 
     # A decay length longer than the acquired depth is NOT constrained by the
@@ -446,6 +451,7 @@ __all__ = [
     "DepthProfile",
     "PenetrationFit",
     "REDUCERS",
+    "FIT_R2_THRESHOLD",
     "intensity_depth_profile",
     "resample_to_depth",
     "subtract_background",

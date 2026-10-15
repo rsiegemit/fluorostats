@@ -34,13 +34,19 @@ from scipy import stats as sps
 # Descriptive summaries
 # ---------------------------------------------------------------------------
 
-def describe(values) -> dict:
+def describe(values: ArrayLike, axis: int | None = None) -> dict:
     """``{"n", "mean", "sd", "sem"}`` of the non-NaN values; NaN where undefined.
 
     NaN entries are dropped and ``n`` counts what remains. The mean is NaN for
     n = 0; the sample SD (ddof=1) and SEM are NaN for n < 2, because a single value
     has no measured spread (0.0 would claim a precision nobody measured).
+
+    With ``axis`` the same summary is taken along that axis of an array (e.g. per
+    depth over a ``(stacks, depths)`` array with ``axis=0``) and each entry is an
+    array; without it, of all values, as scalars.
     """
+    if axis is not None:
+        return _describe_along(np.asarray(values, dtype=float), axis)
     a = np.asarray(values, dtype=float).ravel()
     a = a[~np.isnan(a)]
     n = int(a.size)
@@ -48,6 +54,33 @@ def describe(values) -> dict:
     sd = float(a.std(ddof=1)) if n > 1 else nan
     return {"n": n, "mean": float(a.mean()) if n else nan, "sd": sd,
             "sem": sd / float(np.sqrt(n)) if n > 1 else nan}
+
+
+def _describe_along(a: np.ndarray, axis: int) -> dict:
+    """`describe` along ``axis``: the same rules per position, as arrays, without warnings."""
+    valid = ~np.isnan(a)
+    n = valid.sum(axis=axis)
+    undefined = np.full(n.shape, np.nan)
+    mean = np.divide(np.where(valid, a, 0.0).sum(axis=axis), n, out=undefined.copy(),
+                     where=n > 0)
+    dev = np.where(valid, a - np.expand_dims(mean, axis), 0.0)
+    sd = np.sqrt(np.divide((dev ** 2).sum(axis=axis), n - 1, out=undefined.copy(), where=n > 1))
+    sem = np.divide(sd, np.sqrt(n), out=undefined.copy(), where=n > 1)
+    return {"n": n, "mean": mean, "sd": sd, "sem": sem}
+
+
+# Location statistics selectable by name: `depth`'s per-slice reducer and the
+# bootstrap fold-change aggregate. One registry, so both accept the same names.
+REDUCERS: dict[str, Callable[..., Any]] = {"mean": np.mean, "median": np.median}
+
+
+def reducer(name: str, what: str = "reducer") -> Callable[..., Any]:
+    """The :data:`REDUCERS` function called ``name``; ValueError naming the parameter
+    ``what`` and the valid names otherwise."""
+    if not isinstance(name, str) or name not in REDUCERS:
+        names = " or ".join(repr(k) for k in REDUCERS)
+        raise ValueError(f"{what} must be {names}, got {name!r}")
+    return REDUCERS[name]
 
 
 # ---------------------------------------------------------------------------
@@ -75,10 +108,13 @@ def gini(values: ArrayLike) -> float:
 def coefficient_of_variation(values: np.ndarray, ddof: int = 0) -> float:
     """Coefficient of variation ``std(ddof) / mean``.
 
-    ``ddof`` is the caller's convention and is part of the result: the
-    homogeneity metrics in `morphometry`, `objects` and `ring` use the population
-    form (``ddof=0``), `spatial.spatial_heterogeneity` the sample form
-    (``ddof=1``). NaN when there are ``<= ddof`` values or the mean is 0.
+    ``ddof`` is a parameter because the callers differ and it is part of the
+    result. The homogeneity metrics in `morphometry`, `objects` and `ring` take the
+    CV over every tile of the image: that is the whole population of tiles, not a
+    sample drawn from one, so they use ``ddof=0``. `spatial.spatial_heterogeneity`
+    uses the sample form (``ddof=1``, about 2% larger on a 5x5 grid), which its
+    reported values were computed with. NaN when there are ``<= ddof`` values or the
+    mean is 0.
     """
     v = np.asarray(values, dtype=float).ravel()
     if v.size <= ddof or v.mean() == 0:
@@ -177,8 +213,8 @@ def stratified_mann_whitney(
     df: pd.DataFrame,
     value_cols: list[str],
     group_col: str,
-    group_a,
-    group_b,
+    group_a: Any,
+    group_b: Any,
     strata: list[str] | None = None,
 ) -> pd.DataFrame:
     """Per-stratum two-group test plus BH-FDR across the entire grid.
@@ -248,8 +284,10 @@ def bootstrap_fold_change_ci(
     Bootstraps both groups with replacement, recomputes the ratio, and
     returns the median and central-CI quantiles.
 
-    Returns dict with keys: fold_change_median, ci_low, ci_high, n_boot.
+    ``agg`` is a :data:`REDUCERS` name. Returns dict with keys: fold_change_median,
+    ci_low, ci_high, n_boot.
     """
+    func = reducer(agg, "agg")
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     x = x[~np.isnan(x)]
@@ -257,8 +295,6 @@ def bootstrap_fold_change_ci(
     if x.size == 0 or y.size == 0:
         return {"fold_change_median": float("nan"), "ci_low": float("nan"),
                 "ci_high": float("nan"), "n_boot": 0}
-    funcs: dict[str, Callable[..., Any]] = {"median": np.median, "mean": np.mean}
-    func = funcs[agg]
     rng = np.random.default_rng(seed)
     bx = rng.choice(x, size=(n_boot, x.size), replace=True)
     by = rng.choice(y, size=(n_boot, y.size), replace=True)
@@ -403,6 +439,8 @@ def scheirer_ray_hare(
 
 __all__ = [
     "describe",
+    "REDUCERS",
+    "reducer",
     "gini",
     "coefficient_of_variation",
     "cliffs_delta",

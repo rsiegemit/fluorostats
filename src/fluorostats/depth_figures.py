@@ -12,8 +12,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from . import stats
 from .depth import window_label, window_title
-from .style import PALETTE, lighten, material_color
+from .pubfig import PALETTE, lighten, material_color, save_figure
 
 
 def group_color(name: str, override: str | None) -> str:
@@ -106,10 +107,10 @@ def plot_auc(rows: list[dict], colors: dict[str, str], window: tuple, out_base: 
             continue
         c = colors[g]
         x = xpos[g]
-        m = float(np.mean(vals))
-        sem = float(np.std(vals, ddof=1) / np.sqrt(len(vals))) if len(vals) > 1 else 0.0
+        d = stats.describe(vals)   # NaN AUCs (window past the stack) are dropped
+        m, sem = d["mean"], d["sem"]
         ax.bar(x, m, width=0.55, color=lighten(c, 0.28), edgecolor=c, lw=1.4, zorder=1)
-        if sem:
+        if sem > 0:   # no whisker for an undefined (n < 2) or zero spread
             ax.errorbar(x, m, yerr=sem, color=c, capsize=4, lw=1.4, zorder=2)
         jitter = np.linspace(-0.12, 0.12, len(vals))
         ax.scatter(np.full(len(vals), x) + jitter, vals, color=c,
@@ -147,8 +148,9 @@ def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows
             fr = [r["result"]["auc"][lab]["normalized"] / r["result"]["auc"][lab]["width_um"]
                   for r in rows if r["group"] == g and r["role"] == "primary"]
             xc = x[wi] + (gi - (len(groups) - 1) / 2) * width
-            means.append(np.mean(fr))
-            sems.append(np.std(fr, ddof=1) / np.sqrt(len(fr)) if len(fr) > 1 else 0.0)
+            d = stats.describe(fr)   # SEM NaN (no whisker) for a single stack
+            means.append(d["mean"])
+            sems.append(d["sem"])
             ptsx += list(np.full(len(fr), xc) + np.linspace(-0.06, 0.06, len(fr)))
             ptsy += list(fr)
         xcs = x + (gi - (len(groups) - 1) / 2) * width
@@ -168,6 +170,5 @@ def plot_retention_multiwindow(rows: list[dict], colors: dict[str, str], windows
 def _save(fig, out_base: Path) -> None:
     # Append, not with_suffix: a fractional window label ("0.5_100um") has a dot.
     fig.tight_layout()
-    fig.savefig(out_base.parent / f"{out_base.name}.png", dpi=300)
-    fig.savefig(out_base.parent / f"{out_base.name}.pdf")
-    plt.close(fig)
+    save_figure(fig, {out_base.parent / f"{out_base.name}.png": 300,
+                      out_base.parent / f"{out_base.name}.pdf": None})

@@ -81,9 +81,10 @@ def test_compute_pvalues_names_test_correction_and_effect_size():
     pvals = compute_pvalues(df, ["volume_fraction", "n_components"])
     assert list(pvals.columns) == ["metric", "condition_a", "condition_b", "n_a", "n_b",
                                    "p_value", "q_value", "significance", "cliffs_delta",
-                                   "test", "correction"]
+                                   "test", "correction", "reason"]
+    assert (pvals["reason"] == "").all()
     assert (pvals["test"] == "Mann-Whitney U, two-sided").all()
-    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all rows").all()
+    assert (pvals["correction"] == "Benjamini-Hochberg FDR across all tested rows").all()
     for row in pvals.itertuples():
         a = df.loc[df["condition"] == row.condition_a, row.metric].dropna()
         b = df.loc[df["condition"] == row.condition_b, row.metric].dropna()
@@ -257,15 +258,25 @@ def test_add_pvalue_annotations_mannwhitney_valueerror_via_mock():
 # compute_pvalues — lines 294-295 (ValueError continue)
 # ---------------------------------------------------------------------------
 
-def test_compute_pvalues_skips_too_small_groups():
-    """Groups with < 2 samples are skipped in compute_pvalues."""
+def test_compute_pvalues_keeps_untestable_pairs_with_a_reason():
+    # Regression: pairs that could not be tested were dropped silently, so pvalues.csv
+    # did not show that a comparison had been attempted.
     df = pd.DataFrame({
-        "condition": ["a", "b", "b", "b"],
-        "metric": [1.0, 2.0, 3.0, 4.0],
+        "condition": ["a", "b", "b", "b", "c", "c", "c", "d", "d"],
+        "metric": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 5.0, 6.0],
     })
     result = compute_pvalues(df, ["metric"])
-    # 'a' has only 1 sample → skipped
-    assert result.empty
+    rows = {(r.condition_a, r.condition_b): r for r in result.itertuples()}
+    assert len(rows) == 6                                     # every pair is listed
+    assert rows[("a", "b")].reason == "n<2" and rows[("a", "b")].n_a == 1
+    assert rows[("b", "c")].reason == "all values tied"
+    for pair in (("a", "b"), ("b", "c")):
+        assert np.isnan(rows[pair].p_value) and np.isnan(rows[pair].q_value)
+        assert rows[pair].significance == ""
+    assert rows[("b", "d")].reason == "" and rows[("b", "d")].p_value > 0
+    tested = result[result["reason"] == ""]
+    from fluorostats import stats
+    assert list(tested["q_value"]) == list(stats.bh_fdr(tested["p_value"].to_numpy()))
 
 
 def test_compute_pvalues_skips_missing_metric():
@@ -298,9 +309,11 @@ def test_effect_size_heatmap_with_title(tmp_path):
     df = pd.DataFrame([
         {"metric": "vf", "stratum": "top", "cliffs_delta": 0.8, "sig_q05": True},
     ])
-    out = tmp_path / "hm_title.png"
-    effect_size_heatmap(df, out_path=out, title="My Title")
-    assert out.exists()
+    fig = effect_size_heatmap(df, title="My Title")
+    ax = fig.axes[0]
+    assert ax.get_title() == "My Title"
+    assert [t.get_text() for t in ax.texts] == ["0.80*"]          # value, starred as significant
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -312,9 +325,12 @@ def test_forest_plot_with_title(tmp_path):
     fc = pd.DataFrame([
         {"label": "VF", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 4.0},
     ])
-    out = tmp_path / "forest_title.png"
-    forest_plot(fc, out_path=out, title="Forest Title")
-    assert out.exists()
+    fig = forest_plot(fc, title="Forest Title")
+    ax = fig.axes[0]
+    assert ax.get_title() == "Forest Title"
+    assert ax.patches[0].get_width() == 2.0                       # bar at the median
+    assert [t.get_text() for t in ax.get_yticklabels()] == ["VF"]
+    plt.close(fig)
 
 
 def test_forest_plot_no_reference_no_log_scale(tmp_path):
@@ -322,9 +338,13 @@ def test_forest_plot_no_reference_no_log_scale(tmp_path):
     fc = pd.DataFrame([
         {"label": "A", "fold_change_median": 2.0, "ci_low": 1.0, "ci_high": 3.0},
     ])
-    out = tmp_path / "forest_nolog.png"
-    forest_plot(fc, out_path=out, reference=None, log_scale=False)
-    assert out.exists()
+    fig = forest_plot(fc, reference=None, log_scale=False)
+    ax = fig.axes[0]
+    with_ref = forest_plot(fc).axes[0]
+    assert ax.get_xscale() == "linear" and with_ref.get_xscale() == "log"
+    assert len(with_ref.lines) == len(ax.lines) + 1               # only the reference line
+    assert list(with_ref.lines[-1].get_xdata()) == [1.0, 1.0]
+    plt.close("all")
 
 
 # ---------------------------------------------------------------------------
@@ -344,27 +364,32 @@ def _make_modality_df():
 def test_modality_panel_missing_metric_sets_axis_invisible(tmp_path):
     """When metric not in sub.columns, ax.set_visible(False) fires (line 464)."""
     df = _make_modality_df()
-    out = tmp_path / "mod_missing.png"
-    # 'missing_col' does not exist in df → the axis should be set invisible
-    modality_panel(df, metrics=["vf", "missing_col"], out_path=out)
-    assert out.exists()
+    # 'missing_col' does not exist in df → its column of axes is hidden
+    fig = modality_panel(df, metrics=["vf", "missing_col"])
+    axes = np.array(fig.axes).reshape(2, 2)
+    assert [ax.get_visible() for ax in axes[:, 0]] == [True, True]
+    assert [ax.get_visible() for ax in axes[:, 1]] == [False, False]
+    plt.close(fig)
 
 
 def test_modality_panel_multiple_rows_hides_x_tick_labels(tmp_path):
     """With nrows > 1, rows 0..nrows-2 have x-tick labels hidden (lines 511-512)."""
     df = _make_modality_df()
-    out = tmp_path / "mod_multirow.png"
-    # Two modalities → nrows=2, so row 0 (i=0) will hit i < nrows-1
-    modality_panel(df, metrics=["vf"], out_path=out)
-    assert out.exists()
+    # Two modalities (rows sorted: Immuno, Live/Dead) → only the bottom row is labelled
+    fig = modality_panel(df, metrics=["vf"])
+    top, bottom = fig.axes
+    assert [t.get_text() for t in top.get_xticklabels()] == ["", ""]
+    assert [t.get_text() for t in bottom.get_xticklabels()] == ["A", "B"]
+    assert top.get_ylabel() == "Immuno\nVf" and bottom.get_ylabel() == "Live/Dead\nVf"
+    plt.close(fig)
 
 
 def test_modality_panel_with_title(tmp_path):
     """title kwarg triggers fig.suptitle (line 522)."""
     df = _make_modality_df()
-    out = tmp_path / "mod_title.png"
-    modality_panel(df, metrics=["vf"], out_path=out, title="My Modality Panel")
-    assert out.exists()
+    fig = modality_panel(df, metrics=["vf"], title="My Modality Panel")
+    assert fig.get_suptitle() == "My Modality Panel"
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +422,9 @@ def test_compute_pvalues_mannwhitney_valueerror_via_mock():
     })
     with patch("scipy.stats.mannwhitneyu", side_effect=ValueError("identical")):
         result = compute_pvalues(df, ["metric"])
-    # ValueError was caught → no rows appended → empty result
-    assert result.empty
+    # ValueError was caught: the pair is kept, untested, with the reason
+    assert result["reason"].tolist() == ["test not computable"]
+    assert np.isnan(result["p_value"]).all()
 
 
 # ---------------------------------------------------------------------------
@@ -490,3 +516,37 @@ def test_group_stats_leave_undefined_mean_and_sem_nan():
     data, means, sems = plots._group_stats(df, "m", ["A", "B", "C"])
     assert means[:2] == [2.0, 5.0] and np.isnan(means[2])
     assert sems[0] == pytest.approx(1.0) and np.isnan(sems[1]) and np.isnan(sems[2])
+
+
+@pytest.fixture
+def kept_figures(monkeypatch):
+    """Keep every figure a plot function saves open; yield a getter for the new ones."""
+    before = set(plt.get_fignums())
+    monkeypatch.setattr(plt, "close", lambda fig=None: None)
+    yield lambda: [plt.figure(n) for n in plt.get_fignums() if n not in before]
+    monkeypatch.undo()
+    plt.close("all")
+
+
+def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
+    # The bar + jittered-points block was copied into bar_mean_sem and summary_panel
+    # and drifted (jitter 0.12 vs 0.1, capsize 5 vs 4); one helper now draws both.
+    df = _replicate_df()
+    bar_mean_sem(df, "volume_fraction", tmp_path / "bar.png")
+    summary_panel(df, ["volume_fraction"], tmp_path / "panel.png")
+    boxplot_by_condition(df, "volume_fraction", tmp_path / "box.png")
+    bar_ax, panel_ax, box_ax = (f.axes[0] for f in kept_figures())
+
+    def points(ax):
+        from matplotlib.collections import PathCollection
+        return np.vstack([c.get_offsets() for c in ax.collections
+                          if isinstance(c, PathCollection)])
+
+    def caps(ax):
+        err = next(c for c in ax.containers if hasattr(c, "has_yerr"))
+        return [line.get_markersize() for line in err.lines[1]]
+
+    np.testing.assert_array_equal(points(bar_ax), points(panel_ax))
+    np.testing.assert_allclose(points(box_ax)[:, 0] - 1, points(bar_ax)[:, 0], atol=1e-12)
+    assert np.abs(points(bar_ax)[:, 0] - np.repeat([0, 1], 6)).max() <= 0.05
+    assert caps(bar_ax) == caps(panel_ax) == [8.0, 8.0]           # capsize 4 -> 2 * 4 pt

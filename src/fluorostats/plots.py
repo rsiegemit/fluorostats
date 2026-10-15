@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from . import stats
+from .pubfig import save_figure
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +36,23 @@ def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     return data, means, sems
 
 
+def _jittered_points(ax, x, data) -> None:
+    """Each condition's values as black dots spread ±0.05 around its ``x`` (seeded, so
+    a rerun draws the same figure)."""
+    rng = np.random.default_rng(42)
+    for xi, d in zip(x, data):
+        jitter = 0.1 * (rng.random(len(d)) - 0.5)
+        ax.scatter(np.full(len(d), xi) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+
+
+def _bars_with_points(ax, x, data, means, sems, colors) -> None:
+    """Mean ± SEM bars with every replicate value on top: the one bar style of
+    `bar_mean_sem` and `summary_panel`."""
+    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
+           linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
+    _jittered_points(ax, x, data)
+
+
 def _condition_colors(n: int) -> np.ndarray:
     """``n`` distinct RGBA colours: Set2 for up to its 8 colours, else ``n`` evenly
     spaced hues (Set2 would repeat colours past 8)."""
@@ -54,9 +72,6 @@ def boxplot_by_condition(
     ylabel: str | None = None,
 ) -> None:
     """Boxplot of *metric* grouped by condition, with individual data points."""
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     conditions = sorted(df["condition"].unique())
     data = [df.loc[df["condition"] == c, metric].dropna().values for c in conditions]
 
@@ -71,10 +86,7 @@ def boxplot_by_condition(
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
 
-    rng = np.random.default_rng(42)
-    for i, d in enumerate(data):
-        jitter = 0.1 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), i + 1) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+    _jittered_points(ax, range(1, len(conditions) + 1), data)
 
     ax.set_ylabel(ylabel or _label_for(metric))
     ax.set_title(f"{_label_for(metric)} by Condition")
@@ -82,8 +94,7 @@ def boxplot_by_condition(
     ax.spines["right"].set_visible(False)
 
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=150)
-    plt.close(fig)
+    save_figure(fig, {out_path: 150})
 
 
 def bar_mean_sem(
@@ -102,9 +113,6 @@ def bar_mean_sem(
     `compute_pvalues` returns, so the figure matches it) when given, else
     corrected across the pairs drawn in this panel.
     """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     conditions = sorted(df["condition"].unique())
     data, means, sems = _group_stats(df, metric, conditions)
 
@@ -113,14 +121,7 @@ def bar_mean_sem(
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
-    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-           linewidth=0.8, capsize=5, error_kw={"linewidth": 1.5})
-
-    # Overlay individual replicate points
-    rng = np.random.default_rng(42)
-    for i, d in enumerate(data):
-        jitter = 0.12 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=30, alpha=0.7, zorder=3)
+    _bars_with_points(ax, x, data, means, sems, colors)
 
     # P-value annotations
     if show_pvalues and len(conditions) > 1:
@@ -134,8 +135,7 @@ def bar_mean_sem(
     ax.spines["right"].set_visible(False)
 
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=200)
-    plt.close(fig)
+    save_figure(fig, {out_path: 200})
 
 
 # ---------------------------------------------------------------------------
@@ -157,9 +157,6 @@ def summary_panel(
     P-value brackets are off by default; set show_pvalues=True to draw them.
     Stars use BH q-values, from ``pvalues`` when given (see `bar_mean_sem`).
     """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     available = [m for m in metrics if m in df.columns and df[m].notna().any()]
     n = len(available)
     if n == 0:
@@ -179,13 +176,7 @@ def summary_panel(
         ax = axes[idx]
         data, means, sems = _group_stats(df, metric, conditions)
 
-        ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-               linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
-
-        rng = np.random.default_rng(42)
-        for i, d in enumerate(data):
-            jitter = 0.1 * (rng.random(len(d)) - 0.5)
-            ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+        _bars_with_points(ax, x, data, means, sems, colors)
 
         if show_pvalues and len(conditions) > 1:
             _add_pvalue_annotations(ax, data, x, conditions,
@@ -203,8 +194,7 @@ def summary_panel(
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    save_figure(fig, {out_path: 200}, bbox_inches="tight")
 
 
 # ---------------------------------------------------------------------------
@@ -297,13 +287,17 @@ def compute_pvalues(
     """Compute pairwise Mann-Whitney U p-values for all condition pairs.
 
     Multiple-comparison corrected: a Benjamini-Hochberg ``q_value`` is computed
-    across the whole grid (every metric × condition-pair), and the ``significance``
-    stars reflect the corrected q, matching the library's default correction
-    (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
+    across every tested row of the grid (metric × condition-pair), and the
+    ``significance`` stars reflect the corrected q, matching the library's default
+    correction (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
+
+    A pair that cannot be tested is kept with ``p_value``/``q_value`` NaN, empty
+    ``significance`` and a ``reason`` ("n<2", "all values tied", "test not
+    computable"); ``reason`` is empty for tested rows.
 
     Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
     p_value, q_value, significance, cliffs_delta (``stats.cliffs_delta`` of a vs b),
-    test and correction (naming both), empty if no pair has >=2 samples per group.
+    test and correction (naming both), reason; empty if no metric is in ``df``.
     """
 
     conditions = sorted(df["condition"].unique())
@@ -315,31 +309,34 @@ def compute_pvalues(
         for i, j in combinations(range(len(conditions)), 2):
             a = df.loc[df["condition"] == conditions[i], metric].dropna().values
             b = df.loc[df["condition"] == conditions[j], metric].dropna().values
-            if len(a) < 2 or len(b) < 2:
-                continue
-            res = stats.mann_whitney(a, b)
-            if np.isnan(res["p"]):      # the test could not be computed
-                continue
-            rows.append({
-                "metric": metric,
-                "condition_a": conditions[i],
-                "condition_b": conditions[j],
-                "n_a": len(a),
-                "n_b": len(b),
-                "p_value": res["p"],
-                "cliffs_delta": res["cliffs_delta"],
-            })
+            rows.append({"metric": metric, "condition_a": conditions[i],
+                         "condition_b": conditions[j], "n_a": len(a), "n_b": len(b),
+                         **_pair_test(a, b)})
 
     out = pd.DataFrame(rows)
     if not out.empty:
         out["q_value"] = stats.bh_fdr(out["p_value"].values)
-        out["significance"] = out["q_value"].map(_pvalue_stars)   # stars on CORRECTED q
+        # stars on the CORRECTED q; none for an untested pair
+        out["significance"] = [_pvalue_stars(q) if not np.isnan(q) else "" for q in out["q_value"]]
         out["test"] = "Mann-Whitney U, two-sided"
-        out["correction"] = "Benjamini-Hochberg FDR across all rows"
+        out["correction"] = "Benjamini-Hochberg FDR across all tested rows"
         # existing columns first, in their earlier order; the added ones last
         out = out[["metric", "condition_a", "condition_b", "n_a", "n_b", "p_value",
-                   "q_value", "significance", "cliffs_delta", "test", "correction"]]
+                   "q_value", "significance", "cliffs_delta", "test", "correction", "reason"]]
     return out
+
+
+def _pair_test(a: np.ndarray, b: np.ndarray) -> dict:
+    """``p_value``, ``cliffs_delta`` and ``reason`` (empty when tested) for one pair."""
+    nan = float("nan")
+    if len(a) < 2 or len(b) < 2:
+        return {"p_value": nan, "cliffs_delta": nan, "reason": "n<2"}
+    res = stats.mann_whitney(a, b)
+    reason = ""
+    if np.isnan(res["p"]):      # the test could not be computed
+        tied = np.ptp(np.concatenate([a, b])) == 0
+        reason = "all values tied" if tied else "test not computable"
+    return {"p_value": res["p"], "cliffs_delta": res["cliffs_delta"], "reason": reason}
 
 
 # ---------------------------------------------------------------------------
@@ -428,9 +425,7 @@ def effect_size_heatmap(
         ax.set_title(title, fontsize=11)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
 
 
@@ -471,9 +466,7 @@ def forest_plot(
     ax.spines["right"].set_visible(False)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
 
 
@@ -577,7 +570,5 @@ def modality_panel(
         fig.suptitle(title, fontsize=12, fontweight="bold")
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
