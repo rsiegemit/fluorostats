@@ -226,8 +226,9 @@ def example_patterns(rng: np.random.Generator, n: int = 225) -> dict[str, np.nda
     return {"regular": regular, "random": random, "clustered": clustered}
 
 
-# Reference point-pattern statistics: the independent, textbook definitions the
-# tile Gini is validated against (field-area normalised), not library code.
+# exception REU-3: these reference point-pattern statistics are the independent,
+# textbook definitions the library's tile Gini is validated against (field-area
+# normalised); taking them from the library would validate it against itself.
 # Points are (x, y) in a square field of side ``field`` px. Clark-Evans here uses
 # the known field area, unlike objects.nearest_neighbor_stats (point bounding box).
 def ripley_L_dev(pts, area, r=40):
