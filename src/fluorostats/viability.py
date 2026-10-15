@@ -105,16 +105,18 @@ def live_dead_channels(
 
     An index given explicitly is used as is. Otherwise the first channel whose name
     matches `LIVE_DYES` / `DEAD_DYES` is chosen; with no match the channel is a guess
-    (live 0, dead 1), announced with a RuntimeWarning. Raises ValueError if both
-    resolve to one channel or an index is past the channel count.
+    by position (live 0, dead 1; the other of the two when that one is already the
+    other role's channel), announced with a RuntimeWarning. Raises ValueError if both resolve to one channel or an
+    index is negative or past the channel count.
     """
 
-    def pick(given, pattern, default, role):
+    def by_name(given, pattern):
         if given is not None:
             return given
-        for i, name in enumerate(channel_names):
-            if pattern.search(name):
-                return i
+        return next((i for i, name in enumerate(channel_names) if pattern.search(name)), None)
+
+    def guess(role, preferred, taken):
+        default = preferred if preferred != taken else 1 - preferred
         warnings.warn(
             f"no channel name identifies the {role} channel among "
             f"{channel_names}; using channel {default} by position. Set "
@@ -124,8 +126,14 @@ def live_dead_channels(
         )
         return default
 
-    li = pick(live, LIVE_DYES, 0, "live")
-    di = pick(dead, DEAD_DYES, 1, "dead")
+    li = by_name(live, LIVE_DYES)
+    di = by_name(dead, DEAD_DYES)
+    if li is None:
+        li = guess("live", 0, di)
+    if di is None:
+        di = guess("dead", 1, li)
+    if min(li, di) < 0:
+        raise ValueError(f"channel indices must not be negative, got live {li}, dead {di}")
     if li == di:
         raise ValueError(
             f"live and dead are both channel {li} of {channel_names}; set "

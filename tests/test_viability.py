@@ -339,7 +339,7 @@ def test_live_dead_channels_explicit_and_fallback():
     with pytest.warns(RuntimeWarning, match="dead channel"):
         assert viability.live_dead_channels(["Ch1", "Ch2"], live=0) == (0, 1)
     with pytest.raises(ValueError, match="both channel 1"):
-        viability.live_dead_channels(["Ch1", "Calcein"], live=None, dead=None)
+        viability.live_dead_channels(["Ch1", "Calcein"], live=1, dead=1)
     with pytest.raises(ValueError, match="has 2 channels"):
         viability.live_dead_channels(["a", "b"], live=0, dead=2)
 
@@ -353,3 +353,21 @@ def test_count_all_keeps_the_deprecated_by_method():
     for m, d in out["by_method"].items():
         assert set(d) == {"n_live", "n_dead", "viability"}
         assert all(d[k] == out[f"{k}_{m}"] for k in d)
+
+
+@pytest.mark.parametrize("names", [["TRITC", "FITC"], ["Ch1", "GFP"], ["PI", "Ch2"]])
+def test_live_dead_channels_guess_takes_the_channel_left_over(names):
+    """One dye recognised: the other role takes the remaining channel (with the
+    positional-guess warning) instead of colliding with the recognised one."""
+    with pytest.warns(RuntimeWarning, match="by position"):
+        assert viability.live_dead_channels(names) == (1, 0)
+
+
+def test_live_dead_channels_rejects_negative_indices():
+    with pytest.raises(ValueError, match="negative"):
+        viability.live_dead_channels(["a", "b"], live=-1, dead=1)
+
+
+def test_live_dead_channels_positional_dead_guess_stays_channel_1():
+    with pytest.warns(RuntimeWarning, match="dead channel"):
+        assert viability.live_dead_channels(["DAPI", "Ch2", "FITC"]) == (2, 1)
