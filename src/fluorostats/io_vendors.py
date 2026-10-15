@@ -58,6 +58,18 @@ def _safe_float(val, default: float) -> float:
         return default
 
 
+def _warn_unread(what: str, exc: Exception) -> None:
+    """Announce a metadata element that could not be read (its default is kept)."""
+    warnings.warn(f"{what} could not be read ({type(exc).__name__}: {exc}); the default "
+                  "is kept.", RuntimeWarning, stacklevel=3)
+
+
+def _positional_names(names: list[str | None]) -> list[str]:
+    """Channel names in file order, an empty one becoming ``Ch<i+1>`` in place so
+    every later name keeps its channel."""
+    return [n or f"Ch{i + 1}" for i, n in enumerate(names)]
+
+
 # ---------------------------------------------------------------------------
 # Olympus .oib / .oif
 # ---------------------------------------------------------------------------
@@ -82,13 +94,9 @@ def _parse_olympus_metadata(oif) -> dict:
         "channel_names": [],
     }
 
-    try:
-        settings = oif.mainfile
-    except Exception:
-        return meta
-
+    settings = oif.mainfile
     voxel_x, voxel_y, voxel_z = 1.0, 1.0, 1.0
-    channel_names: list[str] = []
+    channel_names: list[str | None] = []
     read: set[str] = set()
 
     for section_name, section in settings.items():
@@ -96,8 +104,7 @@ def _parse_olympus_metadata(oif) -> dict:
 
         if re.match(r"Channel \d+ Parameters$", section_str):
             dye = _section_get(section, "DyeName")
-            if dye and dye != "(null)" and dye != "None":
-                channel_names.append(dye)
+            channel_names.append(dye if dye not in ("(null)", "None") else None)
 
         if section_str == "Reference Image Parameter":
             wx, hy = _section_get(section, "WidthConvertValue"), _section_get(section, "HeightConvertValue")
@@ -111,7 +118,7 @@ def _parse_olympus_metadata(oif) -> dict:
                 voxel_z = z
                 read.add("z")
 
-    meta["channel_names"] = channel_names
+    meta["channel_names"] = _positional_names(channel_names)
     meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
     meta["_read_axes"] = read
     return meta
@@ -181,7 +188,7 @@ def _czi_axes(czi) -> str | None:
     return axes.translate(_LEGACY_CZI_LETTERS) if axes else None
 
 
-def _czi_voxel_um(root):
+def _czi_voxel_um(root: ET.Element) -> tuple[tuple[float, float, float], set[str]]:
     """(z, y, x) voxel size in µm from CZI ``Distance`` elements (metres), and the
     set of axes it found."""
     size = {"X": 1.0, "Y": 1.0, "Z": 1.0}
@@ -189,21 +196,26 @@ def _czi_voxel_um(root):
     for dist in root.iter("Distance"):
         value_el = dist.find("Value")
         axis_id = dist.get("Id", "")
-        if value_el is not None and value_el.text:
-            val_um = float(value_el.text) * 1e6
-            if axis_id in size:
-                size[axis_id] = val_um
-                read.add(axis_id.lower())
+        if value_el is None or not value_el.text or axis_id not in size:
+            continue
+        try:
+            size[axis_id] = float(value_el.text) * 1e6
+        except ValueError as exc:
+            _warn_unread(f"CZI Distance {axis_id!r} value {value_el.text!r}", exc)
+            continue
+        read.add(axis_id.lower())
     return (size["Z"], size["Y"], size["X"]), read
 
 
-def _czi_channel_names(root) -> list[str]:
-    """Channel names from ``Channel@Name``, falling back to ``DyeName`` text."""
-    names = [ch.get("Name", "") for ch in root.iter("Channel")]
-    names = [n for n in names if n]
-    if not names:
-        names = [dye.text for dye in root.iter("DyeName") if dye.text]
-    return names
+def _czi_channel_names(root: ET.Element) -> list[str]:
+    """Names of the image's channels (``Information/Image/Dimensions/Channels``;
+    the experiment tracks and display settings also hold ``Channel`` elements,
+    acquired or not) from ``Channel@Name``, falling back to their ``DyeName``."""
+    channels = root.findall(".//Information/Image/Dimensions/Channels/Channel")
+    names = [ch.get("Name") for ch in channels]
+    if not any(names):
+        names = [ch.findtext("DyeName") for ch in channels]
+    return _positional_names(names)
 
 
 def _parse_czi_metadata(czi) -> dict:
@@ -212,16 +224,16 @@ def _parse_czi_metadata(czi) -> dict:
         "channel_names": [],
     }
 
+    xml_str = czi.metadata()
+    if not xml_str:
+        return meta
     try:
-        xml_str = czi.metadata()
-        if xml_str:
-            root = ET.fromstring(xml_str)
-
-            meta["voxel_size_um"], meta["_read_axes"] = _czi_voxel_um(root)
-            meta["channel_names"] = _czi_channel_names(root)
-    except Exception:
-        pass
-
+        root = ET.fromstring(xml_str)
+    except ET.ParseError as exc:
+        _warn_unread("CZI metadata XML", exc)
+        return meta
+    meta["voxel_size_um"], meta["_read_axes"] = _czi_voxel_um(root)
+    meta["channel_names"] = _czi_channel_names(root)
     return meta
 
 
@@ -244,6 +256,18 @@ def load_nd2_volume(path: Path) -> tuple[np.ndarray, dict]:
     return arr, meta
 
 
+def _nd2_calibrated_axes(f, vs) -> set[str]:
+    """Axes whose voxel size the ND2 file calibrates. ``voxel_size()`` gives 1 for
+    an axis nd2 cannot determine, so the first channel's ``volume.axesCalibrated``
+    (x, y, z) decides. The legacy reader never flags z and gives 1 when it finds
+    no z step, so there z counts as read when it is not 1."""
+    channels = getattr(f.metadata, "channels", None) or []
+    flags = dict(zip("xyz", channels[0].volume.axesCalibrated if channels else (False,) * 3))
+    if getattr(f, "is_legacy", False):
+        flags["z"] = getattr(vs, "z", 1) != 1
+    return {a for a in "zyx" if flags[a] and _valid_size(getattr(vs, a, None))}
+
+
 def _parse_nd2_metadata(f) -> dict:
     meta: dict = {
         "voxel_size_um": (1.0, 1.0, 1.0),
@@ -251,26 +275,17 @@ def _parse_nd2_metadata(f) -> dict:
     }
 
     try:
-        if hasattr(f, "voxel_size"):
-            vs = f.voxel_size()
-            meta["_read_axes"] = {a for a in "zyx" if _valid_size(getattr(vs, a, None))}
-            meta["voxel_size_um"] = (
-                _safe_float(getattr(vs, "z", 1.0), 1.0),
-                _safe_float(getattr(vs, "y", 1.0), 1.0),
-                _safe_float(getattr(vs, "x", 1.0), 1.0),
-            )
-    except Exception:
-        pass
-
+        vs = f.voxel_size()
+        meta["_read_axes"] = _nd2_calibrated_axes(f, vs)
+        meta["voxel_size_um"] = tuple(_safe_float(getattr(vs, a, 1.0), 1.0) for a in "zyx")
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError) as exc:
+        _warn_unread("ND2 voxel size", exc)
     try:
-        if hasattr(f, "metadata") and hasattr(f.metadata, "channels"):
-            for ch in f.metadata.channels:
-                name = getattr(ch.channel, "name", "") or getattr(ch, "name", "")
-                if name:
-                    meta["channel_names"].append(name)
-    except Exception:
-        pass
-
+        meta["channel_names"] = _positional_names(
+            [getattr(ch.channel, "name", "") or getattr(ch, "name", "")
+             for ch in f.metadata.channels or []])
+    except (AttributeError, TypeError) as exc:
+        _warn_unread("ND2 channel names", exc)
     return meta
 
 
@@ -311,7 +326,7 @@ def load_lif_volume(path: Path) -> tuple[np.ndarray, dict]:
     # so reshape to (Z, C, H, W) THEN transpose to (C, Z, H, W). Reshaping straight to
     # (C, Z, ...) interleaves channels for multi-channel z-stacks (only 1-channel is safe).
     arr = np.array(frames).reshape(n_z, n_channels, h, w).transpose(1, 0, 2, 3)
-    arr = canonicalize_volume(arr, meta)
+    arr = canonicalize_volume(arr, meta, "CZYX")
     return arr, meta
 
 
@@ -321,34 +336,25 @@ def _parse_lif_metadata(img) -> dict:
         "channel_names": [],
     }
 
-    try:
-        # readlif's scale is (x, y, z, t) in pixels per µm for x, y and z (None when
-        # the file gives no length for an axis), so the voxel size is its reciprocal.
-        scale = img.scale
-        if scale:
-            def um(i: int):
-                s = scale[i] if len(scale) > i else None
-                return 1.0 / s if s and s > 0 else None
+    # readlif's scale is (x, y, z, t) in pixels per µm for x, y and z (None when
+    # the file gives no length for an axis), so the voxel size is its reciprocal.
+    scale = img.scale
+    if scale:
+        def um(i: int):
+            s = scale[i] if len(scale) > i else None
+            return 1.0 / s if s and s > 0 else None
 
-            voxel_x = um(0) or 1.0
-            voxel_y = um(1) or voxel_x
-            voxel_z = um(2) or 1.0
-            meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
-            meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
-                                  if len(scale) > i and scale[i] and scale[i] > 0}
-            if um(1) is None and um(0) is not None:
-                meta["_axis_source"] = {"y": "copied-from-x"}
-                warnings.warn(f"the LIF file gives no y length; y voxel size copied from x "
-                              f"({voxel_x} µm).", RuntimeWarning, stacklevel=3)
-    except Exception:
-        pass
-
-    try:
-        for i in range(img.channels):
-            meta["channel_names"].append(f"Ch{i + 1}")
-    except Exception:
-        pass
-
+        voxel_x = um(0) or 1.0
+        voxel_y = um(1) or voxel_x
+        voxel_z = um(2) or 1.0
+        meta["voxel_size_um"] = (voxel_z, voxel_y, voxel_x)
+        meta["_read_axes"] = {a for a, i in (("x", 0), ("y", 1), ("z", 2))
+                              if len(scale) > i and scale[i] and scale[i] > 0}
+        if um(1) is None and um(0) is not None:
+            meta["_axis_source"] = {"y": "copied-from-x"}
+            warnings.warn(f"the LIF file gives no y length; y voxel size copied from x "
+                          f"({voxel_x} µm).", RuntimeWarning, stacklevel=3)
+    meta["channel_names"] = [f"Ch{i + 1}" for i in range(img.channels)]
     return meta
 
 
@@ -358,20 +364,29 @@ def _parse_lif_metadata(img) -> dict:
 
 def load_tiff_volume(path: Path) -> tuple[np.ndarray, dict]:
     """TIFF / OME-TIFF / ImageJ TIFF -> ((C, Z, Y, X), meta), series 0."""
-    meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "tiff"}
-
     with tifffile.TiffFile(str(path)) as tif:
         data, axes = tif.series[0].asarray(), tif.series[0].axes
-        if tif.ome_metadata:
-            meta = _parse_ome_metadata(tif.ome_metadata, meta)
-            meta["format"] = "ome_tiff"
-        elif tif.imagej_metadata:
-            meta = _parse_imagej_metadata(tif.imagej_metadata, meta,
-                                          _imagej_xy_um(tif, tif.imagej_metadata))
-            meta["format"] = "imagej_tiff"
-
+        meta = _tiff_volume_meta(tif)
     data = canonicalize_volume(data, meta, axes, _TIFF_INDEX_AXES)
     return data, meta
+
+
+def read_tiff_volume_meta(path: Path) -> dict:
+    """The ``meta`` of `load_tiff_volume` before channel names are padded, read
+    from the TIFF header and metadata only (no pixel data)."""
+    with tifffile.TiffFile(str(path)) as tif:
+        return _tiff_volume_meta(tif)
+
+
+def _tiff_volume_meta(tif: tifffile.TiffFile) -> dict:
+    """Volume ``meta`` from the OME-XML or ImageJ metadata of an open TIFF."""
+    meta: dict = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": [], "format": "tiff"}
+    if tif.ome_metadata:
+        return {**_parse_ome_metadata(tif.ome_metadata, meta), "format": "ome_tiff"}
+    if tif.imagej_metadata:
+        xy = _imagej_xy_um(tif, tif.imagej_metadata)
+        return {**_parse_imagej_metadata(tif.imagej_metadata, meta, xy), "format": "imagej_tiff"}
+    return meta
 
 
 def load_tiff_image(path: Path) -> tuple[np.ndarray, dict]:
@@ -432,9 +447,10 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
         size[a], source = _length_um(float(pixels.attrib[key]), pixels.get(f"{key}Unit", "µm"), a)
         if source != "file":                    # the OME default unit is µm
             noted[a] = source
-    names = [ch.get("Name", "") or ch.get("Fluor", "") for ch in pixels.findall("{*}Channel")]
+    names = _positional_names([ch.get("Name") or ch.get("Fluor")
+                               for ch in pixels.findall("{*}Channel")])
     return {**meta, "voxel_size_um": (size["z"], size["y"], size["x"]), "_read_axes": set(read),
-            "_axis_source": noted, "channel_names": meta["channel_names"] + [n for n in names if n]}
+            "_axis_source": noted, "channel_names": meta["channel_names"] + names}
 
 
 def _imagej_xy_um(tif: tifffile.TiffFile, ij_meta: dict) -> dict | None:

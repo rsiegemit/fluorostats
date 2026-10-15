@@ -12,7 +12,7 @@ Public API:
     load_keyence_stack(folder, downsample=1, channel=None) -> (array, meta)
 
 ``load_keyence_stack`` returns ``(C, Z, Y, X)`` (or ``(Z, Y, X)`` when ``channel``
-is given) plus a metadata dict with pixel size, z-step, channel names/exposures.
+is given) plus a metadata dict with ``voxel_size_um``, channel names/exposures.
 
 Note: Keyence stores ``System.Double`` values as the raw little-endian Int64 bit
 pattern of the IEEE-754 double, and lengths in nanometres; both are decoded here.
@@ -27,6 +27,7 @@ import zipfile
 from pathlib import Path
 
 import numpy as np
+import tifffile
 
 __all__ = ["parse_gci", "load_keyence_stack", "is_keyence_folder"]
 
@@ -172,11 +173,12 @@ def load_keyence_stack(folder: str | Path, downsample: int = 1,
     -------
     (array, meta) : tuple[np.ndarray, dict]
         ``meta`` includes parsed ``.gci`` fields (when present) plus
-        ``vox_z_um`` / ``vox_xy_um`` (accounting for ``downsample``) and
-        ``n_slices_loaded``.
+        ``voxel_size_um`` — (z, y, x) µm per voxel of the returned array, with
+        ``downsample`` applied; an axis the ``.gci`` does not give is 1.0 — and
+        ``n_slices_loaded``. Deprecated, kept for existing callers: ``px_um`` /
+        ``z_step_um`` (the raw ``.gci`` values, ``px_um`` before downsampling)
+        and ``vox_xy_um`` / ``vox_z_um``; use ``voxel_size_um``.
     """
-    import tifffile
-
     folder = Path(folder)
     files = sorted(glob.glob(str(folder / "*_CHF*.tif")), key=_z_index)
     if not files:  # fall back to any per-slice tif with a _Z index
@@ -202,4 +204,7 @@ def load_keyence_stack(folder: str | Path, downsample: int = 1,
     if meta.get("px_um"):
         meta["vox_xy_um"] = round(meta["px_um"] * downsample, 5)
     meta["vox_z_um"] = meta.get("z_step_um")
+    px, z = meta.get("px_um"), meta.get("z_step_um")
+    xy = round(px * downsample, 5) if px else 1.0
+    meta["voxel_size_um"] = (z or 1.0, xy, xy)
     return arr, meta
