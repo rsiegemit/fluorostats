@@ -63,7 +63,6 @@ def n_junction_nodes(skel: np.ndarray) -> int:
     return int(label(junction_vox, structure=np.ones((3,) * s.ndim))[1])
 
 
-@renamed_keyword("spacing", "voxel_size_um")
 @renamed_keyword("min_branch_length_px", "min_branch_length")
 def prune_skeleton(
     skel: np.ndarray,

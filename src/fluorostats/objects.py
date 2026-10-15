@@ -15,7 +15,6 @@ from scipy import ndimage as ndi
 from skimage.morphology import local_maxima, reconstruction
 from skimage.segmentation import clear_border, watershed
 
-from .deprecation import ignored_keyword
 from .metrics_3d import density_per_mm3
 from .spatial import tile_point_density
 from .stats import coefficient_of_variation, gini
@@ -56,7 +55,6 @@ def _drop_small(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
     return remap[labels], int(keep.sum())
 
 
-@ignored_keyword("footprint_size")       # the keyword form; positional handled below
 def watershed_split(
     mask: np.ndarray,
     min_size: int = 0,
@@ -96,7 +94,7 @@ def watershed_split(
 
     Returns (labels, n).
     """
-    if footprint_size is not None:     # v0.8.2 positional call (the decorator takes keywords)
+    if footprint_size is not None:
         warnings.warn("watershed_split(): 'footprint_size' no longer has an effect and "
                       "is ignored", DeprecationWarning, stacklevel=2)
     m = mask > 0

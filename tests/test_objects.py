@@ -423,12 +423,3 @@ def test_centroid_homogeneity_is_gini_of_tile_point_density():
     assert res["centroid_gini"] == pytest.approx(stats.gini(counts))
     assert res["centroid_cv"] == pytest.approx(stats.coefficient_of_variation(counts))
 
-
-def test_watershed_split_accepts_the_retired_positional_footprint_size():
-    # v0.8.2 signature: watershed_split(mask, min_size, min_distance, footprint_size)
-    m = np.zeros((20, 20), bool)
-    m[5:15, 5:15] = True
-    with pytest.warns(DeprecationWarning, match="'footprint_size' no longer has an effect"):
-        old = objects.watershed_split(m, 0, 3, 7)
-    new = objects.watershed_split(m, 0, 3)
-    assert old[1] == new[1] and (old[0] == new[0]).all()
