@@ -96,14 +96,26 @@ def test_environment_records_the_code_that_ran_not_the_installed_dist(monkeypatc
     )
     env = report.environment()
     assert env["packages"]["fluorostats"] == fluorostats.__version__
-    head = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
-        cwd=Path(report.__file__).parent,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    assert env["fluorostats_commit"].removesuffix("-dirty") == head
+    # From a git checkout the commit is its HEAD; from an archive or an installed
+    # package (no git, or the package not tracked) it is None (M7: the suite ran
+    # only inside a checkout).
+    commit = env["fluorostats_commit"]
+    assert (commit and commit.removesuffix("-dirty")) == _tracked_head(Path(report.__file__).parent)
+
+
+def _tracked_head(package_dir: Path) -> str | None:
+    """Short HEAD of the git checkout that tracks ``package_dir``; None when none does."""
+    try:
+        for args in (
+            ["ls-files", "--error-unmatch", "__init__.py"],
+            ["rev-parse", "--short", "HEAD"],
+        ):
+            run = subprocess.run(["git", *args], cwd=package_dir, capture_output=True, text=True)
+            if run.returncode:
+                return None
+    except OSError:  # no git on this machine
+        return None
+    return run.stdout.strip()
 
 
 def test_git_commit_is_none_outside_a_checkout_and_flags_local_changes(tmp_path, monkeypatch):
