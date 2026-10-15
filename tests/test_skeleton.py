@@ -314,7 +314,9 @@ def test_skeleton_metrics_with_a_uint8_0_255_skeleton(monkeypatch):
     ref = [skeleton_metrics(mask), skeleton_metrics(mask, prune=True, min_branch_length_um=8)]
     _uint8_skeletonize(monkeypatch, sk)
     with warnings.catch_warnings():
-        warnings.simplefilter("error")
+        # the failure fallback warns with RuntimeWarning; upstream deprecation
+        # notices (e.g. scikit-image on numpy 2.5) are not failures
+        warnings.simplefilter("error", RuntimeWarning)
         assert skeleton_metrics(mask) == ref[0]
         assert skeleton_metrics(mask, prune=True, min_branch_length_um=8) == ref[1]
 
