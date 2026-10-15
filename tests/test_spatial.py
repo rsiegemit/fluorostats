@@ -116,3 +116,9 @@ def test_tile_cv_is_the_population_cv_like_the_other_homogeneity_metrics():
 def test_tile_point_density_rejects_non_finite_points():
     with pytest.raises(ValueError, match="finite"):
         spatial.tile_point_density(np.array([[1.0, np.nan]]), (10, 10))
+
+
+def test_tile_point_density_point_on_an_interior_edge_starts_the_next_cell():
+    """Cells are half-open [k·n/g, (k+1)·n/g): y = 9.0 is the edge 7·18/14."""
+    out = spatial.tile_point_density(np.array([[9.0, 0.0]]), (18, 18), grid=(14, 14))
+    assert out[7, 0] == 1.0 and out.sum() == 1.0

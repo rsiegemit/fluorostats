@@ -71,7 +71,8 @@ def tile_point_density(
 
     ``points_yx`` is ``(N, >=2)``; the last two columns are taken as ``(y, x)`` (so
     3D ``(z, y, x)`` centroids work directly). Points are continuous coordinates, so
-    they are binned against the exact cell edges ``k · n / grid`` (not the whole-pixel
+    they are binned into half-open cells between the exact edges ``k · n / grid``
+    (a point on an interior edge belongs to the next cell; not the whole-pixel
     edges `tile_bounds` gives an image); a point on or past the field border counts
     in the nearest edge cell; a NaN or infinite point raises ValueError. With
     ``per_area=True`` each count is divided by the cell area
@@ -84,8 +85,9 @@ def tile_point_density(
     if not np.isfinite(pts).all():
         raise ValueError("tile_point_density: points must be finite (got NaN or inf)")
     if pts.shape[0]:
-        iy = np.clip((pts[:, -2] / (ny / gy)).astype(int), 0, gy - 1)
-        ix = np.clip((pts[:, -1] / (nx / gx)).astype(int), 0, gx - 1)
+        # multiply before dividing: exact on the edges for integer coordinates
+        iy = np.clip(np.floor(pts[:, -2] * gy / ny).astype(int), 0, gy - 1)
+        ix = np.clip(np.floor(pts[:, -1] * gx / nx).astype(int), 0, gx - 1)
         np.add.at(out, (iy, ix), 1.0)
     if per_area:
         out = out / ((ny / gy) * (nx / gx) * pixel_area)
