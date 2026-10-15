@@ -132,7 +132,7 @@ def prune_skeleton(
         if not remove.any():  # pragma: no cover  # spur endpoints are never junctions
             break
         s = s & ~remove
-        s = skeletonize(s)
+        s = skeletonize(s).astype(bool)  # older scikit-image: uint8 0/255 in 3D
     return s
 
 
@@ -176,7 +176,7 @@ def skeleton_metrics(
             f"({np.ndim(mask)}), got {voxel_size_um!r}"
         )
     try:
-        skel = skeletonize(mask)
+        skel = skeletonize(mask).astype(bool)  # older scikit-image: uint8 0/255 in 3D
         # Match spacing length to the mask dimensionality so 2D masks work too
         # (voxel_size_um is (z, y, x); a 2D image uses the trailing (y, x)).
         spacing = tuple(voxel_size_um)[-skel.ndim :]

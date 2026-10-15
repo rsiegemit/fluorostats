@@ -135,7 +135,7 @@ def _wall_thickness(band: np.ndarray, dy: float, dx: float) -> tuple[float, floa
     from skimage.morphology import skeletonize
 
     dt = ndi.distance_transform_edt(band, sampling=(dy, dx))
-    skel = skeletonize(band)
+    skel = skeletonize(band).astype(bool)  # older scikit-image may return uint8 0/255
     if skel.any():
         th = 2.0 * dt[skel]
         cv = coefficient_of_variation(th)  # thickness >= 0: NaN only for a zero mean

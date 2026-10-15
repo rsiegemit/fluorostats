@@ -81,3 +81,13 @@ def test_ring_spacing_scales_area():
 def test_ring_morphometry_refuses_a_3d_mask():
     with pytest.raises(ValueError, match=r"2D \(Y, X\) cross-section"):
         ring.ring_morphometry(np.ones((3, 16, 16), bool))
+
+
+def test_ring_wall_thickness_with_a_uint8_0_255_skeleton(monkeypatch):
+    """scikit-image < 0.23 can return a uint8 0/255 skeleton; it must act as a mask."""
+    import skimage.morphology
+
+    ref = ring.ring_morphometry(_annulus(), voxel_size_um=(1.0, 1.0))
+    orig = skimage.morphology.skeletonize
+    monkeypatch.setattr(skimage.morphology, "skeletonize", lambda m: orig(m).astype(np.uint8) * 255)
+    assert ring.ring_morphometry(_annulus(), voxel_size_um=(1.0, 1.0)) == ref

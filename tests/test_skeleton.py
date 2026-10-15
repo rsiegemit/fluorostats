@@ -296,3 +296,24 @@ def test_skeleton_metrics_rejects_a_voxel_size_with_too_few_axes(voxel):
     mask[2, 10, 2:18] = True
     with pytest.raises(ValueError, match="voxel_size_um"):
         skeleton_metrics(mask, voxel)
+
+
+def _uint8_skeletonize(monkeypatch, module):
+    """scikit-image < 0.23 returns a uint8 0/255 skeleton for 3D input."""
+    from skimage.morphology import skeletonize
+
+    monkeypatch.setattr(module, "skeletonize", lambda m: skeletonize(m).astype(np.uint8) * 255)
+
+
+def test_skeleton_metrics_with_a_uint8_0_255_skeleton(monkeypatch):
+    import fluorostats.skeleton as sk
+
+    mask = np.zeros((6, 30, 30), bool)
+    mask[2:4, 14:16, 3:27] = True
+    mask[2:4, 3:27, 14:16] = True
+    ref = [skeleton_metrics(mask), skeleton_metrics(mask, prune=True, min_branch_length_um=8)]
+    _uint8_skeletonize(monkeypatch, sk)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert skeleton_metrics(mask) == ref[0]
+        assert skeleton_metrics(mask, prune=True, min_branch_length_um=8) == ref[1]
