@@ -156,16 +156,22 @@ def binarize(
         selem = disk(1)
     mask = opening(mask, footprint=selem)
 
-    # Remove small connected components. skimage renamed `min_size` -> `max_size`
-    # in 0.26 (same "remove objects <= threshold" semantic); support both versions.
-    if min_size > 0:
-        try:
-            # max_size removes objects of that size *or fewer*; the old min_size
-            # removed only *smaller* ones. min_size - 1 keeps the documented meaning
-            # ("smaller objects are removed") identical on every skimage version.
-            # skimage >= 0.26 (its < 0.26 annotations lack max_size: mypy flags it there only)
-            mask = remove_small_objects(mask, max_size=min_size - 1)  # type: ignore[call-arg, unused-ignore]
-        except TypeError:  # pragma: no cover - environment-gated: runs only on skimage < 0.26
-            mask = remove_small_objects(mask, min_size=min_size)  # skimage < 0.26
+    return remove_small(mask, min_size)
 
-    return mask
+
+def remove_small(mask: np.ndarray, min_size: int) -> np.ndarray:
+    """Drop connected objects smaller than ``min_size`` pixels/voxels (objects of
+    exactly ``min_size`` are kept), identically on every scikit-image version.
+
+    The one small-object rule of the package (`binarize`, `objects.label_3d`);
+    ``min_size <= 0`` returns the mask unchanged.
+    """
+    if min_size <= 0:
+        return mask
+    try:
+        # skimage >= 0.26 renamed min_size -> max_size, which removes objects of that
+        # size *or fewer*; min_size - 1 keeps "smaller objects are removed".
+        # (its < 0.26 annotations lack max_size: mypy flags it there only)
+        return remove_small_objects(mask, max_size=min_size - 1)  # type: ignore[call-arg, unused-ignore]
+    except TypeError:  # pragma: no cover - environment-gated: runs only on skimage < 0.26
+        return remove_small_objects(mask, min_size=min_size)

@@ -186,3 +186,11 @@ def test_segment_channel_is_denoise_background_binarize(bg_radius):
     np.testing.assert_array_equal(out, ref)
     np.testing.assert_array_equal(
         mask, binarize(ref, method="li", min_size=8, threshold_scale=0.9))
+
+
+@pytest.mark.parametrize("n,kept", [(4, True), (3, False)])
+def test_remove_small_keeps_objects_of_exactly_min_size(n, kept):
+    m = np.zeros((10, 10), bool)
+    m[0, :n] = True
+    assert segment.remove_small(m, 4).any() == kept
+    assert segment.remove_small(m, 0) is m
