@@ -117,18 +117,20 @@ def normalise_skeleton_metrics(
     voxel_size_um: tuple[float, float, float],
 ) -> dict:
     """Append `length_density_um_per_mm3`, `junction_density_per_mm3`,
-    `branch_density_per_mm3`, and `fov_volume_mm3`.
+    `branch_density_per_mm3`, and `fov_volume_mm3`. A density whose count is
+    missing from ``metrics`` is NaN.
 
     Returns a new dict; the input is not mutated.
     """
     v = fov_volume_mm3(shape_zyx, voxel_size_um)
+    nan = float("nan")  # a count missing from ``metrics`` was not measured
     out = dict(metrics)
     out["fov_volume_mm3"] = v
-    out["length_density_um_per_mm3"] = _per_unit(metrics.get("total_length_um", 0.0), v)
+    out["length_density_um_per_mm3"] = _per_unit(metrics.get("total_length_um", nan), v)
     # junction DENSITY uses the same field-standard branchpoint definition as the
     # reported junction COUNT (n_junction_nodes, degree>=3 nodes — AngioTool/REAVER),
     # not skan's n_junctions (junction-to-junction branch segments), so count and
     # density describe the same quantity per unit volume.
-    out["junction_density_per_mm3"] = _per_unit(metrics.get("n_junction_nodes", 0), v)
-    out["branch_density_per_mm3"] = _per_unit(metrics.get("n_branches", 0), v)
+    out["junction_density_per_mm3"] = _per_unit(metrics.get("n_junction_nodes", nan), v)
+    out["branch_density_per_mm3"] = _per_unit(metrics.get("n_branches", nan), v)
     return out

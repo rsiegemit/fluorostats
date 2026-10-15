@@ -90,3 +90,13 @@ def test_volume_metrics_treat_a_0_255_mask_as_binary():
     v[1, 2:5, 2:5] = 255
     assert metrics_3d.volume_fraction(v) == pytest.approx(9 / 400)
     assert metrics_3d.connectivity_metrics(v)["largest_component_fraction"] == 1.0
+
+
+def test_normalise_skeleton_metrics_missing_count_is_nan_not_zero():
+    """A count absent from ``metrics`` was not measured: its density is NaN, not 0."""
+    out = metrics_3d.normalise_skeleton_metrics(
+        {"total_length_um": 10.0}, (10, 100, 100), (1.0, 1.0, 1.0)
+    )
+    assert out["length_density_um_per_mm3"] > 0
+    assert np.isnan(out["junction_density_per_mm3"])
+    assert np.isnan(out["branch_density_per_mm3"])
