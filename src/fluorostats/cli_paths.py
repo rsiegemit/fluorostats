@@ -2,7 +2,8 @@
 
 Input discovery (the files and folder volumes under ``--input``, and each one's
 condition label) and output-folder hygiene (refusing an output inside the input,
-mirroring overlay paths, removing an earlier run's outputs before a rerun).
+mirroring overlay paths, claiming the output folder and removing an earlier run's
+outputs before a rerun).
 """
 
 from __future__ import annotations
@@ -67,13 +68,14 @@ def output_outside_input(input_path: Path, output_path: Path) -> Path:
     return output_path
 
 
-def remove_owned_outputs(output_path: Path) -> list[Path]:
-    """Delete the files an earlier run wrote; return the paths deleted.
+def claim_output(output_path: Path, tool: str, overwrite: bool) -> list[Path]:
+    """`report.claim_output_dir` for a quant command (a refusal is a usage error):
+    delete the files an earlier run of ``tool`` wrote; return the paths deleted.
 
-    Only names this tool writes are touched (any reported metric's ``_bar``/``_box``
-    PNG, the summary panel, ``pvalues.csv``, ``*_overlay.png`` under ``overlays/``,
-    ``run_config.json``), so an earlier run's results never sit next to this run's
-    and nothing else in the folder is removed.
+    Only names this tool writes are touched (``per_file.csv``, ``per_condition.csv``,
+    any reported metric's ``_bar``/``_box`` PNG, the summary panel, ``pvalues.csv``,
+    ``*_overlay.png`` under ``overlays/``, ``run_config.json``), so an earlier run's
+    results never sit next to this run's and nothing else in the folder is removed.
     """
     plot_dir = output_path / "plots"
     owned = [
@@ -82,9 +84,14 @@ def remove_owned_outputs(output_path: Path) -> list[Path]:
         for kind in ("bar", "box")
     ]
     owned += [
+        output_path / "per_file.csv",
+        output_path / "per_condition.csv",
         plot_dir / "summary_panel.png",
         plot_dir / "pvalues.csv",
         output_path / "run_config.json",
     ]
     owned += (output_path / "overlays").rglob("*_overlay.png")
-    return report.remove_outputs(owned)
+    try:
+        return report.claim_output_dir(output_path, tool, owned, overwrite)
+    except ValueError as e:
+        raise click.UsageError(str(e)) from e

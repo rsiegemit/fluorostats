@@ -24,6 +24,14 @@ from . import (
 )
 from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
 
+# Every command that writes an output folder takes the same --overwrite (CFG-1).
+_overwrite_option = click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Replace files in the output folder that another tool or the user wrote "
+    "(default: refuse; an earlier run of the same command is always replaced)",
+)
+
 
 @click.group()
 def cli():
@@ -56,7 +64,8 @@ def formats():
     type=click.Path(),
     help="Output folder; default: the manifest's output_dir",
 )
-def depth_cmd(manifest, output_dir):
+@_overwrite_option
+def depth_cmd(manifest, output_dir, overwrite):
     """Depth-penetration analysis from a JSON manifest.
 
     Compares how far a fluorescent probe penetrates a material across
@@ -67,7 +76,7 @@ def depth_cmd(manifest, output_dir):
     """
     from . import depth_batch  # on use: the other commands never load the batch driver
 
-    out = depth_batch.run(Path(manifest), output_dir)
+    out = depth_batch.run(Path(manifest), output_dir, overwrite)
     click.echo(f"Done. Outputs in {out}/")
 
 
@@ -197,6 +206,7 @@ def viability_cmd(manifest, output_dir):
     show_default=True,
     help="Minimum branch length in µm for spur pruning when --prune is set (CAN AFFECT RESULTS)",
 )
+@_overwrite_option
 def quant3d(
     input_dir,
     output_dir,
@@ -213,6 +223,7 @@ def quant3d(
     no_skeleton,
     prune,
     min_branch_length,
+    overwrite,
 ):
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
@@ -228,7 +239,7 @@ def quant3d(
         raise click.UsageError(f"No volume files found in {input_path}")
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
     output_path.mkdir(parents=True, exist_ok=True)
-    previous = cli_paths.remove_owned_outputs(output_path)
+    previous = cli_paths.claim_output(output_path, "quant3d", overwrite)
 
     click.echo(f"Found {len(files)} volume file(s)")
 
@@ -254,7 +265,7 @@ def quant3d(
     _report_and_plot(
         rows, output_path, "3d", plotted, no_plots, "3D Confocal Quantification Summary"
     )
-    _finish(output_path, config, previous)
+    _finish(output_path, config, previous, "quant3d")
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +344,7 @@ def quant3d(
 )
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
+@_overwrite_option
 def quant2d(
     input_dir,
     output_dir,
@@ -346,6 +358,7 @@ def quant2d(
     auto_crop,
     no_overlays,
     no_plots,
+    overwrite,
 ):
     """Quantify 2D fluorescence images: area fraction (cell coverage) and
     spatial-coverage uniformity (tile CV + Moran's I)."""
@@ -364,7 +377,7 @@ def quant2d(
         )
     config = dict(locals())  # recorded in run_config.json once the run has succeeded
     output_path.mkdir(parents=True, exist_ok=True)
-    previous = cli_paths.remove_owned_outputs(output_path)
+    previous = cli_paths.claim_output(output_path, "quant2d", overwrite)
 
     click.echo(f"Found {len(files)} image file(s)")
 
@@ -384,7 +397,7 @@ def quant2d(
     _report_and_plot(
         rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
     )
-    _finish(output_path, config, previous)
+    _finish(output_path, config, previous, "quant2d")
 
 
 # ---------------------------------------------------------------------------
@@ -506,10 +519,10 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
         _draw_plots_and_pvalues(df, metrics, output_path / "plots", summary_title)
 
 
-def _finish(output_path: Path, config: dict, previous: list[Path]) -> None:
+def _finish(output_path: Path, config: dict, previous: list[Path], tool: str) -> None:
     """Record the run (last, so only a completed run claims the folder) and name the
     earlier outputs it removed and did not write again."""
-    report.write_run_config(output_path, config)
+    report.write_run_config(output_path, config, tool=tool)
     for line in report.stale_notices(previous):
         click.echo(line)
 

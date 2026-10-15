@@ -402,12 +402,16 @@ def write_group_summary_csv(out: Path, aggregates: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run(manifest_path: Path, output_override: str | None = None) -> Path:
-    """Analyse every stack in a manifest; write CSVs, figures and a console report."""
+def run(manifest_path: Path, output_override: str | None = None, overwrite: bool = False) -> Path:
+    """Analyse every stack in a manifest; write CSVs, figures and a console report.
+
+    The output folder must be new or hold an earlier depth run
+    (`report.claim_output_dir`); ``overwrite`` replaces another run's files anyway.
+    """
     m = load_manifest(manifest_path)
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
     out_dir.mkdir(parents=True, exist_ok=True)
-    previous = report.remove_outputs(_owned_outputs(out_dir))
+    previous = report.claim_output_dir(out_dir, "depth", _owned_outputs(out_dir), overwrite)
     pubfig.apply_style("house")
 
     cfg = {
@@ -428,7 +432,9 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     print_auc_summary(rows, windows, m["parametric"], tests)
     print_lambda_summary(rows, m["parametric"], tests)
     # Written last, so only a completed run leaves a record claiming the folder.
-    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
+    report.write_run_config(
+        out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m}, tool="depth"
+    )
     for line in report.stale_notices(previous):
         print(line)
     print(f"\nOutputs written to {out_dir}/")
@@ -436,8 +442,9 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
 
 def _owned_outputs(out_dir: Path) -> list[Path]:
-    """The files an earlier run may have left that this run rewrites or must not keep:
-    every figure name `_write_figures` can write (any window) and ``run_config.json``."""
+    """Every file a run writes, which an earlier run may have left: the CSVs, every
+    figure name `_write_figures` can write (any window) and ``run_config.json``."""
+    tables = ("depth_profiles_long", "auc_per_stack", "group_depth_summary", "contrasts")
     figs = [
         out_dir / f"{stem}.{ext}"
         for ext in ("png", "pdf")
@@ -446,7 +453,7 @@ def _owned_outputs(out_dir: Path) -> list[Path]:
     for kind in ("normalized", "absolute"):
         figs += out_dir.glob(f"fig_auc_{kind}_*.png")
         figs += out_dir.glob(f"fig_auc_{kind}_*.pdf")
-    return [*figs, out_dir / "run_config.json"]
+    return [*(out_dir / f"{t}.csv" for t in tables), *figs, out_dir / "run_config.json"]
 
 
 def _analyse_groups(groups: list[dict], cfg: dict):

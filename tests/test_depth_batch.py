@@ -474,3 +474,28 @@ def test_auc_csv_flags_a_window_the_stack_covers_only_partly(tmp_path):
     ps = pd.read_csv(tmp_path / "auc.csv")
     assert list(ps.columns[-2:]) == ["window_complete_0_5um", "window_complete_5_20um"]
     assert ps.iloc[0, -2:].tolist() == [1, 0]
+
+
+def test_run_refuses_a_folder_holding_files_it_did_not_write(tmp_path):
+    # Regression (M1): a depth run replaced the user's contrasts.csv without notice;
+    # its own earlier tables were not removed before a rerun.
+    s0 = tmp_path / "s0.tif"
+    decay_stack(s0)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "contrasts.csv").write_text("mine")
+    m = {
+        "output_dir": str(out),
+        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
+    }
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    with pytest.raises(ValueError, match="holds contrasts.csv but no run_config.json"):
+        depth_batch.run(mpath)
+    assert (out / "contrasts.csv").read_text() == "mine"
+    with pytest.warns(RuntimeWarning, match="replacing contrasts.csv"):
+        depth_batch.run(mpath, overwrite=True)
+    assert json.loads((out / "run_config.json").read_text())["tool"] == "depth"
+    (out / "depth_profiles_long.csv").write_text("stale")
+    depth_batch.run(mpath)  # a rerun of its own folder rewrites its tables
+    assert (out / "depth_profiles_long.csv").read_text().startswith("group,stack")
