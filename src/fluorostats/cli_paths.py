@@ -16,12 +16,31 @@ import click
 from . import report
 from .io import DirectoryFormat
 
+
+def _stem(path: Path) -> str:
+    """The file name without its extension, a two-part one (".ome.tif") included."""
+    stem = path.stem
+    return stem[: -len(".ome")] if stem.lower().endswith(".ome") else stem
+
+
 # How a file's condition label is derived from its path (--condition-from), by name.
 CONDITION_FROM = {
     "parent": lambda path: path.parent.name,
     "grandparent": lambda path: path.parent.parent.name,
-    "filename": lambda path: path.stem,  # the name without its extension
+    "filename": _stem,
 }
+
+# Formats whose file keeps its planes in a companion folder "<file>.files" beside it
+# (Olympus OIF): that folder's files belong to the file, they are not inputs.
+_COMPANION_FOLDER_OWNERS = (".oif",)
+
+
+def _is_companion_folder(d: Path) -> bool:
+    """``d`` is "<file>.files" and <file>, one of :data:`_COMPANION_FOLDER_OWNERS`, is beside it."""
+    if not d.name.lower().endswith(".files"):
+        return False
+    owner = d.with_name(d.name[: -len(".files")])
+    return owner.suffix.lower() in _COMPANION_FOLDER_OWNERS and owner.is_file()
 
 
 def get_condition(fpath: Path, mode: str) -> str:
@@ -36,16 +55,18 @@ def find_files(
 
     A folder that one of ``directory_formats`` accepts (e.g. a Keyence BZ-X export,
     one volume stored as per-slice files) is one input: it is returned in place of
-    the files inside it.
+    the files inside it. The files of an OIF's "<name>.oif.files" companion folder
+    are the OIF's planes, so they are not returned (the OIF is).
     """
     entries = [root, *sorted(root.rglob("*"))]
     folders = [d for d in entries if d.is_dir() and any(f.probe(d) for f in directory_formats)]
+    skipped = folders + [d for d in entries if d.is_dir() and _is_companion_folder(d)]
     files = [
         f
         for f in entries
         if f.is_file()
         and f.suffix.lower() in suffixes
-        and not any(f.is_relative_to(d) for d in folders)
+        and not any(f.is_relative_to(d) for d in skipped)
     ]
     return sorted(folders + files)
 
