@@ -194,29 +194,24 @@ def test_cli_viability_cmd_output_override(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# quant3d / quant2d no-files early return  (lines 116-117, 235-236)
+# quant3d / quant2d: an input folder with nothing to measure is a usage error
 # ---------------------------------------------------------------------------
 
-def test_quant3d_empty_input_dir(tmp_path):
-    """quant3d on a dir with no volume files should print message and return."""
+@pytest.mark.parametrize("cmd,message", [("quant3d", "No volume files found"),
+                                         ("quant2d", "No image files found")])
+def test_empty_input_dir_is_a_usage_error_and_leaves_earlier_outputs(tmp_path, cmd, message):
+    # Regression: an empty input exited 0, so a rerun "succeeded" next to the previous
+    # run's tables.
     empty = tmp_path / "empty"
     empty.mkdir()
-    res = CliRunner().invoke(cli, [
-        "quant3d", "--input", str(empty), "--output", str(tmp_path / "out"),
-    ])
-    assert res.exit_code == 0
-    assert "No volume files found" in res.output
-
-
-def test_quant2d_empty_input_dir(tmp_path):
-    """quant2d on a dir with no image files should print message and return."""
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    res = CliRunner().invoke(cli, [
-        "quant2d", "--input", str(empty), "--output", str(tmp_path / "out"),
-    ])
-    assert res.exit_code == 0
-    assert "No image files found" in res.output
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "per_file.csv").write_text("earlier run")
+    res = CliRunner().invoke(cli, [cmd, "--input", str(empty), "--output", str(out)])
+    assert res.exit_code == 2
+    assert message in res.output
+    assert (out / "per_file.csv").read_text() == "earlier run"
+    assert not (out / "run_config.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -552,3 +547,34 @@ def test_overlays_of_same_named_files_in_different_conditions_are_kept(tmp_path,
     made = sorted(p.relative_to(tmp_path / "out" / "overlays").as_posix()
                   for p in (tmp_path / "out" / "overlays").rglob("*.png"))
     assert made == [f"{c}/s{i}_overlay.png" for c in ("GelMA", "Hybrid") for i in range(3)]
+
+
+def test_rerun_removes_stale_overlays_and_writes_run_config_last(tmp_path, monkeypatch):
+    # Regression: overlays of files no longer in the input survived a rerun, and
+    # run_config.json was written before measuring, so a run that failed part-way left a
+    # folder claiming the new configuration over the old run's tables.
+    from fluorostats import cli as cli_mod
+
+    _make_dataset(tmp_path / "in", _blob_2d)
+    out = tmp_path / "out"
+    args = ["quant2d", "--input", str(tmp_path / "in"), "--output", str(out), "--no-plots"]
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    assert (out / "overlays" / "GelMA" / "s2_overlay.png").exists()
+    (out / "overlays" / "GelMA" / "notes.png").write_bytes(b"x")     # not the tool's
+
+    (tmp_path / "in" / "GelMA" / "s2.tif").unlink()
+    res = CliRunner().invoke(cli, args)
+    assert res.exit_code == 0, res.output
+    assert not (out / "overlays" / "GelMA" / "s2_overlay.png").exists()
+    assert "s2_overlay.png (not produced by this run)" in res.output
+    assert "s1_overlay.png" not in res.output                         # rewritten, not removed
+    assert (out / "overlays" / "GelMA" / "notes.png").exists()
+    assert json.loads((out / "run_config.json").read_text())["threshold"] == "li"
+
+    def fail(*a, **k):
+        raise RuntimeError("measurement failed")
+
+    monkeypatch.setattr(cli_mod, "_measure_image", fail)
+    res = CliRunner().invoke(cli, args)
+    assert isinstance(res.exception, RuntimeError)
+    assert not (out / "run_config.json").exists()

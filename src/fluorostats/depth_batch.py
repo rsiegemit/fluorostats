@@ -349,7 +349,7 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
     m = load_manifest(manifest_path)
     out_dir = Path(output_override or m.get("output_dir", "depth_output"))
     out_dir.mkdir(parents=True, exist_ok=True)
-    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
+    previous = report.remove_outputs(_owned_outputs(out_dir))
     apply_style()
 
     cfg = {k: m[k] for k in ("channel", "reducer", "n_surface", "windows", "fit_offset")}
@@ -364,8 +364,24 @@ def run(manifest_path: Path, output_override: str | None = None) -> Path:
 
     _print_summary(rows, windows)
     _print_lambda_summary(rows)
+    # Written last, so only a completed run leaves a record claiming the folder.
+    report.write_run_config(out_dir, {"manifest": Path(manifest_path)}, nested={"resolved": m})
+    for line in report.stale_notices(previous):
+        print(line)
     print(f"\nOutputs written to {out_dir}/")
     return out_dir
+
+
+def _owned_outputs(out_dir: Path) -> list[Path]:
+    """The files an earlier run may have left that this run rewrites or must not keep:
+    every figure name `_write_figures` can write (any window) and ``run_config.json``."""
+    figs = [out_dir / f"{stem}.{ext}" for ext in ("png", "pdf")
+            for stem in ("fig_depth_absolute", "fig_depth_normalized",
+                         "fig_auc_retention_multiwindow")]
+    for kind in ("normalized", "absolute"):
+        figs += out_dir.glob(f"fig_auc_{kind}_*.png")
+        figs += out_dir.glob(f"fig_auc_{kind}_*.pdf")
+    return [*figs, out_dir / "run_config.json"]
 
 
 def _analyse_groups(groups: list[dict], cfg: dict):

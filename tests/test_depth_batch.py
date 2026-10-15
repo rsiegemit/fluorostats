@@ -433,3 +433,41 @@ def test_aggregate_group_single_stack_has_no_spread():
                             "normalized": np.exp(-z / 5), "fit": fit}])
     assert np.isnan(agg["sub_sem"]).all() and np.isnan(agg["norm_sem"]).all()
     assert agg["lambda_mean_um"] == 5.0 and np.isnan(agg["lambda_sem_um"])
+
+
+def test_rerun_removes_stale_figures_and_writes_run_config_last(tmp_path, capsys, monkeypatch):
+    # Regression: figures of windows dropped from the manifest survived a rerun, and
+    # run_config.json was written before analysis, so a failed run left the new
+    # configuration next to the old run's tables.
+    s0 = tmp_path / "s0.tif"
+    _decay_stack(s0)
+    out = tmp_path / "out"
+    m = {"auc_windows_um": [[0, 4], [0, 8]], "output_dir": str(out),
+         "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}]}
+    mpath = tmp_path / "m.json"
+    mpath.write_text(json.dumps(m))
+    depth_batch.run(mpath)
+    assert (out / "fig_auc_normalized_0_4um.png").exists()
+    assert (out / "fig_auc_retention_multiwindow.pdf").exists()
+    (out / "notes.png").write_bytes(b"x")                          # not the tool's
+    capsys.readouterr()
+
+    mpath.write_text(json.dumps({**m, "auc_windows_um": [[0, 8]]}))
+    depth_batch.run(mpath)
+    text = capsys.readouterr().out
+    gone = ["fig_auc_absolute_0_4um", "fig_auc_normalized_0_4um", "fig_auc_retention_multiwindow"]
+    for stem in gone:
+        for ext in ("png", "pdf"):
+            assert not (out / f"{stem}.{ext}").exists()
+            assert f"{stem}.{ext} (not produced by this run)" in text
+    assert "fig_auc_normalized_0_8um.png (not" not in text          # rewritten, not removed
+    assert (out / "fig_auc_normalized_0_8um.png").exists() and (out / "notes.png").exists()
+    assert json.loads((out / "run_config.json").read_text())["resolved"]["auc_windows_um"] == [[0, 8]]
+
+    def fail(*a, **k):
+        raise RuntimeError("analysis failed")
+
+    monkeypatch.setattr(depth_batch, "analyse_stack", fail)
+    with pytest.raises(RuntimeError, match="analysis failed"):
+        depth_batch.run(mpath)
+    assert not (out / "run_config.json").exists()

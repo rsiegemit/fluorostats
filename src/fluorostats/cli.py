@@ -116,7 +116,6 @@ def quant3d(
     and spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
     output_path = _output_outside_input(input_path, Path(output_dir))
-    output_path.mkdir(parents=True, exist_ok=True)
 
     # Resolve channel override
     ch_override = _parse_channel(channel)
@@ -124,13 +123,12 @@ def quant3d(
     # Find volume files
     files = _find_files(input_path, iq_io.VOLUME_SUFFIXES)
     if not files:
-        click.echo(f"No volume files found in {input_path}")
-        return
+        raise click.UsageError(f"No volume files found in {input_path}")
+    config = dict(locals())   # recorded in run_config.json once the run has succeeded
+    output_path.mkdir(parents=True, exist_ok=True)
+    previous = _remove_owned_outputs(output_path)
 
     click.echo(f"Found {len(files)} volume file(s)")
-
-    # Save run config
-    report.write_run_config(output_path, locals())
 
     measure = functools.partial(
         _measure_volume, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
@@ -143,6 +141,7 @@ def quant3d(
     plotted = [m for m in report.METRICS_3D if m != "n_branches"]
     _report_and_plot(rows, output_path, "3d", plotted, no_plots,
                      "3D Confocal Quantification Summary")
+    _finish(output_path, config, previous)
 
 
 # ---------------------------------------------------------------------------
@@ -181,19 +180,20 @@ def quant2d(
     spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
     output_path = _output_outside_input(input_path, Path(output_dir))
-    output_path.mkdir(parents=True, exist_ok=True)
 
     ch_override = _parse_channel(channel)
 
     files = _find_files(input_path, iq_io.IMAGE_SUFFIXES)
     if not files:
-        click.echo(f"No image files found in {input_path} "
-                   f"(quant2d matches {sorted(iq_io.IMAGE_SUFFIXES)}). "
-                   "Vendor volume formats (.oib/.czi/.nd2/.lif) are handled by `quant3d`.")
-        return
+        raise click.UsageError(f"No image files found in {input_path} "
+                               f"(quant2d matches {sorted(iq_io.IMAGE_SUFFIXES)}). "
+                               "Vendor volume formats (.oib/.czi/.nd2/.lif) are handled by "
+                               "`quant3d`.")
+    config = dict(locals())   # recorded in run_config.json once the run has succeeded
+    output_path.mkdir(parents=True, exist_ok=True)
+    previous = _remove_owned_outputs(output_path)
 
     click.echo(f"Found {len(files)} image file(s)")
-    report.write_run_config(output_path, locals())
 
     measure = functools.partial(
         _measure_image, ch_override=ch_override, sigma=sigma, bg_radius=bg_radius,
@@ -203,6 +203,7 @@ def quant2d(
     rows = _quantify_files(files, condition_from, "Processing images", measure)
     _report_and_plot(rows, output_path, "2d", list(report.METRICS_2D), no_plots,
                      "2D Coverage Summary")
+    _finish(output_path, config, previous)
 
 
 # ---------------------------------------------------------------------------
@@ -310,16 +311,18 @@ def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) 
 def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     """Shared quant2d/quant3d tail: per-metric plots, summary panel, p-values.
 
-    Draws only when plots are enabled and there is more than one condition; either
-    way, the plot files an earlier run left that this run did not rewrite are removed.
+    Draws only when plots are enabled and there is more than one condition.
     """
-    plot_dir = output_path / "plots"
-    previous = _remove_owned_plots(plot_dir)
     if not no_plots and len(df["condition"].unique()) > 1:
-        _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title)
-    for path in previous:
-        if not path.exists():
-            click.echo(f"Removed stale {path} (not produced by this run)")
+        _draw_plots_and_pvalues(df, metrics, output_path / "plots", summary_title)
+
+
+def _finish(output_path: Path, config: dict, previous: list[Path]) -> None:
+    """Record the run (last, so only a completed run claims the folder) and name the
+    earlier outputs it removed and did not write again."""
+    report.write_run_config(output_path, config)
+    for line in report.stale_notices(previous):
+        click.echo(line)
 
 
 def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
@@ -364,20 +367,21 @@ def _output_outside_input(input_path: Path, output_path: Path) -> Path:
     return output_path
 
 
-def _remove_owned_plots(plot_dir: Path) -> list[Path]:
-    """Delete the plot files an earlier run wrote; return the paths deleted.
+def _remove_owned_outputs(output_path: Path) -> list[Path]:
+    """Delete the files an earlier run wrote; return the paths deleted.
 
-    Only names this tool writes (any reported metric's ``_bar``/``_box`` PNG, the
-    summary panel, ``pvalues.csv``) are touched, so an earlier run's results never
-    sit next to this run's and nothing else in the folder is removed.
+    Only names this tool writes are touched (any reported metric's ``_bar``/``_box``
+    PNG, the summary panel, ``pvalues.csv``, ``*_overlay.png`` under ``overlays/``,
+    ``run_config.json``), so an earlier run's results never sit next to this run's
+    and nothing else in the folder is removed.
     """
+    plot_dir = output_path / "plots"
     owned = [plot_dir / f"{m}_{kind}.png" for m in {*report.METRICS_2D, *report.METRICS_3D}
              for kind in ("bar", "box")]
-    owned += [plot_dir / "summary_panel.png", plot_dir / "pvalues.csv"]
-    removed = sorted(p for p in owned if p.exists())
-    for path in removed:
-        path.unlink()
-    return removed
+    owned += [plot_dir / "summary_panel.png", plot_dir / "pvalues.csv",
+              output_path / "run_config.json"]
+    owned += (output_path / "overlays").rglob("*_overlay.png")
+    return report.remove_outputs(owned)
 
 
 def _find_files(root: Path, suffixes: set[str]) -> list[Path]:
