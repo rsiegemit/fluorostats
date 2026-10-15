@@ -3,7 +3,7 @@
 `depth_batch` and `viability_batch` both describe their input as groups of
 stacks; `check_groups` validates that shared part before any image is loaded.
 `require_groups` checks a manifest's top-level shape first; `unknown_keys`,
-`is_int` and `is_number` are the field checks both use;
+`not_strings`, `is_int` and `is_number` are the field checks both use;
 `check_depth` checks the rest of a depth manifest.
 """
 
@@ -24,6 +24,14 @@ def is_int(v: object) -> bool:
 def is_number(v: object) -> bool:
     """An int or float, not a bool."""
     return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def not_strings(m: dict, keys: Iterable[str]) -> list[str]:
+    """One problem per key of ``keys`` present in ``m`` whose value is not a string
+    (a number given as ``output_dir`` would otherwise fail only when the run writes)."""
+    return [
+        f"{k} must be a string, got {m[k]!r}" for k in keys if k in m and not isinstance(m[k], str)
+    ]
 
 
 def unknown_keys(where: str, d: dict, allowed: Iterable[str]) -> list[str]:
@@ -186,11 +194,7 @@ def check_depth(m: dict) -> list[str]:
         for k in ("fit_offset", "parametric")
         if not isinstance(m[k], bool)
     ]
-    problems += [
-        f"{k} must be a string, got {m[k]!r}"
-        for k in ("title", "signal_label", "output_dir")
-        if k in m and not isinstance(m[k], str)
-    ]
+    problems += not_strings(m, ("title", "signal_label", "output_dir"))
     r2 = m["fit_r2_threshold"]
     if not (is_number(r2) and 0 <= r2 <= 1):
         problems.append(f"fit_r2_threshold must be a number in [0, 1], got {r2!r}")
