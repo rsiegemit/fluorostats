@@ -167,7 +167,14 @@ def skeleton_metrics(
         branchpoint count), mean_branch_length_um. Zeros for an empty
         skeleton (mean_branch_length_um NaN: there is no branch to average);
         all NaN, with a RuntimeWarning, if the skeleton cannot be measured.
+        A ``voxel_size_um`` with fewer entries than ``mask`` has axes raises
+        ValueError.
     """
+    if np.ndim(voxel_size_um) != 1 or len(voxel_size_um) < np.ndim(mask):
+        raise ValueError(
+            f"skeleton_metrics: voxel_size_um needs one entry per mask axis "
+            f"({np.ndim(mask)}), got {voxel_size_um!r}"
+        )
     try:
         skel = skeletonize(mask)
         # Match spacing length to the mask dimensionality so 2D masks work too

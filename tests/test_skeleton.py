@@ -287,3 +287,12 @@ def test_pruning_keeps_a_through_path_at_a_junction():
     t[12:20, 30] = True
     r = skeleton_metrics(t, (1.0, 0.1), prune=True, min_branch_length_um=5)
     assert r["total_length_um"] == pytest.approx(10.5, abs=0.2)
+
+
+@pytest.mark.parametrize("voxel", [(1.0, 1.0), 0.5])
+def test_skeleton_metrics_rejects_a_voxel_size_with_too_few_axes(voxel):
+    """A caller error is a ValueError, not an all-NaN 'could not be measured'."""
+    mask = np.zeros((5, 20, 20), bool)
+    mask[2, 10, 2:18] = True
+    with pytest.raises(ValueError, match="voxel_size_um"):
+        skeleton_metrics(mask, voxel)
