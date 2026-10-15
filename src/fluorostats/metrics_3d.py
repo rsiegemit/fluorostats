@@ -36,21 +36,22 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
     -------
     dict with keys:
         n_components : int
-            Number of connected components.
+            Number of face-connected (6-connected) components, as `objects.label_3d`.
         euler_number : int
-            Euler characteristic (connectivity=3 for 3D).
+            Euler characteristic with 26-connected foreground (connectivity=3).
             More negative = more loops/handles = more interconnected.
         largest_component_fraction : float
             Fraction of total foreground volume in the largest component.
             Near 1.0 = one dominant connected network; low = fragmented.
             NaN for an empty mask.
     """
-    # Dual-connectivity pairing (intentional, not a mismatch): foreground components
-    # are counted under 6-connectivity (scipy.ndimage.label default, face-adjacency),
-    # and the Euler number under 26-connectivity. In 3D these are the DUAL pair required
-    # by the Jordan-Brouwer separation theorem — using the same connectivity for both
-    # gives topologically inconsistent χ. This pairing is what reproduces the analytic
-    # χ on the topology phantoms to zero error (see benchmarks/results/b1_topology_phantoms.csv).
+    # Two connectivities, on purpose. χ uses 26-connected foreground (and so, inside
+    # skimage's computation, 6-connected background: the dual pair that makes χ
+    # topologically consistent); this reproduces the analytic χ of the topology
+    # phantoms exactly (benchmarks/results/b1_topology_phantoms.csv). n_components
+    # counts face-connected components like label_3d. Objects touching only at an
+    # edge or corner are therefore 2 components but one object for χ, so these two
+    # values are not a consistent pair of Betti numbers.
     labeled, n_comp = label(mask)
     euler = int(euler_number(mask, connectivity=3))
 

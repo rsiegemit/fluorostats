@@ -56,8 +56,8 @@ def lateral_homogeneity(
     ny, nx = xy.shape
     if ny < tiles or nx < tiles:
         return {"lateral_gini": float("nan"), "lateral_cv": float("nan"), "n_tiles": 0}
-    # spatial.tile_bounds cells: every pixel counts, the last cell absorbing any
-    # remainder; means accumulate in float64 so float32 input does not round them
+    # spatial.tile_bounds cells: every pixel counts, any remainder spread over the
+    # cells; means accumulate in float64 so float32 input does not round them
     tile_means = tile_reduce(
         xy, lambda t: float(t.mean(dtype=np.float64)), grid=(tiles, tiles)
     ).ravel()

@@ -127,9 +127,9 @@ def count_local_maxima(
     mask: np.ndarray | None = None,
     smooth_sigma: float = 0.0,
 ) -> dict:
-    """Count intensity local maxima — one peak per cell (Fiji "Find Maxima").
+    """Count intensity local maxima — one peak per cell (like Fiji "Find Maxima").
 
-    Prominence-based peak counting excels at counting **crowded, overlapping**
+    Peak counting excels at counting **crowded, overlapping**
     cells that each present a single intensity peak (realistic gaussian-like
     staining): area fraction and connected-component labeling under-count when
     cells touch (the merged-blob failure mode), while one peak still marks each
@@ -153,7 +153,8 @@ def count_local_maxima(
     min_distance : int
         Minimum separation (voxels) between peaks; larger = fewer, merges close cells.
     threshold_rel : float
-        Peaks must exceed this fraction of the image maximum (prominence floor).
+        Peaks must exceed this fraction of the image maximum: an absolute height
+        floor, not a prominence (Fiji's Find Maxima uses prominence instead).
     mask : np.ndarray, optional
         Restrict peak search to this foreground region.
     smooth_sigma : float

@@ -28,8 +28,10 @@ def tile_bounds(
 ) -> Iterator[tuple[int, int, int, int]]:
     """Yield ``(y0, y1, x0, x1)`` pixel bounds for each cell of a ``grid`` partition.
 
-    Cells tile the full 2D ``shape`` with near-equal size (last cell absorbs any
-    remainder). Iterates row-major: ``(iy, ix)`` with ``ix`` fastest.
+    Cells tile the full 2D ``shape`` with near-equal size: edges are
+    ``floor(k · n / grid)``, so any remainder is spread over the cells (n = 11,
+    grid = 4 gives sizes 2, 3, 3, 3). Iterates row-major: ``(iy, ix)`` with ``ix``
+    fastest.
     """
     ny, nx = shape
     gy, gx = grid
@@ -50,7 +52,7 @@ def tile_reduce(
     ``func`` maps a tile (2D sub-array) to a scalar. A tile whose ``func`` returns
     ``None`` or ``NaN`` becomes ``NaN`` in the output — so downstream stats can skip
     empty/degenerate regions. Handy with a lambda, e.g.
-    ``tile_reduce(mask, lambda t: 100 * t.mean())`` for per-tile coverage.
+    ``tile_reduce(mask, lambda t: t.mean())`` for per-tile coverage (a fraction).
     """
     gy, gx = grid
     out = np.full((gy, gx), np.nan, dtype=float)

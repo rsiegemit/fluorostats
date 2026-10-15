@@ -213,10 +213,13 @@ def choose_count_method(channel: np.ndarray, **seg) -> dict:
       ``smooth_sigma`` ≈ radius/1.5) — peaks separate overlapping cells that CC merges.
     - otherwise (well-separated): ``"cc"`` — exact and robust.
 
-    NOTE: ``"maxima"`` is the mode validated against the published Fiji Live/Dead macro
-    (CCC 0.987 vs ground truth, Fig 4). ``auto`` only escalates to it in the clean +
-    crowded regime above, so to reproduce that headline pass ``method="maxima"`` explicitly
-    to ``live_dead_by_count`` rather than relying on the regime default.
+    NOTE: ``"maxima"`` re-implements the Find Maxima step of the published Kerkhoff
+    Fiji Live/Dead macro with that macro's parameters (``min_distance`` 3,
+    ``threshold_rel`` 0.15); it is not validated against the macro itself. Its
+    agreement with ground truth is in
+    benchmarks/results/b_viability_external_agreement.csv. ``auto`` only escalates
+    to it in the clean + crowded regime above, so to reproduce those counts pass
+    ``method="maxima"`` explicitly to ``live_dead_by_count``.
 
     Returns dict: method, smooth_sigma, and the estimated regime metrics (radius,
     snr, crowding: NaN when no cell is segmented; n_cc). The radius and
@@ -312,7 +315,8 @@ def live_dead_by_count(
 
     - ``method="auto"`` (default) — picks per-channel via :func:`choose_count_method`
       (transparent regime heuristic); the chosen method + reasoning are returned.
-    - ``method="maxima"`` — prominence peak counting (Fiji "Find Maxima"); best for
+    - ``method="maxima"`` — intensity peak counting (`objects.count_local_maxima`,
+      a height floor at a fraction of the image maximum, not a prominence); best for
       crowded single-peak cells. Over-counts flat/noisy cells unless ``smooth_sigma``.
     - ``method="watershed"`` — distance-transform watershed split of the mask.
     - ``method="cc"`` — connected components; exact for separated cells, noise-robust.
