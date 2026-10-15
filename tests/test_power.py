@@ -50,7 +50,24 @@ def test_fdr_power_curve_returns_per_metric_rows():
     assert m1_high > m2_high
 
 
-def test_power_empty_group():
+def test_power_empty_group_is_nan_everywhere():
+    # A metric with no measured value in a group has no power estimate: NaN from
+    # every entry point (fdr_power_curve used to report 0.0).
     assert np.isnan(power.bootstrap_power(np.array([]), np.array([1.0, 2.0]), n=5, n_sims=10))
-    r = power.fdr_power_curve({"m": []}, {"m": [1.0, 2.0, 3.0]}, ns=[4], n_sims=10)
-    assert r is not None
+    r = power.fdr_power_curve({"m": [], "k": [1.0, 2.0, 3.0]},
+                              {"m": [1.0, 2.0, 3.0], "k": [4.0, 5.0, 6.0]}, ns=[4], n_sims=10)
+    assert np.isnan(r.set_index("metric").loc["m", "power"])
+    assert 0.0 <= r.set_index("metric").loc["k", "power"] <= 1.0
+
+
+def test_one_metric_has_one_power_whichever_entry_point():
+    # Same metric, same seed: bootstrap_power, power_curve and a one-metric
+    # fdr_power_curve (BH over one test is the raw p) give the same power at each n.
+    rng = np.random.default_rng(3)
+    a, b = rng.normal(0, 1, 15), rng.normal(0.8, 1, 15)
+    ns = [4, 8, 12]
+    curve = power_curve(a, b, ns=ns, n_sims=120, seed=5)
+    fdr = fdr_power_curve({"m": a}, {"m": b}, ns=ns, n_sims=120, seed=5)
+    for i, n in enumerate(ns):
+        single = bootstrap_power(a, b, n=n, n_sims=120, seed=5)
+        assert curve["power"].iloc[i] == single == fdr["power"].iloc[i]
