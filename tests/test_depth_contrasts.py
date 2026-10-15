@@ -72,3 +72,16 @@ def test_summary_says_why_contrasts_are_skipped(capsys, n_groups, which):
     text = capsys.readouterr().out
     assert f"contrasts skipped: {n_groups} group{which}; a two-group" in text
     assert f"contrasts skipped: {n_groups} group{which} with an accepted λ fit" in text
+
+
+def test_mann_whitney_contrasts_serve_any_driver():
+    # e.g. a viability run: one family of metrics, BH across them; untestable entries skipped
+    entries = [("viability", "", {"d1": [0.9, 0.8, 0.85], "d5": [0.5, 0.6, 0.55]}),
+               ("density", "", {"d1": [10.0, 12.0, 11.0], "d5": [10.5, 12.5, 9.0]}),
+               ("only_one_group", "", {"d1": [1.0, 2.0]})]
+    rows = depth_contrasts.mann_whitney_contrasts(entries, across="metrics")
+    assert [r["metric"] for r in rows] == ["viability", "density"]
+    assert [r["q"] for r in rows] == list(stats.bh_fdr([r["p"] for r in rows]))
+    assert {r["correction"] for r in rows} == {"Benjamini-Hochberg FDR across 2 metrics"}
+    single = depth_contrasts.mann_whitney_contrasts(entries[:1])
+    assert single[0]["q"] == single[0]["p"] and single[0]["correction"].startswith("none")

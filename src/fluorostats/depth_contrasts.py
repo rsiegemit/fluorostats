@@ -10,6 +10,7 @@ asks for parametric tests (EXP-2).
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -37,7 +38,7 @@ def _lambda_by_group(rows) -> dict[str, list[float]]:
     return by_group
 
 
-def _mann_whitney_row(metric: str, window: str, by_group: dict[str, list[float]]) -> dict:
+def _mann_whitney_row(metric: str, window: str, by_group: dict[str, Sequence[float]]) -> dict:
     """Two-sided Mann-Whitney between the two groups of ``by_group``, as a contrasts row."""
     (ga, va), (gb, vb) = by_group.items()
     mw = stats.mann_whitney(va, vb)
@@ -46,24 +47,36 @@ def _mann_whitney_row(metric: str, window: str, by_group: dict[str, list[float]]
             "cliffs_delta": mw["cliffs_delta"], "test": "Mann-Whitney U, two-sided"}
 
 
+def mann_whitney_contrasts(entries: Sequence[tuple[str, str, dict[str, Sequence[float]]]],
+                           across: str | None = None) -> list[dict]:
+    """Two-group contrast rows for any driver: one per ``(metric, window, by_group)``
+    entry whose ``by_group`` (group name -> values, in order) has exactly two groups.
+
+    With ``across`` (a noun such as ``"windows"``) the entries are one family and
+    their p-values are BH-corrected together ("Benjamini-Hochberg FDR across n
+    <across>"); without it each row is its own test (q = p). ``window`` is free text
+    (empty when it does not apply). Rows have the `write_contrasts_csv` columns.
+    """
+    rows = [_mann_whitney_row(metric, window, bg) for metric, window, bg in entries
+            if len(bg) == 2]
+    if across is None:
+        return [{**c, "q": c["p"], "correction": "none (single test; q = p)"} for c in rows]
+    qs = stats.bh_fdr([c["p"] for c in rows])
+    correction = f"Benjamini-Hochberg FDR across {len(rows)} {across}"
+    return [{**c, "q": float(q), "correction": correction} for c, q in zip(rows, qs)]
+
+
 def contrasts(rows: list[dict], windows: list[tuple]) -> list[dict]:
-    """The two-group statistics of a run (none unless there are exactly two groups).
+    """The two-group statistics of a depth run (none unless there are exactly two groups).
 
     One row per AUC window on the primary stacks' normalised AUC, BH-corrected across
     the windows, and one on accepted λ fits (a single test: q = p). Columns: metric,
     window, group_a, group_b, n_a, n_b, U, p, q, cliffs_delta, test, correction. The
     console summary prints these same rows; `write_contrasts_csv` writes them.
     """
-    auc = [_mann_whitney_row("auc_normalized", window_label(w), bg)
-           for w in windows if len(bg := _auc_by_group(rows, w)) == 2]
-    qs = stats.bh_fdr([c["p"] for c in auc])
-    out = [{**c, "q": float(q), "correction": f"Benjamini-Hochberg FDR across {len(auc)} windows"}
-           for c, q in zip(auc, qs)]
-    lam = _lambda_by_group(rows)
-    if len(lam) == 2:
-        c = _mann_whitney_row("lambda_um", "", lam)
-        out.append({**c, "q": c["p"], "correction": "none (single test; q = p)"})
-    return out
+    auc = [("auc_normalized", window_label(w), _auc_by_group(rows, w)) for w in windows]
+    return (mann_whitney_contrasts(auc, across="windows")
+            + mann_whitney_contrasts([("lambda_um", "", _lambda_by_group(rows))]))
 
 
 _CONTRAST_COLUMNS = ["metric", "window", "group_a", "group_b", "n_a", "n_b", "U", "p", "q",
@@ -71,7 +84,8 @@ _CONTRAST_COLUMNS = ["metric", "window", "group_a", "group_b", "n_a", "n_b", "U"
 
 
 def write_contrasts_csv(out: Path, tests: list[dict]) -> None:
-    """One row per `contrasts` entry; only the header when there is no two-group contrast."""
+    """One row per contrast (`contrasts` / `mann_whitney_contrasts`); only the header
+    when there is none."""
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(_CONTRAST_COLUMNS)
