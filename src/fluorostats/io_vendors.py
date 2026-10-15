@@ -495,7 +495,8 @@ def _parse_ome_metadata(ome_xml: str, meta: dict) -> dict:
     new dict; ``meta`` itself is returned unchanged for unparseable XML."""
     try:
         root = ET.fromstring(ome_xml)
-    except ET.ParseError:
+    except ET.ParseError as exc:
+        _warn_unread("OME-XML (voxel size and channel names)", exc)
         return meta
     pixels = root.find(".//{*}Pixels")
     if pixels is None:

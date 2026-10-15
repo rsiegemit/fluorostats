@@ -11,9 +11,13 @@ from fluorostats import io, io_vendors
 
 
 def test_ome_metadata_parse_error():
+    # announced like the CZI path: the channel names and calibration are lost
     meta = {"voxel_size_um": (1.0, 1.0, 1.0), "channel_names": []}
-    out = io_vendors._parse_ome_metadata("<not valid xml", meta)
-    assert out["voxel_size_um"] == (1.0, 1.0, 1.0)
+    with pytest.warns(
+        RuntimeWarning, match="OME-XML .voxel size and channel names. could not be read"
+    ):
+        out = io_vendors._parse_ome_metadata("<not valid xml", meta)
+    assert out is meta
 
 
 def test_imagej_metadata_unparseable_spacing_warns():
