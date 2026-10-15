@@ -44,3 +44,19 @@ def test_figure_and_driver_modules_load_on_first_use():
         assert getattr(fluorostats, name).__name__ == f"fluorostats.{name}"
     with pytest.raises(AttributeError, match="no attribute 'nope'"):
         fluorostats.nope
+
+
+def test_package_version_matches_pyproject():
+    """One version: the package and pyproject.toml agree."""
+    import pathlib
+    import re
+
+    import fluorostats
+
+    pyproject = pathlib.Path(__file__).parents[1] / "pyproject.toml"
+    if not pyproject.exists():
+        pytest.skip(
+            "needs a source tree with pyproject.toml (tests run against an installed wheel)"
+        )
+    declared = re.search(r'^version = "([^"]+)"', pyproject.read_text(encoding="utf-8"), re.M)
+    assert declared and declared.group(1) == fluorostats.__version__
