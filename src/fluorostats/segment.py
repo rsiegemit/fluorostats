@@ -96,7 +96,10 @@ def choose_threshold_method(arr: np.ndarray) -> dict:
     for name, fn in THRESHOLD_METHODS.items():
         try:
             fracs[name] = float((a > fn(a)).mean())
-        except Exception:
+        except (ValueError, IndexError) as exc:   # non-finite or degenerate histogram
+            warnings.warn(f"choose_threshold_method: {name} failed ({type(exc).__name__}: "
+                          f"{exc}); its foreground fraction is NaN.",
+                          RuntimeWarning, stacklevel=2)
             fracs[name] = float("nan")
     otsu_f = fracs.get("otsu", 0.0)
     li_f = fracs.get("li", 0.0)

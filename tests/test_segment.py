@@ -225,3 +225,10 @@ def test_opening_options_and_2d():
     _, mask = segment.segment_channel(_sheet(2), sigma=0.0, min_size=0, opening="disk")
     assert mask.sum() >= 0.99 * 2 * 48 * 48
 
+
+def test_choose_threshold_method_warns_when_a_method_fails():
+    img = np.zeros((8, 8))
+    img[0, 0] = np.nan
+    with pytest.warns(RuntimeWarning, match="otsu failed"):
+        info = segment.choose_threshold_method(img)
+    assert np.isnan(info["fractions"]["otsu"])
