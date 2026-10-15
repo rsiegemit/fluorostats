@@ -388,3 +388,19 @@ def test_viability_2d_vs_3d_disk_opening_keeps_a_monolayer():
     r = viability.viability_2d_vs_3d(_monolayer(), opening="disk")
     assert r["live_fraction_3d"] > 0
     assert r["overestimate_mip"] == pytest.approx(8.0, rel=0.05)  # 1 of 8 slices
+
+
+@pytest.mark.parametrize("thick", [1, 2])
+def test_viability_2d_vs_3d_warns_when_the_ball_opening_erases_every_cell(thick):
+    with pytest.warns(RuntimeWarning, match='opening="disk"'):
+        r = viability.viability_2d_vs_3d(_monolayer(thick))
+    assert r["live_fraction_3d"] == 0.0 and np.isnan(r["overestimate_mip"])
+
+
+def test_viability_2d_vs_3d_no_warning_when_cells_survive():
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert viability.viability_2d_vs_3d(_monolayer(3))["live_fraction_3d"] > 0
+        assert viability.viability_2d_vs_3d(np.zeros((4, 8, 8)))["live_fraction_3d"] == 0

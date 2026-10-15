@@ -453,8 +453,9 @@ def viability_2d_vs_3d(
 
     The 3D mask uses `segment.binarize`'s ``opening`` (``seg``): the default
     ``"ball"`` erases cells thinner than 3 z-slices, so a monolayer reads a live
-    fraction of 0 (overestimate NaN) or one biased to its thickest cells; pass
-    ``opening="disk"`` for thin samples.
+    fraction of 0 (overestimate NaN; with a RuntimeWarning when ``"disk"`` would
+    keep cells) or one biased to its thickest cells; pass ``opening="disk"`` for
+    thin samples.
 
     Projection: the MIP here is the maximum projection of the 3D live MASK (the
     volume is segmented once in 3D, then projected), so a voxel counts as covered
@@ -464,6 +465,15 @@ def viability_2d_vs_3d(
     gives a different fraction.
     """
     lm = _mask(live, live_mask, **seg)
+    if not lm.any() and live_mask is None and seg.get("opening", "ball") == "ball":
+        if _mask(live, **{**seg, "opening": "disk"}).any():
+            warnings.warn(
+                "viability_2d_vs_3d: the 'ball' opening erased every live cell from the "
+                '3D mask (cells thinner than 3 z-slices); pass opening="disk" for a '
+                "monolayer. The 3D fractions are 0 and the overestimates NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
     nz = lm.shape[z_axis]
     mid = np.take(lm, nz // 2, axis=z_axis)
     mip = lm.max(axis=z_axis)
