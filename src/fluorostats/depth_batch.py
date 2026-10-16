@@ -58,6 +58,12 @@ and is refused. ``role`` defaults to ``"primary"``; ``aux``
 stacks are exported and drawn faintly but excluded from the group mean/SEM
 curves and AUC statistics, so short or differently-acquired stacks can ride
 along without biasing the matched comparison.
+
+Relative paths (stack ``path``, ``background``, ``output_dir``, whose default is
+``depth_output``) resolve against the folder that holds the manifest file, not the
+working directory (`manifest.resolve_path`); a relative path found only relative to
+the working directory is refused, naming both places. ``--output`` / ``output_override``
+is not a manifest value and stays relative to the working directory.
 """
 
 from __future__ import annotations
@@ -72,7 +78,7 @@ from matplotlib.colors import is_color_like
 
 from . import depth, depth_figures, stats
 from .io import load_volume
-from .manifest import check_depth, require_groups
+from .manifest import check_depth, require_groups, resolve_paths
 from . import pubfig, report
 from .depth_contrasts import contrasts, print_auc_summary, print_lambda_summary, write_contrasts_csv
 
@@ -92,10 +98,13 @@ __all__ = [
 
 
 def load_manifest(path: Path) -> dict:
-    """Read a depth manifest (see the module docstring), filling defaults and parsing windows."""
+    """Read a depth manifest (see the module docstring), filling defaults, resolving
+    its paths against the manifest's folder (`manifest.resolve_paths`) and parsing windows."""
     with open(path, encoding="utf-8") as fh:
         m = json.load(fh)
     require_groups(m)
+    m.setdefault("output_dir", "depth_output")
+    m = resolve_paths(m, path)
     m.setdefault("title", "Depth-penetration analysis")
     m.setdefault("signal_label", "Signal")
     m.setdefault("channel", 0)
@@ -384,7 +393,7 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
     (`report.claim_output_dir`); ``overwrite`` replaces another run's files anyway.
     """
     m = load_manifest(manifest_path)
-    out_dir = Path(output_override or m.get("output_dir", "depth_output"))
+    out_dir = Path(output_override or m["output_dir"])
     previous = report.claim_output_dir(out_dir, "depth", _owned_outputs(out_dir), overwrite)
     pubfig.apply_style("house")
 
@@ -416,8 +425,8 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
 
 
 def _files_read(groups: list[dict], out_dir: Path) -> dict:
-    """The absolute paths a run read and wrote (manifest paths resolve against the
-    working directory), so ``run_config.json`` names the files, not only the text."""
+    """The absolute paths a run read and wrote (``groups`` paths already resolved
+    against the manifest's folder), so ``run_config.json`` names the files."""
     backgrounds = [g["background"] for g in groups if g.get("background")]
     return {
         "stacks": [str(Path(st["path"]).resolve()) for g in groups for st in g["stacks"]],

@@ -561,9 +561,9 @@ def test_run_names_utf8_for_every_text_file_it_reads_and_writes(tmp_path):
 
 
 def test_run_config_records_the_absolute_paths_it_read(tmp_path, monkeypatch):
-    # Regression (C2, the non-breaking part): relative manifest paths resolve against
-    # the working directory, and run_config.json kept only the manifest's text, so the
-    # folder did not say which files were read.
+    # Regression (C2): run_config.json kept only the manifest's text, so the folder did
+    # not say which files were read. Relative paths resolve against the manifest's
+    # folder, here the working directory (tests/test_manifest_paths.py for others).
     monkeypatch.chdir(tmp_path)
     decay_stack(tmp_path / "s0.tif")
     flat_stack(tmp_path / "blank.tif")
@@ -575,7 +575,7 @@ def test_run_config_records_the_absolute_paths_it_read(tmp_path, monkeypatch):
     (tmp_path / "m.json").write_text(json.dumps(m))
     depth_batch.run("m.json")
     cfg = json.loads((tmp_path / "out" / "run_config.json").read_text())
-    assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s0.tif"  # as written
+    assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s0.tif"  # m.json's folder
     assert cfg["files_read"] == {
         "stacks": [str((tmp_path / "s0.tif").resolve())],
         "backgrounds": [str((tmp_path / "blank.tif").resolve())],

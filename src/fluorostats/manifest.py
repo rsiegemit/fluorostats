@@ -4,7 +4,11 @@
 stacks; `check_groups` validates that shared part before any image is loaded.
 `require_groups` checks a manifest's top-level shape first; `unknown_keys`,
 `not_strings`, `is_int` and `is_number` are the field checks both use;
-`check_depth` checks the rest of a depth manifest.
+`check_depth` checks the rest of a depth manifest. `resolve_path` owns where a
+manifest's relative paths point: the folder of the manifest file (`resolve_paths`
+applies it to every path field when a driver loads a file). The checks take a dict
+and use its paths as given, so a manifest built in Python, with no file, keeps
+relative paths relative to the working directory.
 """
 
 from __future__ import annotations
@@ -53,6 +57,68 @@ def _repeated(values: list) -> list:
     return [v for i, v in enumerate(present) if v in present[i + 1 :] and v not in present[:i]]
 
 
+def resolve_path(manifest_path: str | Path | None, value: str) -> str:
+    """Where a manifest's path ``value`` points: unchanged when absolute or when there
+    is no manifest file (``manifest_path`` None: a dict manifest's paths are used as
+    given, relative to the working directory), else joined to the manifest's folder.
+
+    Raises ValueError when the manifest-relative path does not exist but ``value``
+    does relative to the working directory (the rule before 0.9), naming both, so
+    a manifest written for the old rule fails instead of reading another file."""
+    if manifest_path is None or Path(value).is_absolute():
+        return value
+    resolved = Path(manifest_path).parent / value
+    here = Path(value)
+    if not resolved.exists() and here.exists() and resolved.resolve() != here.resolve():
+        raise ValueError(
+            f"path {value!r} is resolved against the manifest's folder, where "
+            f"{resolved} does not exist; it exists relative to the current directory "
+            f"as {here.resolve()}. Give it relative to {resolved.parent} or as an "
+            "absolute path."
+        )
+    return str(resolved)
+
+
+def resolve_paths(m: dict, manifest_path: str | Path) -> dict:
+    """``m`` with its path fields (``output_dir``, each group's ``background`` and
+    each stack's ``path``) resolved by `resolve_path`; a field of the wrong type is
+    kept as given for the checks to report. Raises ValueError listing every path
+    that exists only relative to the working directory."""
+    problems: list[str] = []
+
+    def one(v):
+        if not isinstance(v, str):
+            return v
+        try:
+            return resolve_path(manifest_path, v)
+        except ValueError as e:
+            problems.append(str(e))
+            return v
+
+    groups = [_resolve_group(grp, one) if isinstance(grp, dict) else grp for grp in m["groups"]]
+    out = {**m, "groups": groups}
+    if "output_dir" in m:
+        out["output_dir"] = one(m["output_dir"])
+    if problems:
+        raise ValueError("manifest paths:\n  - " + "\n  - ".join(problems))
+    return out
+
+
+def _resolve_group(grp: dict, one) -> dict:
+    """A group with its background(s) and stack paths passed through ``one``."""
+    out = dict(grp)
+    bg = grp.get("background")
+    if bg is not None:
+        out["background"] = [one(b) for b in bg] if isinstance(bg, list) else one(bg)
+    stacks = grp.get("stacks")
+    if isinstance(stacks, list):
+        out["stacks"] = [
+            {**st, "path": one(st["path"])} if isinstance(st, dict) and "path" in st else st
+            for st in stacks
+        ]
+    return out
+
+
 def require_groups(m: object) -> None:
     """Raise ValueError unless ``m`` (a parsed manifest) is a JSON object with a
     non-empty ``groups`` list; the batch loaders call it before reading any field."""
@@ -77,7 +143,9 @@ def check_groups(
     """Problems with a manifest's groups: each an object, names (non-empty strings,
     unique), stacks (a non-empty list of objects; labels unique within the group,
     paths present), background paths, and (when given) each stack's role and
-    unknown group / stack fields. Empty when all is well."""
+    unknown group / stack fields. Empty when all is well. Paths are checked as given
+    (relative ones against the working directory); the batch loaders resolve a
+    manifest file's paths first (`resolve_paths`)."""
     objects = [grp for grp in groups if isinstance(grp, dict)]
     problems = [
         f"group name {name!r} is used by more than one group; names must be unique"

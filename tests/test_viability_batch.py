@@ -440,7 +440,7 @@ def test_run_reads_and_writes_text_as_utf8(tmp_path):
 
 
 def test_run_config_records_the_absolute_stack_paths_read(tmp_path, monkeypatch):
-    """Relative stack paths still resolve against the working directory; the record
+    """A relative stack path resolves against the manifest's folder; the record
     names the absolute files that were read."""
     mp = _one_stack_manifest(tmp_path)
     man = json.loads(mp.read_text(encoding="utf-8"))
@@ -453,7 +453,7 @@ def test_run_config_records_the_absolute_stack_paths_read(tmp_path, monkeypatch)
         "stacks": [str((tmp_path / "s.npy").resolve())],
         "output_dir": str((tmp_path / "o").resolve()),
     }
-    assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == "s.npy"  # as given
+    assert cfg["resolved"]["groups"][0]["stacks"][0]["path"] == str(tmp_path / "s.npy")
 
 
 def test_run_refuses_a_folder_another_tool_or_the_user_wrote(tmp_path, capsys):

@@ -606,6 +606,12 @@ a Welch t-test and `fit_r2_threshold` (default `depth.FIT_R2_THRESHOLD`, 0.85) f
 `contrasts.csv` flags windows a stack covers only partly (`n_partial`) and gives a
 `reason` for any comparison that could not be tested.
 
+Relative paths in a manifest (stack `path`, `background`, `output_dir` and its
+default) are relative to the folder that holds the manifest, so a run gives the same
+result from any working directory; `--output` is relative to the working directory.
+A relative path that exists only relative to the working directory is an error
+naming both locations (make it relative to the manifest's folder, or absolute).
+
 A run refuses an output folder that holds files it did not write (pass `--overwrite`
 to `quant2d`, `quant3d`, `depth` or `viability` to replace them); files the tool wrote in an
 earlier run are replaced and named.

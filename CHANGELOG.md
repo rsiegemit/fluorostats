@@ -181,6 +181,13 @@ CLI and drivers
   suite at 100% coverage on Python 3.10-3.13); `ruff` and `mypy` pinned in `dev`.
 
 ### Changed
+- **Breaking for manifests that relied on working-directory-relative paths**:
+  relative paths in `depth` and `viability` manifests (stack `path`, `background`,
+  `output_dir`, and the default output folder) resolve against the folder that holds
+  the manifest file, not the working directory. A path that exists only relative to
+  the working directory is refused, naming both locations. `--output`, and manifests
+  passed to the library checks as dicts, stay relative to the working directory;
+  `run_config.json` records the resolved paths.
 - **Dependency floors raised to versions that work**: numpy >= 1.25, scikit-image
   >= 0.23, matplotlib >= 3.8, skan >= 0.12 (at the old floors 3D skeleton metrics
   were NaN and other functions failed).

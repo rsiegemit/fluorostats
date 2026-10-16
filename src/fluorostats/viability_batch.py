@@ -61,13 +61,17 @@ apart, whose only value is "primary") is refused, a group ``background`` include
 Outputs: ``viability_per_stack.csv``, ``viability_group_summary.csv`` (mean and SEM
 per group), ``contrasts.csv`` (the printed two-group statistics, in the columns of
 `depth_batch`'s contrasts.csv) and, written last, ``run_config.json`` (the manifest
-as given, plus ``files_read``: the absolute paths of every stack read and of the
-output folder; relative paths resolve against the working directory). The output
-folder is created only once every stack has been analysed, with an "incomplete"
-``run_config.json`` marker that the full record replaces. Text files are UTF-8. A run
+with its paths resolved, plus ``files_read``: the absolute paths of every stack read
+and of the output folder). The output folder is created only once every stack has
+been analysed, with an "incomplete" ``run_config.json`` marker that the full record
+replaces. Text files are UTF-8. A run
 first removes those files left by an earlier viability run in the output folder; it
 refuses a folder whose run_config.json names another tool, or that holds those
 names with no run_config.json, unless ``overwrite`` is set.
+
+Relative paths (stack ``path``, ``output_dir`` and its default) resolve against the folder that
+holds the manifest file, as in `depth_batch` (`manifest.resolve_path`);
+``--output`` / ``output_override`` stays relative to the working directory.
 
 Segmentation: ``seg.method`` thresholds everything, the cell counts included
 (``count_seg_method`` in run_config.json). ``min_size`` differs by readout:
@@ -97,7 +101,15 @@ import numpy as np
 from .io import load_volume
 from . import stats
 from .depth_contrasts import mann_whitney_contrasts, write_contrasts_csv
-from .manifest import check_groups, is_int, is_number, not_strings, require_groups, unknown_keys
+from .manifest import (
+    check_groups,
+    is_int,
+    is_number,
+    not_strings,
+    require_groups,
+    resolve_paths,
+    unknown_keys,
+)
 from . import report
 from . import segment
 from . import viability as viab
@@ -132,7 +144,8 @@ _OUTPUTS = (
 
 
 def load_manifest(path: Path) -> dict:
-    """Read a viability manifest (see the module docstring), filling defaults."""
+    """Read a viability manifest (see the module docstring), filling defaults and
+    resolving its paths against the manifest's folder (`manifest.resolve_paths`)."""
     m = json.loads(Path(path).read_text(encoding="utf-8"))
     require_groups(m)
     m.setdefault("live_channel", None)  # None: resolved from channel names
@@ -140,6 +153,7 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("seg", dict(DEFAULT_SEG))
     m.setdefault("count_method", "all")
     m.setdefault("output_dir", "viability_out")
+    m = resolve_paths(m, path)
     _validate(m)
     return m
 
@@ -303,8 +317,8 @@ def run(manifest_path: Path, output_override: str | None = None, overwrite: bool
 
 
 def _files_read(m: dict, out: Path) -> dict:
-    """The absolute paths a run read and wrote (manifest paths resolve against the
-    working directory), as `depth_batch` records them in ``run_config.json``."""
+    """The absolute paths a run read and wrote (manifest paths already resolved
+    against the manifest's folder), as `depth_batch` records them in ``run_config.json``."""
     return {
         "stacks": [str(Path(st["path"]).resolve()) for g in m["groups"] for st in g["stacks"]],
         "output_dir": str(out.resolve()),
