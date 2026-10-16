@@ -467,7 +467,7 @@ apply_style("house")                # clean typography, spines, grid, palette
 color = material_color("Hybrid")    # consistent per-condition colors
 ```
 
-`apply_style("house")` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` gives a consistent color story (`MATERIAL_COLORS` is a default condition→color map; pass your own colors for other conditions), and `DARK_PALETTE` drives the black-background 3D look below.
+`apply_style("house")` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` gives a consistent color story (`group_colors(names)` gives each condition its own color: the exact names in `MATERIAL_COLORS` keep theirs, every other name takes the next unused palette color; a manifest group's `color` overrides), and `DARK_PALETTE` drives the black-background 3D look below.
 
 For compact multi-panel figures, `fluorostats.pubfig` is the kit the benchmark
 figures are built with (and the one figure style of the package): an Okabe–Ito palette, a 5–7 pt type scale, bold panel

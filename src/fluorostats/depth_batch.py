@@ -474,11 +474,10 @@ def _owned_outputs(out_dir: Path) -> list[Path]:
 def _analyse_groups(groups: list[dict], cfg: dict):
     """Analyse every stack, group by group. Returns rows, colours, primaries."""
     rows: list[dict] = []
-    colors: dict[str, str] = {}
+    colors = depth_figures.group_colours(groups)
     per_group_primary: dict[str, list[dict]] = {}
     for grp in groups:
         gname = grp["name"]
-        colors[gname] = depth_figures.group_color(gname, grp.get("color"))
         bg = grp.get("background")
         blank = _load_blank(bg, cfg) if bg else None
         per_group_primary.setdefault(gname, [])

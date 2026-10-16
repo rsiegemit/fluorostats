@@ -145,10 +145,31 @@ def test_palette_keys():
     assert {"mesh", "background"} <= set(pubfig.DARK_PALETTE)
 
 
-def test_material_color_exact_substring_and_fallback():
+def test_material_color_exact_name_else_fallback():
     assert pubfig.material_color("GelMA") == pubfig.MATERIAL_COLORS["GelMA"]
-    assert pubfig.material_color("my GelMA sample") == pubfig.MATERIAL_COLORS["GelMA"]
-    assert pubfig.material_color("totally unknown") == pubfig.PALETTE["muted"]
+    # GEN-1: a substring match gave "GelMA-CMCMA" GelMA's colour
+    assert pubfig.material_color("GelMA-CMCMA") == pubfig.PALETTE["muted"]
+    assert pubfig.material_color("totally unknown", "#123456") == "#123456"
+
+
+def test_group_colors_keep_known_names_and_give_every_other_group_its_own_colour():
+    names = ["GelMA", "GelMA-CMCMA", "PEG", "Alginate", "Hybrid", "Collagen"]
+    colors = pubfig.group_colors(names)
+    assert list(colors) == names
+    assert colors["GelMA"] == pubfig.MATERIAL_COLORS["GelMA"]
+    assert colors["Hybrid"] == pubfig.MATERIAL_COLORS["Hybrid"]
+    assert len(set(colors.values())) == len(names)  # all distinct
+
+
+def test_group_colors_overrides_win_and_are_not_reused():
+    colors = pubfig.group_colors(["A", "B"], {"A": pubfig.GROUP_CYCLE[0], "B": None})
+    assert colors["A"] == pubfig.GROUP_CYCLE[0]
+    assert colors["B"] != colors["A"]
+
+
+def test_group_colors_beyond_the_cycle_stay_distinct():
+    names = [f"g{i}" for i in range(len(pubfig.GROUP_CYCLE) + 5)]
+    assert len(set(pubfig.group_colors(names).values())) == len(names)
 
 
 def test_darken_and_lighten_move_away_from_the_colour():

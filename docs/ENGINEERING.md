@@ -17,7 +17,7 @@ Each piece owns all of its functionality behind a small interface, so it can be 
 
 | ID | Rule | Check |
 | --- | --- | --- |
-| MOD-1 | One concern per module. Reading (`io`, `io_tiff`, `io_vendors`, `io_canonical`, `keyence`), manifests (`manifest`), preprocessing, segmentation, each metric family (`metrics_2d`, `metrics_3d`, `skeleton`, `objects`, `morphometry`, `ring`, `texture`, `spatial`, `depth`, `viability`), statistics (`stats`, `stats_combine`, `agreement`, `power`), validation, QC, reporting (`report`, `depth_contrasts`) and figures (`plots`, `render3d`, `projections`, `style`, `pubfig`, `depth_figures`) each keep their logic, options and tests in their own module. | You can name the one concern a module serves; changing that concern touches one module. |
+| MOD-1 | One concern per module. Reading (`io`, `io_tiff`, `io_vendors`, `io_canonical`, `keyence`), manifests (`manifest`), preprocessing, segmentation, each metric family (`metrics_2d`, `metrics_3d`, `skeleton`, `objects`, `morphometry`, `ring`, `texture`, `spatial`, `depth`, `viability`), statistics (`stats`, `stats_combine`, `agreement`, `power`), validation, QC, reporting (`report`, `depth_contrasts`) and figures (`plots`, `render3d`, `projections`, `style`, `pubfig`, `colors`, `depth_figures`) each keep their logic, options and tests in their own module. | You can name the one concern a module serves; changing that concern touches one module. |
 | MOD-2 | Swappable by name. Variants (threshold methods, count methods, reducers, file formats) are chosen by a named option resolved in one place (a dict/registry or one dispatch function), not by `if` chains repeated in each caller. Adding a variant is one implementation plus one registration. | Grep for a variant's name finds its implementation, its registration and its tests, nothing else. |
 | MOD-3 | Dependencies point one way: measurement modules (`io` … `validate`) ← orchestration (`depth_batch`, `viability_batch`, `report`, `cli`, `cli_paths`, `cli_measure`) ← scripts (`benchmarks/`, `examples/`). Measurement modules never import plotting, `click` or orchestration; nothing in `src/` imports `benchmarks/` or `examples/`. No cycles; no function-level import used to dodge one. | The import graph has no upward edges and no cycles. |
 | MOD-4 | Use only a module's public surface. No `module._private` access across module boundaries; if a caller needs it, the owner makes it public. A module's own test files (`test_<module>.py`, `test_<module>_<part>.py`) may exercise that module's private helpers. | No `_name` imported or accessed from outside its module, except by its own test files. |
@@ -201,9 +201,8 @@ Now compliant (measured, not estimated):
 
 Open, each needing an owner decision:
 
-- [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default
-  (existing manifests rely on it); `examples/keyence_tube_analysis.py` and
-  `multi_condition_pipeline.py` are dataset-specific and could become manifest runs.
+- [ ] GEN-1: `examples/keyence_tube_analysis.py` and `multi_condition_pipeline.py`
+  are dataset-specific and could become manifest runs.
 - [ ] MIN-2: deprecated names to remove in a release that announces it. These warn:
   `fluorostats.style` (use `pubfig`); the `render3d` MIP panels (use `projections`);
   the `depth_batch` window and figure helpers (use `depth`, `depth_figures`);

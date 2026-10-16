@@ -14,12 +14,21 @@ import numpy as np
 
 from . import stats
 from .depth import window_label, window_title
-from .pubfig import PALETTE, lighten, material_color, save_figure
+from .pubfig import PALETTE, group_colors, lighten, material_color, save_figure
 
 
 def group_color(name: str, override: str | None) -> str:
-    """A group's plot colour: the manifest override, else the house palette."""
+    """One group's colour: the override, else its exact ``MATERIAL_COLORS`` colour.
+
+    For a whole manifest use ``depth_batch.group_colours``, which keeps groups distinct.
+    """
     return override or material_color(name)
+
+
+def group_colours(groups: list[dict]) -> dict[str, str]:
+    """Each manifest group's plot colour: its ``color``, else a distinct default
+    (``pubfig.group_colors``)."""
+    return group_colors([g["name"] for g in groups], {g["name"]: g.get("color") for g in groups})
 
 
 def plot_depth_curves(

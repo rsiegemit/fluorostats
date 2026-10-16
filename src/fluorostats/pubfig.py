@@ -30,7 +30,6 @@ from math import erf, sqrt
 from pathlib import Path
 from typing import Any, Sequence
 
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import numpy as np
@@ -38,53 +37,22 @@ from matplotlib.rcsetup import cycler
 from numpy.typing import ArrayLike
 
 from . import agreement
-
-# ---- Okabe-Ito palette (colourblind-safe) ----
-OKABE = {
-    "black": "#000000",
-    "orange": "#E69F00",
-    "sky": "#56B4E9",
-    "green": "#009E73",
-    "yellow": "#F0E442",
-    "blue": "#0072B2",
-    "vermillion": "#D55E00",
-    "purple": "#CC79A7",
-    "grey": "#999999",
-    "lgrey": "#C4C9D0",
-}
+from .colors import (  # noqa: F401  (re-exported: pubfig is the figure API)
+    DARK_PALETTE,
+    GROUP_CYCLE,
+    MATERIAL_COLORS,
+    OKABE,
+    PALETTE,
+    darken,
+    group_colors,
+    lighten,
+    material_color,
+)
 
 # One font scale for every compact figure (points): 5-7 pt for body text, with 8 pt
 # bold panel letters ("value": numbers printed beside data marks). Reference these,
 # never hardcode sizes.
 FS = dict(title=7, label=7, tick=6, legend=6, annot=6, value=5.6, small=5, panel=8)
-
-# The house palette (the "house" theme and the CLI / depth / render figures).
-PALETTE = {
-    "primary": "#3F6AB3",  # cool slate blue
-    "accent": "#E25C5C",  # warm coral red
-    "highlight": "#E8A946",  # soft amber
-    "muted": "#9AA4B0",  # cool grey
-    "ink": "#1F2937",  # deep blue-grey for text
-    "paper": "#FCFCFA",  # off-white background
-    "grid": "#E5E7EB",  # very light grey gridlines
-    "background": "#FCFCFA",
-    "panel": "#FFFFFF",
-}
-
-MATERIAL_COLORS = {
-    "GelMA": PALETTE["primary"],
-    "Hybrid": PALETTE["accent"],
-    "Control": PALETTE["muted"],
-}
-
-# Dark render palette (presentation slides)
-DARK_PALETTE = {
-    "background": "#000000",
-    "mesh": "#F5C518",  # rich yellow
-    "grid": "#3A3A3A",
-    "ink": "#FFFFFF",
-    "scalebar": "#FFFFFF",
-}
 
 # Full text width in inches (372 pt = 130.74 mm). A figure authored at the width
 # it is placed at is not rescaled, so the FS point sizes print at their size.
@@ -239,28 +207,6 @@ def apply_style(theme: str = "compact", font_scale: float = 1.0) -> None:
     if theme not in THEMES:
         raise ValueError(f"theme must be one of {tuple(THEMES)}, got {theme!r}")
     plt.rcParams.update(THEMES[theme](font_scale))
-
-
-def material_color(name: str, fallback: str | None = None) -> str:
-    """Look up the canonical color for a condition/material label."""
-    if name in MATERIAL_COLORS:
-        return MATERIAL_COLORS[name]
-    for key, color in MATERIAL_COLORS.items():
-        if key.lower() in str(name).lower():
-            return color
-    return fallback or PALETTE["muted"]
-
-
-def darken(color: str, amount: float = 0.2) -> str:
-    """Return a slightly darker version of a hex color."""
-    r, g, b = mcolors.to_rgb(color)
-    return mcolors.to_hex((max(0, r - amount), max(0, g - amount), max(0, b - amount)))
-
-
-def lighten(color: str, amount: float = 0.2) -> str:
-    """Return a slightly lighter version of a hex color."""
-    r, g, b = mcolors.to_rgb(color)
-    return mcolors.to_hex((min(1, r + amount), min(1, g + amount), min(1, b + amount)))
 
 
 def panel(

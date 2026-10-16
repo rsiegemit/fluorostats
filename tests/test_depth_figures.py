@@ -264,3 +264,19 @@ def test_retention_divides_by_the_covered_width_not_the_window(tmp_path, last_ax
     row["result"]["auc"]["0_100um"].update(normalized=50.0, covered_um=50.0)
     plot_retention_multiwindow([row], {"A": "#3F6AB3"}, windows, tmp_path / "r", title="t")
     assert [p.get_height() for p in last_axes().patches] == [1.0, 1.0]
+
+
+def test_depth_groups_get_distinct_colours_unless_the_manifest_sets_them():
+    # GEN-1: unnamed materials all took one grey, and "GelMA-CMCMA" took GelMA's blue
+    from fluorostats.depth_figures import group_colours
+
+    groups = [
+        {"name": "GelMA"},
+        {"name": "GelMA-CMCMA"},
+        {"name": "PEG"},
+        {"name": "Alginate", "color": "#123456"},
+    ]
+    colours = group_colours(groups)
+    assert colours["GelMA"] == material_color("GelMA")
+    assert colours["Alginate"] == "#123456"
+    assert len(set(colours.values())) == 4

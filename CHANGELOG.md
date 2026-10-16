@@ -109,6 +109,10 @@ CLI and drivers
   replace them) and records which tool wrote the folder; files it wrote earlier are
   replaced and named (relative to the output folder). A folder at an output name is
   refused with a message, and a symlink there is removed, never written through.
+- **Depth groups get distinct default colours**: groups not named exactly GelMA,
+  Hybrid or Control all took one grey, and a name containing one of those (e.g.
+  "GelMA-CMCMA") took its colour. `pubfig.group_colors` now gives every other group
+  the next unused palette colour; `material_color` matches exact names only.
 - **One unreadable file no longer stops `quant2d`/`quant3d`**: failures go to
   `failures.csv`, the rest are measured, and the command exits 1. Errors from bad
   manifests or options print as messages, not tracebacks; a failed run leaves no
