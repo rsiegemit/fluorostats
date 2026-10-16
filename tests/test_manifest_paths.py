@@ -157,3 +157,23 @@ def test_a_manifest_in_the_working_directory_is_not_ambiguous(tmp_path, monkeypa
     m = depth_batch.load_manifest("m.json")
     assert m["groups"][0]["stacks"][0]["path"] == "s0.tif"
     assert resolve_path(mp, "s0.tif") == str(tmp_path / "s0.tif")
+
+
+def test_an_output_folder_in_the_working_directory_does_not_block_a_run(tmp_path, monkeypatch):
+    """output_dir need not exist yet: a same-named folder in the working directory
+    is not an old-rule input, so it must not be refused."""
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    manifest = _depth_manifest(sub)
+    (tmp_path / "out").mkdir()
+    monkeypatch.chdir(tmp_path)
+    loaded = depth_batch.load_manifest(manifest)
+    assert loaded["output_dir"] == str(sub / "out")
+
+
+def test_a_non_string_path_is_left_for_validation_to_report(tmp_path):
+    """A stack path of the wrong type reaches the manifest checks unchanged."""
+    m = json.loads(_depth_manifest(tmp_path).read_text(encoding="utf-8"))
+    m["groups"][0]["stacks"][0]["path"] = 5
+    with pytest.raises(ValueError, match="path"):
+        depth_batch.load_manifest(_write(tmp_path / "bad.json", m))

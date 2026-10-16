@@ -57,19 +57,26 @@ def _repeated(values: list) -> list:
     return [v for i, v in enumerate(present) if v in present[i + 1 :] and v not in present[:i]]
 
 
-def resolve_path(manifest_path: str | Path | None, value: str) -> str:
+def resolve_path(manifest_path: str | Path | None, value: str, *, check_cwd: bool = True) -> str:
     """Where a manifest's path ``value`` points: unchanged when absolute or when there
     is no manifest file (``manifest_path`` None: a dict manifest's paths are used as
     given, relative to the working directory), else joined to the manifest's folder.
 
     Raises ValueError when the manifest-relative path does not exist but ``value``
     does relative to the working directory (the rule before 0.9), naming both, so
-    a manifest written for the old rule fails instead of reading another file."""
+    a manifest written for the old rule fails instead of reading another file.
+    ``check_cwd=False`` skips that check, for an output folder (it need not exist,
+    so a same-named folder in the working directory says nothing)."""
     if manifest_path is None or Path(value).is_absolute():
         return value
     resolved = Path(manifest_path).parent / value
     here = Path(value)
-    if not resolved.exists() and here.exists() and resolved.resolve() != here.resolve():
+    if (
+        check_cwd
+        and not resolved.exists()
+        and here.exists()
+        and resolved.resolve() != here.resolve()
+    ):
         raise ValueError(
             f"path {value!r} is resolved against the manifest's folder, where "
             f"{resolved} does not exist; it exists relative to the current directory "
@@ -82,8 +89,8 @@ def resolve_path(manifest_path: str | Path | None, value: str) -> str:
 def resolve_paths(m: dict, manifest_path: str | Path) -> dict:
     """``m`` with its path fields (``output_dir``, each group's ``background`` and
     each stack's ``path``) resolved by `resolve_path`; a field of the wrong type is
-    kept as given for the checks to report. Raises ValueError listing every path
-    that exists only relative to the working directory."""
+    kept as given for the checks to report. Raises ValueError listing every input
+    path that exists only relative to the working directory."""
     problems: list[str] = []
 
     def one(v):
@@ -97,8 +104,8 @@ def resolve_paths(m: dict, manifest_path: str | Path) -> dict:
 
     groups = [_resolve_group(grp, one) if isinstance(grp, dict) else grp for grp in m["groups"]]
     out = {**m, "groups": groups}
-    if "output_dir" in m:
-        out["output_dir"] = one(m["output_dir"])
+    if isinstance(m.get("output_dir"), str):  # an output: no working-directory check
+        out["output_dir"] = resolve_path(manifest_path, m["output_dir"], check_cwd=False)
     if problems:
         raise ValueError("manifest paths:\n  - " + "\n  - ".join(problems))
     return out
