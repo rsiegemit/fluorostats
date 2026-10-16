@@ -169,7 +169,6 @@ _DEPTH_FIELDS = (
     "fit_r2_threshold",
     "parametric",
     "auc_windows_um",
-    "auc_window_um",
     "output_dir",
     "groups",
 )
@@ -178,10 +177,13 @@ _DEPTH_STACK_FIELDS = ("label", "path", "role")
 
 
 def check_depth(m: dict) -> list[str]:
-    """Problems with a depth manifest (`depth_batch`; defaults already filled, a lone
-    ``auc_window_um`` already folded into ``auc_windows_um``), apart from group
-    colours, which `depth_batch` checks with matplotlib."""
-    problems = unknown_keys("manifest", m, _DEPTH_FIELDS)
+    """Problems with a depth manifest (`depth_batch`; defaults already filled), apart
+    from group colours, which `depth_batch` checks with matplotlib."""
+    # the removed singular window key is named with its replacement, not as unknown
+    known = {k: v for k, v in m.items() if k != "auc_window_um"}
+    problems = unknown_keys("manifest", known, _DEPTH_FIELDS)
+    if "auc_window_um" in m:
+        problems.append("'auc_window_um' was removed; use 'auc_windows_um': [[z0, z1]]")
     if not is_int(m["channel"]) or m["channel"] < 0:
         problems.append(f"channel must be a non-negative integer, got {m['channel']!r}")
     reducers = tuple(REDUCERS)
@@ -198,8 +200,6 @@ def check_depth(m: dict) -> list[str]:
     r2 = m["fit_r2_threshold"]
     if not (is_number(r2) and 0 <= r2 <= 1):
         problems.append(f"fit_r2_threshold must be a number in [0, 1], got {r2!r}")
-    if "auc_window_um" in m:  # `depth_batch.load_manifest` folds a lone singular in
-        problems.append("give auc_windows_um or the older auc_window_um, not both")
     problems += _window_problems(m["auc_windows_um"])
     return problems + check_groups(
         m["groups"],

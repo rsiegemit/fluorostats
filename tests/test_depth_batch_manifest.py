@@ -5,26 +5,14 @@ import json
 
 import pytest
 
-from depth_data import decay_stack, flat_stack
 from fluorostats.depth_batch import load_manifest
 
 
-def test_load_manifest_singular_auc_window(tmp_path):
-    """auc_window_um (singular) should be accepted and wrapped into windows."""
-    blank = tmp_path / "blank.tif"
-    flat_stack(blank)
-    s0 = tmp_path / "s0.tif"
-    decay_stack(s0)
-    m = {
-        "auc_window_um": [0, 10],  # singular (back-compat), NOT auc_windows_um
-        "output_dir": str(tmp_path / "out"),
-        "groups": [{"name": "A", "stacks": [{"label": "s0", "path": str(s0)}]}],
-    }
-    mpath = tmp_path / "manifest.json"
-    mpath.write_text(json.dumps(m))
-    with pytest.warns(FutureWarning, match="'auc_window_um' is deprecated; use 'auc_windows_um'"):
-        loaded = load_manifest(mpath)
-    assert loaded["windows"] == [(0.0, 10.0)]
+def test_load_manifest_rejects_the_removed_singular_window_key(tmp_path):
+    """auc_window_um (singular) was removed: refused, naming its replacement, not ignored."""
+    msg = _manifest_errors(tmp_path, auc_window_um=[0, 10])
+    assert "'auc_window_um' was removed; use 'auc_windows_um'" in msg
+    assert "unknown field 'auc_window_um'" not in msg  # one problem, not two
 
 
 def test_load_manifest_no_groups_raises(tmp_path):
@@ -81,16 +69,6 @@ def test_load_manifest_rejects_malformed_windows(tmp_path, windows, expected):
     msg = _manifest_errors(tmp_path, auc_windows_um=windows)
     assert expected in msg
     assert "e.g. [[0, 100], 'full']" in msg  # names the expected form
-
-
-def test_load_manifest_rejects_malformed_singular_window(tmp_path):
-    assert "entry 'deep' must be" in _manifest_errors(tmp_path, auc_window_um="deep")
-
-
-def test_load_manifest_refuses_both_window_fields(tmp_path):
-    # Regression: auc_window_um was silently ignored when auc_windows_um was given too.
-    msg = _manifest_errors(tmp_path, auc_window_um=[0, 50], auc_windows_um=[[0, 100]])
-    assert "give auc_windows_um or the older auc_window_um, not both" in msg
 
 
 @pytest.mark.parametrize(

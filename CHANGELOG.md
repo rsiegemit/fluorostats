@@ -184,9 +184,8 @@ CLI and drivers
 - **Dependency floors raised to versions that work**: numpy >= 1.25, scikit-image
   >= 0.23, matplotlib >= 3.8, skan >= 0.12 (at the old floors 3D skeleton metrics
   were NaN and other functions failed).
-- The manifest's `auc_window_um` is deprecated
-  and warns. `quant2d`/`quant3d`
-  plots follow the one figure style (their colours and fonts change).
+- `quant2d`/`quant3d` plots follow the one figure style (their colours and fonts
+  change).
 - The maxima count is described as what it is (local maxima above a fraction of the
   image maximum); no claim of agreement with the Fiji Live/Dead macro.
 - Version 0.9.0.dev0 on the development branch.
@@ -229,6 +228,9 @@ old spelling now raises instead of resolving to its replacement.
   argument), which had no effect: drop it.
 - `pubfig.panel(dx=, dy=)`, which were ignored: use `pad=(x, y)` (points).
 - The helper module `fluorostats.deprecation` (nothing left to keep working).
+- The depth manifest's singular `auc_window_um`: a manifest that gives it is refused
+  by validation with an error naming the replacement, `"auc_windows_um": [[z0, z1]]`
+  (it is never silently ignored).
 
 ### Benchmarks and examples
 - Fig 2 (d) plots measured deep-learning lines on the BBBC024 crowding series

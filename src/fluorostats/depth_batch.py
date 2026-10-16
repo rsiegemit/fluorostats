@@ -53,8 +53,8 @@ Manifest schema (all fields except groups/stacks are optional)::
     }
 
 ``auc_windows_um`` accepts ``[z0, z1]`` pairs and/or the string ``"full"``
-(each stack's entire acquired range); the singular ``auc_window_um`` is
-deprecated (still read, with a FutureWarning). ``role`` defaults to ``"primary"``; ``aux``
+(each stack's entire acquired range); the singular ``auc_window_um`` was removed
+and is refused. ``role`` defaults to ``"primary"``; ``aux``
 stacks are exported and drawn faintly but excluded from the group mean/SEM
 curves and AUC statistics, so short or differently-acquired stacks can ride
 along without biasing the matched comparison.
@@ -104,15 +104,8 @@ def load_manifest(path: Path) -> dict:
     m.setdefault("fit_offset", False)
     m.setdefault("fit_r2_threshold", depth.FIT_R2_THRESHOLD)
     m.setdefault("parametric", False)
-    # Accept the deprecated singular `auc_window_um` or plural `auc_windows_um`; a
-    # manifest giving both keeps both, and validation refuses it.
-    if "auc_window_um" in m:
-        # exception STY-4: a FutureWarning, which is shown by default, because the
-        # people who write manifests run the CLI and never see a DeprecationWarning.
-        msg = "depth manifest: 'auc_window_um' is deprecated; use 'auc_windows_um': [[z0, z1]]"
-        warnings.warn(msg, FutureWarning, stacklevel=2)
-    if "auc_windows_um" not in m:  # default [0, 100] µm: no benchmark chose it (REU-5, open)
-        m["auc_windows_um"] = [m.pop("auc_window_um", [0.0, 100.0])]
+    # default [0, 100] µm: no benchmark chose it (REU-5, open)
+    m.setdefault("auc_windows_um", [[0.0, 100.0]])
     _validate(m)
     m["windows"] = [depth.parse_window(w) for w in m["auc_windows_um"]]
     return m
