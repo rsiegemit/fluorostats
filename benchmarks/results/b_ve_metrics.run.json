@@ -1,0 +1,18 @@
+{
+  "table": "b_ve_metrics.csv",
+  "producer": "benchmarks/producers/b_ve_metrics.py",
+  "params": {
+    "method": "auto",
+    "auto_resolved": "li",
+    "min_size": 50,
+    "small_object_rule": "keep >= min_size"
+  },
+  "git_commit": "4c57fe2",
+  "versions": {
+    "python": "3.12.12",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}
