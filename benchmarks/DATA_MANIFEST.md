@@ -49,6 +49,14 @@ URLs verified 2026-09-24.
   in ImageJ with Bio-Formats (Fiji's jars) on the `synthetic` images; keep its
   `Summary.csv` and a `versions.json` naming the ImageJ, Bio-Formats and Java
   versions and the parameters.
+- **BBBC039 deep-learning predictions** (`BBBC039_dl/<tool>/`, read by
+  `b_dl_eval.py`): all 200 BBBC039 images through
+  `cluster/bbbc024_dl_infer.py {stardist,cellpose,omnipose} 2d`, each folder with
+  its `versions.json`.
+- **Fiji z-profiles** (`zprofile_fiji/<stack>.csv`, read by `b_zprofile_fiji.py`):
+  `cluster/fiji_zprofile.ijm` run in ImageJ (Fiji's jars, under a display) on
+  `BBBC024/image-final_0000.tif` and the VesselExpress
+  `VEA_0.25mm^3/Raw/210426_592-1-lepleft_500x_VEA.tif` stack.
 - **One-CPU segmentation timing** (`BBBC039_timing/`, read by `b_seg_timing.py`): in
   one cluster job, on one node, the same 10 images through `cluster/fs_time.py`
   (fluorostats installed from a commit, named in `fs_commit.txt`) and through

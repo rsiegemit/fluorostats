@@ -20,7 +20,7 @@ from fluorostats.stats import bootstrap_mean_ci
 SEED = 0
 N_BOOT = 10000
 DL = {"StarDist": ("stardist_eval.csv", "stardist_f1"), "Cellpose": ("cellpose_eval.csv", "cellpose_f1"),
-      "Omnipose": ("omnipose_eval.csv", "thirddl_f1")}
+      "Omnipose": ("omnipose_eval.csv", "omnipose_f1")}
 
 
 def dl_scores() -> dict[str, pd.DataFrame]:

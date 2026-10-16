@@ -86,6 +86,9 @@ reproduces it byte for byte.
 | `b4_reaver_ranking_perimage.csv` | `b4_reaver_ranking_perimage.py` | REAVER | EXACT |
 | `b_clustering_curve.csv` | `b_clustering_curve.py` | BBBC024 (+ c25/c50/c75) | EXACT |
 | `b_seg_timing.csv` | `b_seg_timing.py` | the timings in `BBBC039_timing/` (`DATA_MANIFEST.md`) | wall-clock (one cluster CPU) |
+| `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv` | `b_dl_eval.py` | BBBC039 and the `BBBC039_dl/` predictions of `cluster/bbbc024_dl_infer.py` (`DATA_MANIFEST.md`) | EXACT given the predictions |
+| `b_clustering_heldout.csv` | `b_clustering_heldout.py` | BBBC024 (+ c25/c50/c75), volumes 6-15 | EXACT |
+| `b_zprofile_fiji.csv` | `b_zprofile_fiji.py` | the Fiji profiles in `zprofile_fiji/` (`cluster/fiji_zprofile.ijm`) and two public stacks | EXACT given the Fiji profiles |
 | `b_dl_determinism.csv` | `b_dl_determinism.py` | BBBC039 (first 10 images) and the 20-run StarDist/Cellpose predictions in `BBBC039_dl_repeat/` (`DATA_MANIFEST.md`) | EXACT given the predictions |
 | `b_stardist3d_tuning.csv` | `b_stardist3d_tuning.py` (run before `b_clustering_curve_dl.py`) | BBBC024 volumes 5-9 and the StarDist per-plane predictions in `BBBC024_dl/sd_grid/` | EXACT given the predictions |
 | `b_clustering_curve_dl.csv`, `b_clustering_curve_2d.csv` | `b_clustering_curve_dl.py` | BBBC024 (+ c25/c50/c75) and the `BBBC024_dl/` predictions of `cluster/bbbc024_dl_infer.py` (`DATA_MANIFEST.md`) | EXACT given the predictions |
@@ -131,12 +134,12 @@ carry are gone.
 
 | table(s) | why | provenance |
 |---|---|---|
-| `stardist_eval.csv` | deep-learning inference run on the GPU/ROCm cluster | StarDist `2D_versatile_fluo` (pretrained) on all 200 BBBC039 images; per-image count and F1@IoU 0.5 against the same watershed-reconstructed GT as `producers/common.py` |
-| `cellpose_eval.csv` | as above | Cellpose (the cluster script loads `CellposeModel(gpu=True)` without naming a model; model and version were not recorded), `diameter=None`, `channels=[0,0]`; same GT and matcher |
-| `omnipose_eval.csv` | as above | Omnipose `cyto2_omni` (`omni=True`), same images, GT and matcher (columns named `thirddl_*`) |
 | `fig6_*.csv` (6 tables) | collaborator data under a data-use arrangement; the producing scripts are excluded with the data | see the next section |
 
-The cluster scripts that produced the DL tables are not part of this repository.
+The deep-learning inference itself runs on a cluster node
+(`cluster/bbbc024_dl_infer.py`); its label outputs are scored here by the
+producers above, and each table's `.run.json` records the model, its weights file
+and SHA-256, and the library versions.
 
 ## Collaborator application tables (`fig6_*`)
 

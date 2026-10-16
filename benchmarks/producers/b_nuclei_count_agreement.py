@@ -23,7 +23,7 @@ from fluorostats.agreement import bland_altman, lins_ccc
 MIN_SIZE = 20
 DL = {"StarDist": ("stardist_eval.csv", "stardist_count", "stardist_f1"),
       "Cellpose": ("cellpose_eval.csv", "cellpose_count", "cellpose_f1"),
-      "Omnipose": ("omnipose_eval.csv", "thirddl_count", "thirddl_f1")}
+      "Omnipose": ("omnipose_eval.csv", "omnipose_count", "omnipose_f1")}
 
 
 def counts() -> pd.DataFrame:

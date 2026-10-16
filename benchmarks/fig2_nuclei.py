@@ -1,4 +1,4 @@
-"""Figure 2 — Nucleus segmentation and the deep-learning boundary (a-f)."""
+"""Figure 2 — Nucleus segmentation against deep learning, from separated to crowded nuclei (a-f)."""
 import sys
 import glob
 import json
@@ -298,7 +298,7 @@ short_txt = f" ({'; '.join(short_n)}: images where the threshold failed are not 
 def change(m):
     """'falls from a to b' / 'rises from a to b' for a panel (d) row between c00 and c75."""
     a, b = cc.loc[m, "c00"], cc.loc[m, "c75"]
-    return f"{'falls' if b < a else 'rises' if b > a else 'stays'} from {a:.2f} to {b:.2f}"
+    return f"{'falls' if b < a else 'rises' if b > a else 'stays'} from {a:.3f} to {b:.3f}"
 
 
 sd = DL3D["stardist_tuned"]
@@ -310,7 +310,7 @@ N_2D = int(pd.read_csv(R/"b_clustering_curve_2d.csv")["n"].min())
 def dl_span(m):
     """'F1 a-b' over the four crowding levels for a deep-learning row of panel (d)."""
     v = dl.loc[m, LEVELS]
-    return f"F1 {v.min():.2f}-{v.max():.2f}" if v.min() != v.max() else f"F1 {v.min():.2f}"
+    return f"F1 {v.min():.3f}-{v.max():.3f}" if v.min() != v.max() else f"F1 {v.min():.3f}"
 
 
 def worst_gap(m):
@@ -318,13 +318,13 @@ def worst_gap(m):
 
 
 def gap_txt(m):
-    return (f"{-gap3d[m]['c00']:.2f} (3D) and {-gap2d[m]['c00']:.2f} (2D) without overlap and "
-            f"{-gap3d[m]['c75']:.2f} and {-gap2d[m]['c75']:.2f} at 75% overlap")
+    return (f"{-gap3d[m]['c00']:.3f} (3D) and {-gap2d[m]['c00']:.3f} (2D) without overlap and "
+            f"{-gap3d[m]['c75']:.3f} and {-gap2d[m]['c75']:.3f} at 75% overlap")
 
 
 classical = cc.drop(index=list(FS_LINES))
 classical = classical[classical[LEVELS].sum(axis=1) > 0]   # the rows panel (d) draws
-cap = ("Figure 2 | Nucleus segmentation and the deep-learning boundary. "
+cap = ("Figure 2 | Nucleus segmentation against deep learning, from separated to crowded nuclei. "
  f"(a) Instance F1 (IoU {IOU}) on BBBC039 (n={N_A} images), dots with 95% bootstrap CIs "
  f"({N_BOOT:,} resamples of per-image scores){short_txt}. The eight classical thresholds (Otsu, Li, "
  "Isodata, Triangle, Yen, Mean, Minimum, watershed) are fluorostats CONFIGURATIONS, not "
