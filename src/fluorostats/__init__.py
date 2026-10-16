@@ -46,14 +46,13 @@ Public API surface, grouped by module:
     Scheirer-Ray-Hare 2-way non-parametric ANOVA.
   - ``power`` — bootstrap power and power curves.
   - ``render3d`` — isosurface mesh (light/dark, smoothed, shaded) and voxel
-    cloud (re-exports the ``projections`` panels).
+    cloud.
   - ``projections`` — 2D MIP panels: grey MIP with mask overlay, two-channel
     live/dead MIP, MIP grid, depth-coded MIP, and top/bottom layer split.
   - ``plots`` — bar/box/strip plots, summary panels, effect-size heatmaps,
     forest plots, modality panels.
   - ``pubfig`` — the one figure style: named rcParams themes (compact, house),
-    palettes, panel/image helpers and the figure writer; ``style`` keeps its
-    earlier names as a thin layer over it.
+    palettes, panel/image helpers and the figure writer.
   - ``qc`` — segmentation QC overlays.
   - ``report`` — per-condition aggregation.
 """
@@ -96,7 +95,6 @@ _LAZY = {
     "projections",
     "plots",
     "pubfig",
-    "style",
     "report",
 }
 

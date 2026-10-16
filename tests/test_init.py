@@ -38,7 +38,6 @@ def test_figure_and_driver_modules_load_on_first_use():
         "depth_contrasts",
         "depth_batch",
         "viability_batch",
-        "style",
         "report",
     ):
         assert getattr(fluorostats, name).__name__ == f"fluorostats.{name}"

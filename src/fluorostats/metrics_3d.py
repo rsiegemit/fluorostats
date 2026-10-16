@@ -14,15 +14,6 @@ import numpy as np
 from scipy.ndimage import label
 from skimage.measure import euler_number
 
-from . import skeleton
-from .deprecation import moved_names
-
-# Deprecated names: skeleton morphometry lives in fluorostats.skeleton; these resolve
-# there with a DeprecationWarning, for one release.
-__getattr__ = moved_names(
-    __name__, ("skeleton_metrics", "prune_skeleton", "n_junction_nodes"), skeleton
-)
-
 
 def volume_fraction(mask: np.ndarray) -> float:
     """Fraction of voxels that are foreground (``mask > 0``), in [0, 1] (not a percent)."""

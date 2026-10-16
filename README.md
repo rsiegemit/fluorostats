@@ -199,7 +199,8 @@ FluoroStats can also be used as a library for custom analysis workflows:
 from fluorostats.io import load_auto
 from fluorostats.preprocess import select_green_channel, denoise
 from fluorostats.segment import binarize
-from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
+from fluorostats.metrics_3d import volume_fraction, connectivity_metrics
+from fluorostats.skeleton import skeleton_metrics
 
 # Load any supported format (auto-detected)
 arr, meta = load_auto("my_sample.czi")

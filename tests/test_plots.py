@@ -483,16 +483,6 @@ def test_bar_figures_share_one_bar_and_jitter_style(tmp_path, kept_figures):
     assert caps(bar_ax) == caps(panel_ax) == [8.0, 8.0]  # capsize 4 -> 2 * 4 pt
 
 
-def test_plots_compute_pvalues_is_the_stats_function():
-    """Moved to stats; the plots name stays for existing callers, with a warning."""
-    from fluorostats import plots, stats
-
-    with pytest.warns(DeprecationWarning, match="plots.compute_pvalues is deprecated"):
-        assert plots.compute_pvalues is stats.compute_pvalues
-    with pytest.raises(AttributeError, match="no attribute 'nope'"):
-        plots.nope
-
-
 @pytest.fixture
 def kept_figure(monkeypatch):
     """Keep the figure a plot function saves open; yield a getter for it."""

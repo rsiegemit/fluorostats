@@ -176,7 +176,7 @@ CLI and drivers
   `viability.live_ratio`, `viability.live_dead_channels`, `qc.overlay_rgb`,
   `io.read_voxel_size`, `io.FORMATS`, `io.DIRECTORY_FORMATS`, `pubfig` (one figure
   style module with themes, `save_figure`, `TEXT_WIDTH_IN`), `depth_figures`,
-  `depth_contrasts`, `projections` (2D MIP panels, moved from `render3d`, which re-exports them), `cli_paths` (CLI input discovery and output hygiene), `manifest`, `deprecation`, `skeleton.UNMEASURED_METRICS`.
+  `depth_contrasts`, `projections` (2D MIP panels, moved from `render3d`), `cli_paths` (CLI input discovery and output hygiene), `manifest`, `deprecation`, `skeleton.UNMEASURED_METRICS`.
 - Type checking (mypy) and a CI workflow (ruff lint and format, mypy, the test
   suite at 100% coverage on Python 3.10-3.13); `ruff` and `mypy` pinned in `dev`.
 
@@ -184,9 +184,8 @@ CLI and drivers
 - **Dependency floors raised to versions that work**: numpy >= 1.25, scikit-image
   >= 0.23, matplotlib >= 3.8, skan >= 0.12 (at the old floors 3D skeleton metrics
   were NaN and other functions failed).
-- `fluorostats.style`, the `render3d` MIP panels, the `depth_batch` window/figure
-  helpers, `pubfig.panel(dx=, dy=)` and the manifest's `auc_window_um` are deprecated
-  and warn (use `pubfig`, `projections`, `depth`/`depth_figures`). `quant2d`/`quant3d`
+- `pubfig.panel(dx=, dy=)` and the manifest's `auc_window_um` are deprecated
+  and warn. `quant2d`/`quant3d`
   plots follow the one figure style (their colours and fonts change).
 - The maxima count is described as what it is (local maxima above a fraction of the
   image maximum); no claim of agreement with the Fiji Live/Dead macro.
@@ -201,15 +200,29 @@ CLI and drivers
 - **`live_dead_by_count` returns one flat set of keys in every mode** (n_live, n_dead,
   viability, consensus, spread, method/reason per channel, and per-method counts);
   `by_method` (method "all") is kept but deprecated.
-- `fluorostats.style` is a thin layer over `pubfig`; `fluorostats.io` is split into
-  `io`, `io_vendors` and `io_canonical`; `plots.compute_pvalues` is
-  `stats.compute_pvalues`. Every existing public name keeps working.
+- `fluorostats.io` is split into `io`, `io_vendors` and `io_canonical`;
+  `compute_pvalues` moved from `plots` to `stats`.
 - `keyence.load_keyence_stack` returns `voxel_size_um`; its `px_um`/`z_step_um`/
   `vox_*` keys are deprecated.
 - Metric labels: `n_junctions` is "Junction-to-Junction Branches".
 - **An output folder written before 0.9 needs `--overwrite` once**: its
   `run_config.json` names no tool, so a rerun refuses it as not this tool's (the
   message says so); after one `--overwrite` run the folder is recorded as the tool's.
+
+### Removed
+Names deprecated earlier in this cycle are gone (a breaking change before 1.0); the
+old spelling now raises instead of resolving to its replacement.
+- Module `fluorostats.style`: use `fluorostats.pubfig` (`style.apply_style(font_scale=)`
+  -> `pubfig.apply_style("house", font_scale=)`; `PALETTE`, `MATERIAL_COLORS`,
+  `DARK_PALETTE`, `material_color`, `darken`, `lighten` -> the same names in `pubfig`).
+- `render3d.mip_overlay`, `live_dead_mip`, `mip_grid`, `depth_coded_mip`,
+  `layer_split_mip`: use `fluorostats.projections`.
+- `depth_batch.parse_window`, `window_label`, `window_title`, `window_bounds`: use
+  `fluorostats.depth`; `depth_batch.plot_depth_curves`, `plot_auc`,
+  `plot_retention_multiwindow`: use `fluorostats.depth_figures`.
+- `metrics_3d.skeleton_metrics`, `prune_skeleton`, `n_junction_nodes`: use
+  `fluorostats.skeleton`.
+- `plots.compute_pvalues`: use `stats.compute_pvalues`.
 
 ### Benchmarks and examples
 - Fig 2 (d) plots measured deep-learning lines on the BBBC024 crowding series

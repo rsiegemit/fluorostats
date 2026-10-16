@@ -1,4 +1,4 @@
-"""Tests for fluorostats.skeleton — pruning, node counting, backward compat."""
+"""Tests for fluorostats.skeleton — pruning and node counting."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from fluorostats.skeleton import (
     prune_skeleton,
     n_junction_nodes,
 )
-from fluorostats import metrics_3d, skeleton
+from fluorostats import skeleton
 
 
 def _plus(n=64, a=20):
@@ -52,19 +52,6 @@ def test_plus_has_one_junction_node_and_four_branches():
     m = skeleton_metrics(_plus(), voxel_size_um=(1, 1, 1))
     assert m["n_branches"] == 4
     assert m["n_junction_nodes"] == 1
-
-
-def test_reexport_matches_module_and_warns():
-    """metrics_3d.skeleton_metrics is skeleton.skeleton_metrics, with a DeprecationWarning."""
-    for name, func in (
-        ("skeleton_metrics", skeleton_metrics),
-        ("prune_skeleton", prune_skeleton),
-        ("n_junction_nodes", n_junction_nodes),
-    ):
-        with pytest.warns(DeprecationWarning, match=f"metrics_3d.{name} is deprecated"):
-            assert getattr(metrics_3d, name) is func
-    with pytest.raises(AttributeError, match="no attribute 'nope'"):
-        metrics_3d.nope
 
 
 # ---------------------------------------------------------------------------

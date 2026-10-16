@@ -71,7 +71,6 @@ import numpy as np
 from matplotlib.colors import is_color_like
 
 from . import depth, depth_figures, stats
-from .deprecation import moved_names
 from .io import load_volume
 from .manifest import check_depth, require_groups
 from . import pubfig, report
@@ -86,24 +85,6 @@ __all__ = [
     "write_auc_csv",
     "write_group_summary_csv",
 ]
-
-# The window helpers and figures live in `depth` / `depth_figures`; the names still
-# resolve here for one release, with a DeprecationWarning (STY-4).
-_moved_windows = moved_names(
-    __name__, ("parse_window", "window_label", "window_title", "window_bounds"), depth
-)
-_moved_figures = moved_names(
-    __name__, ("plot_depth_curves", "plot_auc", "plot_retention_multiwindow"), depth_figures
-)
-
-
-def __getattr__(name: str):
-    """A moved window helper or figure function, with its DeprecationWarning."""
-    try:
-        return _moved_windows(name)
-    except AttributeError:
-        return _moved_figures(name)
-
 
 # ---------------------------------------------------------------------------
 # Manifest handling

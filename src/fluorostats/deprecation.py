@@ -1,11 +1,10 @@
-"""Keeping renamed keyword arguments and moved names working for one deprecation cycle."""
+"""Keeping renamed keyword arguments working for one deprecation cycle."""
 
 from __future__ import annotations
 
 import functools
 import warnings
-from types import ModuleType
-from typing import Any, Callable
+from typing import Callable
 
 
 def renamed_keyword(old: str, new: str) -> Callable:
@@ -33,23 +32,4 @@ def renamed_keyword(old: str, new: str) -> Callable:
     return wrap
 
 
-def moved_names(module: str, names: tuple[str, ...], target: ModuleType) -> Callable[[str], Any]:
-    """A module-level ``__getattr__`` for ``module``: each of ``names`` resolves to
-    the same name in ``target``, with a DeprecationWarning; anything else is the
-    usual AttributeError."""
-
-    def __getattr__(name: str) -> Any:
-        if name not in names:
-            raise AttributeError(f"module {module!r} has no attribute {name!r}")
-        short = module.rsplit(".", 1)[-1]
-        warnings.warn(
-            f"{short}.{name} is deprecated; use {target.__name__}.{name}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return getattr(target, name)
-
-    return __getattr__
-
-
-__all__ = ["renamed_keyword", "moved_names"]
+__all__ = ["renamed_keyword"]

@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 
 from . import stats
-from .deprecation import moved_names
 from .pubfig import PALETTE, save_figure
 
 
@@ -557,8 +556,3 @@ def modality_panel(
     if out_path is not None:
         save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
-
-
-# `compute_pvalues` moved to `stats` (it is statistics, not plotting); the plots
-# name resolves there with a DeprecationWarning, for one release.
-__getattr__ = moved_names(__name__, ("compute_pvalues",), stats)
