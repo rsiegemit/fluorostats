@@ -163,3 +163,6 @@ modules as everything above. These tables were produced on 2026-09-24 (commit
 784729c) with the depth and viability drivers of that version and are not
 regenerated here (the raw stacks are not deposited), so they lack columns added
 since (`voxel_size_source`, channel names, flat count keys) and carry no `.run.json`.
+They were not re-run under the 0.9 measurement fixes that could touch them (the
+small-object rule, watershed-split counting, the Olympus reader; `CHANGELOG.md`
+0.9.0), so they record the 0.8.0 analysis.
