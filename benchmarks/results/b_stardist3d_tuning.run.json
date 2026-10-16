@@ -1,0 +1,50 @@
+{
+  "table": "b_stardist3d_tuning.csv",
+  "producer": "benchmarks/producers/b_stardist3d_tuning.py",
+  "params": {
+    "tune_volumes": "5-9 of each set",
+    "levels": {
+      "c00": "BBBC024",
+      "c25": "BBBC024_c25",
+      "c50": "BBBC024_c50",
+      "c75": "BBBC024_c75"
+    },
+    "prob_thresh": [
+      "default",
+      "0.6",
+      "0.7"
+    ],
+    "normalise": [
+      "volume",
+      "plane"
+    ],
+    "stitch_iou": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.7
+    ],
+    "min_planes": [
+      0,
+      5,
+      10,
+      20,
+      30,
+      40,
+      50,
+      60
+    ],
+    "selection": "max mean F1 over all tuning volumes; ties first in grid order",
+    "scorer": "validate.instance_f1"
+  },
+  "git_commit": "e6889fa",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0.dev0"
+  }
+}
