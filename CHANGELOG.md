@@ -219,6 +219,9 @@ CLI and drivers
   segmentation timings in (a) come from one cluster CPU for all three methods
   (`b_seg_timing`); the typed deep-learning timing constants are removed from the
   timing tables.
+- `ve_crops.npz` (Fig 3b) has a producer, `producers/ve_crops.py`: its crops were
+  recovered as 3-slice maximum projections around the mid plane, centred 400 px,
+  of two VesselExpress VEA volumes, and the producer rebuilds every array exactly.
 - The external-viability peak-count comparator is named `skimage_peakcount` (it is a
   direct scikit-image peak count with the library's parameters, not the Fiji macro);
   figure and docs wording follow.

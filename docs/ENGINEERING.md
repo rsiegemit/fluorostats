@@ -201,7 +201,6 @@ Now compliant (measured, not estimated):
 
 Open, each needing an owner decision:
 
-- [ ] `benchmarks/results/ve_crops.npz` (a display panel) has no producer.
 - [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default
   (existing manifests rely on it); `examples/keyence_tube_analysis.py` and
   `multi_condition_pipeline.py` are dataset-specific and could become manifest runs.

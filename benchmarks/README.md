@@ -117,6 +117,7 @@ raw data and are re-run offline:
 | `b_homogeneity_examples.csv` | `b_homogeneity_examples.py` | none (synthetic, seed 1) | EXACT |
 | `b_vascular_sproutangio_stats.csv` | `b_vascular_sproutangio_stats.py` | `b_vascular_sproutangio_multi.csv` | EXACT |
 | `b_ve_agreement.csv` | `b_ve_agreement.py` | `b_ve_metrics.csv` | EXACT |
+| `ve_crops.npz`, `ve_crops.csv` | `ve_crops.py` | VesselExpress `VEA_0.25mm^3` volumes `210426_592-1-lepleft/lepright` | EXACT (array contents; the `.npz` zip header carries a write time). Exception DAT-1: it holds two raw float32 crops of public CC-BY-4.0 data, kept so Fig 3 renders without the ~250 MB volumes |
 | `b_viability_external_agreement.csv` | `b_viability_external_agreement.py` | `b_viability_external.csv` | EXACT |
 
 Timing tables are wall-clock measurements: a re-run reproduces the relative cost of
@@ -133,7 +134,6 @@ carry are gone.
 | `stardist_eval.csv` | deep-learning inference run on the GPU/ROCm cluster | StarDist `2D_versatile_fluo` (pretrained) on all 200 BBBC039 images; per-image count and F1@IoU 0.5 against the same watershed-reconstructed GT as `producers/common.py` |
 | `cellpose_eval.csv` | as above | Cellpose (the cluster script loads `CellposeModel(gpu=True)` without naming a model; model and version were not recorded), `diameter=None`, `channels=[0,0]`; same GT and matcher |
 | `omnipose_eval.csv` | as above | Omnipose `cyto2_omni` (`omni=True`), same images, GT and matcher (columns named `thirddl_*`) |
-| `ve_crops.npz` | image crops, not a measurement; no producer script exists. exception DAT-1: it holds two raw float32 planes; they come from public CC-BY-4.0 data (`DATA_MANIFEST.md`), and without a producer the crops cannot be rebuilt from a download | two 400×400 crops of VesselExpress volumes: raw plane, VesselExpress binary, fluorostats `binarize(method="auto")` mask |
 | `fig6_*.csv` (6 tables) | collaborator data under a data-use arrangement; the producing scripts are excluded with the data | see the next section |
 
 The cluster scripts that produced the DL tables are not part of this repository.
