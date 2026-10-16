@@ -1,0 +1,20 @@
+{
+  "table": "b_zprofile_fiji.csv",
+  "producer": "benchmarks/producers/b_zprofile_fiji.py",
+  "params": {
+    "fiji": "ImageJ 1.54p (Fiji), Plot Z-axis Profile, no selection",
+    "export_decimals": 9,
+    "stacks": {
+      "bbbc024_c00_0000": "BBBC024/image-final_0000.tif",
+      "vea_592-1-lepleft": "vesselexpress/Figure2C_E/VEA_0.25mm^3/Raw/210426_592-1-lepleft_500x_VEA.tif"
+    }
+  },
+  "git_commit": "9780b1b",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}

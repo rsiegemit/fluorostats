@@ -1,0 +1,25 @@
+{
+  "table": "b_clustering_heldout.csv",
+  "producer": "benchmarks/producers/b_clustering_heldout.py",
+  "params": {
+    "levels": {
+      "c00": "BBBC024",
+      "c25": "BBBC024_c25",
+      "c50": "BBBC024_c50",
+      "c75": "BBBC024_c75"
+    },
+    "volumes": "6-15 of each level (1-based)",
+    "min_size": 30,
+    "small_object_rule": "keep >= min_size",
+    "watershed_min_distance": 6,
+    "scorer": "validate.instance_f1"
+  },
+  "git_commit": "9780b1b",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}

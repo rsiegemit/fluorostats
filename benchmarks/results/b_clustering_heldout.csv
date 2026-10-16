@@ -1,0 +1,9 @@
+method,clustering,mean_F1,min_F1,count_min,count_max,gt_count_min,gt_count_max,n_volumes
+fluorostats(raw Otsu+CC),c00,0.967,0.923,19,20,20,20,10
+fluorostats(raw Otsu+CC),c25,0.599,0.375,12,18,20,20,10
+fluorostats(raw Otsu+CC),c50,0.329,0.071,8,13,20,20,10
+fluorostats(raw Otsu+CC),c75,0.258,0.08,5,13,20,20,10
+fluorostats_watershed,c00,0.998,0.976,20,21,20,20,10
+fluorostats_watershed,c25,0.985,0.927,20,21,20,20,10
+fluorostats_watershed,c50,1.0,1.0,20,20,20,20,10
+fluorostats_watershed,c75,0.995,0.976,20,21,20,20,10
