@@ -64,8 +64,8 @@ def test_viability_batch_runs_and_recovers_coverage_gradient(tmp_path):
 
     rows = list(csv.DictReader(open(per)))
     assert len(rows) == 6
-    sparse = np.mean([float(r["live_cov_pct"]) for r in rows if r["group"] == "sparse"])
-    dense = np.mean([float(r["live_cov_pct"]) for r in rows if r["group"] == "dense"])
+    sparse = np.mean([float(r["live_cov_frac"]) for r in rows if r["group"] == "sparse"])
+    dense = np.mean([float(r["live_cov_frac"]) for r in rows if r["group"] == "dense"])
     # more blobs -> higher live coverage (monotone direction recovered)
     assert dense > sparse
 
@@ -246,7 +246,7 @@ def test_single_stack_group_has_no_sem(tmp_path, capsys):
 
 
 def test_the_two_mip_columns_are_the_documented_definitions(tmp_path):
-    # live_cov_pct segments the intensity MIP; live_frac_mip projects the 3D mask.
+    # live_cov_frac segments the intensity MIP; live_frac_mip projects the 3D mask.
     import csv
     from fluorostats import viability
     from fluorostats.segment import binarize
@@ -258,7 +258,7 @@ def test_the_two_mip_columns_are_the_documented_definitions(tmp_path):
     live = vol[0].astype(np.float32)
     intensity_mip = viability.live_dead_fractions(live.max(0), **seg)["live_fraction"]
     mask_mip = binarize(live, **seg).max(0).mean()
-    assert float(row["live_cov_pct"]) == pytest.approx(100 * intensity_mip)
+    assert float(row["live_cov_frac"]) == pytest.approx(intensity_mip)
     assert float(row["live_frac_mip"]) == pytest.approx(mask_mip)
     cfg = json.loads((out / "run_config.json").read_text())
     assert cfg["mip_columns"] == viability_batch.MIP_COLUMNS
@@ -287,7 +287,7 @@ def test_channels_resolved_from_names_and_recorded(tmp_path, monkeypatch):
     (tmp_path / "r").mkdir()
     ref_out = viability_batch.run(_one_stack_manifest(tmp_path / "r"))
     ref = next(csv.DictReader(open(ref_out / "viability_per_stack.csv")))
-    assert row["live_cov_pct"] == ref["live_cov_pct"]  # the same live signal measured
+    assert row["live_cov_frac"] == ref["live_cov_frac"]  # the same live signal measured
 
 
 def test_unnamed_channels_fall_back_to_0_1_with_a_warning(tmp_path):
@@ -398,9 +398,8 @@ def test_seg_opening_disk_measures_single_slice_cells_in_3d(tmp_path):
     assert row["live_frac_3d"] > 0
 
 
-def test_coverage_is_reported_as_a_fraction_with_deprecated_percent_columns(tmp_path):
-    """EXP-1: coverage columns are fractions; the _pct columns (deprecated) are
-    the same values times 100."""
+def test_coverage_is_reported_as_a_fraction_only(tmp_path):
+    """EXP-1: coverage columns are fractions; the removed _pct duplicates are gone."""
     import csv
 
     out = viability_batch.run(_one_stack_manifest(tmp_path))
@@ -408,7 +407,7 @@ def test_coverage_is_reported_as_a_fraction_with_deprecated_percent_columns(tmp_
     for ch in ("live", "dead"):
         frac = float(row[f"{ch}_cov_frac"])
         assert 0 < frac < 1
-        assert float(row[f"{ch}_cov_pct"]) == pytest.approx(100 * frac)
+        assert f"{ch}_cov_pct" not in row
 
 
 def test_run_reads_and_writes_text_as_utf8(tmp_path):

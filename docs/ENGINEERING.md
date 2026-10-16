@@ -173,8 +173,7 @@ Now compliant (measured, not estimated):
   plotting backend; no private access across modules outside a module's own test
   file.
 - MOD-5: one voxel-size argument, `voxel_size_um`; one key set per function
-  (`live_dead_by_count` returns the same flat keys in every mode; `method="all"`
-  also keeps the deprecated `by_method`); renamed or
+  (`live_dead_by_count` returns the same flat keys in every mode); renamed or
   retired arguments keep working for one release with a DeprecationWarning.
 - GEN-2/GEN-3: axis order and channel names from the file's labels (Olympus: from the
   plane file names, checked against the mainfile sizes; a mismatch raises), verified on

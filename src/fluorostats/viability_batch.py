@@ -19,9 +19,7 @@ the quantitative viability readouts the library exposes, from one JSON config:
     is not ``live_cov_frac``, which segments the intensity MIP. Both are kept;
     `MIP_COLUMNS` (also written to run_config.json) states which column is which.
 
-Coverage is a fraction in [0, 1] (``live_cov_frac``, ``dead_cov_frac``). The
-percent columns ``live_cov_pct`` / ``dead_cov_pct`` (the same values times 100)
-are deprecated and will be removed in a later release.
+Coverage is a fraction in [0, 1] (``live_cov_frac``, ``dead_cov_frac``).
 
 Everything is scale-aware: cells are counted on the surface maximum-intensity
 projection (surface culture is a quasi-monolayer), and a per-FOV cell density is
@@ -108,9 +106,8 @@ DEFAULT_SEG = {"method": viab.DEFAULT_SEG_METHOD, "min_size": viab.AREA_MIN_SIZE
 # The two maximum-intensity-projection definitions in the per-stack table.
 MIP_COLUMNS = {
     "live_cov_frac": "fraction of the intensity MIP segmented live: each channel is "
-    "max-projected over z, then thresholded (likewise dead_cov_frac, the "
-    "deprecated live_cov_pct / dead_cov_pct = 100 x these, viability_area "
-    "and the cell counts)",
+    "max-projected over z, then thresholded (likewise dead_cov_frac, "
+    "viability_area and the cell counts)",
     "live_frac_mip": "fraction of the MIP of the 3D live mask: the stack is "
     "thresholded in 3D, then the mask is max-projected "
     "(viability.viability_2d_vs_3d; overestimate_mip = live_frac_mip "
@@ -188,8 +185,7 @@ def _check_seg(seg) -> list[str]:
 
 
 # `live_dead_by_count` keys written under another column name; every other key is
-# written as is, except ``viability`` (equals ``consensus``, not repeated) and the
-# deprecated nested ``by_method`` (its values are the per-method keys).
+# written as is, except ``viability`` (equals ``consensus``, not repeated).
 _COUNT_COLUMNS = {
     "consensus": "viability_count_consensus",
     "spread": "viability_count_spread",
@@ -241,8 +237,6 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         # area / coverage on the intensity MIP (segment the projection; MIP_COLUMNS)
         "live_cov_frac": area["live_fraction"],
         "dead_cov_frac": area["dead_fraction"],
-        "live_cov_pct": 100.0 * area["live_fraction"],  # deprecated: live_cov_frac x 100
-        "dead_cov_pct": 100.0 * area["dead_fraction"],  # deprecated: dead_cov_frac x 100
         "viability_area": area["viability"],
         # 2D vs full-3D coverage bias; this MIP projects the 3D mask (MIP_COLUMNS)
         "live_frac_mip": bias["live_fraction_mip"],
@@ -253,8 +247,7 @@ def analyse_stack(path: Path, cfg: dict) -> dict:
         "regime_crowding": regime["crowding"],
         "regime_method": regime["method"],
     }
-    skip = ("viability", "by_method")
-    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items() if k not in skip})
+    row.update({_COUNT_COLUMNS.get(k, k): v for k, v in counts.items() if k != "viability"})
     # density from the single count, or (method "all": no single count) the CC count
     n_live_ref = counts["n_live"] if counts["n_live"] == counts["n_live"] else counts["n_live_cc"]
     row["live_density_permm2"] = n_live_ref / fov_mm2 if fov_mm2 > 0 else float("nan")

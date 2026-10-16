@@ -198,11 +198,9 @@ def supported_formats() -> dict[str, str]:
 
 def _load_keyence_volume(path: Path) -> tuple[np.ndarray, dict]:
     arr, meta = keyence.load_keyence_stack(path)
-    meta["_read_axes"] = ({"y", "x"} if meta.get("px_um") else set()) | (
-        {"z"} if meta.get("z_step_um") else set()
-    )
+    meta["_read_axes"] = set(meta.pop("gci_axes"))  # recorded as voxel_size_source
     # keyence.parse_gci warns that the Stack/Pitch unit is assumed.
-    meta["_axis_source"] = {"z": "file-assumed-0.1um"} if meta.get("z_step_um") else {}
+    meta["_axis_source"] = {"z": "file-assumed-0.1um"} if "z" in meta["_read_axes"] else {}
     chd = meta.get("channels") or {}
     meta["channel_names"] = [chd.get(str(i), {}).get("name", f"CH{i}") for i in range(arr.shape[0])]
     return arr, meta

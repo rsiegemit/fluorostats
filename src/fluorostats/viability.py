@@ -290,7 +290,7 @@ def _count_record() -> dict:
 
 def _count_every_method(live: np.ndarray, dead: np.ndarray, count_one, rseg: dict) -> dict:
     """``method="all"`` of `live_dead_by_count`: every count method on both channels,
-    their median consensus and spread, and the deprecated nested ``by_method``."""
+    their median consensus and spread."""
     out = _count_record()
     # auto-smooth the smoothed methods from each channel's estimated radius
     # (no cells -> radius NaN -> no smoothing)
@@ -310,10 +310,6 @@ def _count_every_method(live: np.ndarray, dead: np.ndarray, count_one, rseg: dic
         out["consensus"] = out["viability"] = float(np.median(vals))
     if len(vals) > 1:  # one viability has no spread
         out["spread"] = float(max(vals) - min(vals))
-    # deprecated v0.8.2 nested form of the per-method keys
-    out["by_method"] = {
-        m: {k: out[f"{k}_{m}"] for k in ("n_live", "n_dead", "viability")} for m in COUNT_METHODS
-    }
     return out
 
 
@@ -366,11 +362,6 @@ def live_dead_by_count(
       method used on each channel and (``auto``) why ("" for ``all``);
     - ``n_live_<m>``, ``n_dead_<m>``, ``viability_<m>`` for every ``m`` in
       `COUNT_METHODS` — the per-method counts that were computed.
-
-    Deprecated: ``method="all"`` also returns ``by_method`` (``{m: {n_live, n_dead,
-    viability}}``), the v0.8.2 nested form of the per-method keys; it will be
-    removed in a later release, so read ``n_live_<m>`` etc. instead. Reading it
-    gives no DeprecationWarning (a plain dict key cannot warn when read).
     """
     methods = ("auto", "all", *COUNT_METHODS)
     if method not in methods:

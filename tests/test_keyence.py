@@ -60,15 +60,16 @@ def test_load_stack_all_channels(keyence_folder):
     arr, meta = keyence.load_keyence_stack(keyence_folder)
     assert arr.shape == (2, 3, 24, 32)  # (C, Z, Y, X)
     assert arr.dtype == np.uint16
-    assert meta["vox_xy_um"] == pytest.approx(0.4)
-    assert meta["vox_z_um"] == pytest.approx(2.5)
+    assert meta["voxel_size_um"] == pytest.approx((2.5, 0.4, 0.4))
     assert meta["n_slices_loaded"] == 3
+    assert meta["gci_axes"] == "zyx"  # the axes the .gci calibrated
+    # the removed duplicates of voxel_size_um are gone
+    assert not {"px_um", "z_step_um", "vox_xy_um", "vox_z_um"} & set(meta)
 
 
 def test_load_stack_single_channel_and_downsample(keyence_folder):
     arr, meta = keyence.load_keyence_stack(keyence_folder, downsample=2, channel=0)
     assert arr.shape == (3, 12, 16)  # (Z, Y, X), XY halved
-    assert meta["vox_xy_um"] == pytest.approx(0.8)
     assert meta["voxel_size_um"] == pytest.approx((2.5, 0.8, 0.8))
 
 
@@ -76,6 +77,7 @@ def test_voxel_size_without_gci_is_the_placeholder(keyence_folder):
     (keyence_folder / "Image .gci").unlink()
     _, meta = keyence.load_keyence_stack(keyence_folder, downsample=2)
     assert meta["voxel_size_um"] == (1.0, 1.0, 1.0)
+    assert meta["gci_axes"] == ""
 
 
 def test_missing_files(tmp_path):
@@ -180,6 +182,6 @@ def test_meta_has_the_same_keys_with_and_without_gci(keyence_folder):
     (keyence_folder / "Image .gci").unlink()
     _, without = keyence.load_keyence_stack(keyence_folder)
     assert set(without) == set(with_gci)
-    assert {
-        k: without[k] for k in ("px_um", "vox_xy_um", "n_slices", "z_step_note")
-    } == dict.fromkeys(("px_um", "vox_xy_um", "n_slices", "z_step_note"))
+    assert {k: without[k] for k in ("n_slices", "z_step_note")} == dict.fromkeys(
+        ("n_slices", "z_step_note")
+    )

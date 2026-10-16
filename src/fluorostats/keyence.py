@@ -212,11 +212,11 @@ def load_keyence_stack(
         ``meta`` includes parsed ``.gci`` fields (when present) plus
         ``voxel_size_um`` — (z, y, x) µm per voxel of the returned array, with
         ``downsample`` applied; an axis the ``.gci`` does not give is 1.0 — and
-        ``n_slices_loaded``. The ``.gci`` keys are None when the folder has no
-        ``.gci``. Deprecated, kept for existing callers: ``px_um`` /
-        ``z_step_um`` (the raw ``.gci`` values, ``px_um`` before downsampling)
-        and ``vox_xy_um`` / ``vox_z_um``; use ``voxel_size_um``. Reading them
-        gives no DeprecationWarning (a plain dict key cannot warn when read).
+        ``n_slices_loaded``, and ``gci_axes``: the axes of ``voxel_size_um`` the
+        ``.gci`` gave, a string in ``"zyx"`` order (``""`` without a ``.gci``). The
+        other ``.gci`` keys are None when the folder has no ``.gci``; its calibration
+        is given only as ``voxel_size_um`` (not as `parse_gci`'s ``px_um`` /
+        ``z_step_um``).
     """
     folder = Path(folder)
     files = sorted(glob.glob(str(folder / "*_CHF*.tif")), key=_z_index)
@@ -242,9 +242,8 @@ def load_keyence_stack(
     _warn_slice_count(meta["n_slices"], len(files), folder)
     meta["n_slices_loaded"] = len(files)
     meta["downsample"] = downsample
-    px, z = meta["px_um"], meta["z_step_um"]
-    meta["vox_xy_um"] = round(px * downsample, 5) if px else None
-    meta["vox_z_um"] = z
+    px, z = meta.pop("px_um"), meta.pop("z_step_um")
     xy = round(px * downsample, 5) if px else 1.0
     meta["voxel_size_um"] = (z or 1.0, xy, xy)
+    meta["gci_axes"] = ("z" if z else "") + ("yx" if px else "")
     return arr, meta

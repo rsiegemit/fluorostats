@@ -73,20 +73,23 @@ DEFAULT_Z_STEP_UM = 2.5
 # --------------------------------------------------------------------------- #
 # Loading — delegates to the reusable fluorostats.keyence reader
 # --------------------------------------------------------------------------- #
+def _assumed(folder, what: str, default: float) -> float:
+    warnings.warn(f"{folder}: no {what} in the Keyence metadata; assuming {default} µm, so every "
+                  "calibrated length, area, volume and density uses it.", RuntimeWarning, stacklevel=3)
+    return default
+
+
 def load_stack(folder, downsample: int = 3):
-    """DAPI/GFP z-stack + metadata via fluorostats.keyence (px/z-step from .gci)."""
+    """DAPI/GFP z-stack + metadata via fluorostats.keyence (voxel_size_um from .gci)."""
     arr, meta = keyence.load_keyence_stack(folder, downsample)
     if arr.shape[0] < 2:
         raise ValueError(f"expected >=2 channels (DAPI, GFP), got {arr.shape[0]}")
-    meta = dict(meta)
-    for key, default in (("px_um", DEFAULT_PX_UM), ("z_step_um", DEFAULT_Z_STEP_UM)):
-        if not meta.get(key):
-            warnings.warn(f"{folder}: no {key} in the Keyence metadata; assuming {default} µm, so every "
-                          "calibrated length, area, volume and density uses it.", RuntimeWarning, stacklevel=2)
-            meta[key] = default
-    meta["vox_z_um"] = meta.get("vox_z_um") or meta["z_step_um"]
-    meta["vox_xy_um"] = meta.get("vox_xy_um") or round(meta["px_um"] * downsample, 4)
-    return arr[0], arr[1], meta
+    vz, vxy, _ = meta["voxel_size_um"]  # an axis the .gci did not give is 1.0
+    if "z" not in meta["gci_axes"]:
+        vz = _assumed(folder, "z step", DEFAULT_Z_STEP_UM)
+    if "yx" not in meta["gci_axes"]:
+        vxy = round(_assumed(folder, "pixel size", DEFAULT_PX_UM) * downsample, 4)
+    return arr[0], arr[1], {**meta, "voxel_size_um": (vz, vxy, vxy)}
 
 
 # --------------------------------------------------------------------------- #
@@ -380,8 +383,8 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
     name = name or in_dir.name.strip().replace(" ", "_")
     print(f"[{name}] loading ({downsample}x)...")
     dapi, gfp, meta = load_stack(in_dir, downsample)
-    vox = (meta["vox_z_um"], meta["vox_xy_um"], meta["vox_xy_um"])
-    print(f"[{name}] {dapi.shape} vox(zyx)={vox} px={meta['px_um']}µm ch={meta['channels']}")
+    vox = tuple(meta["voxel_size_um"])
+    print(f"[{name}] {dapi.shape} vox(zyx)={vox} ch={meta['channels']}")
     nuc, lab, bw, peaks = analyze_nuclei(dapi, vox)
     zdf, band = analyze_zprofile(dapi, gfp, vox)
     band_slices = np.where(zdf.dapi_area_pct.values > max(1, zdf.dapi_area_pct.max() * 0.25))[0]
@@ -393,7 +396,7 @@ def analyze_folder(in_dir, out_dir, downsample: int = 3, name: str | None = None
     org = analyze_organization(dapi, gfp, peaks, bw, gmip, gmask, vox)
     summary = {"sample": name, **nuc, **band, **wall, **gfpm, **geom, **org,
                "gfp_mean": round(float(gfp.mean()), 1), "dapi_mean": round(float(dapi.mean()), 1),
-               "px_um": meta["px_um"], "z_step_um": meta["z_step_um"], "objective": meta["objective"],
+               "voxel_z_um": vox[0], "voxel_xy_um": vox[1], "objective": meta["objective"],
                "n_slices": meta["n_slices_loaded"]}
     summary["_dir"] = out_dir
     summary["_vox"] = vox

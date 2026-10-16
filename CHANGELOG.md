@@ -150,7 +150,7 @@ CLI and drivers
 ### Added
 - `quant3d --opening` and the viability `seg.opening`; `viability.live_dead_channels`
   (live/dead from dye names); `live_cov_frac`/`dead_cov_frac` (fractions; the `_pct`
-  columns are kept, deprecated); `run_config.json` records the tool, the code commit
+  columns are removed, see Removed); `run_config.json` records the tool, the code commit
   and the absolute paths read; `io.read_voxel_size`; an optional regression suite on
   real vendor files (`FLUOROSTATS_VENDOR_DATA`); a CI job at the minimum dependency
   versions.
@@ -195,12 +195,11 @@ CLI and drivers
   (`voxel_size_z_um`), `prune_skeleton` (`min_branch_length_px` ->
   `min_branch_length`); the old keywords are removed (see Removed).
 - **`live_dead_by_count` returns one flat set of keys in every mode** (n_live, n_dead,
-  viability, consensus, spread, method/reason per channel, and per-method counts);
-  `by_method` (method "all") is kept but deprecated.
+  viability, consensus, spread, method/reason per channel, and per-method counts).
 - `fluorostats.io` is split into `io`, `io_vendors` and `io_canonical`;
   `compute_pvalues` moved from `plots` to `stats`.
-- `keyence.load_keyence_stack` returns `voxel_size_um`; its `px_um`/`z_step_um`/
-  `vox_*` keys are deprecated.
+- `keyence.load_keyence_stack` returns `voxel_size_um` and `gci_axes` (the axes the
+  `.gci` calibrated).
 - Metric labels: `n_junctions` is "Junction-to-Junction Branches".
 - **An output folder written before 0.9 needs `--overwrite` once**: its
   `run_config.json` names no tool, so a rerun refuses it as not this tool's (the
@@ -231,6 +230,13 @@ old spelling now raises instead of resolving to its replacement.
 - The depth manifest's singular `auc_window_um`: a manifest that gives it is refused
   by validation with an error naming the replacement, `"auc_windows_um": [[z0, z1]]`
   (it is never silently ignored).
+- `live_dead_by_count`'s nested `by_method` (method "all"): read the flat
+  `n_live_<m>`, `n_dead_<m>`, `viability_<m>` keys.
+- `keyence.load_keyence_stack`'s `px_um`, `z_step_um`, `vox_xy_um`, `vox_z_um`: use
+  `voxel_size_um` (z, y, x; downsampling applied) and `gci_axes` for which axes the
+  `.gci` gave. `parse_gci` still returns the raw `px_um` / `z_step_um`.
+- The viability per-stack columns `live_cov_pct` / `dead_cov_pct`: use
+  `live_cov_frac` / `dead_cov_frac` (the same values / 100).
 
 ### Benchmarks and examples
 - Fig 2 (d) plots measured deep-learning lines on the BBBC024 crowding series
