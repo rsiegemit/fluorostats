@@ -17,7 +17,7 @@ Each piece owns all of its functionality behind a small interface, so it can be 
 
 | ID | Rule | Check |
 | --- | --- | --- |
-| MOD-1 | One concern per module. Reading (`io`, `io_tiff`, `io_vendors`, `io_canonical`, `keyence`), manifests (`manifest`), preprocessing, segmentation, each metric family (`metrics_2d`, `metrics_3d`, `skeleton`, `objects`, `morphometry`, `ring`, `texture`, `spatial`, `depth`, `viability`), statistics (`stats`, `stats_combine`, `agreement`, `power`), validation, QC, reporting (`report`, `depth_contrasts`) and figures (`plots`, `render3d`, `projections`, `style`, `pubfig`, `colors`, `depth_figures`) each keep their logic, options and tests in their own module. | You can name the one concern a module serves; changing that concern touches one module. |
+| MOD-1 | One concern per module. Reading (`io`, `io_tiff`, `io_vendors`, `io_canonical`, `keyence`), manifests (`manifest`), preprocessing, segmentation, each metric family (`metrics_2d`, `metrics_3d`, `skeleton`, `objects`, `morphometry`, `ring`, `texture`, `spatial`, `depth`, `viability`), statistics (`stats`, `stats_combine`, `agreement`, `power`), validation, QC, reporting (`report`, `depth_contrasts`) and figures (`plots`, `render3d`, `projections`, `pubfig`, `colors`, `depth_figures`) each keep their logic, options and tests in their own module. | You can name the one concern a module serves; changing that concern touches one module. |
 | MOD-2 | Swappable by name. Variants (threshold methods, count methods, reducers, file formats) are chosen by a named option resolved in one place (a dict/registry or one dispatch function), not by `if` chains repeated in each caller. Adding a variant is one implementation plus one registration. | Grep for a variant's name finds its implementation, its registration and its tests, nothing else. |
 | MOD-3 | Dependencies point one way: measurement modules (`io` … `validate`) ← orchestration (`depth_batch`, `viability_batch`, `report`, `cli`, `cli_paths`, `cli_measure`) ← scripts (`benchmarks/`, `examples/`). Measurement modules never import plotting, `click` or orchestration; nothing in `src/` imports `benchmarks/` or `examples/`. No cycles; no function-level import used to dodge one. | The import graph has no upward edges and no cycles. |
 | MOD-4 | Use only a module's public surface. No `module._private` access across module boundaries; if a caller needs it, the owner makes it public. A module's own test files (`test_<module>.py`, `test_<module>_<part>.py`) may exercise that module's private helpers. | No `_name` imported or accessed from outside its module, except by its own test files. |
@@ -173,8 +173,9 @@ Now compliant (measured, not estimated):
   plotting backend; no private access across modules outside a module's own test
   file.
 - MOD-5: one voxel-size argument, `voxel_size_um`; one key set per function
-  (`live_dead_by_count` returns the same flat keys in every mode); renamed or
-  retired arguments keep working for one release with a DeprecationWarning.
+  (`live_dead_by_count` returns the same flat keys in every mode); the names
+  deprecated during the audit are removed in 0.9.0 (MIN-2/MIN-3; `CHANGELOG.md`,
+  Removed), so no shim or old spelling remains in `src/`.
 - GEN-2/GEN-3: axis order and channel names from the file's labels (Olympus: from the
   plane file names, checked against the mainfile sizes; a mismatch raises), verified on
   45 public vendor sample files and an optional real-file regression suite; lengths
@@ -202,15 +203,6 @@ Open, each needing an owner decision:
 
 - [ ] GEN-1: `examples/keyence_tube_analysis.py` and `multi_condition_pipeline.py`
   are dataset-specific and could become manifest runs.
-- [ ] MIN-2: deprecated names to remove in a release that announces it. These warn:
-  `fluorostats.style` (use `pubfig`); the `render3d` MIP panels (use `projections`);
-  the `depth_batch` window and figure helpers (use `depth`, `depth_figures`);
-  `pubfig.panel(dx=, dy=)`; the depth manifest's `auc_window_um`; the renamed
-  voxel-size keywords; `watershed_split`'s `footprint_size`; the `metrics_3d`
-  skeleton re-exports; `plots.compute_pvalues`. These are plain dict keys or table
-  columns, kept for compatibility and documented as deprecated, but they cannot warn:
-  `live_dead_by_count`'s `by_method`; Keyence `px_um`/`z_step_um`/`vox_*` keys; the
-  viability `*_cov_pct` columns.
 - [ ] GEN-1: defaults whose values cite no evidence (each is named once and
   documented as uncited): depth `FIT_R2_THRESHOLD` (0.85) and default window;
   quant3d `--threshold-scale 0.9` and `--min-branch-length 5`; quant2d `--threshold
