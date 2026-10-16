@@ -102,14 +102,28 @@ def git_commit() -> str:
     return f"{sha}-dirty" if changed else sha
 
 
+def cpu_model() -> str:
+    """The CPU's model name (macOS sysctl, Linux /proc/cpuinfo), else ``unknown``."""
+    try:
+        if sys.platform == "darwin":
+            return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
+                                  text=True, check=True).stdout.strip()
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return "unknown"
+
+
 def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) -> None:
     """Write ``results/<stem>.csv`` and its provenance record ``results/<stem>.run.json``.
 
     The record names the producer, its ``params``, the fluorostats git commit
     (``git_commit``) and the python / numpy /
     scipy / scikit-image / fluorostats versions; a ``timing`` table also records
-    the CPU (``platform.machine()``, ``platform.processor()``). No host name,
-    user or absolute path is written. ``csv_kw`` goes to ``DataFrame.to_csv``
+    the machine: architecture, CPU model, core count and OS (``cpu_model``). No
+    host name, user or absolute path is written. ``csv_kw`` goes to ``DataFrame.to_csv``
     (``index`` defaults to False).
     """
     df.to_csv(RESULTS / f"{stem}.csv", **{"index": False, **csv_kw})
@@ -119,7 +133,9 @@ def write_table(df, stem: str, params: dict, *, timing: bool = False, **csv_kw) 
                            "scipy": scipy.__version__, "scikit-image": skimage.__version__,
                            "fluorostats": fluorostats.__version__}}
     if timing:
-        record["platform"] = {"machine": platform.machine(), "processor": platform.processor()}
+        record["platform"] = {"machine": platform.machine(), "processor": platform.processor(),
+                              "cpu_model": cpu_model(), "cpu_count": os.cpu_count(),
+                              "os": platform.platform()}
     (RESULTS / f"{stem}.run.json").write_text(json.dumps(record, indent=2) + "\n")
 
 
