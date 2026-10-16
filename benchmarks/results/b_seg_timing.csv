@@ -1,0 +1,5 @@
+method,median_ms,q25_ms,q75_ms,n_timings
+fluorostats(denoised Otsu+CC),23.15,21.43,24.2,50
+fluorostats(raw Otsu+CC),7.89,7.43,8.18,50
+StarDist,180.0,162.5,200.0,50
+Cellpose,3935.0,3572.5,6105.0,50
