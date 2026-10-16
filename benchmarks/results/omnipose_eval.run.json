@@ -1,0 +1,33 @@
+{
+  "table": "omnipose_eval.csv",
+  "producer": "benchmarks/producers/b_dl_eval.py",
+  "params": {
+    "images": "all BBBC039 with masks",
+    "n_images": 200,
+    "iou_threshold": 0.5,
+    "scorer": "validate.instance_f1",
+    "inference": {
+      "tool": "omnipose",
+      "omnipose": "0.4.4",
+      "cellpose-omni": "0.9.1",
+      "torch": "2.7.1+rocm6.3",
+      "model": "cyto2_omni",
+      "omni": true,
+      "gpu": false,
+      "weights": "/home1/rsiege/.cellpose/models/cyto2_omnitorch_0",
+      "weights_sha256": "976b90634a3fb56e65ed75d63928308054a58eef0d4282057f2247da500e80e1",
+      "command": "python bbbc024_dl_infer.py omnipose 2d in/bbbc039_all out/bbbc039/omnipose",
+      "mode": "2d",
+      "n_files": 200,
+      "python": "3.9.21"
+    }
+  },
+  "git_commit": "74a6cc5",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}

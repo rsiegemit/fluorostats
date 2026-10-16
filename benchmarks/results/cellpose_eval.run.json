@@ -1,0 +1,31 @@
+{
+  "table": "cellpose_eval.csv",
+  "producer": "benchmarks/producers/b_dl_eval.py",
+  "params": {
+    "images": "all BBBC039 with masks",
+    "n_images": 200,
+    "iou_threshold": 0.5,
+    "scorer": "validate.instance_f1",
+    "inference": {
+      "tool": "cellpose",
+      "cellpose": "3.1.1.3",
+      "torch": "2.7.1+rocm6.3",
+      "model": "nuclei",
+      "gpu": false,
+      "weights": "/home1/rsiege/.cellpose/models/nucleitorch_0",
+      "weights_sha256": "89ca45e4a45048d5010d29621466b1274b91b3dcb9714dce9f9e90a9a8671303",
+      "command": "python bbbc024_dl_infer.py cellpose 2d in/bbbc039_all out/bbbc039/cellpose",
+      "mode": "2d",
+      "n_files": 200,
+      "python": "3.9.21"
+    }
+  },
+  "git_commit": "74a6cc5",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}

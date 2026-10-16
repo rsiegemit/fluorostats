@@ -1,6 +1,6 @@
 method,mean_F1,CI_low,CI_high,diff_significant
 fluorostats(denoised Otsu+CC),0.8959,0.8723,0.9154,
-StarDist,0.8713,0.8576,0.883,
+StarDist,0.8711,0.8574,0.8828,
 Cellpose,0.8619,0.8446,0.8773,
-fluorostats(denoised Otsu+CC) - StarDist,0.0246,0.0041,0.0417,YES (excludes 0)
+fluorostats(denoised Otsu+CC) - StarDist,0.0248,0.0042,0.0419,YES (excludes 0)
 fluorostats(denoised Otsu+CC) - Cellpose,0.034,0.008,0.0572,YES (excludes 0)

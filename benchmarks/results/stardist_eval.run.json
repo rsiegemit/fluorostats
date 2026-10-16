@@ -1,0 +1,38 @@
+{
+  "table": "stardist_eval.csv",
+  "producer": "benchmarks/producers/b_dl_eval.py",
+  "params": {
+    "images": "all BBBC039 with masks",
+    "n_images": 200,
+    "iou_threshold": 0.5,
+    "scorer": "validate.instance_f1",
+    "inference": {
+      "tool": "stardist",
+      "stardist": "0.9.2",
+      "csbdeep": "0.8.2",
+      "tensorflow": "2.15.1",
+      "model": "2D_versatile_fluo",
+      "normalise_percentiles": [
+        1.0,
+        99.8
+      ],
+      "weights": "/home1/rsiege/.keras/models/StarDist2D/2D_versatile_fluo/weights_best.h5",
+      "weights_sha256": "42202bd269c8106782316f1a2c75afb3f5ffa65e525c2e155ee0ced3a95da349",
+      "prob_thresh": "default",
+      "normalise": "image",
+      "stitched": false,
+      "command": "python bbbc024_dl_infer.py stardist 2d in/bbbc039_all out/bbbc039/stardist",
+      "mode": "2d",
+      "n_files": 200,
+      "python": "3.9.21"
+    }
+  },
+  "git_commit": "74a6cc5",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}
