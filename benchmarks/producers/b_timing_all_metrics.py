@@ -5,8 +5,8 @@ BBBC039 image, the Kerkhoff "700 Live; 700 Dead-1" image, seeded random samples)
 mean wall-clock ms over 3-5 repeats after one warm-up. Times depend on the
 machine, so a re-run reproduces relative cost, not the committed digits.
 
-The two DL rows are CPU inference times measured on the cluster (cluster script,
-not included), carried as constants in ``common.DL_CPU_MS``. Comparator
+Deep-learning inference times are in ``b_seg_timing.py`` (one CPU for every
+method). Comparator
 implementations (the point-pattern statistics and lacunarity that
 b_homogeneity_multi validates the tile Gini against) are the independent
 references in ``common.py``, not library code; the skimage peak count there is the
@@ -31,7 +31,7 @@ from skimage.measure import euler_number
 from skimage.morphology import medial_axis, skeletonize, thin
 from skimage.segmentation import watershed
 
-from common import (DATA, DL_CPU_MS, MAXIMA_MIN_DISTANCE, MAXIMA_THRESHOLD_REL, bbbc024_volumes, bbbc039_pairs,
+from common import (DATA, MAXIMA_MIN_DISTANCE, MAXIMA_THRESHOLD_REL, bbbc024_volumes, bbbc039_pairs,
                     clark_evans, skimage_peak_count,
                     lacunarity, morisita, quadrat_var, require, ripley_L_dev, thresholds, write_table)
 from fluorostats import (agreement, metrics_2d, metrics_3d, morphometry, objects, preprocess, segment,
@@ -169,9 +169,8 @@ def main():
     for grp, name, fn in segmentation_ops(d) + metric_ops(d) + viability_stats_ops(d):
         reps = 3 if any(k in name for k in SLOW) else 5
         rows.append({"group": grp, "metric": name, "ms": round(mean_ms(fn, reps), 3)})
-    rows += [{"group": "comparator", "metric": f"{k} (per 2D img, CPU cluster)", "ms": v} for k, v in DL_CPU_MS.items()]
     df = pd.DataFrame(rows)
-    write_table(df, "b_timing_all_metrics", {"dl_cpu_ms": DL_CPU_MS}, timing=True)
+    write_table(df, "b_timing_all_metrics", {}, timing=True)
     print(df.to_string(index=False))
 
 

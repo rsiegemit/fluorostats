@@ -84,9 +84,6 @@ MAXIMA_THRESHOLD_REL = 0.15
 # Side (px) of the square field of the example point patterns.
 EXAMPLE_FIELD = 500
 
-# CPU inference ms per BBBC039 image of the two DL baselines, measured on the
-# cluster (StarDist 2D_versatile_fluo, Cellpose nuclei; 20 images); carried as constants.
-DL_CPU_MS = {"StarDist": 215.1, "Cellpose": 5547.0}
 
 
 def git_commit() -> str:

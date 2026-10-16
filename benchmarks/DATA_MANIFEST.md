@@ -38,6 +38,15 @@ URLs verified 2026-09-24.
   BBBC024_dl/<mode>/<tool>/<set>` for each set. Each output folder holds one label
   TIFF per input and a `versions.json` (model, library versions, settings) that the
   producer copies into its `.run.json`.
+- **BBBC039 repeat runs** (`BBBC039_dl_repeat/`, read by `b_dl_determinism.py`):
+  the first 10 BBBC039 images (sorted) through the same script in `2d` mode 20 times
+  per tool, each run a new process, written to `BBBC039_dl_repeat/<tool>/run_01` ...
+  `run_20`.
+- **One-CPU segmentation timing** (`BBBC039_timing/`, read by `b_seg_timing.py`): in
+  one cluster job, on one node, the same 10 images through `cluster/fs_time.py`
+  (fluorostats installed from a commit, named in `fs_commit.txt`) and through
+  `cluster/bbbc024_dl_infer.py` for StarDist and Cellpose, 5 passes each, into
+  `<tool>/pass_<k>/`, plus `node.json` (the CPU).
 - **SproutAngio subset:** `b_vascular_sproutangio_multi.csv` covers 12 of the record's
   53 files: `group1-07..10`, `group3-04, -05, -09, -10`, `group5-03, -06, -10, -11` (`.czi`).
   Its producer reads every `.czi` in `sproutangio/`, so download exactly these.

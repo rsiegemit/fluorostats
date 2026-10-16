@@ -63,5 +63,3 @@ fluorostats,agreement.icc,0.025
 comparator,scipy.pearsonr,0.103
 fluorostats,validate.instance_f1,2205.431
 fluorostats,validate.average_precision,19543.962
-comparator,"StarDist (per 2D img, CPU cluster)",215.1
-comparator,"Cellpose (per 2D img, CPU cluster)",5547.0

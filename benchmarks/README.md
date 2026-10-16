@@ -85,6 +85,8 @@ reproduces it byte for byte.
 | `b3_viability_multi.csv` | `b3_viability_multi.py` | S-BIAD2130 | EXACT |
 | `b4_reaver_ranking_perimage.csv` | `b4_reaver_ranking_perimage.py` | REAVER | EXACT |
 | `b_clustering_curve.csv` | `b_clustering_curve.py` | BBBC024 (+ c25/c50/c75) | EXACT |
+| `b_seg_timing.csv` | `b_seg_timing.py` | the timings in `BBBC039_timing/` (`DATA_MANIFEST.md`) | wall-clock (one cluster CPU) |
+| `b_dl_determinism.csv` | `b_dl_determinism.py` | BBBC039 (first 10 images) and the 20-run StarDist/Cellpose predictions in `BBBC039_dl_repeat/` (`DATA_MANIFEST.md`) | EXACT given the predictions |
 | `b_stardist3d_tuning.csv` | `b_stardist3d_tuning.py` (run before `b_clustering_curve_dl.py`) | BBBC024 volumes 5-9 and the StarDist per-plane predictions in `BBBC024_dl/sd_grid/` | EXACT given the predictions |
 | `b_clustering_curve_dl.csv`, `b_clustering_curve_2d.csv` | `b_clustering_curve_dl.py` | BBBC024 (+ c25/c50/c75) and the `BBBC024_dl/` predictions of `cluster/bbbc024_dl_infer.py` (`DATA_MANIFEST.md`) | EXACT given the predictions |
 | `b_denoising.csv` | `b_denoising.py` | BBBC024 | EXACT |
@@ -118,8 +120,11 @@ raw data and are re-run offline:
 | `b_viability_external_agreement.csv` | `b_viability_external_agreement.py` | `b_viability_external.csv` | EXACT |
 
 Timing tables are wall-clock measurements: a re-run reproduces the relative cost of
-each operation, not the committed milliseconds. Their two DL rows are constants
-measured on the cluster CPU (`producers/common.py`, `DL_CPU_MS`).
+each operation, not the committed milliseconds. Deep-learning inference is timed
+only in `b_seg_timing.csv`, where fluorostats, StarDist and Cellpose run on one
+cluster CPU in one job (`cluster/fs_time.py`, `cluster/bbbc024_dl_infer.py`; the
+run record names the CPU); the per-image constants the two Mac tables used to
+carry are gone.
 
 ### Tables without a producer here
 

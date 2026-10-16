@@ -4,10 +4,8 @@ Mean wall-clock ms per image over the first 50 BBBC039 images (one warm-up
 call). Wall-clock times depend on the machine, so a re-run reproduces the
 ranking and order of magnitude, not the committed digits.
 
-The two DL rows are not measured here: they are the per-image CPU inference
-times measured on the cluster (cluster script, not included; 20 BBBC039 images,
-StarDist ``2D_versatile_fluo`` and Cellpose ``nuclei``), carried as constants in
-``common.DL_CPU_MS``.
+Deep-learning inference times are measured with fluorostats on one CPU in
+``b_seg_timing.py``, not here.
 Data: ``$FLUOROSTATS_DATA/BBBC039``.
 """
 from __future__ import annotations
@@ -19,7 +17,7 @@ import pandas as pd
 import tifffile
 from skimage import filters
 
-from common import (DENOISED_OTSU_CC, DL_CPU_MS, SMALL_OBJECT_RULE, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc,
+from common import (DENOISED_OTSU_CC, SMALL_OBJECT_RULE, YEAR_LABELS, bbbc039_pairs, denoised_otsu_cc,
                     threshold_cc, thresholds, write_table)
 from fluorostats.objects import watershed_split
 from fluorostats.segment import remove_small
@@ -51,14 +49,8 @@ def main():
         ms = ms_per_image(fn, images)
         rows.append({"method": name, "device": "CPU", "ms_per_image": round(ms, 1),
                      "images_per_sec": round(1000 / ms, 1)})
-    rows.append({"method": "StarDist_2018 (DL)", "device": "CPU(cluster)",
-                 "ms_per_image": DL_CPU_MS["StarDist"],
-                 "images_per_sec": round(1000 / DL_CPU_MS["StarDist"], 1)})
-    rows.append({"method": "Cellpose_2021 (DL)", "device": "CPU(cluster)",
-                 "ms_per_image": DL_CPU_MS["Cellpose"],
-                 "images_per_sec": round(1000 / DL_CPU_MS["Cellpose"], 2)})
     df = pd.DataFrame(rows).sort_values("ms_per_image")
-    write_table(df, "b_timing", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "dl_cpu_ms": DL_CPU_MS}, timing=True)
+    write_table(df, "b_timing", {"n_images": N_IMAGES, "min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE}, timing=True)
     print(df.to_string(index=False))
 
 

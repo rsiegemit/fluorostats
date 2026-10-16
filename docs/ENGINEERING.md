@@ -195,13 +195,12 @@ Now compliant (measured, not estimated):
   except those `benchmarks/README.md` marks as not regenerated (cluster-only,
   wall-clock timing and collaborator tables). Every plotted value comes from a
   table or a cited publication: the Fig 2 deep-learning lines are measured
-  (`b_clustering_curve_dl`, with the StarDist stitch chosen on held-out volumes).
+  (`b_clustering_curve_dl`, with the StarDist stitch chosen on held-out volumes);
+  Fig S2's run-to-run spread and deep-learning timings are measured
+  (`b_dl_determinism`; `b_seg_timing`, every method on one CPU).
 
 Open, each needing an owner decision:
 
-- [ ] `benchmarks/figS2_runtime.py`: panel (c) plots a typed value, not a measured
-  one; the platform label and the deep-learning timings are typed (cluster-only,
-  no run record).
 - [ ] `benchmarks/results/ve_crops.npz` (a display panel) has no producer.
 - [ ] GEN-1: `style.MATERIAL_COLORS` keeps its GelMA/Hybrid/Control default
   (existing manifests rely on it); `examples/keyence_tube_analysis.py` and

@@ -214,6 +214,11 @@ CLI and drivers
   F1 gap to Cellpose in place of a hand-drawn scope map. Fig S4 (c) adds every
   method on the 2D mid planes. New: `cluster/bbbc024_dl_infer.py`,
   `producers/b_clustering_curve_dl.py`, `b_stardist3d_tuning.py`, `zstitch.py`.
+- Fig S2 (c) plots the measured run-to-run spread of fluorostats, StarDist and
+  Cellpose (20 runs, `b_dl_determinism`) in place of a typed 3.2%, and the 2D
+  segmentation timings in (a) come from one cluster CPU for all three methods
+  (`b_seg_timing`); the typed deep-learning timing constants are removed from the
+  timing tables.
 - The external-viability peak-count comparator is named `skimage_peakcount` (it is a
   direct scikit-image peak count with the library's parameters, not the Fiji macro);
   figure and docs wording follow.

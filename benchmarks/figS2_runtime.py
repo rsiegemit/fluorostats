@@ -7,10 +7,12 @@
     states each wrapper's time ratio to its underlying library call.
 (b) Determinism: three fluorostats metrics run N=20x on the SAME BBBC024 volume
     give bit-identical output (spread = 0), unlike seed/hardware-sensitive DL.
-(c) Reproducibility: run-to-run spread (CV%) — fluorostats 0.0 vs a trained
-    pipeline that varies with seed / GPU.
+(c) Reproducibility, measured: how many of 20 runs on 10 BBBC039 images give
+    labels identical to the first, for fluorostats, StarDist and Cellpose
+    (b_dl_determinism; the deep-learning runs reload the model each time, on CPU).
 """
 import glob
+import json
 import sys
 import numpy as np
 import pandas as pd
@@ -22,7 +24,7 @@ from matplotlib.lines import Line2D
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import figstyle as F  # noqa: E402
-from figstyle import OKABE  # noqa: E402
+from figstyle import OKABE, TOOL  # noqa: E402
 
 from fluorostats import metrics_3d, morphometry  # noqa: E402
 
@@ -57,10 +59,12 @@ assert all(s == 0.0 for s in det_spread.values()), "expected bit-identical outpu
 # All ms values read directly from results/b_timing_all_metrics.csv.
 # ----------------------------------------------------------------------------
 df = pd.read_csv(RES / "b_timing_all_metrics.csv")
-# 2D-segmentation head-to-head fluorostats value lives in the segmentation
-# benchmark table (b_timing.csv), row F.DENOISED_OTSU_CC -> ms_per_image.
-df_seg = pd.read_csv(RES / "b_timing.csv")
-SEG_FLUORO_MS = float(df_seg[df_seg.method == F.DENOISED_OTSU_CC].ms_per_image.iloc[0])
+# 2D-segmentation head-to-head: fluorostats, StarDist and Cellpose timed on ONE
+# cluster CPU in one job (b_seg_timing, median ms per image); every other row is
+# the Mac wall-clock table above.
+seg = pd.read_csv(RES / "b_seg_timing.csv").set_index("method")
+SEG_RUN = json.loads((RES / "b_seg_timing.run.json").read_text())["params"]
+SEG_CAT = "2D seg. (one cluster CPU)"
 
 
 # Category label -> list of (display_label, csv_metric, kind)
@@ -68,9 +72,9 @@ SEG_FLUORO_MS = float(df_seg[df_seg.method == F.DENOISED_OTSU_CC].ms_per_image.i
 # Ordered top->bottom within the axis; grouped by category with spacers.
 ROWS = [
     # --- 2D instance segmentation (head-to-head) ---
-    ("2D segmentation",  "Cellpose (per 2D img)",     "comparator,Cellpose (per 2D img, CPU cluster)", "cellpose"),
-    ("2D segmentation",  "StarDist (per 2D img)",     "comparator,StarDist (per 2D img, CPU cluster)", "stardist"),
-    ("2D segmentation",  "fluorostats (Otsu + CC)",   F.DENOISED_OTSU_CC,                          "fluorostats"),
+    (SEG_CAT,  "Cellpose (per 2D img)",     "seg:Cellpose",                 "cellpose"),
+    (SEG_CAT,  "StarDist (per 2D img)",     "seg:StarDist",                 "stardist"),
+    (SEG_CAT,  "fluorostats (Otsu + CC)",   "seg:" + F.DENOISED_OTSU_CC,    "fluorostats"),
     # --- 3D metrics ---
     ("3D metrics",       "connectivity (Euler no.)",  "fluorostats,metrics_3d.connectivity_metrics",   "fluorostats"),
     ("3D metrics",       "euler_number (skimage)",    "comparator,euler_number(skimage) 3D",           "scipy"),
@@ -98,11 +102,10 @@ KIND_COLOR = {
 
 
 def lookup(metric_key):
-    """metric_key is the exact CSV metric string (after the 'group,' prefix we
-    stored above for uniqueness). We stored 'group,metric' to disambiguate the
-    two DL rows whose metric text contains a comma; strip the group if present."""
-    if metric_key == F.DENOISED_OTSU_CC:
-        return SEG_FLUORO_MS
+    """ms for a ROWS key: 'seg:<method>' reads b_seg_timing (median per image);
+    'group,metric' reads the Mac timing table."""
+    if metric_key.startswith("seg:"):
+        return float(seg.loc[metric_key[4:], "median_ms"])
     if metric_key.startswith("comparator,") or metric_key.startswith("fluorostats,"):
         grp, met = metric_key.split(",", 1)
         hit = df[(df.group == grp) & (df.metric == met)]
@@ -201,9 +204,9 @@ axA.legend(handles=legA, loc="center right", bbox_to_anchor=(1.0, 0.30),
 # sit here was removed: it duplicated the caption and, floating over the short
 # 3D-metric/skeleton bars, read as if it belonged to that row group. The three
 # 2D-segmentation bars already show the fluorostats-vs-DL speedup visually.
-seg_f = lookup(F.DENOISED_OTSU_CC)
-seg_sd = lookup("comparator,StarDist (per 2D img, CPU cluster)")
-seg_cp = lookup("comparator,Cellpose (per 2D img, CPU cluster)")
+seg_f = lookup("seg:" + F.DENOISED_OTSU_CC)
+seg_sd = lookup("seg:StarDist")
+seg_cp = lookup("seg:Cellpose")
 # wrapper / underlying-call time ratios on shared operations, for the caption
 ratio_conn = lookup("fluorostats,metrics_3d.connectivity_metrics") / lookup("comparator,euler_number(skimage) 3D")
 ratio_mwu = lookup("fluorostats,stats.mann_whitney") / lookup("comparator,scipy.mannwhitneyu")
@@ -233,23 +236,38 @@ axB.text(0.5, 0.80, "spread = 0  (bit-identical)", transform=axB.transAxes,
          fontweight="bold")
 F.panel(axB, "b")   # deferred: row-2 de-indent destabilises panel a's x-axis
 
-# --- Panel (c): reproducibility — run-to-run spread (CV%) --------------------
-labels = ["fluorostats\n(CPU, any run)", "trained pipeline\n(seed / hardware)"]
-spreads = [0.0, 3.2]  # illustrative CV% for a seed/hardware-sensitive DL pipeline
-axC.bar([0, 1], spreads, width=0.6,
-        color=[OKABE["blue"], OKABE["orange"]], edgecolor="#333333", linewidth=0.4)
-axC.set_xticks([0, 1])
-axC.set_xticklabels(labels, fontsize=F.FS["small"])
-axC.set_xlim(-0.6, 1.6)
-axC.set_ylabel("run-to-run spread\n(CV %)", fontsize=F.FS["annot"])
-axC.set_ylim(0, 4)
-axC.text(0, 0.12, "0.0", ha="center", va="bottom", fontsize=F.FS["annot"],
-         color=OKABE["blue"], fontweight="bold")
-axC.text(1, spreads[1] + 0.12, "seed / GPU\nvariable", ha="center", va="bottom",
-         fontsize=F.FS["small"], color=OKABE["orange"])
+# --- Panel (c): reproducibility, measured (b_dl_determinism) -----------------
+det = pd.read_csv(RES / "b_dl_determinism.csv").set_index("method")
+DET_ORDER = [(F.RAW_OTSU_CC, "fluorostats", OKABE["blue"]),
+             ("StarDist", "StarDist", TOOL["StarDist"]["c"]),
+             ("Cellpose", "Cellpose", TOOL["Cellpose"]["c"])]
+n_runs = int(det["n_runs"].max())
+for i, (m, lab, col) in enumerate(DET_ORDER):
+    same = int(det.loc[m, "runs_identical_to_run1"])
+    axC.bar(i, same, width=0.6, color=col, edgecolor="#333333", lw=0.4)
+    axC.text(i, same + 0.3, f"CV {det.loc[m, 'F1_cv_percent']:.2g}%", ha="center", va="bottom",
+             fontsize=F.FS["small"], color=col)
+axC.set_xticks(range(len(DET_ORDER)))
+axC.set_xticklabels([lab for _, lab, _ in DET_ORDER], fontsize=F.FS["small"])
+axC.set_xlim(-0.6, len(DET_ORDER) - 0.4)
+axC.set_ylim(0, n_runs * 1.18)
+axC.set_ylabel(f"runs identical to run 1\n(of {n_runs})", fontsize=F.FS["annot"])
+axC.text(0.5, 1.10, f"same 10 images, {n_runs} runs, CPU", transform=axC.transAxes,
+         ha="center", va="bottom", fontsize=F.FS["annot"])
 F.panel(axC, "c")   # deferred with panel b
 
 F.save(fig, "figS2_runtime", F.SUPP, tight=False)
+
+def det_caption():
+    rp = json.loads((RES / "b_dl_determinism.run.json").read_text())["params"]
+    parts = [f"{lab} {det.loc[m, 'F1_cv_percent']:.2g}% / {det.loc[m, 'count_cv_percent']:.2g}% "
+             f"({int(det.loc[m, 'runs_identical_to_run1'])} of {rp['n_runs']} runs identical to the first)"
+             for m, lab, _ in DET_ORDER]
+    return (f"(c) Reproducibility, measured: each method segmented the first {rp['n_images']} "
+            f"BBBC039 images {rp['n_runs']} times (StarDist and Cellpose on the cluster CPU, "
+            "reloading the model every run; GPU runs were not possible there). Run-to-run CV "
+            "of the mean instance F1 / of the object count: " + "; ".join(parts) + ".")
+
 
 CAPTION = (
     "Figure S2 | Runtime and determinism. "
@@ -257,23 +275,24 @@ CAPTION = (
     "set of representative fluorostats operations (blue) and their matched "
     "SciPy / scikit-image reference implementations (grey), timed on identical "
     "inputs (one BBBC024 3D volume; 2D nuclei image; synthetic live/dead field) on "
-    "a single Apple Silicon Mac CPU (darwin). On shared operations the fluorostats "
+    "a single Apple Silicon Mac CPU (darwin), except the 2D segmentation group. On "
+    "shared operations the fluorostats "
     f"wrapper takes {ratio_conn:.2f}× the time of its library equivalent for "
     f"connectivity (metrics_3d.connectivity_metrics vs euler_number) and {ratio_mwu:.2f}× "
     "for stats.mann_whitney vs scipy.mannwhitneyu (both return more than the bare call). "
-    "For headline 2D instance "
-    "segmentation, fluorostats (Otsu + connected components) runs at "
-    f"{seg_f:.1f} ms/image versus {seg_sd:.0f} ms for StarDist (~{F.round_sig(seg_sd/seg_f):.0f}×) "
-    f"and {seg_cp:.0f} ms for Cellpose (~{F.round_sig(seg_cp/seg_f):.0f}×), both measured on CPU. "
+    "For headline 2D instance segmentation the three methods were timed on one "
+    f"cluster CPU ({SEG_RUN['cpu']}) in one job, on the first 10 BBBC039 images in "
+    f"{SEG_RUN['passes']} passes each (median per image, model loading excluded): "
+    f"fluorostats (denoised Otsu + connected components) {seg_f:.1f} ms/image versus "
+    f"{seg_sd:.0f} ms for StarDist (~{F.round_sig(seg_sd/seg_f):.0f}×) and {seg_cp:.0f} ms for "
+    f"Cellpose (~{F.round_sig(seg_cp/seg_f):.0f}×; b_seg_timing). "
     "The two whole-volume validation operations (validate.instance_f1; "
     "validate.average_precision) are computed once per volume during benchmarking "
     "and are not part of per-frame analysis cost. (b) Determinism. Three "
     "representative fluorostats metrics (volume fraction, connectivity/Euler "
     f"number, lateral homogeneity) run N={N_RUNS} times on the same BBBC024 volume return "
     "bit-identical values (run-to-run spread = 0; deviations plotted in parts per "
-    "million). (c) Reproducibility. Run-to-run spread (CV%): fluorostats is fully "
-    "deterministic on CPU (0.0), whereas trained deep-learning pipelines vary "
-    "run-to-run with random seed and hardware/GPU non-determinism (illustrative)."
+    "million). " + det_caption()
 )
 F.caption("figS2_runtime", CAPTION, F.SUPP)
 print("done")
