@@ -7,11 +7,14 @@ the same algorithm as the maxima mode, so identical to it by construction), fluo
 watershed object count (``objects.watershed_split``), area fraction
 (``viability.live_dead_fractions``), native peak counting
 (``viability.live_dead_by_count(method="maxima")``) and plain Otsu-CC counts.
-Data: ``$FLUOROSTATS_DATA/kerkhoff_lda/synthetic``.
+``kerkhoff_macro`` is the published Fiji macro's own viability, read from the
+``Summary.csv`` it wrote (``cluster/kerkhoff_macro_headless.py``; DATA_MANIFEST.md).
+Data: ``$FLUOROSTATS_DATA/kerkhoff_lda/{synthetic,macro_output}``.
 """
 from __future__ import annotations
 
 import glob
+import json
 import re
 from pathlib import Path
 
@@ -27,6 +30,15 @@ from fluorostats.segment import remove_small
 from fluorostats.viability import live_dead_by_count, live_dead_fractions, live_ratio
 
 MIN_SIZE = 8
+MACRO_CUT = 17   # the macro's "Cut Prefix": it names each image without its first 17 characters
+
+
+def macro_viability() -> tuple[dict[str, float], dict]:
+    """The macro's viability (fraction) per image file name, and its run record."""
+    out = DATA / "kerkhoff_lda" / "macro_output"
+    summary = pd.read_csv(require(out / "Summary.csv")).dropna(subset=["Image"])
+    record = json.loads(require(out / "versions.json").read_text(encoding="utf-8"))
+    return {name: v / 100 for name, v in zip(summary["Image"], summary["Cell Viability [%]"])}, record
 
 
 def score(path):
@@ -48,15 +60,19 @@ def score(path):
 
 def main():
     root = require(DATA / "kerkhoff_lda" / "synthetic")
+    macro, macro_run = macro_viability()
     rows = []
     for f in sorted(glob.glob(str(root / "**" / "*.tif"), recursive=True)):
         m = re.search(r"(\d+) Live; (\d+) Dead", Path(f).name)
         if not m:
             continue
         n_live, n_dead = int(m.group(1)), int(m.group(2))
-        rows.append({"file": Path(f).name, "true_viability": n_live / (n_live + n_dead), **score(f)})
+        name = Path(f).name
+        rows.append({"file": name, "true_viability": n_live / (n_live + n_dead), **score(f),
+                     "kerkhoff_macro": macro[name[MACRO_CUT:]]})
     df = pd.DataFrame(rows)
-    write_table(df, "b_viability_external", {"min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE, "n_images": len(df)})
+    write_table(df, "b_viability_external", {"min_size": MIN_SIZE, "small_object_rule": SMALL_OBJECT_RULE,
+                                             "n_images": len(df), "kerkhoff_macro": macro_run})
     print(f"n = {len(df)} images")
     print(df.drop(columns=["file"]).describe().to_string())
 

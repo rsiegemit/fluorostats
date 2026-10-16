@@ -42,6 +42,13 @@ URLs verified 2026-09-24.
   the first 10 BBBC039 images (sorted) through the same script in `2d` mode 20 times
   per tool, each run a new process, written to `BBBC039_dl_repeat/<tool>/run_01` ...
   `run_20`.
+- **Kerkhoff Fiji macro output** (`kerkhoff_lda/macro_output/`, read by
+  `b_viability_external.py` for `kerkhoff_macro`): `LDA_macro.ijm` from the same
+  Zenodo record, made unattended by `cluster/kerkhoff_macro_headless.py` (only the
+  folder prompts and parameter dialog change; the macro's defaults are kept), run
+  in ImageJ with Bio-Formats (Fiji's jars) on the `synthetic` images; keep its
+  `Summary.csv` and a `versions.json` naming the ImageJ, Bio-Formats and Java
+  versions and the parameters.
 - **One-CPU segmentation timing** (`BBBC039_timing/`, read by `b_seg_timing.py`): in
   one cluster job, on one node, the same 10 images through `cluster/fs_time.py`
   (fluorostats installed from a commit, named in `fs_commit.txt`) and through

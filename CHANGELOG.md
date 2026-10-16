@@ -260,6 +260,11 @@ old spelling now raises instead of resolving to its replacement.
 - `ve_crops.npz` (Fig 3b) has a producer, `producers/ve_crops.py`: its crops were
   recovered as 3-slice maximum projections around the mid plane, centred 400 px,
   of two VesselExpress VEA volumes, and the producer rebuilds every array exactly.
+- The published Kerkhoff Fiji macro is run on its own synthetic Live/Dead set
+  (`cluster/kerkhoff_macro_headless.py` makes it unattended; only its folder
+  prompts and parameter dialog change). `b_viability_external` gains its viability
+  (`kerkhoff_macro`), and Fig 4 (d) is a Bland-Altman of fluorostats against the
+  macro in place of fluorostats against the same algorithm in scikit-image.
 - The external-viability peak-count comparator is named `skimage_peakcount` (it is a
   direct scikit-image peak count with the library's parameters, not the Fiji macro);
   figure and docs wording follow.

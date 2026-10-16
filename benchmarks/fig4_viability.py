@@ -85,18 +85,21 @@ axc.set_ylim(0.3,1.0)
 axc.legend(fontsize=6.0, loc="upper left")
 panel(axc, "c", "maxima vs ground truth", xanchor=0.0315)   # row-leader
 
-# (d) Bland-Altman: fluorostats maxima vs the direct skimage call (same algorithm -> identical)
+# (d) Bland-Altman: fluorostats maxima vs the published Kerkhoff Fiji macro, run on
+# the same images (b_viability_external.kerkhoff_macro)
+macro = ext["kerkhoff_macro"].values
+ccc_m = agr.loc["kerkhoff_macro", "lins_ccc"]
+mae_m = agr.loc["kerkhoff_macro", "MAE"]
 axd = fig.add_subplot(gs[1, 2:])
-_bd, _ld = F.bland_altman(axd, fx, skp, annotate=False)
-axd.set_ylim(-0.02, 0.02)
+_bd, _ld = F.bland_altman(axd, fx, macro, annotate=False)
 axd.text(0.02, 0.96, f"bias {_bd:+.3f}\n±{_ld:.3f} (95% LoA)", transform=axd.transAxes,
-         va="top", fontsize=6.0, color="#333")
-axd.set_xlabel("mean viability (fs, skimage)")
-axd.set_ylabel("fluorostats $-$ skimage")
-axd.text(0.5, 0.30, "maxima = skimage\n(same peak counting)", transform=axd.transAxes, ha="center", va="center", fontsize=6.0, color="#555")
-axd.text(0.5, 0.08, f"vs ground truth: CCC {ccc_v:.3f}, MAE {mae_v:.3f}", transform=axd.transAxes,
-         ha="center", va="bottom", fontsize=5.0, color="#777")
-panel(axd, "d", "fluorostats $-$ skimage = 0")
+         ha="left", va="top", fontsize=6.0)
+axd.set_xlabel("mean viability (fs, macro)")
+axd.set_ylabel("fluorostats $-$ Fiji macro")
+axd.text(0.98, 0.04, f"vs ground truth: fs CCC {ccc_v:.3f}, MAE {mae_v:.3f}\n"
+         f"macro CCC {ccc_m:.3f}, MAE {mae_m:.3f}", transform=axd.transAxes,
+         ha="right", va="bottom", fontsize=5.5, color="#555")
+panel(axd, "d", "fluorostats vs Kerkhoff macro")
 
 # (e) Live/Dead qualitative overlay
 # exception DAT-3: an overlay shows the segmentation on the image itself, so the
@@ -134,10 +137,11 @@ cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (
  "(c) On the synthetic Live/Dead set published with the Kerkhoff Fiji macro (Zenodo 10395753, exact "
  f"ground-truth viability), fluorostats live_dead_by_count(maxima; blue) against ground truth: CCC {ccc_v:.3f}, "
  f"MAE {mae_v:.3f}. Orange squares: a direct skimage peak_local_max count with the same parameters, "
- "which coincides with the maxima mode by construction; the macro itself was not run. fluorostats "
- "count/area modes shown faint (grey). (d) Bland–Altman of fluorostats maxima minus the direct skimage "
- "count: 0 because both apply the same peak-counting algorithm, a consistency check rather than an "
- "external comparison. (e) Two-channel Live/Dead crop (green live, magenta dead): raw mid-plane, "
+ "which coincides with the maxima mode by construction. fluorostats count/area modes shown faint "
+ f"(grey). (d) Bland–Altman of fluorostats maxima minus the published Kerkhoff Fiji macro, run unchanged "
+ f"apart from its parameter dialog (its defaults: prominence 20, Mean filter radius 0.5) on the same "
+ f"{len(ext)} images: bias {_bd:+.3f}, 95% limits of agreement ±{_ld:.3f}. Against ground truth the macro "
+ f"reaches CCC {ccc_m:.3f}, MAE {mae_m:.3f}. (e) Two-channel Live/Dead crop (green live, magenta dead): raw mid-plane, "
  "fluorostats live/dead classification, and the maximum-intensity projection that collapses depth "
  f"and inflates viability. Scale bar {SCALEBAR_UM} µm.")
 save(fig, "fig4_viability", tight=False)
