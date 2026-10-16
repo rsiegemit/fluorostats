@@ -176,7 +176,7 @@ CLI and drivers
   `viability.live_ratio`, `viability.live_dead_channels`, `qc.overlay_rgb`,
   `io.read_voxel_size`, `io.FORMATS`, `io.DIRECTORY_FORMATS`, `pubfig` (one figure
   style module with themes, `save_figure`, `TEXT_WIDTH_IN`), `depth_figures`,
-  `depth_contrasts`, `projections` (2D MIP panels, moved from `render3d`), `cli_paths` (CLI input discovery and output hygiene), `manifest`, `deprecation`, `skeleton.UNMEASURED_METRICS`.
+  `depth_contrasts`, `projections` (2D MIP panels, moved from `render3d`), `cli_paths` (CLI input discovery and output hygiene), `manifest`, `skeleton.UNMEASURED_METRICS`.
 - Type checking (mypy) and a CI workflow (ruff lint and format, mypy, the test
   suite at 100% coverage on Python 3.10-3.13); `ruff` and `mypy` pinned in `dev`.
 
@@ -184,8 +184,8 @@ CLI and drivers
 - **Dependency floors raised to versions that work**: numpy >= 1.25, scikit-image
   >= 0.23, matplotlib >= 3.8, skan >= 0.12 (at the old floors 3D skeleton metrics
   were NaN and other functions failed).
-- `pubfig.panel(dx=, dy=)` and the manifest's `auc_window_um` are deprecated
-  and warn. `quant2d`/`quant3d`
+- The manifest's `auc_window_um` is deprecated
+  and warns. `quant2d`/`quant3d`
   plots follow the one figure style (their colours and fonts change).
 - The maxima count is described as what it is (local maxima above a fraction of the
   image maximum); no claim of agreement with the Fiji Live/Dead macro.
@@ -194,9 +194,7 @@ CLI and drivers
   order; a scalar means isotropic): `ring_morphometry`/`mesh_size` (`spacing`),
   `coverage_metrics` (`pixel_size_um`), `intensity_depth_profile`
   (`voxel_size_z_um`), `prune_skeleton` (`min_branch_length_px` ->
-  `min_branch_length`). The old keywords keep working with a DeprecationWarning;
-  `watershed_split`'s `footprint_size` (keyword or positional) is accepted and
-  ignored with a DeprecationWarning.
+  `min_branch_length`); the old keywords are removed (see Removed).
 - **`live_dead_by_count` returns one flat set of keys in every mode** (n_live, n_dead,
   viability, consensus, spread, method/reason per channel, and per-method counts);
   `by_method` (method "all") is kept but deprecated.
@@ -223,6 +221,14 @@ old spelling now raises instead of resolving to its replacement.
 - `metrics_3d.skeleton_metrics`, `prune_skeleton`, `n_junction_nodes`: use
   `fluorostats.skeleton`.
 - `plots.compute_pvalues`: use `stats.compute_pvalues`.
+- The renamed keywords (now a TypeError): `ring_morphometry(spacing=)`,
+  `mesh_size(spacing=)`, `coverage_metrics(pixel_size_um=)` and
+  `intensity_depth_profile(voxel_size_z_um=)` -> `voxel_size_um=`;
+  `prune_skeleton(min_branch_length_px=)` -> `min_branch_length=`.
+- `watershed_split`'s `footprint_size` (keyword, or the v0.8.2 fourth positional
+  argument), which had no effect: drop it.
+- `pubfig.panel(dx=, dy=)`, which were ignored: use `pad=(x, y)` (points).
+- The helper module `fluorostats.deprecation` (nothing left to keep working).
 
 ### Benchmarks and examples
 - Fig 2 (d) plots measured deep-learning lines on the BBBC024 crowding series

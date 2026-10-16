@@ -48,7 +48,6 @@ def watershed_split(
     mask: np.ndarray,
     min_size: int = 0,
     min_distance: int = 5,
-    footprint_size: int | None = None,
 ) -> tuple[np.ndarray, int]:
     """Split touching convex objects via a distance-transform watershed.
 
@@ -83,18 +82,9 @@ def watershed_split(
         About the smallest object radius, in pixels/voxels: the neck-depth
         criterion above (seed dynamics > ``min_distance / 2``). Larger means
         fewer splits.
-    footprint_size : deprecated
-        Retired (the seeding uses no footprint); accepted, by keyword or as the
-        v0.8.2 fourth positional argument, with a DeprecationWarning and ignored.
 
     Returns (labels, n).
     """
-    if footprint_size is not None:
-        warnings.warn(
-            "watershed_split(): 'footprint_size' no longer has an effect and is ignored",
-            DeprecationWarning,
-            stacklevel=2,
-        )
     m = mask > 0
     if not m.any():
         return np.zeros(m.shape, int), 0

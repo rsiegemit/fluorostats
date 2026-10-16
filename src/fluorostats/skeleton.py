@@ -19,8 +19,6 @@ import skan
 from scipy.ndimage import label, convolve
 from skimage.morphology import skeletonize
 
-from .deprecation import renamed_keyword
-
 
 # The result of `skeleton_metrics` for an empty skeleton: the one definition of
 # its keys, also used by the CLI when skeletons are skipped. Counts and length are
@@ -96,7 +94,6 @@ def _spurs(skeleton_obj, branch_data, junctions: np.ndarray, min_length: float) 
     return remove
 
 
-@renamed_keyword("min_branch_length_px", "min_branch_length")
 def prune_skeleton(
     skel: np.ndarray,
     min_branch_length: float | None = None,

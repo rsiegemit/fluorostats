@@ -33,7 +33,6 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from . import stats
-from .deprecation import renamed_keyword
 
 
 @dataclass(frozen=True)
@@ -81,7 +80,6 @@ def _select_plane_stack(volume: np.ndarray, channel: int) -> np.ndarray:
 REDUCERS = stats.REDUCERS
 
 
-@renamed_keyword("voxel_size_z_um", "voxel_size_um")
 def intensity_depth_profile(
     volume: np.ndarray,
     voxel_size_um: float | Sequence[float],

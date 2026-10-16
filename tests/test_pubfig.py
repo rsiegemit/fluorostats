@@ -176,14 +176,6 @@ def test_darken_and_lighten_move_away_from_the_colour():
     assert pubfig.darken("#888888", 0.2) != "#888888" != pubfig.lighten("#888888", 0.2)
 
 
-def test_panel_dx_dy_are_ignored_with_a_warning():
-    # STY-4: retired keywords were accepted and ignored silently.
-    fig, ax = plt.subplots()
-    with pytest.warns(DeprecationWarning, match="panel\\(\\): 'dx' and 'dy' are deprecated"):
-        pubfig.panel(ax, "a", dx=3.0)
-    assert [t.get_text() for t in ax.texts] == ["a"]
-
-
 @pytest.mark.parametrize("k, coverage", [(1.96, "95%"), (2.576, "99%"), (1.0, "68%")])
 def test_bland_altman_names_the_coverage_of_its_limits(k, coverage):
     # Regression (L8): the label said "95% LoA" whatever loa_k was.

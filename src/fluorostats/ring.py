@@ -12,11 +12,9 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
-from .deprecation import renamed_keyword
 from .stats import coefficient_of_variation
 
 
-@renamed_keyword("spacing", "voxel_size_um")
 def ring_morphometry(
     mask: np.ndarray,
     voxel_size_um: float | tuple[float, float] = (1.0, 1.0),

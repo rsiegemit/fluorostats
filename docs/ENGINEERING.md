@@ -108,7 +108,7 @@ These rules exist because the published numbers depend on them.
 | STY-1 | `ruff check src tests benchmarks examples` and `ruff format --check src tests` pass; `mypy` (configured in `pyproject.toml`) passes for `src/`. One statement per line. | CI is green. |
 | STY-2 | Names say what a thing is or does; no `_v2`, `_new`, `_final`, `_gaps2` for live code or tests. | A reader can predict a module from its name. |
 | STY-3 | Comments explain why. A comment that no longer matches the code is a bug. | Docstrings match behaviour. |
-| STY-4 | Public functions have type hints and docstrings stating shapes and units. No function mutates its arguments unless its name says so. A renamed or retired keyword keeps working for one release with a `DeprecationWarning` (`fluorostats.deprecation`). | mypy; review. |
+| STY-4 | Public functions have type hints and docstrings stating shapes and units. No function mutates its arguments unless its name says so. A renamed or retired keyword keeps working for one release with a `DeprecationWarning`. | mypy; review. |
 
 ## 10. Errors (ERR)
 

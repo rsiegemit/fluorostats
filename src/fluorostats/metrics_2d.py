@@ -5,8 +5,6 @@ from __future__ import annotations
 import numpy as np
 from scipy.ndimage import label
 
-from .deprecation import renamed_keyword
-
 
 def area_fraction(mask: np.ndarray) -> float:
     """Fraction of pixels that are foreground (cell-covered, ``mask > 0``), in [0, 1]
@@ -14,7 +12,6 @@ def area_fraction(mask: np.ndarray) -> float:
     return float(np.count_nonzero(np.asarray(mask) > 0) / mask.size)
 
 
-@renamed_keyword("pixel_size_um", "voxel_size_um")
 def coverage_metrics(
     mask: np.ndarray,
     voxel_size_um: float | tuple[float, float] = 1.0,

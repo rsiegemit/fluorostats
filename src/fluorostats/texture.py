@@ -17,8 +17,6 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage as ndi
 
-from .deprecation import renamed_keyword
-
 
 def orientation_anisotropy(
     image: np.ndarray,
@@ -136,7 +134,6 @@ def orientation_order(
     }
 
 
-@renamed_keyword("spacing", "voxel_size_um")
 def mesh_size(mask: np.ndarray, voxel_size_um: float | tuple[float, ...] = 1.0) -> float:
     """Characteristic open-gap (pore / mesh) size of a network mask.
 
