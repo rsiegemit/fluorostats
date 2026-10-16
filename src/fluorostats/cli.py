@@ -47,10 +47,9 @@ def formats():
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
         click.echo(f"  [{marker}] {ext:<8} {desc}")
-    click.echo('\nInstall all readers: pip install "fluorostats[all]"')
     readers = " ".join(iq_io.OPTIONAL_READERS)
     click.echo(
-        f'(from a checkout: pip install -e ".[all]"; the readers alone: pip install {readers})'
+        f'\nInstall all readers: pip install -e ".[all]" in a checkout, or pip install {readers}'
     )
 
 

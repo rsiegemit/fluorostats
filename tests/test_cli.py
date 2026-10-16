@@ -57,9 +57,11 @@ def test_cli_formats():
     res = CliRunner().invoke(cli, ["formats"])
     assert res.exit_code == 0
     assert "[x] .tif" in res.output
-    # Packaging (LOW): the install hint names the package extra first, the checkout second.
+    # fluorostats is not on PyPI: the hint installs the readers into a checkout or
+    # on their own, never "pip install fluorostats[...]" (a command that fails).
     hints = [line for line in res.output.splitlines() if "pip install" in line]
-    assert hints[0].endswith('pip install "fluorostats[all]"') and '-e ".[all]"' in hints[1]
+    assert hints and not any("pip install fluorostats" in h or '"fluorostats[' in h for h in hints)
+    assert any('-e ".[all]"' in h for h in hints) and any("readlif" in h for h in hints)
 
 
 @pytest.mark.parametrize("flags", [["--prune"], ["--min-branch-length", "3"]])
