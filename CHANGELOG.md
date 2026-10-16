@@ -5,7 +5,12 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
-Three rounds of audits against the engineering rules (`docs/ENGINEERING.md`).
+## [0.9.0] - 2026-10-16
+
+Four rounds of audits against the engineering rules (`docs/ENGINEERING.md`), a bug
+hunt and a test on real vendor files; every typed value in the benchmark figures
+replaced by a measurement; deprecated names removed. Breaking for 0.8 users: see
+Removed, the manifest path rule and the output-folder rule under Changed.
 Refactors were proven behaviour-identical with a golden-output harness over every
 public function, every CLI command and every figure script. The changes below that
 DO alter outputs come first, each with the inputs it affects.

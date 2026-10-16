@@ -665,9 +665,10 @@ pin an exact version (v0.8.0 is
 
 Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) (GitHub's
 "Cite this repository" button reads it) and [`.zenodo.json`](.zenodo.json).
-The archive is self-contained: the derived metric tables underlying every figure
-ship inside it at [`benchmarks/results/`](https://github.com/rsiegemit/fluorostats/blob/main/benchmarks/results), so each figure
-regenerates from the deposit alone. Source dataset licences and URLs are listed
+The derived metric tables behind the benchmark figures ship inside the archive at
+[`benchmarks/results/`](https://github.com/rsiegemit/fluorostats/blob/main/benchmarks/results), each with a record of the commit and
+parameters that produced it. Figures 3, 5, S1, S3 and S4 regenerate from them
+alone; Figures 2, 4 and S2 also read public datasets. Source dataset licences and URLs are listed
 in [`benchmarks/DATA_MANIFEST.md`](https://github.com/rsiegemit/fluorostats/blob/main/benchmarks/DATA_MANIFEST.md).
 
 ## License
