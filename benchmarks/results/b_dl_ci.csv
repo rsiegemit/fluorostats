@@ -4,3 +4,5 @@ StarDist,0.8711,0.8574,0.8828,
 Cellpose,0.8619,0.8446,0.8773,
 fluorostats(denoised Otsu+CC) - StarDist,0.0248,0.0042,0.0419,YES (excludes 0)
 fluorostats(denoised Otsu+CC) - Cellpose,0.034,0.008,0.0572,YES (excludes 0)
+Omnipose,0.8019,0.7892,0.8133,
+fluorostats(denoised Otsu+CC) - Omnipose,0.094,0.07,0.1144,YES (excludes 0)
