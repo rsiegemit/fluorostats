@@ -1,0 +1,23 @@
+{
+  "table": "ve_crops.csv",
+  "producer": "benchmarks/producers/ve_crops.py",
+  "params": {
+    "volumes": [
+      "210426_592-1-lepleft_500x_VEA",
+      "210426_592-1-lepright_500x_VEA"
+    ],
+    "mip_slices": 3,
+    "plane": "centred on shape[0] // 2",
+    "crop": "400 centred",
+    "fluorostats": "binarize(method=\"auto\", min_size=50) on the volume",
+    "arrays": "results/ve_crops.npz"
+  },
+  "git_commit": "1201eba",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0.dev0"
+  }
+}

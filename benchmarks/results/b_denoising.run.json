@@ -1,0 +1,28 @@
+{
+  "table": "b_denoising.csv",
+  "producer": "benchmarks/producers/b_denoising.py",
+  "params": {
+    "seed": 0,
+    "noise_sd": [
+      40,
+      80,
+      160
+    ],
+    "n_volumes": 5,
+    "denoisers": [
+      "none",
+      "fluorostats(gaussian \u03c31)",
+      "median_3",
+      "gaussian_\u03c32",
+      "TV_chambolle"
+    ]
+  },
+  "git_commit": "227d69e",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0.dev0"
+  }
+}

@@ -8,8 +8,17 @@ checks (complementary to intensity-based `morphometry.lateral_homogeneity`).
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy import ndimage as ndi
+from skimage.morphology import local_maxima, reconstruction
+from skimage.segmentation import clear_border, watershed
+
+from .metrics_3d import density_per_mm3
+from .segment import remove_small_labels
+from .spatial import tile_point_density
+from .stats import coefficient_of_variation, gini
 
 
 def label_3d(mask: np.ndarray, min_size: int = 0) -> tuple[np.ndarray, int]:
@@ -32,65 +41,72 @@ def label_3d(mask: np.ndarray, min_size: int = 0) -> tuple[np.ndarray, int]:
     labels, n = ndi.label(mask)
     if min_size <= 0 or n == 0:
         return labels, int(n)
-    sizes = np.bincount(labels.ravel())
-    keep = sizes >= min_size
-    keep[0] = False  # background
-    if not keep.any():
-        return np.zeros_like(labels), 0
-    remap = np.zeros(sizes.size, dtype=labels.dtype)
-    remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
-    return remap[labels], int(keep.sum())
+    return remove_small_labels(labels, min_size)
 
 
 def watershed_split(
     mask: np.ndarray,
     min_size: int = 0,
     min_distance: int = 5,
-    footprint_size: int = 3,
 ) -> tuple[np.ndarray, int]:
     """Split touching convex objects via a distance-transform watershed.
 
     Connected-component labeling merges touching nuclei/cells into one object
     (fluorostats' main under-count failure mode in crowded fields). This seeds
-    a watershed at local maxima of the distance transform to separate them —
-    the classical fix, no training required.
+    a watershed at the h-maxima of the Euclidean distance transform (EDT), with
+    ``h = min_distance / 2``: a seed is a distance peak that rises more than
+    ``min_distance / 2`` above the saddle joining it to any higher peak. Bumps
+    of an irregular outline and the ridge of an elongated object are shallower
+    than that, so they do not split one object.
+
+    Geometrically, two touching objects whose inscribed radius is ``r`` and
+    whose neck has half-width ``w`` (both in pixels/voxels) are split when
+    ``2r - 2w > min_distance``: the constriction is more than ``min_distance``
+    narrower than the objects' inscribed diameter (a seed must rise *more* than
+    ``min_distance / 2``; at exactly ``min_distance / 2`` the peaks merge).
+    Every connected component keeps at least one seed, so objects too small to
+    seed stay single objects.
+
+    Connectivity is the same as `label_3d`'s: objects are face-connected (4 in
+    2D, 6 in 3D), so objects touching only at a corner or edge never share a
+    label, and with ``min_size=0`` the count is never below `label_3d`'s.
 
     Parameters
     ----------
     mask : np.ndarray of bool
+        2D or 3D foreground. The EDT is in voxel units on every axis, so
+        isotropic voxels are assumed.
     min_size : int
         Drop objects below this voxel count after splitting.
     min_distance : int
-        Distance-transform value floor for seeds: only voxels with
-        ``dist > min_distance`` can seed (≈ min object radius, voxels);
-        larger → fewer seeds.
-    footprint_size : int
-        Size of the local-maximum neighbourhood.
+        About the smallest object radius, in pixels/voxels: the neck-depth
+        criterion above (seed dynamics > ``min_distance / 2``). Larger means
+        fewer splits.
 
     Returns (labels, n).
     """
-    from scipy.ndimage import distance_transform_edt, maximum_filter
-    from skimage.segmentation import watershed as _watershed
-
     m = mask > 0
     if not m.any():
         return np.zeros(m.shape, int), 0
-    dist = distance_transform_edt(m)
-    fp = np.ones((footprint_size,) * m.ndim, dtype=bool)
-    local_max = (maximum_filter(dist, footprint=fp) == dist) & (dist > min_distance)
-    markers, _ = ndi.label(local_max)
-    labels = _watershed(-dist, markers, mask=m)
+    dist = ndi.distance_transform_edt(m)
+    # h-maxima as regional maxima of the reconstruction of (EDT - h) under the EDT;
+    # peaks joined above their saddle by less than h merge into one plateau, one seed.
+    rec = reconstruction(dist - min_distance / 2, dist, method="dilation")
+    peaks = local_maxima(rec, connectivity=m.ndim) & m
+    markers, _ = ndi.label(peaks, structure=np.ones((3,) * m.ndim))
+    components, n_comp = ndi.label(m)
+    # A plateau joined across a corner can span two face-connected components:
+    # one seed per (plateau, component) piece, so no label crosses a corner.
+    pieces = markers[peaks] * (n_comp + 1) + components[peaks]
+    markers[peaks] = np.unique(pieces, return_inverse=True)[1] + 1
+    n_seeds = int(markers.max())
+    unseeded = np.setdiff1d(np.arange(1, n_comp + 1), components[markers > 0])
+    if unseeded.size:  # components too small to seed: one marker each
+        pos = ndi.maximum_position(dist, components, unseeded)
+        markers[tuple(np.array(pos).T)] = np.arange(n_seeds + 1, n_seeds + unseeded.size + 1)
+    labels = watershed(-dist, markers, mask=m)
     if min_size > 0:
-        labels, n = label_3d(labels > 0, min_size=0)  # relabel contiguous
-        # re-apply size filter on the watershed labels
-        sizes = np.bincount(labels.ravel())
-        keep = sizes >= min_size
-        keep[0] = False
-        if not keep.any():
-            return np.zeros_like(labels), 0
-        remap = np.zeros(sizes.size, dtype=labels.dtype)
-        remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
-        return remap[labels], int(keep.sum())
+        return remove_small_labels(labels, min_size)
     return labels, int(labels.max())
 
 
@@ -101,9 +117,9 @@ def count_local_maxima(
     mask: np.ndarray | None = None,
     smooth_sigma: float = 0.0,
 ) -> dict:
-    """Count intensity local maxima — one peak per cell (Fiji "Find Maxima").
+    """Count intensity local maxima — one peak per cell (skimage ``peak_local_max``).
 
-    Prominence-based peak counting excels at counting **crowded, overlapping**
+    Peak counting excels at counting **crowded, overlapping**
     cells that each present a single intensity peak (realistic gaussian-like
     staining): area fraction and connected-component labeling under-count when
     cells touch (the merged-blob failure mode), while one peak still marks each
@@ -127,7 +143,8 @@ def count_local_maxima(
     min_distance : int
         Minimum separation (voxels) between peaks; larger = fewer, merges close cells.
     threshold_rel : float
-        Peaks must exceed this fraction of the image maximum (prominence floor).
+        Peaks must exceed this fraction of the image maximum: an absolute height
+        floor, not a prominence.
     mask : np.ndarray, optional
         Restrict peak search to this foreground region.
     smooth_sigma : float
@@ -145,21 +162,22 @@ def count_local_maxima(
         img = np.where(np.asarray(mask) > 0, img, 0.0)
     if img.size == 0 or img.max() <= 0:
         return {"count": 0, "coords": np.empty((0, img.ndim), dtype=int)}
-    coords = peak_local_max(
-        img, min_distance=min_distance, threshold_abs=img.max() * threshold_rel
-    )
+    coords = peak_local_max(img, min_distance=min_distance, threshold_abs=img.max() * threshold_rel)
     return {"count": int(len(coords)), "coords": coords}
 
 
 def clear_border_labels(labels: np.ndarray) -> tuple[np.ndarray, int]:
-    """Remove objects touching any image border and relabel.
+    """Remove objects touching any image border and relabel the rest 1..n.
 
     Useful for count endpoints where partial edge objects bias the total
-    (e.g. BBBC039 ground truth excludes border nuclei). Returns (labels, n).
+    (e.g. BBBC039 ground truth excludes border nuclei). Touching objects keep
+    their own labels, so a `watershed_split` result stays split. A boolean or 0/1
+    mask is labelled first (`label_3d`). Returns (labels, n).
     """
-    from skimage.segmentation import clear_border
-    cleared = clear_border(labels)
-    return label_3d(cleared > 0, min_size=0)
+    labels = np.asarray(labels)
+    if labels.dtype == bool or labels.max(initial=0) <= 1:
+        labels = label_3d(labels)[0]
+    return remove_small_labels(clear_border(labels), 1)
 
 
 def object_volumes_voxels(labels: np.ndarray) -> np.ndarray:
@@ -167,7 +185,7 @@ def object_volumes_voxels(labels: np.ndarray) -> np.ndarray:
     if labels.max() == 0:
         return np.array([], dtype=np.int64)
     sizes = np.bincount(labels.ravel())[1:]
-    return sizes[sizes > 0].astype(np.int64)   # drop gaps from non-contiguous label images
+    return sizes[sizes > 0].astype(np.int64)  # drop gaps from non-contiguous label images
 
 
 def equivalent_diameters_um(
@@ -187,11 +205,13 @@ def equivalent_diameters_um(
 
 
 def object_centroids(labels: np.ndarray) -> np.ndarray:
-    """Centroid (z, y, x) per object, shape (N, 3) in voxel units."""
-    n = int(labels.max())
-    if n == 0:
-        return np.zeros((0, 3), dtype=float)
-    centers = ndi.center_of_mass(labels > 0, labels, np.arange(1, n + 1))
+    """Centroid per object in voxel units, shape (N, labels.ndim): (z, y, x) for a
+    3D label image, (y, x) for 2D. One row per label present, in label order;
+    ids missing from a non-contiguous label image give no row."""
+    ids = np.unique(labels[labels > 0])
+    if ids.size == 0:
+        return np.zeros((0, labels.ndim), dtype=float)
+    centers = ndi.center_of_mass(labels > 0, labels, ids)
     return np.asarray(centers, dtype=float)
 
 
@@ -264,7 +284,9 @@ def nearest_neighbor_stats(
     dict with keys:
         mean_nn_dist, median_nn_dist — nearest-neighbour distance.
         clark_evans_R — observed / CSR-expected mean NN (<1 clustered, ≈1 random,
-            >1 dispersed/regular); NaN if D not in {2, 3}.
+            >1 dispersed/regular), using the 2D or 3D CSR formula for the number
+            of axes with non-zero range (a constant axis is dropped); NaN if that
+            number is not 2 or 3 (with a warning when it is below 2).
         pattern — "clustered" | "random" | "dispersed" from ``clark_evans_R``.
         n — number of points.
     """
@@ -273,26 +295,46 @@ def nearest_neighbor_stats(
     pts = np.asarray(centroids, dtype=float)
     n, d = pts.shape if pts.ndim == 2 else (0, 0)
     if n < 2:
-        return {"mean_nn_dist": float("nan"), "median_nn_dist": float("nan"),
-                "clark_evans_R": float("nan"), "pattern": "n/a", "n": int(n)}
+        return {
+            "mean_nn_dist": float("nan"),
+            "median_nn_dist": float("nan"),
+            "clark_evans_R": float("nan"),
+            "pattern": "n/a",
+            "n": int(n),
+        }
     scale = np.asarray(voxel_size_um if voxel_size_um is not None else (1.0,) * d, float)
     xy = pts * scale
-    nn = cKDTree(xy).query(xy, k=2)[0][:, 1]      # distance to nearest other point
+    nn = cKDTree(xy).query(xy, k=2)[0][:, 1]  # distance to nearest other point
     mean_nn = float(nn.mean())
     ranges = xy.max(0) - xy.min(0)
-    vol = float(np.prod(ranges[ranges > 0]))
-    lam = n / vol if vol > 0 else 0.0
-    if lam > 0 and d == 2:
+    # The pattern's dimension is the number of axes the points actually span: 3D
+    # centroids in one z-plane are a 2D pattern and take the 2D CSR constant.
+    d_eff = int((ranges > 0).sum())
+    lam = n / float(np.prod(ranges[ranges > 0]))
+    if d_eff == 2:
         expected = 0.5 / np.sqrt(lam)
-    elif lam > 0 and d == 3:
+    elif d_eff == 3:
         expected = 0.55396 / lam ** (1.0 / 3.0)
     else:
+        if d_eff < 2:
+            warnings.warn(
+                f"nearest_neighbor_stats: the points span fewer than 2 axes "
+                f"({d_eff}); clark_evans_R is NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         expected = float("nan")
     R = mean_nn / expected if expected and expected == expected else float("nan")
-    pattern = "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")
-    return {"mean_nn_dist": mean_nn, "median_nn_dist": float(np.median(nn)),
-            "clark_evans_R": float(R) if R == R else float("nan"),
-            "pattern": pattern, "n": int(n)}
+    pattern = (
+        "n/a" if R != R else ("clustered" if R < 0.9 else "dispersed" if R > 1.1 else "random")
+    )
+    return {
+        "mean_nn_dist": mean_nn,
+        "median_nn_dist": float(np.median(nn)),
+        "clark_evans_R": float(R) if R == R else float("nan"),
+        "pattern": pattern,
+        "n": int(n),
+    }
 
 
 def object_mask_association(
@@ -311,7 +353,8 @@ def object_mask_association(
     ----------
     centroids : (N, >=mask.ndim) array of object positions in voxel coordinates.
     mask : bool array — the reference structure to measure distance to.
-    voxel_size_um : optional per-axis size for physical distances (else pixels).
+    voxel_size_um : optional per-axis size for physical distances (else pixels);
+        its last ``mask.ndim`` entries are used, so a (z, y, x) size suits a 2D mask.
     max_dist_um : "within" threshold for the co-localised fraction; defaults to
         one voxel step (objects effectively on the structure).
 
@@ -323,11 +366,15 @@ def object_mask_association(
     m = np.asarray(mask) > 0
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0 or not m.any():
-        return {"median_distance": float("nan"), "mean_distance": float("nan"),
-                "frac_within": float("nan"), "n": int(pts.shape[0])}
-    sampling = voxel_size_um if voxel_size_um is not None else (1.0,) * m.ndim
+        return {
+            "median_distance": float("nan"),
+            "mean_distance": float("nan"),
+            "frac_within": float("nan"),
+            "n": int(pts.shape[0]),
+        }
+    sampling = tuple(voxel_size_um)[-m.ndim :] if voxel_size_um is not None else (1.0,) * m.ndim
     dt = ndi.distance_transform_edt(~m, sampling=sampling)
-    idx = np.round(pts[:, -m.ndim:]).astype(int)
+    idx = np.round(pts[:, -m.ndim :]).astype(int)
     for ax in range(m.ndim):
         idx[:, ax] = np.clip(idx[:, ax], 0, m.shape[ax] - 1)
     dist = dt[tuple(idx.T)]
@@ -345,11 +392,9 @@ def object_density_per_mm3(
     shape_zyx: tuple[int, int, int],
     voxel_size_um: tuple[float, float, float],
 ) -> float:
-    """Object count divided by the imaged volume in mm³."""
-    vol_mm3 = float(np.prod(shape_zyx)) * float(np.prod(voxel_size_um)) * 1e-9
-    if vol_mm3 == 0:
-        return 0.0
-    return float(n_objects / vol_mm3)
+    """Object count divided by the imaged volume in mm³ (see
+    `metrics_3d.density_per_mm3`; NaN with a warning for a zero volume)."""
+    return density_per_mm3(n_objects, shape_zyx, voxel_size_um)
 
 
 def centroid_homogeneity(
@@ -359,8 +404,10 @@ def centroid_homogeneity(
 ) -> dict:
     """Spatial uniformity of object centroids over an XY tile grid.
 
-    Expects centroids as (N, 3) in (z, y, x) voxel order (as from
-    ``object_centroids``). Same Gini/CV summary as
+    Accepts centroids as (N, 3) in (z, y, x) voxel order (as from
+    ``object_centroids``) or (N, 2) in (y, x), with ``shape_zyx`` the matching
+    (Z, Y, X) or (Y, X) shape; only the last two axes are tiled. Same Gini/CV
+    summary as
     `morphometry.lateral_homogeneity`, but computed on object *counts per
     tile* rather than intensity per tile.
 
@@ -369,16 +416,12 @@ def centroid_homogeneity(
     n_obj = centroids.shape[0]
     if n_obj == 0:
         return {"centroid_gini": float("nan"), "centroid_cv": float("nan"), "n_objects": 0}
-    _, ny, nx = shape_zyx
-    ty = ny / tiles
-    tx = nx / tiles
-    yi = np.clip((centroids[:, 1] / ty).astype(int), 0, tiles - 1)
-    xi = np.clip((centroids[:, 2] / tx).astype(int), 0, tiles - 1)
-    counts = np.zeros(tiles * tiles, dtype=int)
-    np.add.at(counts, yi * tiles + xi, 1)
+    counts = tile_point_density(
+        centroids, (shape_zyx[-2], shape_zyx[-1]), grid=(tiles, tiles)
+    ).ravel()
     return {
-        "centroid_gini": float(_gini(counts)),
-        "centroid_cv": float(_cv(counts)),
+        "centroid_gini": float(gini(counts)),
+        "centroid_cv": float(coefficient_of_variation(counts)),
         "n_objects": int(n_obj),
     }
 
@@ -404,15 +447,19 @@ def angular_homogeneity(
     """
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0:
-        return {"angular_gini": float("nan"), "resultant_length": float("nan"),
-                "dominant_angle_deg": float("nan"), "n": 0}
+        return {
+            "angular_gini": float("nan"),
+            "resultant_length": float("nan"),
+            "dominant_angle_deg": float("nan"),
+            "n": 0,
+        }
     dy = pts[:, -2] - center[0]
     dx = pts[:, -1] - center[1]
     ang = np.arctan2(dy, dx)
     counts, _ = np.histogram(ang, bins=bins, range=(-np.pi, np.pi))
     resultant = np.mean(np.exp(1j * ang))
     return {
-        "angular_gini": float(_gini(counts)),
+        "angular_gini": float(gini(counts)),
         "resultant_length": float(np.abs(resultant)),
         "dominant_angle_deg": float(np.degrees(np.angle(resultant)) % 360.0),
         "n": int(pts.shape[0]),
@@ -436,17 +483,22 @@ def radial_distribution(
         mean_norm_radius — mean radius normalised to ``r_max`` (0 = centre).
         r_max — the radius used for normalisation.
         n — number of points.
+    Points all at the centre (``r_max`` 0 from the data) are in the inner shell;
+    an explicit ``r_max <= 0`` raises ValueError.
     """
+    if r_max is not None and r_max <= 0:
+        raise ValueError(f"radial_distribution: r_max must be positive, got {r_max}")
     pts = np.asarray(centroids, dtype=float)
     if pts.shape[0] == 0:
-        return {"fractions": np.zeros(n_bins), "mean_norm_radius": float("nan"),
-                "r_max": float("nan"), "n": 0}
+        return {
+            "fractions": np.zeros(n_bins),
+            "mean_norm_radius": float("nan"),
+            "r_max": float("nan"),
+            "n": 0,
+        }
     r = np.hypot(pts[:, -2] - center[0], pts[:, -1] - center[1])
     rmax = float(r_max) if r_max is not None else float(r.max())
-    if rmax <= 0:
-        return {"fractions": np.zeros(n_bins), "mean_norm_radius": 0.0,
-                "r_max": rmax, "n": int(pts.shape[0])}
-    rn = np.clip(r / rmax, 0.0, 1.0)
+    rn = np.clip(r / rmax, 0.0, 1.0) if rmax > 0 else np.zeros_like(r)  # all at the centre
     counts, _ = np.histogram(rn, bins=n_bins, range=(0.0, 1.0))
     return {
         "fractions": counts / counts.sum(),
@@ -454,27 +506,3 @@ def radial_distribution(
         "r_max": rmax,
         "n": int(pts.shape[0]),
     }
-
-
-# ---------------------------------------------------------------------------
-# Local helpers (duplicated from morphometry to keep modules independent)
-# ---------------------------------------------------------------------------
-
-def _gini(values: np.ndarray) -> float:
-    v = np.asarray(values, dtype=float).ravel()
-    if v.size == 0:
-        return float("nan")
-    v = v - v.min() if v.min() < 0 else v
-    if v.sum() == 0:
-        return 0.0
-    v = np.sort(v)
-    n = v.size
-    cum = np.cumsum(v)
-    return float((n + 1 - 2 * cum.sum() / cum[-1]) / n)
-
-
-def _cv(values: np.ndarray) -> float:
-    v = np.asarray(values, dtype=float).ravel()
-    if v.size == 0 or v.mean() == 0:
-        return float("nan")
-    return float(v.std(ddof=0) / v.mean())

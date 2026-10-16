@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from fluorostats import stats
 import pytest
 
+from fluorostats import morphometry
 from fluorostats.morphometry import (
     lateral_homogeneity,
     depth_profile,
@@ -18,6 +20,7 @@ from fluorostats.morphometry import (
 # ---------------------------------------------------------------------------
 # Lateral homogeneity
 # ---------------------------------------------------------------------------
+
 
 def test_lateral_homogeneity_uniform_volume_is_near_zero():
     vol = np.ones((4, 64, 64), dtype=np.float32)
@@ -46,6 +49,7 @@ def test_lateral_homogeneity_tiny_volume_returns_nan():
 # Depth profile / span / centroid
 # ---------------------------------------------------------------------------
 
+
 def test_depth_profile_shape_and_values():
     vol = np.zeros((5, 4, 4), dtype=np.float32)
     vol[2] = 10.0
@@ -71,8 +75,115 @@ def test_depth_span_empty_volume():
 
 
 def test_depth_centroid_returns_um():
+    # Regression: z_centroid / z_p* are µm when calibrated and slices when not, as in
+    # v0.8.2; the _um keys are always µm (NaN uncalibrated), _slices always slices.
     vol = np.zeros((10, 4, 4), dtype=np.float32)
     vol[5] = 1.0
     res = depth_centroid(vol, voxel_size_um=(2.0, 1.0, 1.0))
-    assert res["z_centroid"] == pytest.approx(10.0)
-    assert res["z_p50"] == pytest.approx(10.0)
+    assert res["z_centroid"] == pytest.approx(10.0) and res["z_p50"] == pytest.approx(10.0)
+    assert res["z_centroid_um"] == pytest.approx(10.0)
+    assert res["z_p50_um"] == pytest.approx(10.0)
+    assert res["z_centroid_slices"] == pytest.approx(5.0)
+    assert res["z_p50_slices"] == pytest.approx(5.0)
+    uncal = depth_centroid(vol)
+    assert uncal["z_centroid"] == pytest.approx(5.0) and np.isnan(uncal["z_centroid_um"])
+    assert uncal["z_centroid_slices"] == pytest.approx(5.0)
+    assert (
+        set(res)
+        == set(uncal)
+        == {f"z_{k}{u}" for k in ("centroid", "p25", "p50", "p75") for u in ("", "_um", "_slices")}
+    )
+
+
+def test_depth_metrics_take_the_voxel_size_of_the_z_axis():
+    # voxel_size_um is per axis in array order, so z_axis=2 takes its third entry
+    # (as in v0.8.2); a scalar is isotropic.
+    vol = np.zeros((4, 4, 10), dtype=np.float32)
+    vol[:, :, 2:7] = 1.0
+    span = depth_span(vol, voxel_size_um=(0.5, 0.5, 5.0), z_axis=2)
+    assert span["span_slices"] == 5 and span["span_um"] == pytest.approx(25.0)
+    cen = depth_centroid(vol, voxel_size_um=(0.5, 0.5, 5.0), z_axis=2)
+    assert cen["z_centroid_um"] == pytest.approx(5.0 * cen["z_centroid_slices"])
+    assert depth_span(vol, voxel_size_um=5.0, z_axis=2)["span_um"] == pytest.approx(25.0)
+    assert depth_span(vol, voxel_size_um=np.array([0.5, 0.5, 5.0]), z_axis=2)[
+        "span_um"
+    ] == pytest.approx(25.0)
+
+
+def test_depth_span_uncalibrated_um_is_nan():
+    vol = np.zeros((6, 4, 4), dtype=np.float32)
+    vol[1:3] = 1.0
+    assert np.isnan(depth_span(vol)["span_um"])
+    assert np.isnan(depth_span(np.zeros((3, 4, 4)))["span_um"])
+
+
+# ---------------------------------------------------------------------------
+# morphometry — zero-signal guard branches
+# ---------------------------------------------------------------------------
+
+
+def test_depth_span_zero_volume():
+    out = morphometry.depth_span(np.zeros((5, 8, 8)), voxel_size_um=(2.0, 1.0, 1.0))
+    assert out["span_slices"] == 0
+    assert out["span_um"] == 0.0
+
+
+def test_depth_centroid_zero_volume_is_nan():
+    # Regression: a volume with no signal has no centroid; it used to be 0.0.
+    out = morphometry.depth_centroid(np.zeros((5, 8, 8)), voxel_size_um=(2.0, 1.0, 1.0))
+    assert all(np.isnan(v) for v in out.values())
+
+
+def test_lateral_homogeneity_too_small_for_tiles():
+    """Image smaller than the tile grid returns the n_tiles==0 guard."""
+    out = morphometry.lateral_homogeneity(np.ones((2, 4, 4)), tiles=8)
+    assert out["n_tiles"] == 0
+    assert np.isnan(out["lateral_gini"])
+
+
+def test_morphometry_degenerate():
+    assert morphometry.depth_span(np.zeros((3, 4, 4)))["span_slices"] == 0
+    assert np.isnan(stats.gini(np.array([])))
+    assert stats.coefficient_of_variation(np.array([2.0])) == 0.0  # single value
+    assert np.isnan(stats.coefficient_of_variation(np.array([])))
+
+
+# ---------------------------------------------------------------------------
+# morphometry.py:102 — depth_span early return when no slice qualifies
+# ---------------------------------------------------------------------------
+def test_depth_span_no_slice_above_cutoff():
+    # A single non-zero slice: profile.max() > 0, but with the default
+    # relative_threshold a lone spike still qualifies. Force the "above.size==0"
+    # branch by making every slice's mean fall below the cutoff except via a
+    # threshold that excludes all: use a volume whose profile is all equal but
+    # nonzero and a relative_threshold > 1.0 so nothing meets the cutoff.
+    vol = np.ones((4, 5, 5), dtype=float)
+    out = morphometry.depth_span(vol, relative_threshold=1.5)
+    assert out["span_slices"] == 0
+    assert out["z_lo"] == 0 and out["z_hi"] == 0
+
+
+# ---------------------------------------------------------------------------
+# stats.gini all-zero (sum==0) guard
+# ---------------------------------------------------------------------------
+def test_morphometry_gini_all_zero():
+    assert stats.gini(np.zeros(5)) == 0.0
+
+
+def test_lateral_homogeneity_uses_every_pixel_on_uneven_fields():
+    """A field that does not divide by `tiles` is tiled like spatial.tile_reduce,
+    so its edge pixels count instead of being cropped away."""
+    from fluorostats import spatial, stats
+
+    xy = np.zeros((10, 10))
+    xy[:, 9] = 100.0  # signal only in the last column
+    res = lateral_homogeneity(xy[None], tiles=4)
+    tiles = spatial.tile_reduce(xy, lambda t: float(t.mean()), grid=(4, 4)).ravel()
+    assert res["n_tiles"] == 16
+    assert res["lateral_gini"] == pytest.approx(stats.gini(tiles))
+    assert res["lateral_gini"] > 0  # cropping would have seen a flat field
+
+
+def test_lateral_homogeneity_refuses_a_2d_image():
+    with pytest.raises(ValueError, match=r"3D \(Z, Y, X\) volume"):
+        morphometry.lateral_homogeneity(np.ones((16, 16)))

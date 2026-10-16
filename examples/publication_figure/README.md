@@ -8,8 +8,9 @@ normalisation → AUC + single-exponential λ fit), and renders a three-panel
 figure showing (a) ground-truth recovery, (b) λ recovery on the identity line,
 and (c) two-condition discrimination.
 
-`figstyle.py` is the shared publication-styling helper (Okabe–Ito palette,
-panel labels, scale bars, consistent type sizes) used to build the figure.
+The figure is built with `fluorostats.pubfig`, the library's publication-figure
+kit (Okabe–Ito palette, panel labels, scale bars, consistent type sizes) — the
+same kit the benchmark figures use.
 
 Run it:
 
@@ -19,6 +20,7 @@ cd examples/publication_figure
 python depth_penetration_figure.py
 ```
 
-It writes the figure to `figures/main/` and summary CSVs to `results/`
-(both are git-ignored). `depth_penetration.png` in this folder is a committed
+It writes `figures/main/depth_penetration.{pdf,png}` with its caption (`.txt`,
+every number read from the run) and `results/depth_penetration_*.csv` (both
+folders are git-ignored). `depth_penetration.png` in this folder is a committed
 preview of the expected output.

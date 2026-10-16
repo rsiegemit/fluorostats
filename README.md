@@ -12,7 +12,7 @@ FluoroStats is a Python CLI tool and library that converts microscopy images —
 
 ## Why FluoroStats?
 
-Fluorescence microscopy experiments often produce clear qualitative differences between conditions — more cells, denser networks, better coverage. But manuscripts require quantitative evidence: volume fractions, connectivity metrics, error bars, and p-values.
+Fluorescence microscopy experiments often produce clear qualitative differences between conditions — more cells, denser networks, better coverage. But reporting them requires quantitative evidence: volume fractions, connectivity metrics, error bars, and p-values.
 
 FluoroStats bridges that gap with a single command:
 
@@ -34,7 +34,7 @@ This produces:
 Well suited for bioprinted constructs, tissue sections, organoids, and spheroids — any volumetric data where cell presence and network structure matter.
 
 **Metrics:**
-- **Volume fraction** — percentage of the volume containing cells
+- **Volume fraction** — fraction (0–1) of the volume containing cells
 - **Euler number** — topological measure of network interconnectedness (more negative = more loops and tunnels)
 - **Largest component fraction** — whether the structure forms one connected network (e.g., 97%) or many scattered clusters (e.g., 19%)
 - **Skeleton length, branches, junctions** — extent and branching complexity of the cell network
@@ -46,7 +46,7 @@ Well suited for bioprinted constructs, tissue sections, organoids, and spheroids
 Well suited for endothelial coverage, monolayer confluence, wound healing assays, and other planar cell coverage measurements.
 
 **Metrics:**
-- **Area fraction** — percentage of the surface covered by cells
+- **Area fraction** — fraction (0–1) of the surface covered by cells
 - **Cluster count and sizes** — whether cells form one confluent sheet or many scattered patches
 - **Largest component fraction** — degree of coverage fragmentation
 
@@ -120,10 +120,26 @@ fluorostats depth ./my_experiment/manifest.json
 Start with the `overlays/` folder — each image gets a QC overlay (grayscale intensity + magenta segmentation mask) for immediate visual verification.
 
 Then inspect:
-- `per_file.csv` — measurements for every file
+- `per_file.csv` — measurements for every file, plus which channel was measured
+  (`channel_used`) and whether each voxel size came from the file or is the 1.0 µm
+  placeholder (`voxel_size_source`)
 - `per_condition.csv` — summary statistics grouped by condition
 - `plots/summary_panel.png` — all metrics in one composite figure
-- `plots/pvalues.csv` — statistical comparisons (available when replicates are present)
+- `plots/pvalues.csv` — statistical comparisons (available when replicates are present):
+  two-sided Mann-Whitney U, Cliff's δ and Benjamini–Hochberg q-values, which the
+  summary panel's stars use; pairs that cannot be tested are listed with a `reason`
+- `run_config.json` — the tool, parameters, package versions and code commit that produced the
+  folder and the files it read. A run first writes it as a marker
+  (`{"tool": ..., "status": "incomplete"}`) and replaces it with the full record
+  (`"status": "complete"`) when it finishes, so a folder an interrupted or failed run left
+  says so and is still recognised as that tool's on rerun. When every file fails, the
+  run writes only `failures.csv` and the marker
+- `failures.csv` — only when a file could not be read or measured: the file and the error; the
+  other files are still measured and the command exits with status 1
+
+Watch the console too: fluorostats warns, rather than guessing silently, when a
+file lacks calibration, when the channel is chosen by position because no name
+matched a dye, or when extra axes (time points, scenes) are dropped.
 
 ## Tuning
 
@@ -154,10 +170,10 @@ fluorostats formats   # check availability on the current system
 | `.tif` `.tiff` | Universal / OME-TIFF / ImageJ | included |
 | `.png` `.jpg` `.bmp` | Exported snapshots | included |
 | `.npy` | NumPy arrays | included |
-| `.oib` `.oif` | Olympus FluoView | `fluorostats[olympus]` |
-| `.czi` | Zeiss ZEN | `fluorostats[zeiss]` |
-| `.nd2` | Nikon NIS-Elements | `fluorostats[nikon]` |
-| `.lif` | Leica LAS X | `fluorostats[leica]` |
+| `.oib` `.oif` | Olympus FluoView | `pip install oiffile` (extra `olympus`) |
+| `.czi` | Zeiss ZEN | `pip install czifile` (extra `zeiss`) |
+| `.nd2` | Nikon NIS-Elements | `pip install nd2` (extra `nikon`) |
+| `.lif` | Leica LAS X | `pip install readlif` (extra `leica`) |
 | `*_CHF*.ome.tif` folder + `.gci` | Keyence BZ-X (per-slice z-stack export) | included |
 
 Keyence BZ-X exports a z-stack as one OME-TIFF per slice (all channels inside each file) plus an `Image .gci` metadata archive. Load the whole stack — pixel size, z-step, and channel names read from the `.gci` — in one call:
@@ -166,14 +182,14 @@ Keyence BZ-X exports a z-stack as one OME-TIFF per slice (all channels inside ea
 from fluorostats import keyence
 
 arr, meta = keyence.load_keyence_stack("path/to/stack_folder")   # (C, Z, Y, X) + metadata
-# arr[0], arr[1] = acquired channels; meta = {px_um, z_step_um, channels, ...}
+# arr[0], arr[1] = acquired channels; meta = {voxel_size_um, channels, ...}
 
 # ...or just pass the folder to the generic loader — it auto-detects Keyence:
 from fluorostats.io import load_volume
 arr, meta = load_volume("path/to/stack_folder")   # (C, Z, Y, X); voxel_size_um, channel_names
 ```
 
-Only the `*_CHF*` files and `.gci` are needed — the 8-bit `Overlay` / `Preview` exports are derivable. See [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) for an end-to-end cell-laden-tube analysis (nuclei density, wall band, coverage/lumen, GFP network) built on this reader.
+Only the `*_CHF*` files and `.gci` are needed — the 8-bit `Overlay` / `Preview` exports are derivable. See [`examples/keyence_tube_analysis.py`](https://github.com/rsiegemit/fluorostats/blob/main/examples/keyence_tube_analysis.py) for an end-to-end cell-laden-tube analysis (nuclei density, wall band, coverage/lumen, GFP network) built on this reader.
 
 ## Python API
 
@@ -183,7 +199,8 @@ FluoroStats can also be used as a library for custom analysis workflows:
 from fluorostats.io import load_auto
 from fluorostats.preprocess import select_green_channel, denoise
 from fluorostats.segment import binarize
-from fluorostats.metrics_3d import volume_fraction, connectivity_metrics, skeleton_metrics
+from fluorostats.metrics_3d import volume_fraction, connectivity_metrics
+from fluorostats.skeleton import skeleton_metrics
 
 # Load any supported format (auto-detected)
 arr, meta = load_auto("my_sample.czi")
@@ -244,7 +261,7 @@ For a batch, manifest-driven workflow — many stacks grouped by condition, matc
 fluorostats depth manifest.json      # or: from fluorostats.depth_batch import run
 ```
 
-The JSON manifest lists the groups, stacks, blanks, and AUC windows (fully generic; nothing hardcoded). See [`fluorostats.depth_batch`](src/fluorostats/depth_batch.py) for the schema.
+The JSON manifest lists the groups, stacks, blanks, and AUC windows (fully generic; nothing hardcoded). See [`fluorostats.depth_batch`](https://github.com/rsiegemit/fluorostats/blob/main/src/fluorostats/depth_batch.py) for the schema.
 
 A parallel manifest-driven driver quantifies **Live/Dead viability** across many two-channel stacks grouped by condition (area/count consensus, regime detection, per-FOV density, 2D-vs-3D bias → tidy CSVs):
 
@@ -252,7 +269,7 @@ A parallel manifest-driven driver quantifies **Live/Dead viability** across many
 fluorostats viability manifest.json   # or: from fluorostats.viability_batch import run
 ```
 
-See [`fluorostats.viability_batch`](src/fluorostats/viability_batch.py) for the schema. (The five CLI subcommands are `quant3d`, `quant2d`, `depth`, `viability`, and `formats`.)
+See [`fluorostats.viability_batch`](https://github.com/rsiegemit/fluorostats/blob/main/src/fluorostats/viability_batch.py) for the schema. (The five CLI subcommands are `quant3d`, `quant2d`, `depth`, `viability`, and `formats`.)
 
 ### Per-object measurements
 
@@ -322,10 +339,11 @@ corr = attenuation_correct(volume)        # per-z normalisation: biological deat
 
 # count-based viability — robust to crowding (area under-reports when cells overlap)
 cnt  = live_dead_by_count(live_channel, dead_channel, method="all")
-#   -> {'by_method': {cc/watershed/maxima}, 'consensus': median, 'spread': disagreement}
+#   -> {'n_live_cc', ..., 'viability_maxima', 'consensus': median, 'spread': disagreement, ...}
+#      the same flat keys for every method (NaN where a method did not run)
 ```
 
-Quantifies the Calcein-AM / PI (live/dead) assay in a depth-aware way. In thick 3D samples a single plane or a maximum-intensity projection overestimates viability and misses depth-dependent core death — `viability_2d_vs_3d` measures that overestimation and `viability_depth_profile` exposes the gradient. `live_dead_by_count` counts cells instead of area (via `cc`, `watershed`, prominence-`maxima`, a transparent `auto`, or `all`+consensus); on a published synthetic Live/Dead set the `maxima` mode matches the reference Fiji macro exactly (CCC 0.987). No single counting mode is universally best — `maxima` excels on crowded single-peak cells, `cc` is most noise-robust — so pick by regime or use `all`.
+Quantifies the Calcein-AM / PI (live/dead) assay in a depth-aware way. In thick 3D samples a single plane or a maximum-intensity projection overestimates viability and misses depth-dependent core death — `viability_2d_vs_3d` measures that overestimation and `viability_depth_profile` exposes the gradient. `live_dead_by_count` counts cells instead of area (via `cc`, `watershed`, peak-counting `maxima` — local maxima above a fraction of the image maximum —, a transparent `auto`, or `all`+consensus); on a published synthetic Live/Dead set with known viabilities the `maxima` mode agrees with the ground truth at CCC 0.987 (MAE 0.016). No single counting mode is universally best — `maxima` excels on crowded single-peak cells, `cc` is most noise-robust — so pick by regime or use `all`.
 
 ### Instance-segmentation validation
 
@@ -357,18 +375,18 @@ from fluorostats.texture import orientation_anisotropy, mesh_size
 from fluorostats.objects import angular_homogeneity, radial_distribution
 
 # tube / vessel cross-section (2D wall mask): lumen, wall, diameters, concentricity
-r = ring_morphometry(wall_mask, spacing=(dy_um, dx_um))   # off-centre / open-ring safe
+r = ring_morphometry(wall_mask, voxel_size_um=(dy_um, dx_um))   # off-centre / open-ring safe
 
 # fibrous network (e.g. F-actin MIP): alignment + pore scale
 o = orientation_anisotropy(image, mask=net_mask)          # coherence 0=isotropic … 1=aligned
-gap = mesh_size(net_mask, spacing=(dy_um, dx_um))          # typical open-gap size
+gap = mesh_size(net_mask, voxel_size_um=(dy_um, dx_um))       # typical open-gap size
 
 # distribution of points around a centre (last two centroid cols = y, x)
 angular_homogeneity(centroids, center)                    # circumferential evenness
 radial_distribution(centroids, center, n_bins=3)          # inner→outer shells (n_bins default 8; 3 = thirds)
 ```
 
-General, assay-agnostic geometry helpers for tubular / networked constructs — see [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py) (`geometry="cross_section"` / `"wall"`) for an end-to-end use.
+General, assay-agnostic geometry helpers for tubular / networked constructs — see [`examples/keyence_tube_analysis.py`](https://github.com/rsiegemit/fluorostats/blob/main/examples/keyence_tube_analysis.py) (`geometry="cross_section"` / `"wall"`) for an end-to-end use.
 
 ### Spatial sampling & heterogeneity
 
@@ -379,7 +397,7 @@ from fluorostats.objects import (object_shape_metrics, nearest_neighbor_stats,
 from fluorostats.texture import orientation_order
 
 # one big FOV -> a grid of sub-region measurements (any reducer)
-cov_grid = tile_reduce(net_mask, lambda t: 100 * t.mean(), grid=(5, 5))   # per-tile coverage
+cov_grid = tile_reduce(net_mask, lambda t: 100 * t.mean(), grid=(5, 5))   # per-tile coverage, %
 den_grid = tile_point_density(centroids, mask.shape, grid=(5, 5))         # per-tile object counts
 het = spatial_heterogeneity(den_grid)          # {cv, morans_i, n}: uniform vs patchy/clustered
 
@@ -393,7 +411,7 @@ assoc = object_mask_association(centroids, net_mask)                      # do n
 align = orientation_order(shape["orientation_deg"], reference_deg=net_angle)  # nucleus↔network alignment
 ```
 
-`spatial` samples a field at sub-region scale with any callable and scores uniformity (tile-to-tile CV, Moran's I spatial autocorrelation); `objects`/`texture` add point-pattern clustering, object–structure association, and orientation alignment. All are assay-agnostic and used end-to-end in [`examples/keyence_tube_analysis.py`](examples/keyence_tube_analysis.py).
+`spatial` samples a field at sub-region scale with any callable and scores uniformity (tile-to-tile CV, Moran's I spatial autocorrelation); `objects`/`texture` add point-pattern clustering, object–structure association, and orientation alignment. All are assay-agnostic and used end-to-end in [`examples/keyence_tube_analysis.py`](https://github.com/rsiegemit/fluorostats/blob/main/examples/keyence_tube_analysis.py).
 
 ### Multi-group statistics
 
@@ -422,6 +440,11 @@ anova = scheirer_ray_hare(df, value_col="lateral_gini",
                           factor_a="material", factor_b="day")
 ```
 
+`stats` also holds the small pieces the rest of the library shares, so there is
+one implementation of each: `gini` and `coefficient_of_variation` (the `ddof` is
+explicit), `bootstrap_mean_ci` (seeded percentile bootstrap of a mean) and
+`welch_t` (for contrasts that ask for a parametric test by name).
+
 ### Bootstrap power analysis
 
 ```python
@@ -439,13 +462,28 @@ multi = fdr_power_curve(samples_per_metric_a, samples_per_metric_b,
 ### Publication styling
 
 ```python
-from fluorostats.style import apply_style, PALETTE, material_color
+from fluorostats.pubfig import apply_style, PALETTE, material_color
 
-apply_style()                       # clean typography, spines, grid, palette
+apply_style("house")                # clean typography, spines, grid, palette
 color = material_color("Hybrid")    # consistent per-condition colors
 ```
 
-`apply_style()` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` / `MATERIAL_COLORS` give a consistent color story, and `DARK_PALETTE` drives the black-background 3D look below.
+`apply_style("house")` opts every subsequent figure into a modern publication look — call it once at the top of a script. `PALETTE` gives a consistent color story (`group_colors(names)` gives each condition its own color: the exact names in `MATERIAL_COLORS` keep theirs, every other name takes the next unused palette color; a manifest group's `color` overrides), and `DARK_PALETTE` drives the black-background 3D look below.
+
+For compact multi-panel figures, `fluorostats.pubfig` is the kit the benchmark
+figures are built with (and the one figure style of the package): an Okabe–Ito palette, a 5–7 pt type scale, bold panel
+letters, image helpers and scale bars, lollipop and Bland–Altman panels, and an
+exporter that writes PDF + 600-dpi PNG at the authored size.
+
+```python
+from fluorostats import pubfig as F
+
+F.apply_style()
+fig, ax = plt.subplots(figsize=(3.5, 2.6))
+...
+F.panel(ax, "a", "ground-truth recovery")
+F.save(fig, "fig1", "figures/")      # figures/fig1.pdf + fig1.png
+```
 
 ### 3D reconstruction (isosurface, voxel cloud)
 
@@ -464,10 +502,10 @@ render_isosurface(mask, voxel_size_um=meta["voxel_size_um"],
 
 Marching-cubes isosurface on a physical-micrometre grid. `style="dark"` renders on black with a faint box and white scalebar; `smooth_iter` applies Laplacian mesh smoothing for continuous tubes; `shade=True` adds Lambertian per-face shading for depth. `render_voxel_cloud` is a chunky voxel variant.
 
-### Slide-style image panels (no segmentation)
+### Image panels (no segmentation)
 
 ```python
-from fluorostats.render3d import live_dead_mip, mip_grid, layer_split_mip, depth_coded_mip
+from fluorostats.projections import live_dead_mip, mip_grid, layer_split_mip, depth_coded_mip
 
 # Two-channel raw MIP (green live + red dead), gamma + percentile clipped
 live_dead_mip(live_channel, dead_channel, ax=ax)
@@ -513,14 +551,18 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 | `--output` | required | Output folder for results |
 | `--condition-from` | `parent` | Label source: `parent` folder, `grandparent`, or `filename` |
 | `--channel` | auto | Force channel by index or name |
-| `--threshold` | `otsu` | Thresholding method: `otsu` or `li` |
-| `--threshold-scale` | `0.9` | Scale threshold (lower = more sensitive) |
-| `--min-size` | `64` | Min object size in voxels |
+| `--threshold` | `otsu` | `otsu`, `li`, `isodata`, `triangle`, `yen`, `mean`, `auto` (picked from the histogram) or `consensus` (majority vote) |
+| `--threshold-scale` | `0.9` | Scale threshold, > 0 (lower = more sensitive) |
+| `--min-size` | `64` | Min object size in voxels (smaller objects are removed) |
 | `--sigma` | `1.0` | Gaussian blur sigma |
 | `--bg-radius` | `0` | Background subtraction radius (0 = off) |
-| `--no-skeleton` | off | Skip skeleton analysis (faster) |
+| `--opening` | `ball` | Noise opening: `ball` (3D; erases structures thinner than 3 slices), `disk` (per slice) or `none` |
+| `--no-skeleton` | off | Skip skeleton analysis (faster); skeleton columns are left blank (cannot be combined with `--prune`) |
+| `--prune/--no-prune` | off | Prune skeleton spurs shorter than `--min-branch-length` |
+| `--min-branch-length` | `5.0` | Spur-pruning length in µm (with `--prune`) |
 | `--no-overlays` | off | Skip QC overlay images |
 | `--no-plots` | off | Skip comparison plots |
+| `--overwrite` | off | Allow an output folder that holds files this tool did not write |
 
 </details>
 
@@ -533,16 +575,78 @@ modality_panel(df, metrics=["volume_fraction", "length_density_um_per_mm3"],
 | `--output` | required | Output folder for results |
 | `--condition-from` | `parent` | Label source: `parent` folder, `grandparent`, or `filename` |
 | `--channel` | auto | Force channel by index or name |
-| `--threshold` | `li` | Thresholding method: `otsu` or `li` |
-| `--threshold-scale` | `1.0` | Scale threshold (lower = more sensitive) |
-| `--min-size` | `64` | Min object size in pixels |
+| `--threshold` | `li` | Same choices as quant3d |
+| `--threshold-scale` | `1.0` | Scale threshold, > 0 (lower = more sensitive) |
+| `--min-size` | `64` | Min object size in pixels (smaller objects are removed) |
 | `--sigma` | `1.0` | Gaussian blur sigma |
 | `--bg-radius` | `15` | Background subtraction radius (0 = off) |
-| `--auto-crop` | on | Auto-crop microscope software borders |
+| `--auto-crop/--no-auto-crop` | on | Auto-crop microscope software borders |
 | `--no-overlays` | off | Skip QC overlay images |
 | `--no-plots` | off | Skip comparison plots |
+| `--overwrite` | off | Allow an output folder that holds files this tool did not write |
 
 </details>
+
+<details>
+<summary>fluorostats depth / viability / formats</summary>
+
+| Command | Description |
+|---------|-------------|
+| `fluorostats depth MANIFEST [--output DIR] [--overwrite]` | Depth-penetration batch run from a JSON manifest (schema in `fluorostats.depth_batch`) |
+| `fluorostats viability MANIFEST [--output DIR] [--overwrite]` | Live/Dead batch run from a JSON manifest (schema in `fluorostats.viability_batch`) |
+| `fluorostats formats` | List file formats and whether their readers are installed |
+
+Manifests are checked before any image is loaded: an unknown field, a typo in a
+channel index, a role, an AUC window or a file path is reported at once, all
+problems together. Both commands write their two-group statistics to
+`contrasts.csv` (Mann-Whitney, Cliff's δ, BH q) and, last, `run_config.json` with
+the fully resolved manifest. Depth manifests take `"parametric": true` to also print
+a Welch t-test and `fit_r2_threshold` (default `depth.FIT_R2_THRESHOLD`, 0.85) for the
+λ fit; λ is reported only when it lies between the z-step and the imaged depth.
+`contrasts.csv` flags windows a stack covers only partly (`n_partial`) and gives a
+`reason` for any comparison that could not be tested.
+
+Relative paths in a manifest (stack `path`, `background`, `output_dir` and its
+default) are relative to the folder that holds the manifest, so a run gives the same
+result from any working directory; `--output` is relative to the working directory.
+A relative path that exists only relative to the working directory is an error
+naming both locations (make it relative to the manifest's folder, or absolute).
+
+A run refuses an output folder that holds files it did not write (pass `--overwrite`
+to `quant2d`, `quant3d`, `depth` or `viability` to replace them); files the tool wrote in an
+earlier run are replaced and named.
+
+`quant3d` also accepts Keyence BZ-X folders as volumes; an input folder with
+nothing to measure exits with status 2.
+
+</details>
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest --cov=fluorostats          # the suite runs at 100% line coverage
+ruff check src tests benchmarks examples
+ruff format --check src tests
+mypy                              # configured in pyproject.toml
+```
+
+CI runs the same checks on Python 3.10-3.13, plus the test suite with every dependency
+at its declared minimum version.
+
+The file readers also have an optional regression suite on real vendor sample files
+(`tests/test_io_real_files.py`). It runs when `FLUOROSTATS_VENDOR_DATA` points to a folder
+holding these public files (any layout; check each source's licence before reusing them):
+[Spleenx20.oib](https://zenodo.org/records/4598136),
+[partB_OSN_9_Apple.oib](https://zenodo.org/records/4563053),
+`h1-rc-1.oib` from the [RICS dataset](https://zenodo.org/records/11075037),
+[PR2729_frameOrderCombinedScanTypes.lif](https://downloads.openmicroscopy.org/images/Leica-LIF/michael/),
+`ND2_dims_rgb_t3p2c2z3x64y64.nd2`, `s_3_t_1_c_3_z_5.czi` and `s_3_t_1_c_3_z_5.ome.tiff` from the
+[AICS test resources](https://aics-modeling-packages-test-resources.s3.us-west-2.amazonaws.com/aicsimageio/test_resources/resources/),
+and `confocal-series.tif` from the [ImageJ samples](https://imagej.net/images/confocal-series.zip).
+It needs the reader extras: `pip install -e ".[all]"`.
+
+Engineering rules for contributions are in [docs/ENGINEERING.md](https://github.com/rsiegemit/fluorostats/blob/main/docs/ENGINEERING.md).
 
 ## Citation
 
@@ -556,14 +660,16 @@ That is the concept DOI: it always resolves to the newest release, so it never
 goes stale. Each release also gets its own version DOI — cite that instead to
 pin an exact version (v0.8.0 is
 [10.5281/zenodo.22942365](https://doi.org/10.5281/zenodo.22942365), v0.8.1 is
-[10.5281/zenodo.22945043](https://doi.org/10.5281/zenodo.22945043)).
+[10.5281/zenodo.22945043](https://doi.org/10.5281/zenodo.22945043), v0.8.2 is
+[10.5281/zenodo.22947222](https://doi.org/10.5281/zenodo.22947222)).
 
 Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) (GitHub's
 "Cite this repository" button reads it) and [`.zenodo.json`](.zenodo.json).
-The archive is self-contained: the derived metric tables underlying every figure
-ship inside it at [`benchmarks/results/`](benchmarks/results), so each figure
-regenerates from the deposit alone. Source dataset licences and URLs are listed
-in [`benchmarks/DATA_MANIFEST.md`](benchmarks/DATA_MANIFEST.md).
+The derived metric tables behind the benchmark figures ship inside the archive at
+[`benchmarks/results/`](https://github.com/rsiegemit/fluorostats/blob/main/benchmarks/results), each with a record of the commit and
+parameters that produced it. Figures 3, 5, S1, S3 and S4 regenerate from them
+alone; Figures 2, 4 and S2 also read public datasets. Source dataset licences and URLs are listed
+in [`benchmarks/DATA_MANIFEST.md`](https://github.com/rsiegemit/fluorostats/blob/main/benchmarks/DATA_MANIFEST.md).
 
 ## License
 

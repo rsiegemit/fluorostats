@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 from skimage.filters import (
     threshold_isodata,
@@ -11,15 +15,17 @@ from skimage.filters import (
     threshold_triangle,
     threshold_yen,
 )
+from scipy import ndimage as ndi
 from skimage.morphology import (
     ball,
     disk,
-    opening,
-    remove_small_objects,
 )
+from skimage.morphology import opening as binary_opening
+
+from .preprocess import background_subtract, denoise
 
 # Global thresholding algorithms fluorostats implements (all in-library).
-THRESHOLD_METHODS = {
+THRESHOLD_METHODS: dict[str, Callable[..., Any]] = {
     "otsu": threshold_otsu,
     "li": threshold_li,
     "isodata": threshold_isodata,
@@ -27,6 +33,50 @@ THRESHOLD_METHODS = {
     "yen": threshold_yen,
     "mean": threshold_mean,
 }
+
+# Every accepted ``binarize(method=...)``: the algorithms above plus the two
+# meta-methods that choose among them. The CLI builds its --threshold choices here.
+METHODS = (*THRESHOLD_METHODS, "auto", "consensus")
+
+# `choose_threshold_method`'s rule: Otsu has missed a dim, sparse foreground when it
+# keeps under AUTO_OTSU_MIN_FRACTION of the pixels while Li keeps more than
+# AUTO_LI_RATIO times as much. Hand-set heuristics (v0.7), checked only on the
+# synthetic sparse-signal case in tests/test_segment.py; no benchmark table chose them.
+AUTO_OTSU_MIN_FRACTION = 0.01
+AUTO_LI_RATIO = 3.0
+
+# Salt-noise opening applied after thresholding, by name: the footprint for a mask
+# of the given ndim, or None for no opening. "ball" (3x3x3 cross in 3D, disk(1) in
+# 2D) removes any structure thinner than 3 z-slices; "disk" opens each z-slice in
+# 2D only, so thin sheets/vessels that span 1-2 slices survive.
+OPENINGS: dict[str, Callable[[int], np.ndarray | None]] = {
+    "ball": lambda ndim: ball(1) if ndim == 3 else disk(1),
+    "disk": lambda ndim: disk(1)[None] if ndim == 3 else disk(1),
+    "none": lambda ndim: None,
+}
+
+
+def segment_channel(
+    img: np.ndarray,
+    *,
+    method: str = "otsu",
+    min_size: int = 64,
+    threshold_scale: float = 1.0,
+    sigma: float = 1.0,
+    bg_radius: int = 0,
+    opening: str = "ball",
+) -> tuple[np.ndarray, np.ndarray]:
+    """The full single-channel segmentation the CLI runs: Gaussian denoise,
+    optional white-top-hat background subtraction (``bg_radius > 0``), then
+    `binarize` (``opening`` as there: the default 3D opening erases structures
+    thinner than 3 z-slices). Returns ``(preprocessed_image, mask)``.
+    """
+    img = denoise(img, sigma=sigma)
+    if bg_radius > 0:
+        img = background_subtract(img, radius=bg_radius)
+    return img, binarize(
+        img, method=method, min_size=min_size, threshold_scale=threshold_scale, opening=opening
+    )
 
 
 def choose_threshold_method(arr: np.ndarray) -> dict:
@@ -54,18 +104,40 @@ def choose_threshold_method(arr: np.ndarray) -> dict:
     for name, fn in THRESHOLD_METHODS.items():
         try:
             fracs[name] = float((a > fn(a)).mean())
-        except Exception:
+        except (ValueError, IndexError) as exc:  # non-finite or degenerate histogram
+            warnings.warn(
+                f"choose_threshold_method: {name} failed ({type(exc).__name__}: "
+                f"{exc}); its foreground fraction is NaN.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             fracs[name] = float("nan")
     otsu_f = fracs.get("otsu", 0.0)
     li_f = fracs.get("li", 0.0)
-    if otsu_f < 0.01 and li_f > 3 * otsu_f:
-        method, reason = "li", (
-            f"Otsu keeps only {otsu_f:.4f} of pixels while Li finds {li_f:.4f} "
-            f"— dim/sparse foreground Otsu misses")
+    if otsu_f < AUTO_OTSU_MIN_FRACTION and li_f > AUTO_LI_RATIO * otsu_f:
+        method, reason = (
+            "li",
+            (
+                f"Otsu keeps only {otsu_f:.4f} of pixels while Li finds {li_f:.4f} "
+                f"— dim/sparse foreground Otsu misses"
+            ),
+        )
     else:
-        method, reason = "otsu", (
-            f"Otsu foreground {otsu_f:.4f} plausible (skew {skew:.1f})")
+        method, reason = "otsu", (f"Otsu foreground {otsu_f:.4f} plausible (skew {skew:.1f})")
     return {"method": method, "reason": reason, "skew": skew, "fractions": fracs}
+
+
+def _scaled(thresh: float, threshold_scale: float) -> float:
+    """``thresh * threshold_scale``, with a RuntimeWarning when the scale flips
+    direction: for a threshold <= 0 a scale > 1 keeps more pixels, not fewer."""
+    if thresh <= 0 and threshold_scale != 1.0:
+        warnings.warn(
+            f"binarize: the threshold {thresh:g} is not positive, so threshold_scale="
+            f"{threshold_scale:g} moves it the opposite way (> 1 keeps more pixels)",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return thresh * threshold_scale
 
 
 def binarize(
@@ -73,6 +145,7 @@ def binarize(
     method: str = "otsu",
     min_size: int = 64,
     threshold_scale: float = 1.0,
+    opening: str = "ball",
 ) -> np.ndarray:
     """Segment fluorescence signal into a binary mask.
 
@@ -89,45 +162,85 @@ def binarize(
         Minimum object size in pixels/voxels. Smaller objects are removed.
     threshold_scale : float
         Multiply the computed threshold by this factor. Values < 1.0
-        capture more dim signal; values > 1.0 are more conservative.
+        capture more dim signal; values > 1.0 are more conservative. This
+        assumes a positive threshold: for a threshold <= 0 (zero-centred or
+        background-subtracted data) the direction flips, with a RuntimeWarning.
+    opening : {"ball", "disk", "none"}
+        Salt-noise opening after thresholding (see `OPENINGS`). The default
+        ``"ball"`` opens 3D masks with a 3x3x3 cross, which erases any structure
+        thinner than 3 z-slices (thin sheets, monolayers, vessels on a coarse
+        z-step); ``"disk"`` opens each z-slice in 2D and keeps them; ``"none"``
+        skips the opening. 2D masks: ``"ball"`` and ``"disk"`` are both disk(1).
 
     Returns
     -------
     ndarray[bool]
-        Binary mask, same shape as input.
+        Binary mask, same shape as input. A NaN or infinite pixel raises
+        ValueError (the thresholds are undefined on non-finite data).
     """
     arr_float = arr.astype(np.float64)
+    if not np.isfinite(arr_float).all():
+        raise ValueError(
+            "binarize: the image has NaN or infinite pixels; thresholds need finite data"
+        )
 
     # Global threshold
     if method == "consensus":
         votes = np.zeros(arr_float.shape, dtype=np.uint8)
-        for fn in THRESHOLD_METHODS.values():
+        for name, fn in THRESHOLD_METHODS.items():
             try:
-                votes += (arr_float > fn(arr_float) * threshold_scale).astype(np.uint8)
-            except Exception:
-                pass
+                votes += (arr_float > _scaled(fn(arr_float), threshold_scale)).astype(np.uint8)
+            except Exception as exc:
+                # A failed method still counts toward the majority, i.e. it votes
+                # background everywhere; say so rather than skipping it silently.
+                warnings.warn(
+                    f"consensus threshold: {name} failed ({type(exc).__name__}: "
+                    f"{exc}); it counts as a background vote.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
         mask = votes >= (len(THRESHOLD_METHODS) // 2 + 1)
     else:
         if method == "auto":
             method = choose_threshold_method(arr_float)["method"]
         if method not in THRESHOLD_METHODS:
             raise ValueError(f"Unknown threshold method: {method!r}")
-        thresh = THRESHOLD_METHODS[method](arr_float) * threshold_scale
+        thresh = _scaled(THRESHOLD_METHODS[method](arr_float), threshold_scale)
         mask = arr_float > thresh
 
-    # Morphological opening to remove salt noise
-    if arr.ndim == 3:
-        selem = ball(1)
-    else:
-        selem = disk(1)
-    mask = opening(mask, footprint=selem)
+    if opening not in OPENINGS:
+        raise ValueError(f"Unknown opening: {opening!r}; choose from {sorted(OPENINGS)}")
+    footprint = OPENINGS[opening](arr.ndim)
+    if footprint is not None:
+        mask = binary_opening(mask, footprint=footprint)
 
-    # Remove small connected components. skimage renamed `min_size` -> `max_size`
-    # in 0.26 (same "remove objects <= threshold" semantic); support both versions.
-    if min_size > 0:
-        try:
-            mask = remove_small_objects(mask, max_size=min_size)  # skimage >= 0.26
-        except TypeError:  # pragma: no cover  # skimage<0.26 signature fallback
-            mask = remove_small_objects(mask, min_size=min_size)  # skimage < 0.26
+    return remove_small(mask, min_size)
 
-    return mask
+
+def remove_small(mask: np.ndarray, min_size: int) -> np.ndarray:
+    """Drop connected objects smaller than ``min_size`` pixels/voxels (objects of
+    exactly ``min_size`` are kept); a new bool mask.
+
+    Objects are face-connected components (`scipy.ndimage.label`), and the rule
+    is `remove_small_labels`, the one small-object rule of the package (also
+    used by `binarize`, `objects.label_3d` and `objects.watershed_split`);
+    ``min_size <= 0`` returns the mask unchanged.
+    """
+    if min_size <= 0:
+        return mask
+    return remove_small_labels(ndi.label(mask)[0], min_size)[0] > 0
+
+
+def remove_small_labels(labels: np.ndarray, min_size: int) -> tuple[np.ndarray, int]:
+    """``(labels, n)`` with every label of fewer than ``min_size`` pixels/voxels
+    removed and the survivors relabelled 1..n in their original order (labels of
+    exactly ``min_size`` are kept). ``labels`` is an integer label image, 0 the
+    background; touching objects keep their own labels."""
+    sizes = np.bincount(labels.ravel())
+    keep = sizes >= min_size
+    keep[0] = False  # background
+    if not keep.any():
+        return np.zeros_like(labels), 0
+    remap = np.zeros(sizes.size, dtype=labels.dtype)
+    remap[keep] = np.arange(1, keep.sum() + 1, dtype=labels.dtype)
+    return remap[labels], int(keep.sum())

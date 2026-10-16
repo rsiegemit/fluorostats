@@ -1,8 +1,8 @@
 """End-to-end multi-condition analysis using only FluoroStats.
 
-Reproduces the kind of analysis we ran on the Extrusion bioprinting
-project (GelMA vs Hybrid × Day 1/7/14 × Top/Middle/Bottom) using only
-the FluoroStats library — no project-specific helpers.
+A worked example of a multi-condition design (material × day × region,
+e.g. GelMA vs Hybrid × Day 1/7/14 × Top/Middle/Bottom) using only the
+FluoroStats library — no project-specific helpers.
 
 Pipeline:
 
@@ -11,7 +11,6 @@ Pipeline:
         - 3D metrics (VF, connectivity, skeleton)
         - FOV-normalised densities (zoom-invariant)
         - intensity-based morphometry (lateral Gini/CV, depth span)
-        - per-object metrics (nuclei size + density when applicable)
 
   2.  Statistics:
         - stratified Mann-Whitney + BH-FDR across (day × region × metric)
@@ -26,29 +25,25 @@ Pipeline:
         - condition strip plot (markers differentiate batches)
         - 3D isosurface render on physical-µm grid
 
-Adapt `DATA_ROOT` and the discovery logic to your own folder layout —
-everything below is library code, not paper-specific glue.
+Run it as ``python multi_condition_pipeline.py <data_root> <out_dir>`` and adapt
+`discover_stacks` to your own folder layout — everything else is library code,
+not project-specific glue.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from fluorostats.io import load_volume
-from fluorostats.preprocess import select_green_channel, denoise, background_subtract
-from fluorostats.segment import binarize
+from fluorostats.preprocess import select_green_channel
+from fluorostats.segment import segment_channel
 from fluorostats.metrics_3d import (
-    volume_fraction, connectivity_metrics, skeleton_metrics,
-    normalise_skeleton_metrics,
+    volume_fraction, connectivity_metrics, normalise_skeleton_metrics,
 )
+from fluorostats.skeleton import skeleton_metrics
 from fluorostats.morphometry import lateral_homogeneity, depth_span
-from fluorostats.objects import (
-    label_3d, equivalent_diameters_um, object_density_per_mm3,
-    object_centroids, centroid_homogeneity,
-)
 from fluorostats.stats import (
     stratified_mann_whitney, bootstrap_fold_change_ci,
     stouffer_combine, scheirer_ray_hare,
@@ -59,6 +54,8 @@ from fluorostats.plots import (
 )
 from fluorostats.render3d import save_isosurface
 
+# One segmentation for every stack: denoise -> background subtract -> Otsu x0.9.
+SEG = dict(method="otsu", threshold_scale=0.9, min_size=64, sigma=1.0, bg_radius=15)
 
 # ---------------------------------------------------------------------------
 # 1. Per-stack quantification
@@ -68,9 +65,7 @@ def quantify_stack(path: Path) -> dict:
     """Run the full per-stack metric set on one volume."""
     arr, meta = load_volume(path)
     vol = select_green_channel(arr, meta["channel_names"])
-    smoothed = denoise(vol, sigma=1.0)
-    bg = background_subtract(smoothed, radius=15)
-    mask = binarize(bg, method="otsu", threshold_scale=0.9, min_size=64)
+    _, mask = segment_channel(vol, **SEG)
 
     vsz = meta["voxel_size_um"]
     metrics = {"file": path.name, "shape": vol.shape, "voxel_size_um": vsz,
@@ -81,28 +76,6 @@ def quantify_stack(path: Path) -> dict:
     metrics.update(lateral_homogeneity(vol, tiles=8))
     metrics.update(depth_span(vol, voxel_size_um=vsz))
     return metrics
-
-
-def quantify_objects(path: Path, channel_index: int = 0) -> dict:
-    """Per-object metrics for a channel (e.g. DAPI nuclei)."""
-    arr, meta = load_volume(path)
-    vol = arr[channel_index] if arr.ndim == 4 else arr
-    smoothed = denoise(vol, sigma=1.0)
-    bg = background_subtract(smoothed, radius=15)
-    mask = binarize(bg, method="otsu", threshold_scale=0.9, min_size=64)
-
-    labels, n = label_3d(mask, min_size=64)
-    diams = equivalent_diameters_um(labels, meta["voxel_size_um"])
-    density = object_density_per_mm3(n, mask.shape, meta["voxel_size_um"])
-    centroids = object_centroids(labels)
-    hom = centroid_homogeneity(centroids, mask.shape, tiles=8)
-    return {
-        "file": path.name,
-        "n_objects": n,
-        "median_diameter_um": float(np.median(diams)) if diams.size else 0.0,
-        "density_per_mm3": density,
-        **hom,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +150,8 @@ def make_figures(df: pd.DataFrame, stats: dict, out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 4))
     condition_strip(df[df.region == "middle"], x_col="day", y_col="volume_fraction",
                     hue_col="material", marker_col="batch", ax=ax)
-    fig.tight_layout(); fig.savefig(out_dir / "middle_vf_strip.png", dpi=200)
+    fig.tight_layout()
+    fig.savefig(out_dir / "middle_vf_strip.png", dpi=200)
     plt.close(fig)
 
 
@@ -204,6 +178,7 @@ def discover_stacks(root: Path) -> pd.DataFrame:
 
 
 def main(data_root: Path, out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
     stacks = discover_stacks(data_root)
     per_file = []
     for _, row in stacks.iterrows():
@@ -228,8 +203,7 @@ def main(data_root: Path, out_dir: Path) -> None:
     rep = stacks.query("material == 'Hybrid' and day == 14 and region == 'middle'").iloc[0]
     arr, meta = load_volume(rep["path"])
     vol = select_green_channel(arr, meta["channel_names"])
-    mask = binarize(background_subtract(denoise(vol), radius=15),
-                    method="otsu", threshold_scale=0.9, min_size=64)
+    _, mask = segment_channel(vol, **SEG)
     save_isosurface(mask, out_dir / "plots" / "rep_iso.png",
                     voxel_size_um=meta["voxel_size_um"],
                     color="#d62728", downsample=(1, 4, 4), scalebar_um=100)

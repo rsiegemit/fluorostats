@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib.colors import to_hex
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from fluorostats.metrics_3d import (
     fov_volume_mm3,
@@ -17,13 +20,9 @@ from fluorostats.render3d import (
     block_reduce_max,
     render_isosurface,
     render_voxel_cloud,
-    mip_overlay,
     save_isosurface,
-    live_dead_mip,
-    mip_grid,
-    depth_coded_mip,
-    layer_split_mip,
 )
+from fluorostats.pubfig import DARK_PALETTE
 
 
 def _solid_mask() -> np.ndarray:
@@ -40,6 +39,7 @@ def _solid_mask() -> np.ndarray:
 # ---------------------------------------------------------------------------
 # FOV helpers
 # ---------------------------------------------------------------------------
+
 
 def test_fov_volume_mm3_matches_manual_calc():
     # 10 x 100 x 100 voxels at 2 x 1 x 1 µm = 2e5 µm³ = 2e-4 mm³
@@ -66,6 +66,7 @@ def test_normalise_skeleton_metrics_adds_density_columns():
 # block_reduce_max
 # ---------------------------------------------------------------------------
 
+
 def test_block_reduce_max_shape_and_value():
     mask = np.zeros((4, 8, 8), dtype=bool)
     mask[0, 0, 0] = True
@@ -79,13 +80,15 @@ def test_block_reduce_max_shape_and_value():
 # Renderers — assert they produce axes without crashing
 # ---------------------------------------------------------------------------
 
+
 def test_render_isosurface_returns_axes():
     mask = np.zeros((8, 32, 32), dtype=bool)
     mask[2:6, 8:24, 8:24] = True
     fig = plt.figure(figsize=(4, 4))
     ax = fig.add_subplot(111, projection="3d")
-    out = render_isosurface(mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax,
-                            downsample=(1, 4, 4), scalebar_um=10.0)
+    out = render_isosurface(
+        mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax, downsample=(1, 4, 4), scalebar_um=10.0
+    )
     assert out is ax
     plt.close(fig)
 
@@ -99,22 +102,13 @@ def test_render_isosurface_handles_empty_mask():
     plt.close(fig)
 
 
-def test_mip_overlay_produces_rgb_image():
-    intensity = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32) * 100
-    mask = intensity[0] > 50
-    mask3 = np.broadcast_to(mask, intensity.shape)
-    fig, ax = plt.subplots()
-    out = mip_overlay(intensity, mask=mask3, ax=ax)
-    assert out is ax
-    plt.close(fig)
-
-
 def test_save_isosurface_writes_file(tmp_path):
     mask = np.zeros((8, 32, 32), dtype=bool)
     mask[2:6, 8:24, 8:24] = True
     out_path = tmp_path / "iso.png"
-    save_isosurface(mask, out_path, voxel_size_um=(2.0, 1.0, 1.0),
-                    downsample=(1, 4, 4), scalebar_um=20.0)
+    save_isosurface(
+        mask, out_path, voxel_size_um=(2.0, 1.0, 1.0), downsample=(1, 4, 4), scalebar_um=20.0
+    )
     assert out_path.exists() and out_path.stat().st_size > 1000
 
 
@@ -123,54 +117,13 @@ def test_render_isosurface_dark_style():
     mask[2:6, 8:24, 8:24] = True
     fig = plt.figure(figsize=(4, 4))
     ax = fig.add_subplot(111, projection="3d")
-    render_isosurface(mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax,
-                      style="dark", smooth_iter=2, color="#F5C518")
-    plt.close(fig)
-
-
-def test_live_dead_mip_returns_axis():
-    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32) * 100
-    dead = np.random.RandomState(1).rand(4, 16, 16).astype(np.float32) * 50
-    fig, ax = plt.subplots()
-    out = live_dead_mip(live, dead, ax=ax)
-    assert out is ax
-    plt.close(fig)
-
-
-def test_live_dead_mip_handles_zero_dead():
-    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
-    fig, ax = plt.subplots()
-    live_dead_mip(live, dead=None, ax=ax)
-    plt.close(fig)
-
-
-def test_mip_grid_writes_cells(tmp_path):
-    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
-    cells = {
-        ("D1", "top"): {"live": live},
-        ("D1", "middle"): {"live": live * 0.5},
-        ("D7", "top"): {"live": live * 0.8},
-        ("D7", "middle"): {"live": live * 1.2},
-    }
-    fig = mip_grid(cells, rows=["D1", "D7"], cols=["top", "middle"],
-                   title="test grid")
-    out = tmp_path / "grid.png"
-    fig.savefig(out, dpi=100)
-    plt.close(fig)
-    assert out.exists() and out.stat().st_size > 1000
-
-
-def test_depth_coded_mip_runs():
-    vol = np.random.RandomState(0).rand(8, 16, 16).astype(np.float32)
-    fig, ax = plt.subplots()
-    depth_coded_mip(vol, ax=ax)
-    plt.close(fig)
-
-
-def test_layer_split_mip_runs():
-    vol = np.random.RandomState(0).rand(10, 16, 16).astype(np.float32)
-    fig, (a, b) = plt.subplots(1, 2)
-    layer_split_mip(vol, ax_top=a, ax_bot=b, split=0.5)
+    render_isosurface(
+        mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax, style="dark", smooth_iter=2, color="#F5C518"
+    )
+    # under the signal guard: a dark empty panel with the message in the dark ink
+    assert to_hex(ax.get_facecolor()) == DARK_PALETTE["background"]
+    assert [t.get_text() for t in ax.texts] == ["(insufficient signal)"]
+    assert to_hex(ax.texts[0].get_color()) == DARK_PALETTE["ink"].lower()
     plt.close(fig)
 
 
@@ -178,13 +131,20 @@ def test_layer_split_mip_runs():
 # Full marching-cubes body — mask large enough to clear the signal guard
 # ---------------------------------------------------------------------------
 
+
 def test_render_isosurface_light_shaded_runs_mesh_body():
     """Light style, shade=True — exercises the Lambertian shading path."""
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    out = render_isosurface(_solid_mask(), voxel_size_um=(2.0, 1.0, 1.0), ax=ax,
-                            downsample=(1, 4, 4), shade=True, scalebar_um=20.0,
-                            title="light shaded")
+    out = render_isosurface(
+        _solid_mask(),
+        voxel_size_um=(2.0, 1.0, 1.0),
+        ax=ax,
+        downsample=(1, 4, 4),
+        shade=True,
+        scalebar_um=20.0,
+        title="light shaded",
+    )
     assert out is ax
     # Mesh body ran: something was drawn into the 3D collection list.
     assert len(ax.collections) > 0
@@ -204,15 +164,26 @@ def test_render_isosurface_dark_smoothed_mesh_body():
     """Dark style + smoothing on a real mesh (draws box edges + scalebar)."""
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    render_isosurface(_solid_mask(), ax=ax, downsample=(1, 4, 4),
-                      style="dark", smooth_iter=2, shade=False)
+    render_isosurface(
+        _solid_mask(), ax=ax, downsample=(1, 4, 4), style="dark", smooth_iter=2, shade=False
+    )
+    assert any(isinstance(c, Poly3DCollection) for c in ax.collections)
+    assert to_hex(ax.get_facecolor()) == DARK_PALETTE["background"]
+    assert len(ax.get_xticks()) == len(ax.get_yticks()) == len(ax.get_zticks()) == 0
+    assert ax.get_xlabel() == ""  # bare axes: no µm labels
+    assert len(ax.lines) == 12 + 1  # bounding box edges + scale bar
+    assert [t.get_text() for t in ax.texts] == ["100 µm"]
+    assert to_hex(ax.texts[0].get_color()) == DARK_PALETTE["scalebar"].lower()
     plt.close(fig)
 
 
 def test_render_isosurface_creates_own_axes_when_none():
     """ax=None branch builds its own 3D figure."""
     ax = render_isosurface(_solid_mask(), downsample=(1, 4, 4))
-    assert ax is not None
+    assert ax.name == "3d"
+    assert tuple(ax.figure.get_size_inches()) == (6.0, 5.0)
+    assert any(isinstance(c, Poly3DCollection) for c in ax.collections)
+    assert ax.get_xlabel() == ax.get_ylabel() == ax.get_zlabel() == "µm"  # light style
     plt.close(ax.figure)
 
 
@@ -220,13 +191,15 @@ def test_render_isosurface_creates_own_axes_when_none():
 # Voxel cloud
 # ---------------------------------------------------------------------------
 
+
 def test_render_voxel_cloud_returns_axis():
     mask = np.zeros((8, 32, 32), dtype=bool)
     mask[2:6, 8:24, 8:24] = True
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    out = render_voxel_cloud(mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax,
-                             downsample=(1, 4, 4), title="cloud")
+    out = render_voxel_cloud(
+        mask, voxel_size_um=(2.0, 1.0, 1.0), ax=ax, downsample=(1, 4, 4), title="cloud"
+    )
     assert out is ax
     plt.close(fig)
 
@@ -244,52 +217,10 @@ def test_render_voxel_cloud_creates_own_axes():
     mask = np.zeros((6, 24, 24), dtype=bool)
     mask[1:5, 4:20, 4:20] = True
     ax = render_voxel_cloud(mask, downsample=(1, 4, 4))
-    assert ax is not None
+    assert ax.name == "3d"
+    assert len(ax.collections) > 0  # the voxel faces
+    assert len(ax.get_xticks()) == len(ax.get_yticks()) == len(ax.get_zticks()) == 0
     plt.close(ax.figure)
-
-
-# ---------------------------------------------------------------------------
-# mip_overlay without mask, live_dead border, depth_coded z_axis, grid gaps
-# ---------------------------------------------------------------------------
-
-def test_mip_overlay_without_mask():
-    intensity = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32) * 100
-    fig, ax = plt.subplots()
-    out = mip_overlay(intensity, mask=None, ax=ax)
-    assert out is ax
-    plt.close(fig)
-
-
-def test_live_dead_mip_all_zero_live_no_border():
-    """All-zero live hits the m.max()==0 early return in _to_norm; border=None."""
-    live = np.zeros((4, 16, 16), dtype=np.float32)
-    fig, ax = plt.subplots()
-    live_dead_mip(live, dead=None, ax=ax, border=None)
-    plt.close(fig)
-
-
-def test_depth_coded_mip_z_axis_last():
-    vol = np.random.RandomState(0).rand(16, 16, 8).astype(np.float32)
-    fig, ax = plt.subplots()
-    depth_coded_mip(vol, ax=ax, z_axis=2)
-    plt.close(fig)
-
-
-def test_mip_grid_missing_cell_placeholder(tmp_path):
-    live = np.random.RandomState(0).rand(4, 16, 16).astype(np.float32)
-    cells = {("D1", "top"): {"live": live}}  # ("D1","bot") missing -> placeholder
-    fig = mip_grid(cells, rows=["D1"], cols=["top", "bot"],
-                   row_labels=["Day1"], col_labels=["Top", "Bottom"])
-    assert fig is not None
-    plt.close(fig)
-
-
-def test_layer_split_mip_only_top_axis():
-    vol = np.random.RandomState(0).rand(10, 16, 16).astype(np.float32)
-    fig, ax = plt.subplots()
-    top, bot = layer_split_mip(vol, ax_top=ax, ax_bot=None, split=0.5)
-    assert top is ax and bot is None
-    plt.close(fig)
 
 
 def test_block_reduce_max_degenerate_factor_returns_min_shape():
@@ -297,3 +228,22 @@ def test_block_reduce_max_degenerate_factor_returns_min_shape():
     ds = block_reduce_max(mask, (4, 4, 4))  # factors exceed size
     assert ds.shape == (1, 1, 1)
     assert ds.sum() == 0
+
+
+def test_unknown_style_is_rejected():
+    mask = np.zeros((4, 16, 16), bool)
+    with pytest.raises(ValueError, match="'light', 'dark'"):
+        render_isosurface(mask, style="Dark")
+    plt.close("all")
+
+
+def test_import_does_not_switch_the_matplotlib_backend(monkeypatch):
+    """A library module must leave the user's backend alone."""
+    import importlib
+
+    from fluorostats import render3d
+
+    calls = []
+    monkeypatch.setattr(matplotlib, "use", lambda *a, **k: calls.append(a))
+    importlib.reload(render3d)
+    assert calls == []

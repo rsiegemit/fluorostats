@@ -8,53 +8,54 @@ densities that can be compared across acquisition settings.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.ndimage import label
 from skimage.measure import euler_number
 
-# Skeleton morphometry lives in its own module (fluorostats.skeleton); it is
-# re-exported here for backwards compatibility.
-from .skeleton import skeleton_metrics, prune_skeleton, n_junction_nodes  # noqa: F401
-
 
 def volume_fraction(mask: np.ndarray) -> float:
-    """Fraction of voxels that are foreground, in [0, 1] (not a percent)."""
-    return float(mask.sum() / mask.size)
+    """Fraction of voxels that are foreground (``mask > 0``), in [0, 1] (not a percent)."""
+    return float(np.count_nonzero(np.asarray(mask) > 0) / mask.size)
 
 
 def connectivity_metrics(mask: np.ndarray) -> dict:
-    """Connected component and topological metrics.
+    """Connected component and topological metrics of a mask (nonzero = foreground).
 
     Returns
     -------
     dict with keys:
         n_components : int
-            Number of connected components.
+            Number of face-connected (6-connected) components, as `objects.label_3d`.
         euler_number : int
-            Euler characteristic (connectivity=3 for 3D).
+            Euler characteristic with 26-connected foreground (connectivity=3).
             More negative = more loops/handles = more interconnected.
         largest_component_fraction : float
             Fraction of total foreground volume in the largest component.
             Near 1.0 = one dominant connected network; low = fragmented.
+            NaN for an empty mask.
     """
-    # Dual-connectivity pairing (intentional, not a mismatch): foreground components
-    # are counted under 6-connectivity (scipy.ndimage.label default, face-adjacency),
-    # and the Euler number under 26-connectivity. In 3D these are the DUAL pair required
-    # by the Jordan-Brouwer separation theorem — using the same connectivity for both
-    # gives topologically inconsistent χ. This pairing is what reproduces the analytic
-    # χ on the topology phantoms to zero error (see benchmarks/results/b1_topology_phantoms.csv).
+    # Two connectivities, on purpose. χ uses 26-connected foreground (and so, inside
+    # skimage's computation, 6-connected background: the dual pair that makes χ
+    # topologically consistent); this reproduces the analytic χ of the topology
+    # phantoms exactly (benchmarks/results/b1_topology_phantoms.csv). n_components
+    # counts face-connected components like label_3d. Objects touching only at an
+    # edge or corner are therefore 2 components but one object for χ, so these two
+    # values are not a consistent pair of Betti numbers.
+    mask = np.asarray(mask) > 0
     labeled, n_comp = label(mask)
     euler = int(euler_number(mask, connectivity=3))
 
     # Largest component fraction
     total_fg = mask.sum()
     if total_fg == 0 or n_comp == 0:
-        lcf = 0.0
+        lcf = float("nan")  # no component: undefined, not 0
     else:
-        component_sizes = np.bincount(labeled.ravel())
+        component_sizes: np.ndarray = np.bincount(labeled.ravel())
         # Index 0 is background, skip it
         largest = int(component_sizes[1:].max()) if len(component_sizes) > 1 else 0
-        lcf = largest / total_fg
+        lcf = float(largest / total_fg)
 
     return {
         "n_components": n_comp,
@@ -66,6 +67,7 @@ def connectivity_metrics(mask: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 # FOV-normalised densities (voxel-size invariant)
 # ---------------------------------------------------------------------------
+
 
 def fov_volume_mm3(
     shape_zyx: tuple[int, int, int],
@@ -79,11 +81,25 @@ def fov_volume_mm3(
     return float(np.prod(shape_zyx)) * float(np.prod(voxel_size_um)) * 1e-9
 
 
-def density_per_mm3(count: float, shape_zyx: tuple[int, int, int],
-                    voxel_size_um: tuple[float, float, float]) -> float:
-    """Convert a per-FOV count (or length in µm) to per-mm³ density."""
-    v = fov_volume_mm3(shape_zyx, voxel_size_um)
-    return float(count / v) if v > 0 else 0.0
+def _per_unit(count: float, volume: float) -> float:
+    """``count / volume``; NaN, with a warning, for a non-positive volume."""
+    if volume > 0:
+        return float(count / volume)
+    warnings.warn(
+        f"non-positive imaged volume ({volume} mm³); density is NaN", RuntimeWarning, stacklevel=3
+    )
+    return float("nan")
+
+
+def density_per_mm3(
+    count: float, shape_zyx: tuple[int, int, int], voxel_size_um: tuple[float, float, float]
+) -> float:
+    """Convert a per-FOV count (or length in µm) to per-mm³ density.
+
+    NaN, with a RuntimeWarning, when the imaged volume is zero (an empty shape
+    or a zero voxel size).
+    """
+    return _per_unit(count, fov_volume_mm3(shape_zyx, voxel_size_um))
 
 
 def normalise_skeleton_metrics(
@@ -92,24 +108,20 @@ def normalise_skeleton_metrics(
     voxel_size_um: tuple[float, float, float],
 ) -> dict:
     """Append `length_density_um_per_mm3`, `junction_density_per_mm3`,
-    `branch_density_per_mm3`, and `fov_volume_mm3`.
+    `branch_density_per_mm3`, and `fov_volume_mm3`. A density whose count is
+    missing from ``metrics`` is NaN.
 
     Returns a new dict; the input is not mutated.
     """
     v = fov_volume_mm3(shape_zyx, voxel_size_um)
+    nan = float("nan")  # a count missing from ``metrics`` was not measured
     out = dict(metrics)
     out["fov_volume_mm3"] = v
-    out["length_density_um_per_mm3"] = (
-        float(metrics.get("total_length_um", 0.0) / v) if v > 0 else 0.0
-    )
+    out["length_density_um_per_mm3"] = _per_unit(metrics.get("total_length_um", nan), v)
     # junction DENSITY uses the same field-standard branchpoint definition as the
     # reported junction COUNT (n_junction_nodes, degree>=3 nodes — AngioTool/REAVER),
     # not skan's n_junctions (junction-to-junction branch segments), so count and
     # density describe the same quantity per unit volume.
-    out["junction_density_per_mm3"] = (
-        float(metrics.get("n_junction_nodes", 0) / v) if v > 0 else 0.0
-    )
-    out["branch_density_per_mm3"] = (
-        float(metrics.get("n_branches", 0) / v) if v > 0 else 0.0
-    )
+    out["junction_density_per_mm3"] = _per_unit(metrics.get("n_junction_nodes", nan), v)
+    out["branch_density_per_mm3"] = _per_unit(metrics.get("n_branches", nan), v)
     return out

@@ -15,16 +15,23 @@ they take an array/points and a callable, nothing domain-specific.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Iterator
 
 import numpy as np
 
+from .stats import coefficient_of_variation
 
-def tile_bounds(shape: tuple[int, int], grid: tuple[int, int] = (5, 5)):
+
+def tile_bounds(
+    shape: tuple[int, int],
+    grid: tuple[int, int] = (5, 5),
+) -> Iterator[tuple[int, int, int, int]]:
     """Yield ``(y0, y1, x0, x1)`` pixel bounds for each cell of a ``grid`` partition.
 
-    Cells tile the full 2D ``shape`` with near-equal size (last cell absorbs any
-    remainder). Iterates row-major: ``(iy, ix)`` with ``ix`` fastest.
+    Cells tile the full 2D ``shape`` with near-equal size: edges are
+    ``floor(k · n / grid)``, so any remainder is spread over the cells (n = 11,
+    grid = 4 gives sizes 2, 3, 3, 3). Iterates row-major: ``(iy, ix)`` with ``ix``
+    fastest.
     """
     ny, nx = shape
     gy, gx = grid
@@ -45,7 +52,7 @@ def tile_reduce(
     ``func`` maps a tile (2D sub-array) to a scalar. A tile whose ``func`` returns
     ``None`` or ``NaN`` becomes ``NaN`` in the output — so downstream stats can skip
     empty/degenerate regions. Handy with a lambda, e.g.
-    ``tile_reduce(mask, lambda t: 100 * t.mean())`` for per-tile coverage.
+    ``tile_reduce(mask, lambda t: t.mean())`` for per-tile coverage (a fraction).
     """
     gy, gx = grid
     out = np.full((gy, gx), np.nan, dtype=float)
@@ -65,23 +72,27 @@ def tile_point_density(
     """Bin a point set into a grid of counts (or densities).
 
     ``points_yx`` is ``(N, >=2)``; the last two columns are taken as ``(y, x)`` (so
-    3D ``(z, y, x)`` centroids work directly). With ``per_area=True`` each cell is
-    divided by its area (cell pixel count × ``pixel_area``) to give a density.
+    3D ``(z, y, x)`` centroids work directly). Points are continuous coordinates, so
+    they are binned into half-open cells between the exact edges ``k · n / grid``
+    (a point on an interior edge belongs to the next cell; not the whole-pixel
+    edges `tile_bounds` gives an image); a point on or past the field border counts
+    in the nearest edge cell; a NaN or infinite point raises ValueError. With
+    ``per_area=True`` each count is divided by the cell area
+    (``(ny / gy) · (nx / gx) · pixel_area``) to give a density.
     """
     gy, gx = grid
-    out = np.zeros((gy, gx), dtype=float)
+    ny, nx = shape
+    out: np.ndarray = np.zeros((gy, gx), dtype=float)
     pts = np.asarray(points_yx, dtype=float)
-    for k, (y0, y1, x0, x1) in enumerate(tile_bounds(shape, grid)):
-        if pts.shape[0]:
-            inb = ((pts[:, -2] >= y0) & (pts[:, -2] < y1)
-                   & (pts[:, -1] >= x0) & (pts[:, -1] < x1))
-            c = float(inb.sum())
-        else:
-            c = 0.0
-        if per_area:
-            area = (y1 - y0) * (x1 - x0) * pixel_area
-            c = c / area if area > 0 else np.nan
-        out[k // gx, k % gx] = c
+    if not np.isfinite(pts).all():
+        raise ValueError("tile_point_density: points must be finite (got NaN or inf)")
+    if pts.shape[0]:
+        # multiply before dividing: exact on the edges for integer coordinates
+        iy = np.clip(np.floor(pts[:, -2] * gy / ny).astype(int), 0, gy - 1)
+        ix = np.clip(np.floor(pts[:, -1] * gx / nx).astype(int), 0, gx - 1)
+        np.add.at(out, (iy, ix), 1.0)
+    if per_area:
+        out = out / ((ny / gy) * (nx / gx) * pixel_area)
     return out
 
 
@@ -116,6 +127,13 @@ def slab_reduce(
     return centers, values
 
 
+# Neighbour offsets for `morans_i`, by connectivity name.
+_NEIGHBOUR_OFFSETS = {
+    "rook": [(0, 1), (1, 0), (0, -1), (-1, 0)],
+    "queen": [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)],
+}
+
+
 def morans_i(grid: np.ndarray, connectivity: str = "rook") -> float:
     """Spatial autocorrelation (Moran's I) of a 2D value grid.
 
@@ -124,16 +142,17 @@ def morans_i(grid: np.ndarray, connectivity: str = "rook") -> float:
     ``connectivity`` is ``"rook"`` (4-neighbour) or ``"queen"`` (8-neighbour).
     Returns ``NaN`` for <3 valid cells or zero variance.
     """
+    if connectivity not in _NEIGHBOUR_OFFSETS:
+        raise ValueError(
+            f"connectivity must be one of {tuple(_NEIGHBOUR_OFFSETS)}, got {connectivity!r}"
+        )
     g = np.asarray(grid, dtype=float)
     mask = ~np.isnan(g)
     if mask.sum() < 3:
         return float("nan")
     mu = g[mask].mean()
     z = np.where(mask, g - mu, 0.0)
-    if connectivity == "queen":
-        offs = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-    else:
-        offs = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+    offs = _NEIGHBOUR_OFFSETS[connectivity]
     nr, nc = g.shape
     num = 0.0
     s0 = 0.0
@@ -156,17 +175,37 @@ def spatial_heterogeneity(grid: np.ndarray, connectivity: str = "rook") -> dict:
     """Summarise how uniform a value grid is.
 
     Returns dict with keys:
-        cv — coefficient of variation across valid cells (0 = uniform).
+        cv — coefficient of variation across valid cells (0 = uniform), in the
+            population form (ddof=0): the cells are every tile of the image, not
+            a sample of them, as for `morphometry` lateral_cv and `objects`
+            centroid_cv.
         morans_i — spatial autocorrelation (see `morans_i`).
         n — number of valid (non-NaN) cells.
     """
     g = np.asarray(grid, dtype=float)
     v = g[~np.isnan(g)]
-    cv = float(v.std(ddof=1) / v.mean()) if v.size > 1 and v.mean() != 0 else float("nan")
+    cv = coefficient_of_variation(v)
     return {"cv": cv, "morans_i": morans_i(g, connectivity), "n": int(v.size)}
 
 
+def coverage_heterogeneity(mask: np.ndarray, grid: tuple[int, int] = (5, 5)) -> dict:
+    """Spatial uniformity of a binary mask's coverage across a tile grid.
+
+    For a 3D ``(Z, Y, X)`` mask the through-z coverage map is used. Returns
+    ``coverage_tile_cv`` (tile-to-tile CV, 0 = evenly seeded) and
+    ``coverage_morans_i`` (spatial autocorrelation; >0 = patchy/clustered).
+    """
+    cov = mask.mean(axis=0) if mask.ndim == 3 else mask.astype(float)
+    het = spatial_heterogeneity(tile_reduce(cov, lambda t: float(t.mean()), grid=grid))
+    return {"coverage_tile_cv": het["cv"], "coverage_morans_i": het["morans_i"]}
+
+
 __all__ = [
-    "tile_bounds", "tile_reduce", "tile_point_density", "slab_reduce",
-    "morans_i", "spatial_heterogeneity",
+    "tile_bounds",
+    "tile_reduce",
+    "tile_point_density",
+    "slab_reduce",
+    "coverage_heterogeneity",
+    "morans_i",
+    "spatial_heterogeneity",
 ]

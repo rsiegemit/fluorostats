@@ -1,0 +1,23 @@
+{
+  "table": "b3_viability_multi.csv",
+  "producer": "benchmarks/producers/b3_viability_multi.py",
+  "params": {
+    "live_channel": 2,
+    "dead_channel": 1,
+    "xy_downsample": 8,
+    "seg": {
+      "method": "otsu",
+      "threshold_scale": 1.0,
+      "min_size": 8
+    },
+    "small_object_rule": "keep >= min_size"
+  },
+  "git_commit": "227d69e",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0.dev0"
+  }
+}

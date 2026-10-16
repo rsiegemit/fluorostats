@@ -1,0 +1,32 @@
+{
+  "table": "b_dl_determinism.csv",
+  "producer": "benchmarks/producers/b_dl_determinism.py",
+  "params": {
+    "n_images": 10,
+    "n_runs": 20,
+    "min_size": 20,
+    "images": [
+      "IXMtest_A02_s1_w1051DAA7C-7042-435F-99F0-1E847D9B42CB",
+      "IXMtest_A06_s6_w1B9577918-4973-4A87-BA73-A168AA755527",
+      "IXMtest_A09_s1_w1CE70AD49-290D-4312-82E6-CDC717F32637",
+      "IXMtest_A12_s7_w1EAEEA614-51ED-43B3-A4FF-088730911E4C",
+      "IXMtest_A15_s5_w1825174D4-ED30-490C-9635-6196417D6C9D",
+      "IXMtest_A16_s2_w15AF20A10-82AE-48FA-AC50-7AE8AC3AA544",
+      "IXMtest_A16_s3_w1032BE329-E21B-4E1B-B4B8-58700685EE0C",
+      "IXMtest_A18_s1_w1BFDF1C94-9C1F-4F5F-BBC1-05196333B1BF",
+      "IXMtest_A20_s4_w153DE191F-B112-471B-AC0A-FAD27990714B",
+      "IXMtest_A21_s1_w1D8BF2790-C628-4109-94AF-DF6D8A3480B6"
+    ],
+    "iou_threshold": 0.5,
+    "dl_hardware": "cluster CPU (Cellpose fails in ROCm hipBLASLt; TensorFlow CPU build)",
+    "scorer": "validate.instance_f1"
+  },
+  "git_commit": "27dbbce",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0.dev0"
+  }
+}

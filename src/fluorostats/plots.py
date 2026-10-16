@@ -1,4 +1,9 @@
-"""Comparison plots grouped by experimental condition, with replicate support."""
+"""Comparison plots grouped by experimental condition, with replicate support.
+
+Type, colours and frames come from the active `pubfig` theme (the CLI draws in
+``pubfig.apply_style("house")``), so these plots share the one figure style;
+nothing here sets a font size or weight of its own.
+"""
 
 from __future__ import annotations
 
@@ -6,36 +11,82 @@ from itertools import combinations
 from pathlib import Path
 
 import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+from . import stats
+from .pubfig import PALETTE, save_figure
 
 
 # ---------------------------------------------------------------------------
 # Shared per-condition statistics
 # ---------------------------------------------------------------------------
 
+
 def _group_stats(df: pd.DataFrame, metric: str, conditions: list[str]):
     """Per-condition (data, means, sems) for *metric*.
 
     Returns three parallel lists aligned to *conditions*: the raw dropped-NA
-    value arrays, the means (0 when empty), and the SEMs (0 when n<=1).
+    value arrays, the means and the SEMs, NaN where undefined (`stats.describe`).
     """
     data = []
     means = []
     sems = []
     for c in conditions:
         vals = df.loc[df["condition"] == c, metric].dropna().values
+        d = stats.describe(vals)
         data.append(vals)
-        means.append(vals.mean() if len(vals) > 0 else 0)
-        sems.append(vals.std(ddof=1) / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+        means.append(d["mean"])
+        sems.append(d["sem"])
     return data, means, sems
+
+
+def _jitter(rng: np.random.Generator, n: int) -> np.ndarray:
+    """``n`` horizontal offsets in ±0.05, the one jitter of every strip of points."""
+    return rng.uniform(-0.05, 0.05, n)
+
+
+def _jittered_points(ax, x, data) -> None:
+    """Each condition's values as black dots spread ±0.05 around its ``x`` (seeded, so
+    a rerun draws the same figure)."""
+    rng = np.random.default_rng(42)
+    for xi, d in zip(x, data):
+        ax.scatter(
+            np.full(len(d), xi) + _jitter(rng, len(d)), d, color="k", s=20, alpha=0.7, zorder=3
+        )
+
+
+def _bars_with_points(ax, x, data, means, sems, colors) -> None:
+    """Mean ± SEM bars with every replicate value on top: the one bar style of
+    `bar_mean_sem` and `summary_panel`."""
+    ax.bar(
+        x,
+        means,
+        yerr=sems,
+        width=0.6,
+        color=colors,
+        edgecolor="black",
+        linewidth=0.8,
+        capsize=4,
+        error_kw={"linewidth": 1.2},
+    )
+    _jittered_points(ax, x, data)
+
+
+def _condition_colors(n: int) -> list:
+    """``n`` distinct colours: the active theme's colour cycle while it has ``n``, else
+    ``n`` evenly spaced hues (the cycle would repeat colours)."""
+    cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    if n <= len(cycle):
+        return cycle[:n]
+    return list(matplotlib.colormaps["hsv"](np.linspace(0, 1, n, endpoint=False)))
 
 
 # ---------------------------------------------------------------------------
 # Single-metric plots
 # ---------------------------------------------------------------------------
+
 
 def boxplot_by_condition(
     df: pd.DataFrame,
@@ -44,9 +95,6 @@ def boxplot_by_condition(
     ylabel: str | None = None,
 ) -> None:
     """Boxplot of *metric* grouped by condition, with individual data points."""
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     conditions = sorted(df["condition"].unique())
     data = [df.loc[df["condition"] == c, metric].dropna().values for c in conditions]
 
@@ -54,26 +102,20 @@ def boxplot_by_condition(
 
     bp = ax.boxplot(data, patch_artist=True, widths=0.5, showfliers=False)
     ax.set_xticks(range(1, len(conditions) + 1))
-    ax.set_xticklabels(conditions)   # avoids the deprecated boxplot(labels=) kwarg
+    ax.set_xticklabels(conditions)  # avoids the deprecated boxplot(labels=) kwarg
 
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
     for patch, color in zip(bp["boxes"], colors):
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
 
-    rng = np.random.default_rng(42)
-    for i, d in enumerate(data):
-        jitter = 0.1 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), i + 1) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+    _jittered_points(ax, range(1, len(conditions) + 1), data)
 
     ax.set_ylabel(ylabel or _label_for(metric))
     ax.set_title(f"{_label_for(metric)} by Condition")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
 
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=150)
-    plt.close(fig)
+    save_figure(fig, {out_path: 150})
 
 
 def bar_mean_sem(
@@ -82,51 +124,43 @@ def bar_mean_sem(
     out_path: Path,
     ylabel: str | None = None,
     show_pvalues: bool = False,
+    pvalues: pd.DataFrame | None = None,
 ) -> None:
     """Bar chart with mean +/- SEM and individual replicate points.
 
     Publication-standard format for n=3-5 replicates.
     P-value brackets are off by default; set show_pvalues=True to draw them.
+    Their stars use Benjamini-Hochberg q-values: from ``pvalues`` (the table
+    `compute_pvalues` returns, so the figure matches it) when given, else
+    corrected across the pairs drawn in this panel.
     """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     conditions = sorted(df["condition"].unique())
     data, means, sems = _group_stats(df, metric, conditions)
 
     x = np.arange(len(conditions))
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
 
     fig, ax = plt.subplots(figsize=(max(4, len(conditions) * 1.8), 5))
 
-    ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-           linewidth=0.8, capsize=5, error_kw={"linewidth": 1.5})
-
-    # Overlay individual replicate points
-    rng = np.random.default_rng(42)
-    for i, d in enumerate(data):
-        jitter = 0.12 * (rng.random(len(d)) - 0.5)
-        ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=30, alpha=0.7, zorder=3)
+    _bars_with_points(ax, x, data, means, sems, colors)
 
     # P-value annotations
     if show_pvalues and len(conditions) > 1:
-        _add_pvalue_annotations(ax, data, x, conditions)
+        _add_pvalue_annotations(ax, data, x, conditions, q_lookup=_q_lookup(pvalues, metric))
 
     ax.set_xticks(x)
     ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0)
-    ax.set_ylabel(ylabel or _label_for(metric), fontsize=11, fontweight="bold")
-    ax.set_title(f"{_label_for(metric)} by Condition", fontsize=12, fontweight="bold")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.set_ylabel(ylabel or _label_for(metric))
+    ax.set_title(f"{_label_for(metric)} by Condition")
 
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=200)
-    plt.close(fig)
+    save_figure(fig, {out_path: 200})
 
 
 # ---------------------------------------------------------------------------
 # Multi-metric summary figure
 # ---------------------------------------------------------------------------
+
 
 def summary_panel(
     df: pd.DataFrame,
@@ -135,15 +169,14 @@ def summary_panel(
     title: str = "Quantification Summary",
     ncols: int = 4,
     show_pvalues: bool = False,
+    pvalues: pd.DataFrame | None = None,
 ) -> None:
     """Multi-panel figure: one bar+SEM subplot per metric.
 
     Generates a publication-ready composite figure with all metrics.
     P-value brackets are off by default; set show_pvalues=True to draw them.
+    Stars use BH q-values, from ``pvalues`` when given (see `bar_mean_sem`).
     """
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
     available = [m for m in metrics if m in df.columns and df[m].notna().any()]
     n = len(available)
     if n == 0:
@@ -156,52 +189,56 @@ def summary_panel(
     axes = axes.flat
 
     conditions = sorted(df["condition"].unique())
-    colors = plt.cm.Set2(np.linspace(0, 1, len(conditions)))
+    colors = _condition_colors(len(conditions))
     x = np.arange(len(conditions))
 
     for idx, metric in enumerate(available):
         ax = axes[idx]
         data, means, sems = _group_stats(df, metric, conditions)
 
-        ax.bar(x, means, yerr=sems, width=0.6, color=colors, edgecolor="black",
-               linewidth=0.8, capsize=4, error_kw={"linewidth": 1.2})
-
-        rng = np.random.default_rng(42)
-        for i, d in enumerate(data):
-            jitter = 0.1 * (rng.random(len(d)) - 0.5)
-            ax.scatter(np.full(len(d), x[i]) + jitter, d, color="k", s=20, alpha=0.7, zorder=3)
+        _bars_with_points(ax, x, data, means, sems, colors)
 
         if show_pvalues and len(conditions) > 1:
-            _add_pvalue_annotations(ax, data, x, conditions)
+            _add_pvalue_annotations(ax, data, x, conditions, q_lookup=_q_lookup(pvalues, metric))
 
         ax.set_xticks(x)
-        ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0, fontsize=9)
-        ax.set_ylabel(_label_for(metric), fontsize=10, fontweight="bold")
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
+        ax.set_xticklabels(conditions, rotation=20 if len(conditions) > 3 else 0)
+        ax.set_ylabel(_label_for(metric))
 
     # Hide unused axes
     for idx in range(n, nrows * ncols):
         axes[idx].set_visible(False)
 
-    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.suptitle(title)
     fig.tight_layout()
-    fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    save_figure(fig, {out_path: 200}, bbox_inches="tight")
 
 
 # ---------------------------------------------------------------------------
 # Statistical helpers
 # ---------------------------------------------------------------------------
 
-def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6):
-    """Add p-value brackets — only the most meaningful comparisons.
+
+def _q_lookup(pvalues: pd.DataFrame | None, metric: str) -> dict | None:
+    """``{frozenset({cond_a, cond_b}): q}`` for one metric of a `compute_pvalues` table."""
+    if pvalues is None or pvalues.empty:
+        return None
+    rows = pvalues[pvalues["metric"] == metric]
+    return {
+        frozenset((a, b)): q
+        for a, b, q in zip(rows["condition_a"], rows["condition_b"], rows["q_value"])
+    }
+
+
+def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6, q_lookup=None):
+    """Add significance brackets — only the most meaningful comparisons.
 
     For <= 4 conditions: show all significant pairs.
     For > 4 conditions: show only adjacent pairs (dose-response neighbors).
-    Limits total brackets to max_brackets to keep plots clean.
+    Stars come from Benjamini-Hochberg q-values: looked up in ``q_lookup`` when
+    given, else corrected across the pairs tested here. Limits total brackets to
+    max_brackets to keep plots clean.
     """
-    from scipy.stats import mannwhitneyu
 
     n = len(conditions)
 
@@ -212,18 +249,22 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6):
         # Adjacent pairs only (i, i+1) — natural for dose-response
         pairs = [(i, i + 1) for i in range(n - 1)]
 
-    # Compute p-values and filter to significant
-    sig_pairs = []
-    for i, j in pairs:
-        if len(data[i]) < 2 or len(data[j]) < 2:
-            continue
-        try:
-            _, p = mannwhitneyu(data[i], data[j], alternative="two-sided")
-        except ValueError:
-            continue
-        stars = _pvalue_stars(p)
-        if stars != "ns":
-            sig_pairs.append((i, j, stars, p))
+    # Test the pairs, correct for multiplicity, keep the significant ones
+    tested = []
+    for i, j in pairs:  # mann_whitney leaves a pair under stats.MIN_N untested (NaN)
+        p = stats.mann_whitney(data[i], data[j])["p"]
+        if not np.isnan(p):
+            tested.append((i, j, p))
+    qs: list[float] | np.ndarray
+    if q_lookup is not None:
+        qs = [q_lookup.get(frozenset((conditions[i], conditions[j])), np.nan) for i, j, _ in tested]
+    else:
+        qs = stats.bh_fdr(np.array([p for _, _, p in tested])) if tested else []
+    sig_pairs = [
+        (i, j, stats.significance_stars(q), q)
+        for (i, j, _), q in zip(tested, qs)
+        if not np.isnan(q) and stats.significance_stars(q) != "ns"
+    ]
 
     # Sort by significance (most significant first) and limit
     sig_pairs.sort(key=lambda t: t[3])
@@ -240,71 +281,17 @@ def _add_pvalue_annotations(ax, data, x, conditions, max_brackets: int = 6):
 
     for drawn_idx, (i, j, stars, _) in enumerate(sig_pairs):
         y = y_max + offset + drawn_idx * step
-        ax.plot([x[i], x[i], x[j], x[j]], [y - step * 0.2, y, y, y - step * 0.2],
-                color="black", linewidth=0.8)
-        ax.text((x[i] + x[j]) / 2, y, stars, ha="center", va="bottom", fontsize=9)
+        ax.plot(
+            [x[i], x[i], x[j], x[j]],
+            [y - step * 0.2, y, y, y - step * 0.2],
+            color="black",
+            linewidth=0.8,
+        )
+        ax.text((x[i] + x[j]) / 2, y, stars, ha="center", va="bottom")
 
     # Extend y-axis just enough for drawn brackets
     new_max = y_max + offset + len(sig_pairs) * step + step * 0.5
     ax.set_ylim(ax.get_ylim()[0], new_max)
-
-
-def _pvalue_stars(p: float) -> str:
-    if p < 0.001:
-        return "***"
-    if p < 0.01:
-        return "**"
-    if p < 0.05:
-        return "*"
-    return "ns"
-
-
-def compute_pvalues(
-    df: pd.DataFrame,
-    metrics: list[str],
-) -> pd.DataFrame:
-    """Compute pairwise Mann-Whitney U p-values for all condition pairs.
-
-    Multiple-comparison corrected: a Benjamini-Hochberg ``q_value`` is computed
-    across the whole grid (every metric × condition-pair), and the ``significance``
-    stars reflect the corrected q, matching the library's default correction
-    (``stats.bh_fdr``). The raw ``p_value`` is retained for transparency.
-
-    Returns a DataFrame with columns: metric, condition_a, condition_b, n_a, n_b,
-    p_value, q_value, significance (empty if no pair has >=2 samples per group).
-    """
-    from scipy.stats import mannwhitneyu
-
-    conditions = sorted(df["condition"].unique())
-    rows = []
-
-    for metric in metrics:
-        if metric not in df.columns:
-            continue
-        for i, j in combinations(range(len(conditions)), 2):
-            a = df.loc[df["condition"] == conditions[i], metric].dropna().values
-            b = df.loc[df["condition"] == conditions[j], metric].dropna().values
-            if len(a) < 2 or len(b) < 2:
-                continue
-            try:
-                _, p = mannwhitneyu(a, b, alternative="two-sided")
-                rows.append({
-                    "metric": metric,
-                    "condition_a": conditions[i],
-                    "condition_b": conditions[j],
-                    "n_a": len(a),
-                    "n_b": len(b),
-                    "p_value": p,
-                })
-            except ValueError:
-                continue
-
-    out = pd.DataFrame(rows)
-    if not out.empty:
-        from .stats import bh_fdr
-        out["q_value"] = bh_fdr(out["p_value"].values)
-        out["significance"] = out["q_value"].map(_pvalue_stars)   # stars on CORRECTED q
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +300,7 @@ def compute_pvalues(
 
 _LABELS = {
     # volume_fraction / area_fraction are FRACTIONS in [0, 1] (no ×100 in the pipeline),
-    # so they are NOT labelled "(%)". Viability is the only percent-denominated output.
+    # so they are NOT labelled "(%)".
     "volume_fraction": "Volume Fraction",
     "area_fraction": "Area Fraction",
     "n_components": "Connected Components",
@@ -321,10 +308,13 @@ _LABELS = {
     "largest_component_fraction": "Largest Component Fraction",
     "total_length_um": "Total Skeleton Length (µm)",
     "n_branches": "Number of Branches",
-    "n_junctions": "Number of Junctions",
+    "n_junctions": "Junction-to-Junction Branches",
+    "n_junction_nodes": "Junctions (Branch Points)",
     "mean_branch_length_um": "Mean Branch Length (µm)",
     "mean_cluster_area_px": "Mean Cluster Area (px)",
     "median_cluster_area_px": "Median Cluster Area (px)",
+    "coverage_tile_cv": "Coverage Tile-to-Tile CV",
+    "coverage_morans_i": "Coverage Moran's I",
 }
 
 
@@ -335,6 +325,7 @@ def _label_for(metric: str) -> str:
 # ---------------------------------------------------------------------------
 # Effect-size grids and forest plots
 # ---------------------------------------------------------------------------
+
 
 def effect_size_heatmap(
     stats_df: pd.DataFrame,
@@ -349,7 +340,7 @@ def effect_size_heatmap(
     vmax: float = 1.0,
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
-):
+) -> plt.Figure:
     """Heatmap of an effect-size column across (metric × stratum).
 
     Cells flagged by `sig_col` (boolean column, e.g. BH-FDR sig) are
@@ -361,18 +352,23 @@ def effect_size_heatmap(
     df = stats_df.copy()
     if col_col not in df.columns:
         df[col_col] = "all"
-    pivot = df.pivot_table(index=row_col, columns=col_col, values=value_col,
-                           aggfunc="first")
-    sig = (df.pivot_table(index=row_col, columns=col_col, values=sig_col,
-                          aggfunc="first").fillna(False).astype(bool)
-           if sig_col and sig_col in df.columns else None)
+    pivot = df.pivot_table(index=row_col, columns=col_col, values=value_col, aggfunc="first")
+    sig = (
+        df.pivot_table(index=row_col, columns=col_col, values=sig_col, aggfunc="first")
+        .fillna(False)
+        .astype(bool)
+        if sig_col and sig_col in df.columns
+        else None
+    )
 
     nrows, ncols = pivot.shape
     figsize = figsize or (max(4, ncols * 1.1), max(2, nrows * 0.5))
     fig, ax = plt.subplots(figsize=figsize)
     im = ax.imshow(pivot.values, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
-    ax.set_xticks(range(ncols)); ax.set_xticklabels(pivot.columns, rotation=45, ha="right")
-    ax.set_yticks(range(nrows)); ax.set_yticklabels([_label_for(r) for r in pivot.index])
+    ax.set_xticks(range(ncols))
+    ax.set_xticklabels(pivot.columns, rotation=45, ha="right")
+    ax.set_yticks(range(nrows))
+    ax.set_yticklabels([_label_for(r) for r in pivot.index])
     for i in range(nrows):
         for j in range(ncols):
             v = pivot.values[i, j]
@@ -380,17 +376,21 @@ def effect_size_heatmap(
                 txt = f"{v:.2f}"
                 if sig is not None and sig.values[i, j]:
                     txt += "*"
-                ax.text(j, i, txt, ha="center", va="center", fontsize=8,
-                        color="white" if abs(v) > 0.6 else "black")
+                ax.text(
+                    j,
+                    i,
+                    txt,
+                    ha="center",
+                    va="center",
+                    color="white" if abs(v) > 0.6 else "black",
+                )
     cbar = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
-    cbar.set_label(value_col, fontsize=10)
+    cbar.set_label(value_col)
     if title:
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
 
 
@@ -404,11 +404,11 @@ def forest_plot(
     hi_col: str = "ci_high",
     reference: float = 1.0,
     log_scale: bool = True,
-    color: str = "#d62728",
+    color: str = PALETTE["accent"],
     title: str | None = None,
     xlabel: str | None = None,
     figsize: tuple[float, float] | None = None,
-):
+) -> plt.Figure:
     """Forest plot — one row per measurement, center ± [lo, hi]."""
     df = df.copy()
     df = df.sort_values(center_col).reset_index(drop=True)
@@ -416,22 +416,19 @@ def forest_plot(
     err = np.array([df[center_col] - df[lo_col], df[hi_col] - df[center_col]])
     figsize = figsize or (8, max(2, 0.4 * len(df)))
     fig, ax = plt.subplots(figsize=figsize)
-    ax.barh(y, df[center_col], xerr=err, color=color, alpha=0.65,
-            edgecolor="black", capsize=4)
+    ax.barh(y, df[center_col], xerr=err, color=color, alpha=0.65, edgecolor="black", capsize=4)
     if reference is not None:
         ax.axvline(reference, color="black", lw=0.7)
     if log_scale:
         ax.set_xscale("log")
-    ax.set_yticks(y); ax.set_yticklabels(df[label_col].tolist(), fontsize=9)
+    ax.set_yticks(y)
+    ax.set_yticklabels(df[label_col].tolist())
     ax.set_xlabel(xlabel or f"{center_col} (95% CI)")
     if title:
-        ax.set_title(title, fontsize=11)
-    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+        ax.set_title(title)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig
 
 
@@ -442,11 +439,11 @@ def condition_strip(
     *,
     hue_col: str | None = None,
     marker_col: str | None = None,
-    ax=None,
+    ax: plt.Axes | None = None,
     palette: dict | None = None,
     markers: dict | None = None,
     show_median: bool = True,
-):
+) -> plt.Axes:
     """Strip plot with optional hue and per-point marker differentiation.
 
     `marker_col` is handy to distinguish e.g. "original" vs "new" batches
@@ -458,9 +455,9 @@ def condition_strip(
     x_levels = sorted(df[x_col].dropna().unique())
     hue_levels = sorted(df[hue_col].dropna().unique()) if hue_col else [None]
     marker_levels = sorted(df[marker_col].dropna().unique()) if marker_col else [None]
-    palette = palette or {h: c for h, c in zip(
-        hue_levels, plt.cm.Set2(np.linspace(0, 1, max(1, len(hue_levels))))
-    )}
+    palette = palette or {
+        h: c for h, c in zip(hue_levels, _condition_colors(max(1, len(hue_levels))))
+    }
     markers = markers or {m: ("^" if i % 2 else "o") for i, m in enumerate(marker_levels)}
     n_hue = max(1, len(hue_levels))
     for xi, xv in enumerate(x_levels):
@@ -475,25 +472,49 @@ def condition_strip(
                 if vals.size == 0:
                     continue
                 offset = (hi - (n_hue - 1) / 2) * 0.25
-                x = xi + offset + rng.uniform(-0.05, 0.05, vals.size)
-                ax.scatter(x, vals, color=palette.get(hv, "k"),
-                           marker=markers.get(mv, "o"),
-                           s=55, alpha=0.8, edgecolors="black", linewidths=0.4)
+                x = xi + offset + _jitter(rng, vals.size)
+                ax.scatter(
+                    x,
+                    vals,
+                    color=palette.get(hv, "k"),
+                    marker=markers.get(mv, "o"),
+                    s=55,
+                    alpha=0.8,
+                    edgecolors="black",
+                    linewidths=0.4,
+                )
                 if show_median:
-                    ax.plot([xi + offset - 0.13, xi + offset + 0.13],
-                            [np.median(vals)] * 2,
-                            color=palette.get(hv, "k"), linewidth=3)
+                    ax.plot(
+                        [xi + offset - 0.13, xi + offset + 0.13],
+                        [np.median(vals)] * 2,
+                        color=palette.get(hv, "k"),
+                        linewidth=3,
+                    )
     ax.set_xticks(range(len(x_levels)))
     ax.set_xticklabels(x_levels)
     ax.set_ylabel(_label_for(y_col))
-    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     if hue_col and len(hue_levels) > 1:
-        from matplotlib.lines import Line2D
-        handles = [Line2D([0], [0], marker="o", color="w",
-                          markerfacecolor=palette[h], markersize=8, label=str(h))
-                   for h in hue_levels]
-        ax.legend(handles=handles, loc="best", frameon=False)
+        _hue_legend(ax, hue_levels, palette)
     return ax
+
+
+def _hue_legend(ax: plt.Axes, hue_levels: list, palette: dict) -> None:
+    """One round marker per hue level, coloured from ``palette``."""
+    from matplotlib.lines import Line2D
+
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor=palette[h],
+            markersize=8,
+            label=str(h),
+        )
+        for h in hue_levels
+    ]
+    ax.legend(handles=handles, loc="best", frameon=False)
 
 
 def modality_panel(
@@ -505,7 +526,7 @@ def modality_panel(
     out_path: Path | None = None,
     figsize: tuple[float, float] | None = None,
     title: str | None = None,
-):
+) -> plt.Figure:
     """Compare a set of metrics across staining modalities.
 
     Produces a grid with rows = modalities, cols = metrics. Each cell is
@@ -524,17 +545,14 @@ def modality_panel(
                 continue
             condition_strip(sub, group_col, metric, ax=ax)
             if j == 0:
-                ax.set_ylabel(f"{mod}\n{_label_for(metric)}",
-                              fontsize=9, fontweight="bold")
+                ax.set_ylabel(f"{mod}\n{_label_for(metric)}")
             else:
-                ax.set_ylabel(_label_for(metric), fontsize=9)
+                ax.set_ylabel(_label_for(metric))
             if i < nrows - 1:
                 ax.set_xticklabels([])
     if title:
-        fig.suptitle(title, fontsize=12, fontweight="bold")
+        fig.suptitle(title)
     fig.tight_layout()
     if out_path is not None:
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(str(out_path), dpi=200, bbox_inches="tight")
-        plt.close(fig)
+        save_figure(fig, {out_path: 200}, bbox_inches="tight")
     return fig

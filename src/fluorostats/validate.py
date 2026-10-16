@@ -20,8 +20,14 @@ def match_instances(pred: np.ndarray, gt: np.ndarray, iou_threshold: float = 0.5
     pids = [p for p in np.unique(pred) if p != 0]
     gids = [g for g in np.unique(gt) if g != 0]
     if not gids:
-        return {"tp": 0, "fp": len(pids), "fn": 0,
-                "n_pred": len(pids), "n_gt": 0, "matched_ious": []}
+        return {
+            "tp": 0,
+            "fp": len(pids),
+            "fn": 0,
+            "n_pred": len(pids),
+            "n_gt": 0,
+            "matched_ious": [],
+        }
     gt_masks = {g: (gt == g) for g in gids}
     matched_g = set()
     tp = 0
@@ -48,8 +54,14 @@ def match_instances(pred: np.ndarray, gt: np.ndarray, iou_threshold: float = 0.5
             ious.append(float(best))
     fp = len(pids) - tp
     fn = len(gids) - tp
-    return {"tp": tp, "fp": fp, "fn": fn, "n_pred": len(pids),
-            "n_gt": len(gids), "matched_ious": ious}
+    return {
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "n_pred": len(pids),
+        "n_gt": len(gids),
+        "matched_ious": ious,
+    }
 
 
 def instance_f1(pred: np.ndarray, gt: np.ndarray, iou_threshold: float = 0.5) -> dict:
@@ -61,14 +73,23 @@ def instance_f1(pred: np.ndarray, gt: np.ndarray, iou_threshold: float = 0.5) ->
     denom = 2 * tp + fp + fn
     f1 = 2 * tp / denom if denom else 1.0
     return {
-        "f1": float(f1), "precision": float(precision), "recall": float(recall),
+        "f1": float(f1),
+        "precision": float(precision),
+        "recall": float(recall),
         "mean_iou": float(np.mean(m["matched_ious"])) if m["matched_ious"] else 0.0,
-        "tp": tp, "fp": fp, "fn": fn, "n_pred": m["n_pred"], "n_gt": m["n_gt"],
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "n_pred": m["n_pred"],
+        "n_gt": m["n_gt"],
     }
 
 
-def average_precision(pred: np.ndarray, gt: np.ndarray,
-                      thresholds=(0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)) -> dict:
+def average_precision(
+    pred: np.ndarray,
+    gt: np.ndarray,
+    thresholds: tuple[float, ...] = (0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9),
+) -> dict:
     """Mean AP over IoU thresholds (Kaggle DSB2018 AP = TP / (TP+FP+FN)).
 
     Returns dict: mAP, per_threshold (IoU → AP).
@@ -84,4 +105,15 @@ def average_precision(pred: np.ndarray, gt: np.ndarray,
     return {"mAP": float(np.mean(aps)), "per_threshold": per}
 
 
-__all__ = ["match_instances", "instance_f1", "average_precision"]
+def dice(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Foreground (semantic) Dice of two masks or label images.
+
+    Anything > 0 is foreground. 1.0 when both are empty.
+    """
+    p = np.asarray(pred) > 0
+    g = np.asarray(gt) > 0
+    s = p.sum() + g.sum()
+    return float(2 * (p & g).sum() / s) if s else 1.0
+
+
+__all__ = ["match_instances", "instance_f1", "average_precision", "dice"]

@@ -7,21 +7,22 @@ from scipy.ndimage import label
 
 
 def area_fraction(mask: np.ndarray) -> float:
-    """Fraction of pixels that are foreground (cell-covered), in [0, 1] (not a percent)."""
-    return float(mask.sum() / mask.size)
+    """Fraction of pixels that are foreground (cell-covered, ``mask > 0``), in [0, 1]
+    (not a percent)."""
+    return float(np.count_nonzero(np.asarray(mask) > 0) / mask.size)
 
 
 def coverage_metrics(
     mask: np.ndarray,
-    pixel_size_um: float = 1.0,
+    voxel_size_um: float | tuple[float, float] = 1.0,
 ) -> dict:
     """Connectivity and cluster analysis for 2D binary masks.
 
     Parameters
     ----------
     mask : ndarray (Y, X), bool
-        Binary segmentation mask.
-    pixel_size_um : float
+        Binary segmentation mask; any nonzero value is foreground (e.g. 0/255).
+    voxel_size_um : float or (dy, dx)
         Pixel size in µm (for calibrated area). Default 1.0 (uncalibrated).
 
     Returns
@@ -33,37 +34,40 @@ def coverage_metrics(
         largest_component_fraction : float
             Fraction of total foreground in the largest cluster.
             Near 1.0 = one confluent sheet; low = scattered patches.
+            NaN for an empty mask, as are the cluster areas below.
         mean_cluster_area_px : float
             Average cluster size in pixels.
         median_cluster_area_px : float
             Median cluster size in pixels (robust to outliers).
         mean_cluster_area_um2, median_cluster_area_um2 : float
-            The same cluster areas calibrated by ``pixel_size_um`` (× pixel_size_um²);
-            equal to the pixel values when ``pixel_size_um`` is 1.0 (uncalibrated).
+            The same cluster areas times the pixel area (``dy * dx``, or the
+            scalar squared); equal to the pixel values when uncalibrated (1.0).
     """
+    mask = np.asarray(mask) > 0
     af = area_fraction(mask)
     labeled, n_comp = label(mask)
 
     total_fg = mask.sum()
 
     if n_comp == 0 or total_fg == 0:
+        # no clusters: their sizes and the largest one's share are undefined (NaN)
         return {
             "area_fraction": af,
             "n_components": 0,
-            "largest_component_fraction": 0.0,
-            "mean_cluster_area_px": 0.0,
-            "median_cluster_area_px": 0.0,
-            "mean_cluster_area_um2": 0.0,
-            "median_cluster_area_um2": 0.0,
+            "largest_component_fraction": float("nan"),
+            "mean_cluster_area_px": float("nan"),
+            "median_cluster_area_px": float("nan"),
+            "mean_cluster_area_um2": float("nan"),
+            "median_cluster_area_um2": float("nan"),
         }
 
-    component_sizes = np.bincount(labeled.ravel())
+    component_sizes: np.ndarray = np.bincount(labeled.ravel())
     # Index 0 is background, skip it
     fg_sizes = component_sizes[1:]
     largest = int(fg_sizes.max())
     lcf = largest / total_fg
 
-    px2 = float(pixel_size_um) ** 2
+    px2 = float(np.prod(np.broadcast_to(np.asarray(voxel_size_um, float), (2,))))
     return {
         "area_fraction": af,
         "n_components": n_comp,

@@ -1,0 +1,33 @@
+method,clustering,mean_F1,sd_F1,n
+Cellpose,c00,1.0,0.0,30
+Cellpose,c25,1.0,0.0,30
+Cellpose,c50,1.0,0.0,30
+Cellpose,c75,0.999,0.004,30
+Isodata_1978,c00,0.964,0.05,30
+Isodata_1978,c25,0.741,0.118,30
+Isodata_1978,c50,0.497,0.145,30
+Isodata_1978,c75,0.312,0.153,30
+Li_1993,c00,0.881,0.092,30
+Li_1993,c25,0.579,0.138,30
+Li_1993,c50,0.325,0.136,30
+Li_1993,c75,0.143,0.125,30
+Otsu_1979,c00,0.964,0.05,30
+Otsu_1979,c25,0.741,0.118,30
+Otsu_1979,c50,0.498,0.143,30
+Otsu_1979,c75,0.312,0.153,30
+StarDist,c00,0.984,0.04,30
+StarDist,c25,0.967,0.039,30
+StarDist,c50,0.969,0.044,30
+StarDist,c75,0.965,0.044,30
+Triangle_1977,c00,0.605,0.145,30
+Triangle_1977,c25,0.391,0.119,30
+Triangle_1977,c50,0.213,0.135,30
+Triangle_1977,c75,0.117,0.102,30
+fluorostats(raw Otsu+CC),c00,0.964,0.05,30
+fluorostats(raw Otsu+CC),c25,0.741,0.118,30
+fluorostats(raw Otsu+CC),c50,0.498,0.143,30
+fluorostats(raw Otsu+CC),c75,0.312,0.153,30
+fluorostats_watershed,c00,0.986,0.021,30
+fluorostats_watershed,c25,0.988,0.026,30
+fluorostats_watershed,c50,0.992,0.02,30
+fluorostats_watershed,c75,0.988,0.029,30

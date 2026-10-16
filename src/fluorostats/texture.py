@@ -38,31 +38,49 @@ def orientation_anisotropy(
     Returns
     -------
     dict with keys:
-        coherence — 0 (isotropic) … 1 (fully aligned).
-        dominant_orientation_deg — preferred axis in [0, 180).
+        coherence — 0 (isotropic, or a flat image) … 1 (fully aligned); NaN
+            when ``mask`` selects no pixel.
+        dominant_orientation_deg — preferred axis in [0, 180), in the same
+            convention as ``objects.object_shape_metrics`` ``orientation_deg``
+            (skimage regionprops: 0 = along the row axis, i.e. vertical; 90 =
+            horizontal), so the two can be compared directly.
         n_pixels — pixels contributing to the average.
     """
     from skimage.feature import structure_tensor
 
     img = np.asarray(image, dtype=float)
+    if img.ndim != 2:
+        raise ValueError(
+            f"orientation_anisotropy expects a 2D (Y, X) image, got shape "
+            f"{img.shape}; project a stack first (e.g. its maximum over z)"
+        )
     if mask is not None:
         sel = np.asarray(mask) > 0
     else:
         sel = np.ones(img.shape, bool)
     if not sel.any() or np.ptp(img) == 0:
-        return {"coherence": 0.0, "dominant_orientation_deg": float("nan"),
-                "n_pixels": int(sel.sum())}
+        return {
+            "coherence": float("nan") if not sel.any() else 0.0,
+            "dominant_orientation_deg": float("nan"),
+            "n_pixels": int(sel.sum()),
+        }
 
     axx, axy, ayy = structure_tensor(img, sigma=sigma, order="rc")
     # 'rc' order returns (Arr, Arc, Acc) = (Ayy, Axy, Axx) in image (y, x) axes.
     jyy, jxy, jxx = axx.mean(where=sel), axy.mean(where=sel), ayy.mean(where=sel)
     denom = jxx + jyy
     coherence = float(np.hypot(jxx - jyy, 2.0 * jxy) / denom) if denom > 0 else 0.0
-    orient = 0.5 * np.arctan2(2.0 * jxy, jxx - jyy)          # radians, principal axis
-    orient_deg = float(np.degrees(orient) % 180.0)
-    return {"coherence": min(coherence, 1.0),
-            "dominant_orientation_deg": orient_deg,
-            "n_pixels": int(sel.sum())}
+    orient = 0.5 * np.arctan2(2.0 * jxy, jxx - jyy)  # radians, principal axis
+    # Reported in the skimage regionprops convention (objects.object_shape_metrics):
+    # the structure tensor's angle runs the opposite way, hence the sign flip.
+    orient_deg = float(-np.degrees(orient) % 180.0)
+    if orient_deg > 180.0 - 1e-9:  # float % can return 180.0
+        orient_deg = 0.0
+    return {
+        "coherence": min(coherence, 1.0),
+        "dominant_orientation_deg": orient_deg,
+        "n_pixels": int(sel.sum()),
+    }
 
 
 def orientation_order(
@@ -93,8 +111,12 @@ def orientation_order(
     """
     a = np.asarray(angles_deg, dtype=float).ravel()
     if a.size == 0:
-        return {"order": float("nan"), "mean_orientation_deg": float("nan"),
-                "alignment": float("nan"), "n": 0}
+        return {
+            "order": float("nan"),
+            "mean_orientation_deg": float("nan"),
+            "alignment": float("nan"),
+            "n": 0,
+        }
     th = np.deg2rad(a) * 2.0
     vec = np.mean(np.exp(1j * th))
     order = float(np.abs(vec))
@@ -104,23 +126,27 @@ def orientation_order(
     else:
         ref = np.deg2rad(float(reference_deg)) * 2.0
         alignment = float(np.mean(np.cos(th - ref)))
-    return {"order": order, "mean_orientation_deg": mean_deg,
-            "alignment": alignment, "n": int(a.size)}
+    return {
+        "order": order,
+        "mean_orientation_deg": mean_deg,
+        "alignment": alignment,
+        "n": int(a.size),
+    }
 
 
-def mesh_size(mask: np.ndarray, spacing: float | tuple[float, ...] = 1.0) -> float:
+def mesh_size(mask: np.ndarray, voxel_size_um: float | tuple[float, ...] = 1.0) -> float:
     """Characteristic open-gap (pore / mesh) size of a network mask.
 
     Twice the mean distance from background pixels to the nearest foreground
     strand — the typical gap between strands. Returns physical units when
-    ``spacing`` is given (scalar or per-axis), else pixels. NaN if the mask is
+    ``voxel_size_um`` is given (scalar or per-axis), else pixels. NaN if the mask is
     empty or fully foreground (no gaps to measure).
     """
     m = np.asarray(mask) > 0
     bg = ~m
     if not m.any() or not bg.any():
         return float("nan")
-    dt = ndi.distance_transform_edt(bg, sampling=spacing)
+    dt = ndi.distance_transform_edt(bg, sampling=voxel_size_um)
     return float(2.0 * dt[bg].mean())
 
 

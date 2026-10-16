@@ -1,0 +1,156 @@
+"""Figure S3 — Robustness of fluorostats to noise and denoising.
+
+(a) Foreground Dice vs added Gaussian-noise sd for classic thresholders + fluorostats.
+(b) Dice recovery under denoising strategies across noise levels.
+(c) Per-nucleus median-diameter recovery error (%) vs BBBC024 ground truth.
+"""
+from __future__ import annotations
+import sys
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from figstyle import OKABE, RAW_OTSU_CC, apply_style, save, panel, caption, SUPP, TW  # noqa: E402
+
+apply_style()
+
+RES = Path(__file__).resolve().parent / "results"
+noise = pd.read_csv(RES / "b_noise_robustness.csv")
+denoise = pd.read_csv(RES / "b_denoising.csv")
+size = pd.read_csv(RES / "b_nuclei_size.csv")
+
+FLU = OKABE["blue"]
+
+# Author at the text width (TW = 5.147 in) for a 1:1 include.
+# At this narrower canvas the former 1x3 row is too cramped, so stack: panel a
+# (noise-robustness curves + legend) spans the full width on top; panels b
+# (denoising bars) and c (median-diameter error) sit side-by-side below.
+fig = plt.figure(figsize=(TW, 4.327))
+gs = fig.add_gridspec(2, 2, height_ratios=[1.05, 1.0],
+                      hspace=0.434, wspace=0.42,
+                      left=0.115, right=0.975, top=0.9591, bottom=0.1604)
+ax_a = fig.add_subplot(gs[0, :])
+ax_b = fig.add_subplot(gs[1, 0])
+ax_c = fig.add_subplot(gs[1, 1])
+
+# ---- (a) Noise robustness ----------------------------------------------------
+flu_col = RAW_OTSU_CC
+# other methods: grey/coloured with distinct markers; fluorostats blue bold on top
+others = {
+    "Otsu":     dict(c=OKABE["grey"],       m="s", ls="--"),
+    "Li":       dict(c=OKABE["orange"],     m="^", ls="-."),
+    "Isodata":  dict(c=OKABE["green"],      m="D", ls=":"),
+    "Triangle": dict(c=OKABE["vermillion"], m="v", ls="--"),
+}
+for name, st in others.items():
+    if name == "Otsu":
+        continue  # identical to fluorostats; shown as white dashes over the blue line
+    ax_a.plot(noise["noise_sd"], noise[name], color=st["c"], marker=st["m"],
+              ls=st["ls"], lw=1.0, ms=3.2, mew=0.4, mec="white", label=name)
+# fluorostats (Otsu + CC): bold blue; white dashes on top mark the identical Otsu curve
+ax_a.plot(noise["noise_sd"], noise[flu_col], color=FLU, marker="o", ls="-",
+          lw=2.2, ms=4.2, mew=0.5, mec="white", label="fluorostats", zorder=6)
+ax_a.plot(noise["noise_sd"], noise["Otsu"], color="white", ls=(0, (2, 2.2)),
+          lw=1.3, zorder=7)
+ax_a.set_xlabel("added Gaussian noise (s.d., gray levels)")
+ax_a.set_ylabel("foreground Dice")
+ax_a.set_xticks(noise["noise_sd"])
+ax_a.set_ylim(0.5, 0.96)
+# order legend so fluorostats is first; note it coincides with Otsu
+h, labels = ax_a.get_legend_handles_labels()
+order = [labels.index("fluorostats")] + [i for i, x in enumerate(labels) if x != "fluorostats"]
+ax_a.legend([h[i] for i in order], [labels[i] for i in order],
+            loc="lower left", handlelength=1.8, borderpad=0.2, labelspacing=0.25,
+            title="(white dashes = Otsu)", title_fontsize=5.0)
+panel(ax_a, "a", xanchor=0.0315)   # row-leader
+
+# ---- (b) Denoising recovery --------------------------------------------------
+# grouped bars per noise level; fluorostats denoiser highlighted
+strat = ["none", "median_3", "gaussian_σ2", "TV_chambolle", "fluorostats(gaussian σ1)"]
+labels = ["none", "median", r"gaussian $\sigma$ = 2", "TV", "fluorostats"]
+bar_c = [OKABE["lgrey"], OKABE["grey"], OKABE["green"], OKABE["orange"], FLU]
+levels = denoise["noise_sd"].to_list()
+x = np.arange(len(levels))
+w = 0.16
+for i, (s, c) in enumerate(zip(strat, bar_c)):
+    off = (i - (len(strat) - 1) / 2) * w
+    ax_b.bar(x + off, denoise[s], width=w, color=c,
+             edgecolor="#333333", linewidth=0.4,
+             label=labels[i], zorder=3 if s.startswith("fluoro") else 2)
+ax_b.set_xticks(x)
+ax_b.set_xticklabels([f"{v}" for v in levels])
+ax_b.set_xlabel("added Gaussian noise (s.d.)")
+ax_b.set_ylabel("foreground Dice")
+ax_b.set_ylim(0.35, 1.00)          # headroom so the label clears every bar top
+# annotate the recovery at the highest noise level: the arrow SPANS the two bars it
+# quotes -- from the 'none' bar (0.41) to the 'fluorostats' bar (0.91) -- rather than
+# sitting on the group centre (the gaussian bar, neither value). Endpoints anchored on
+# the actual bar x/tops; a small upward arc keeps it clear of the intermediate bars.
+i_hi = len(levels) - 1
+xn = i_hi + (0 - (len(strat) - 1) / 2) * w                 # 'none' bar
+xf = i_hi + ((len(strat) - 1) - (len(strat) - 1) / 2) * w  # 'fluorostats' bar
+yn = float(denoise[strat[0]].iloc[i_hi])
+yf = float(denoise[strat[-1]].iloc[i_hi])
+ax_b.annotate("", xy=(xf, yf), xytext=(xn, yn),
+              arrowprops=dict(arrowstyle="->", color=OKABE["black"], lw=0.8,
+                              connectionstyle="arc3,rad=-0.25"))
+ax_b.annotate(rf"{yn:.2f} $\rightarrow$ {yf:.2f}", xy=((xn + xf) / 2, 0.985), ha="center", va="top",
+              fontsize=6, color=OKABE["black"])
+# legend outside the axes (below), off every bar
+ax_b.legend(loc="upper center", bbox_to_anchor=(0.5, -0.30), ncol=3,
+            columnspacing=0.9, handlelength=1.0, borderpad=0.2,
+            labelspacing=0.25, handletextpad=0.4)
+panel(ax_b, "b", xanchor=0.0315)   # row-leader
+
+# ---- (c) Per-nucleus size recovery ------------------------------------------
+sz = size.sort_values("pct_error").reset_index(drop=True)
+# collapse identical Otsu/Isodata/fluorostats tie into readable short labels
+name_map = {
+    "Otsu_1979": "Otsu", "Isodata_1978": "Isodata",
+    RAW_OTSU_CC: "fluorostats", "Li_1993": "Li",
+    "Triangle_1977": "Triangle",
+}
+sz["short"] = sz["method"].map(name_map)
+cols = [FLU if s == "fluorostats" else OKABE["lgrey"] for s in sz["short"]]
+ypos = np.arange(len(sz))[::-1]  # best at top
+bars = ax_c.barh(ypos, sz["pct_error"], color=cols, edgecolor="#333333",
+                 linewidth=0.4, height=0.68, zorder=3)
+ax_c.set_yticks(ypos)
+ax_c.set_yticklabels(sz["short"])
+ax_c.set_xlabel("median-diameter error (%)")
+ax_c.set_xlim(0, 45)
+for y, v in zip(ypos, sz["pct_error"]):
+    ax_c.text(v + 0.8, y, f"{v:.1f}", va="center", ha="left", fontsize=6)
+panel(ax_c, "c")
+
+save(fig, "figS3_robustness", SUPP, tight=False)
+
+# Caption numbers are read from the tables plotted above, never typed.
+hi_noise = noise.iloc[-1]
+size_by = size.set_index("method")
+cap = (
+    "Figure S3 | Robustness of fluorostats segmentation to noise. "
+    "(a) Foreground Dice versus added zero-mean Gaussian noise (standard deviation "
+    "in grey levels; 8-bit images) for classic global thresholders and fluorostats "
+    "(Otsu + connected-component post-processing, blue). fluorostats matches the best "
+    "classic method (Otsu/Isodata) at every noise level and degrades gracefully, "
+    f"retaining Dice {hi_noise[flu_col]:.2f} at s.d.={hi_noise['noise_sd']:.0f}, where Li "
+    f"collapses to {hi_noise['Li']:.2f}. Triangle is the exception: worst at low noise "
+    f"({noise['Triangle'].iloc[0]:.2f} at s.d.=0) but best at the highest "
+    f"({hi_noise['Triangle']:.2f}). "
+    "(b) Foreground Dice under denoising strategies (none, 3×3×3 median, Gaussian sigma=2, "
+    "total-variation Chambolle, and the fluorostats built-in Gaussian sigma=1 pre-filter) "
+    f"across increasing noise. Without denoising, Dice collapses to {yn:.2f} at "
+    f"s.d.={levels[-1]:.0f}; the fluorostats pre-filter recovers it to {yf:.2f}, matching "
+    "dedicated denoisers. "
+    "(c) Per-nucleus median-diameter recovery error relative to BBBC024 ground truth "
+    f"({size_by['GT_median'].iloc[0]:.1f} voxels), sorted best-to-worst. fluorostats is "
+    f"best-tied at {size_by.loc[RAW_OTSU_CC, 'pct_error']:.1f}% error, versus "
+    f"{size_by.loc['Li_1993', 'pct_error']:.1f}% (Li) and "
+    f"{size_by.loc['Triangle_1977', 'pct_error']:.1f}% (Triangle). Blue denotes fluorostats "
+    "throughout."
+)
+caption("figS3_robustness", cap, SUPP)
+print("done")

@@ -2,41 +2,73 @@
 
 from __future__ import annotations
 
-import json
+import functools
 from pathlib import Path
 
 import click
+import matplotlib
+import pandas as pd
 
+from . import cli_measure, cli_paths
 from . import io as iq_io
-from . import metrics_2d, metrics_3d, plots, preprocess, qc, report, segment, spatial
+from . import (
+    plots,
+    pubfig,
+    report,
+    segment,
+    skeleton,
+    stats,
+)
+from .cli_paths import CONDITION_FROM  # the --condition-from registry, importable from here
+
+# REU-5: no committed benchmark table chose these result-changing defaults yet (an
+# open item): quant3d --threshold-scale 0.9, quant2d --threshold li and --bg-radius 15
+# (--min-branch-length is skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM, documented there).
+
+# Every command that writes an output folder takes the same --overwrite (CFG-1).
+_overwrite_option = click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Replace files in the output folder that another tool or the user wrote "
+    "(default: refuse; an earlier run of the same command is always replaced)",
+)
 
 
 @click.group()
 def cli():
     """FluoroStats — Universal fluorescence microscopy image quantification."""
+    matplotlib.use("Agg")  # every command writes figures to files; none opens a window
 
 
 @cli.command()
 def formats():
     """List all supported file formats and their availability."""
-    from . import io as iq_io
     click.echo("Supported formats:\n")
     for ext, desc in sorted(iq_io.supported_formats().items()):
         marker = "x" if "requires" not in desc else " "
         click.echo(f"  [{marker}] {ext:<8} {desc}")
-    click.echo("\nInstall all readers: pip install oiffile czifile nd2 readlif")
-    click.echo('(from a fluorostats checkout: pip install -e ".[all]")')
+    readers = " ".join(iq_io.OPTIONAL_READERS)
+    click.echo(
+        f'\nInstall all readers: pip install -e ".[all]" in a checkout, or pip install {readers}'
+    )
 
 
 # ---------------------------------------------------------------------------
 # depth — probe-penetration / permeability analysis (manifest driven)
 # ---------------------------------------------------------------------------
 
+
 @cli.command("depth")
 @click.argument("manifest", type=click.Path(exists=True))
-@click.option("--output", "output_dir", default=None, type=click.Path(),
-              help="Override the manifest's output_dir")
-def depth_cmd(manifest, output_dir):
+@click.option(
+    "--output",
+    "output_dir",
+    default=None,
+    type=click.Path(),
+    help="Output folder; default: the manifest's output_dir",
+)
+@_overwrite_option
+def depth_cmd(manifest, output_dir, overwrite):
     """Depth-penetration analysis from a JSON manifest.
 
     Compares how far a fluorescent probe penetrates a material across
@@ -45,8 +77,9 @@ def depth_cmd(manifest, output_dir):
     (for Prism/replotting) and publication figures. See
     ``fluorostats.depth_batch`` for the manifest schema.
     """
-    from . import depth_batch
-    out = depth_batch.run(Path(manifest), output_dir)
+    from . import depth_batch  # on use: the other commands never load the batch driver
+
+    out = _run_driver(depth_batch.run, manifest, output_dir, overwrite)
     click.echo(f"Done. Outputs in {out}/")
 
 
@@ -54,11 +87,18 @@ def depth_cmd(manifest, output_dir):
 # viability — Live/Dead viability analysis (manifest driven)
 # ---------------------------------------------------------------------------
 
+
 @cli.command("viability")
 @click.argument("manifest", type=click.Path(exists=True))
-@click.option("--output", "output_dir", default=None, type=click.Path(),
-              help="Override the manifest's output_dir")
-def viability_cmd(manifest, output_dir):
+@click.option(
+    "--output",
+    "output_dir",
+    default=None,
+    type=click.Path(),
+    help="Output folder; default: the manifest's output_dir",
+)
+@_overwrite_option
+def viability_cmd(manifest, output_dir, overwrite):
     """Live/Dead viability analysis from a JSON manifest.
 
     Quantifies two-channel Live/Dead z-stacks grouped by condition: area /
@@ -67,33 +107,120 @@ def viability_cmd(manifest, output_dir):
     vs-3D coverage bias. Writes tidy CSVs. See ``fluorostats.viability_batch``
     for the manifest schema.
     """
-    from . import viability_batch
-    out = viability_batch.run(Path(manifest), output_dir)
+    from . import viability_batch  # on use: the other commands never load the batch driver
+
+    out = _run_driver(viability_batch.run, manifest, output_dir, overwrite)
     click.echo(f"Done. Outputs in {out}/")
+
+
+def _run_driver(run, manifest: str, *args) -> Path:
+    """A batch driver's ``run``. A problem with the manifest or the data it names (a
+    ValueError, which JSON syntax errors and file-format errors are too) is printed as
+    ``Error: <message>`` with exit status 1, not as a traceback."""
+    try:
+        return run(Path(manifest), *args)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
 
 
 # ---------------------------------------------------------------------------
 # quant3d
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
-@click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .oib/.oif/.tif volumes")
-@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
-@click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(["otsu", "li"]), default="otsu")
-@click.option("--threshold-scale", type=float, default=0.9, help="Scale threshold by this factor (lower=more sensitive, default 0.9)")
-@click.option("--min-size", type=int, default=64, help="Min object size in voxels")
-@click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=int, default=0, help="Background subtraction disk radius (0=off; enabling is recommended for confocal)")
+@click.option(
+    "--input",
+    "input_dir",
+    required=True,
+    type=click.Path(exists=True),
+    help="Folder with .oib/.oif/.tif volumes",
+)
+@click.option(
+    "--output",
+    "output_dir",
+    required=True,
+    type=click.Path(),
+    help="Output folder for results (not inside --input)",
+)
+@click.option(
+    "--condition-from",
+    "condition_from",
+    type=click.Choice(list(CONDITION_FROM)),
+    default="parent",
+    show_default=True,
+    help="How to assign condition labels",
+)
+@click.option(
+    "--channel",
+    default=None,
+    help="Channel to measure, by index (int) or name substring (ImageJ TIFFs carry no channel names: use an index); default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
+)
+@click.option(
+    "--threshold",
+    type=click.Choice(segment.METHODS),
+    default="otsu",
+    show_default=True,
+    help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize",
+)
+@click.option(
+    "--threshold-scale",
+    type=click.FloatRange(min=0, min_open=True),
+    default=0.9,
+    show_default=True,
+    help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--min-size",
+    type=click.IntRange(min=0),
+    default=64,
+    show_default=True,
+    help="Remove objects smaller than this, in voxels (CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--sigma",
+    type=click.FloatRange(min=0),
+    default=1.0,
+    show_default=True,
+    help="Gaussian blur sigma in pixels, in-plane per z-slice (CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--bg-radius",
+    type=click.IntRange(min=0),
+    default=0,
+    show_default=True,
+    help="Background subtraction disk radius in pixels (0=off; enabling is recommended for confocal; CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--opening",
+    type=click.Choice(list(segment.OPENINGS)),
+    default="ball",
+    show_default=True,
+    help="Salt-noise opening after thresholding: ball (3x3x3; erases structures thinner "
+    "than 3 z-slices), disk (per z-slice), none (CAN AFFECT RESULTS)",
+)
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
-@click.option("--no-skeleton", is_flag=True, help="Skip skeleton analysis (faster)")
-@click.option("--prune/--no-prune", default=False,
-              help="Prune short skeleton spurs before counting (field-standard branch/junction counts, "
-                   "matching Fiji AnalyzeSkeleton / AngioTool / REAVER). Default off = raw skeleton.")
-@click.option("--min-branch-length", type=float, default=5.0,
-              help="Minimum branch length in µm for spur pruning when --prune is set (default 5).")
+@click.option(
+    "--no-skeleton",
+    is_flag=True,
+    help="Skip skeleton analysis (faster); skeleton columns are left blank",
+)
+@click.option(
+    "--prune/--no-prune",
+    default=False,
+    show_default=True,
+    help="Prune short skeleton spurs before counting (field-standard branch/junction counts, "
+    "matching Fiji AnalyzeSkeleton / AngioTool / REAVER); off = raw skeleton (CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--min-branch-length",
+    type=click.FloatRange(min=0),
+    default=skeleton.DEFAULT_MIN_BRANCH_LENGTH_UM,
+    show_default=True,
+    help="Minimum branch length in µm for spur pruning when --prune is set (CAN AFFECT RESULTS)",
+)
+@_overwrite_option
 def quant3d(
     input_dir,
     output_dir,
@@ -104,128 +231,140 @@ def quant3d(
     min_size,
     sigma,
     bg_radius,
+    opening,
     no_overlays,
     no_plots,
     no_skeleton,
     prune,
     min_branch_length,
+    overwrite,
 ):
     """Quantify 3D confocal z-stacks: volume fraction, connectivity, skeleton,
     and spatial-coverage uniformity (tile CV + Moran's I)."""
+    pruning = prune or _given("min_branch_length")
+    if no_skeleton and pruning:
+        raise click.UsageError("--prune / --min-branch-length have no effect with --no-skeleton")
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    output_path = cli_paths.output_outside_input(input_path, Path(output_dir))
 
     # Resolve channel override
     ch_override = _parse_channel(channel)
 
     # Find volume files
-    files = _find_files(input_path, iq_io.VOLUME_SUFFIXES)
+    files = cli_paths.find_files(input_path, iq_io.VOLUME_SUFFIXES, iq_io.DIRECTORY_FORMATS)
     if not files:
-        click.echo(f"No volume files found in {input_path}")
-        return
+        raise click.UsageError(f"No volume files found in {input_path}")
+    config = dict(locals())  # recorded in run_config.json once the run has succeeded
+    previous = cli_paths.claim_output(output_path, "quant3d", overwrite, not no_overlays)
 
     click.echo(f"Found {len(files)} volume file(s)")
 
-    # Save run config
-    _save_config(output_path, locals())
-
-    rows: list[dict] = []
-    rep_counter = _ReplicateCounter()
-
-    with click.progressbar(files, label="Processing volumes") as bar:
-        for fpath in bar:
-            condition = _get_condition(fpath, condition_from)
-            replicate = rep_counter.next(condition)
-
-            # Load
-            arr, meta = iq_io.load_volume(fpath)
-            voxel_size = meta["voxel_size_um"]
-
-            # Channel selection
-            vol = preprocess.select_green_channel(
-                arr, meta["channel_names"], override=ch_override
-            )
-
-            # Preprocess
-            vol = preprocess.denoise(vol, sigma=sigma)
-            if bg_radius > 0:
-                vol = preprocess.background_subtract(vol, radius=bg_radius)
-
-            # Segment
-            mask = segment.binarize(vol, method=threshold, min_size=min_size, threshold_scale=threshold_scale)
-
-            # Metrics
-            vf = metrics_3d.volume_fraction(mask)
-            conn = metrics_3d.connectivity_metrics(mask)
-
-            # same keys as skeleton_metrics() so the CSV row shape is identical
-            # whether or not --no-skeleton is set (else n_junction_nodes /
-            # mean_branch_length_um show as blank cells for skipped rows).
-            skel = {"total_length_um": 0.0, "n_branches": 0, "n_junctions": 0,
-                    "n_junction_nodes": 0, "mean_branch_length_um": 0.0}
-            if not no_skeleton:
-                skel = metrics_3d.skeleton_metrics(
-                    mask, voxel_size_um=voxel_size,
-                    prune=prune, min_branch_length_um=min_branch_length)
-
-            row = {
-                "file": fpath.name,
-                "condition": condition,
-                "replicate": replicate,
-                "shape": str(arr.shape),
-                "voxel_size_um": str(voxel_size),
-                "volume_fraction": vf,
-                **conn,
-                **skel,
-                **_coverage_heterogeneity(mask),
-            }
-            rows.append(row)
-
-            # QC overlay
-            if not no_overlays:
-                overlay_path = output_path / "overlays" / f"{fpath.stem}_overlay.png"
-                qc.overlay_3d(vol, mask, overlay_path)
-
-    # Reports
-    df = report.write_per_file_csv(rows, output_path / "per_file.csv", mode="3d")
-    summary = report.write_per_condition_csv(df, output_path / "per_condition.csv", mode="3d")
-
-    click.echo(f"\nPer-file results: {output_path / 'per_file.csv'}")
-    click.echo(f"Per-condition summary: {output_path / 'per_condition.csv'}")
-
-    click.echo("\n--- Per-condition summary ---")
-    click.echo(summary.to_string(index=False))
-
-    # Plots
-    _3d_metrics = ["volume_fraction", "n_components", "euler_number",
-                   "largest_component_fraction", "total_length_um",
-                   "n_junctions", "n_junction_nodes", "mean_branch_length_um",
-                   "coverage_tile_cv", "coverage_morans_i"]
-
-    _write_plots_and_pvalues(
-        df, _3d_metrics, output_path, no_plots,
-        summary_title="3D Confocal Quantification Summary",
+    measure = functools.partial(
+        cli_measure.measure_volume,
+        ch_override=ch_override,
+        sigma=sigma,
+        bg_radius=bg_radius,
+        opening=opening,
+        threshold=threshold,
+        threshold_scale=threshold_scale,
+        min_size=min_size,
+        no_skeleton=no_skeleton,
+        prune=prune,
+        min_branch_length=min_branch_length,
+        overlay_dir=None if no_overlays else output_path / "overlays",
+        input_root=input_path,
     )
+    rows, failures = cli_measure.quantify_files(
+        files, condition_from, "Processing volumes", measure
+    )
+
+    # Every reported metric is plotted except n_branches, as in earlier releases.
+    plotted = [m for m in report.METRICS_3D if m != "n_branches"]
+    report.mark_output_dir(output_path, "quant3d")  # before the first table
+    if rows:  # no file measured: no tables, and the marker stays (_finish)
+        _report_and_plot(
+            rows, output_path, "3d", plotted, no_plots, "3D Confocal Quantification Summary"
+        )
+    _finish(output_path, config, previous, "quant3d", failures, len(files))
 
 
 # ---------------------------------------------------------------------------
 # quant2d
 # ---------------------------------------------------------------------------
 
+
 @cli.command()
-@click.option("--input", "input_dir", required=True, type=click.Path(exists=True), help="Folder with .png/.tif images")
-@click.option("--output", "output_dir", required=True, type=click.Path(), help="Output folder for results")
-@click.option("--condition-from", "condition_from", type=click.Choice(["parent", "grandparent", "filename"]), default="parent", help="How to assign condition labels")
-@click.option("--channel", default=None, help="Force channel by index (int) or name substring")
-@click.option("--threshold", type=click.Choice(["otsu", "li"]), default="li")
-@click.option("--threshold-scale", type=float, default=1.0, help="Scale threshold by this factor (lower=more sensitive)")
-@click.option("--min-size", type=int, default=64, help="Min object size in pixels")
-@click.option("--sigma", type=float, default=1.0, help="Gaussian blur sigma")
-@click.option("--bg-radius", type=int, default=15, help="Background subtraction disk radius")
-@click.option("--auto-crop/--no-auto-crop", default=True, help="Auto-crop microscope borders (default: on)")
+@click.option(
+    "--input",
+    "input_dir",
+    required=True,
+    type=click.Path(exists=True),
+    help="Folder with .png/.tif images",
+)
+@click.option(
+    "--output",
+    "output_dir",
+    required=True,
+    type=click.Path(),
+    help="Output folder for results (not inside --input)",
+)
+@click.option(
+    "--condition-from",
+    "condition_from",
+    type=click.Choice(list(CONDITION_FROM)),
+    default="parent",
+    show_default=True,
+    help="How to assign condition labels",
+)
+@click.option(
+    "--channel",
+    default=None,
+    help="Channel to measure, by index (int) or name substring (ImageJ TIFFs carry no channel names: use an index); default: the channel named as a green dye, else a positional guess (warned). CAN AFFECT RESULTS",
+)
+@click.option(
+    "--threshold",
+    type=click.Choice(segment.METHODS),
+    default="li",
+    show_default=True,
+    help="Threshold algorithm (CAN AFFECT RESULTS); see segment.binarize",
+)
+@click.option(
+    "--threshold-scale",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+    help="Scale threshold by this factor (lower=more sensitive; CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--min-size",
+    type=click.IntRange(min=0),
+    default=64,
+    show_default=True,
+    help="Remove objects smaller than this, in pixels (CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--sigma",
+    type=click.FloatRange(min=0),
+    default=1.0,
+    show_default=True,
+    help="Gaussian blur sigma in pixels (CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--bg-radius",
+    type=click.IntRange(min=0),
+    default=15,
+    show_default=True,
+    help="Background subtraction disk radius in pixels (0=off; CAN AFFECT RESULTS)",
+)
+@click.option(
+    "--auto-crop/--no-auto-crop",
+    default=True,
+    show_default=True,
+    help="Auto-crop microscope borders before measuring (CAN AFFECT RESULTS)",
+)
 @click.option("--no-overlays", is_flag=True, help="Skip QC overlay PNGs")
 @click.option("--no-plots", is_flag=True, help="Skip comparison plots")
+@_overwrite_option
 def quant2d(
     input_dir,
     output_dir,
@@ -239,67 +378,58 @@ def quant2d(
     auto_crop,
     no_overlays,
     no_plots,
+    overwrite,
 ):
     """Quantify 2D fluorescence images: area fraction (cell coverage) and
     spatial-coverage uniformity (tile CV + Moran's I)."""
     input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    output_path = cli_paths.output_outside_input(input_path, Path(output_dir))
 
     ch_override = _parse_channel(channel)
 
-    files = _find_files(input_path, iq_io.IMAGE_SUFFIXES)
+    files = cli_paths.find_files(input_path, iq_io.IMAGE_SUFFIXES)
     if not files:
-        click.echo(f"No image files found in {input_path} "
-                   f"(quant2d matches {sorted(iq_io.IMAGE_SUFFIXES)}). "
-                   "Vendor volume formats (.oib/.czi/.nd2/.lif) are handled by `quant3d`.")
-        return
+        raise click.UsageError(
+            f"No image files found in {input_path} "
+            f"(quant2d matches {sorted(iq_io.IMAGE_SUFFIXES)}). "
+            "Vendor volume formats (.oib/.czi/.nd2/.lif) are handled by "
+            "`quant3d`."
+        )
+    config = dict(locals())  # recorded in run_config.json once the run has succeeded
+    previous = cli_paths.claim_output(output_path, "quant2d", overwrite, not no_overlays)
 
     click.echo(f"Found {len(files)} image file(s)")
-    _save_config(output_path, locals())
 
-    rows: list[dict] = []
-    rep_counter = _ReplicateCounter()
+    measure = functools.partial(
+        cli_measure.measure_image,
+        ch_override=ch_override,
+        sigma=sigma,
+        bg_radius=bg_radius,
+        threshold=threshold,
+        threshold_scale=threshold_scale,
+        min_size=min_size,
+        auto_crop=auto_crop,
+        overlay_dir=None if no_overlays else output_path / "overlays",
+        input_root=input_path,
+    )
+    rows, failures = cli_measure.quantify_files(files, condition_from, "Processing images", measure)
+    report.mark_output_dir(output_path, "quant2d")  # before the first table
+    if rows:  # no file measured: no tables, and the marker stays (_finish)
+        _report_and_plot(
+            rows, output_path, "2d", list(report.METRICS_2D), no_plots, "2D Coverage Summary"
+        )
+    _finish(output_path, config, previous, "quant2d", failures, len(files))
 
-    with click.progressbar(files, label="Processing images") as bar:
-        for fpath in bar:
-            condition = _get_condition(fpath, condition_from)
-            replicate = rep_counter.next(condition)
 
-            arr, meta = iq_io.load_image(fpath)
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-            # Auto-crop microscope borders before channel selection
-            if auto_crop:
-                arr, crop_coords = preprocess.auto_crop(arr)
 
-            img = preprocess.select_green_channel(
-                arr, meta["channel_names"], override=ch_override
-            )
-
-            img = preprocess.denoise(img, sigma=sigma)
-            if bg_radius > 0:
-                img = preprocess.background_subtract(img, radius=bg_radius)
-
-            mask = segment.binarize(img, method=threshold, min_size=min_size, threshold_scale=threshold_scale)
-
-            cov = metrics_2d.coverage_metrics(mask)
-
-            row = {
-                "file": fpath.name,
-                "condition": condition,
-                "replicate": replicate,
-                "shape": str(arr.shape),
-                **cov,
-                **_coverage_heterogeneity(mask),
-            }
-            rows.append(row)
-
-            if not no_overlays:
-                overlay_path = output_path / "overlays" / f"{fpath.stem}_overlay.png"
-                qc.overlay_2d(img, mask, overlay_path)
-
-    df = report.write_per_file_csv(rows, output_path / "per_file.csv", mode="2d")
-    summary = report.write_per_condition_csv(df, output_path / "per_condition.csv", mode="2d")
+def _report_and_plot(rows, output_path, mode, metrics, no_plots, summary_title) -> None:
+    """Write per-file + per-condition CSVs, echo the summary, then plots/p-values."""
+    df = report.write_per_file_csv(rows, output_path / "per_file.csv", mode=mode)
+    summary = report.write_per_condition_csv(df, output_path / "per_condition.csv", mode=mode)
 
     click.echo(f"\nPer-file results: {output_path / 'per_file.csv'}")
     click.echo(f"Per-condition summary: {output_path / 'per_condition.csv'}")
@@ -307,46 +437,68 @@ def quant2d(
     click.echo("\n--- Per-condition summary ---")
     click.echo(summary.to_string(index=False))
 
-    _2d_metrics = ["area_fraction", "n_components", "largest_component_fraction",
-                   "mean_cluster_area_px", "median_cluster_area_px",
-                   "coverage_tile_cv", "coverage_morans_i"]
+    _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title=summary_title)
 
-    _write_plots_and_pvalues(
-        df, _2d_metrics, output_path, no_plots,
-        summary_title="2D Coverage Summary",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     """Shared quant2d/quant3d tail: per-metric plots, summary panel, p-values.
 
-    No-op unless plots are enabled and there is more than one condition.
+    Draws only when plots are enabled and there is more than one condition.
     """
-    if no_plots or len(df["condition"].unique()) <= 1:
-        return
+    if not no_plots and len(df["condition"].unique()) > 1:
+        _draw_plots_and_pvalues(df, metrics, output_path / "plots", summary_title)
 
-    plot_dir = output_path / "plots"
+
+def _finish(output_path: Path, config: dict, previous: list[Path], tool: str, failures, n) -> None:
+    """Write ``failures.csv`` (file, condition, error) when files of the ``n`` failed;
+    unless all failed, record the run and the absolute paths it read (last: the
+    record replaces the "incomplete" marker); name the earlier outputs it removed and
+    did not write again; then exit 1 naming the failed files."""
+    if failures:
+        pd.DataFrame(failures, columns=["file", "condition", "error"]).to_csv(
+            output_path / "failures.csv", index=False
+        )
+    if len(failures) < n:
+        read = {
+            "files": [str(f.resolve()) for f in config["files"]],
+            "output_dir": str(output_path.resolve()),
+        }
+        report.write_run_config(output_path, config, {"files_read": read}, tool=tool)
+    for line in report.stale_notices(previous):
+        click.echo(line)
+    if failures:
+        listed = "".join(f"\n  {f['condition']}/{f['file']}: {f['error']}" for f in failures)
+        raise click.ClickException(
+            f"{len(failures)} of {n} file(s) could not be measured (failures.csv):{listed}"
+        )
+
+
+def _draw_plots_and_pvalues(df, metrics, plot_dir, summary_title) -> None:
+    """Draw the per-metric plots, the summary panel and pvalues.csv into ``plot_dir``,
+    in the house figure theme."""
+    pubfig.apply_style("house")
     has_replicates = any(len(df[df["condition"] == c]) > 1 for c in df["condition"].unique())
+    # unmeasured metrics (e.g. skeleton columns under --no-skeleton) are neither
+    # plotted nor listed as untestable pairs in pvalues.csv
+    metrics = [m for m in metrics if m in df.columns and df[m].notna().any()]
 
     for metric in metrics:
-        if metric not in df.columns or not df[metric].notna().any():
-            continue
         if has_replicates:
             plots.bar_mean_sem(df, metric, plot_dir / f"{metric}_bar.png")
         plots.boxplot_by_condition(df, metric, plot_dir / f"{metric}_box.png")
 
+    # p-values first, so the summary panel's stars use the same BH q-values as pvalues.csv
+    pvals = stats.compute_pvalues(df, metrics) if has_replicates else None
     plots.summary_panel(
-        df, metrics, plot_dir / "summary_panel.png",
+        df,
+        metrics,
+        plot_dir / "summary_panel.png",
         title=summary_title,
         show_pvalues=has_replicates,
+        pvalues=pvals,
     )
 
-    if has_replicates:
-        pvals = plots.compute_pvalues(df, metrics)
+    if pvals is not None:
         if len(pvals) > 0:
             pvals.to_csv(str(plot_dir / "pvalues.csv"), index=False)
             click.echo(f"\nStatistical comparisons: {plot_dir / 'pvalues.csv'}")
@@ -354,48 +506,10 @@ def _write_plots_and_pvalues(df, metrics, output_path, no_plots, summary_title):
     click.echo(f"Plots saved to {plot_dir}")
 
 
-def _coverage_heterogeneity(mask, grid: tuple[int, int] = (5, 5)) -> dict:
-    """Spatial uniformity of a binary mask's coverage across a tile grid.
-
-    For a 3D ``(Z, Y, X)`` mask the through-z coverage map is used. Returns
-    ``coverage_tile_cv`` (tile-to-tile CV, 0 = evenly seeded) and
-    ``coverage_morans_i`` (spatial autocorrelation; >0 = patchy/clustered).
-    """
-    cov = mask.mean(axis=0) if mask.ndim == 3 else mask.astype(float)
-    het = spatial.spatial_heterogeneity(
-        spatial.tile_reduce(cov, lambda t: float(t.mean()), grid=grid)
-    )
-    return {"coverage_tile_cv": het["cv"], "coverage_morans_i": het["morans_i"]}
-
-
-def _find_files(root: Path, suffixes: set[str]) -> list[Path]:
-    """Recursively find files with matching suffixes."""
-    files = []
-    for f in sorted(root.rglob("*")):
-        if f.is_file() and f.suffix.lower() in suffixes:
-            files.append(f)
-    return files
-
-
-def _get_condition(fpath: Path, mode: str) -> str:
-    """Derive the experimental condition label from the file path."""
-    if mode == "parent":
-        return fpath.parent.name
-    if mode == "grandparent":
-        return fpath.parent.parent.name
-    # filename: strip extension, use as condition
-    return fpath.stem
-
-
-class _ReplicateCounter:
-    """Auto-assign replicate IDs per condition."""
-
-    def __init__(self):
-        self._counts: dict[str, int] = {}
-
-    def next(self, condition: str) -> int:
-        self._counts[condition] = self._counts.get(condition, 0) + 1
-        return self._counts[condition]
+def _given(param: str) -> bool:
+    """Whether the current command's option ``param`` was typed, not defaulted."""
+    source = click.get_current_context().get_parameter_source(param)
+    return source == click.core.ParameterSource.COMMANDLINE
 
 
 def _parse_channel(channel: str | None) -> int | str | None:
@@ -405,40 +519,3 @@ def _parse_channel(channel: str | None) -> int | str | None:
         return int(channel)
     except ValueError:
         return channel
-
-
-def _environment() -> dict:
-    """Package versions + optional-reader availability, for the reproducibility record.
-
-    (The resolved per-file ``voxel_size_um`` is recorded per row in ``per_file.csv``.)
-    """
-    import importlib.metadata as _im
-    import importlib.util as _iu
-    import platform
-
-    pkgs: dict[str, str | None] = {}
-    for p in ("fluorostats", "numpy", "scipy", "scikit-image", "tifffile",
-              "pandas", "matplotlib", "skan"):
-        try:
-            pkgs[p] = _im.version(p)
-        except Exception:  # pragma: no cover - core deps are always installed
-            pkgs[p] = None
-    readers = {r: _iu.find_spec(r) is not None
-               for r in ("oiffile", "czifile", "nd2", "readlif")}
-    return {"python": platform.python_version(), "packages": pkgs,
-            "optional_readers": readers}
-
-
-def _save_config(output_dir: Path, params: dict) -> None:
-    """Save run parameters + environment for reproducibility."""
-    config: dict = {}
-    for k, v in params.items():
-        if isinstance(v, Path):
-            config[k] = str(v)
-        elif isinstance(v, (str, int, float, bool, type(None))):
-            config[k] = v
-    config["_environment"] = _environment()
-
-    config_path = output_dir / "run_config.json"
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)

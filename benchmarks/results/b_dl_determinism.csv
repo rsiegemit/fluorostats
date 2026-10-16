@@ -1,0 +1,4 @@
+method,n_runs,n_images,mean_F1,F1_cv_percent,count_mean,count_cv_percent,runs_identical_to_run1
+fluorostats(raw Otsu+CC),20,10,0.8935,0.0,868.0,0.0,20
+StarDist,20,10,0.8736,0.0,973.0,0.0,20
+Cellpose,20,10,0.851,0.0,990.0,0.0,20

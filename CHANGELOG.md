@@ -3,6 +3,296 @@
 Notable changes to fluorostats. Format follows [Keep a Changelog](https://keepachangelog.com);
 versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+## [0.9.0] - 2026-10-16
+
+Four rounds of audits against the engineering rules (`docs/ENGINEERING.md`), a bug
+hunt and a test on real vendor files; every typed value in the benchmark figures
+replaced by a measurement; deprecated names removed. Breaking for 0.8 users: see
+Removed, the manifest path rule and the output-folder rule under Changed.
+Refactors were proven behaviour-identical with a golden-output harness over every
+public function, every CLI command and every figure script. The changes below that
+DO alter outputs come first, each with the inputs it affects.
+
+### Fixed (changes outputs)
+
+Reading files
+- **Leica `.lif` files load** (every one failed: the reader used a name readlif does
+  not export); a negative z length (top-down acquisition) is read as its magnitude.
+- **Olympus axes come from the plane file names**, checked against the mainfile
+  sizes: 2-channel single-plane files were read as 1 channel x 2 slices, time series
+  as z-stacks, C x Z x T files lost a channel, and a file name pattern dropped all
+  but one plane silently (a size mismatch now raises). Pixel sizes written with a
+  comma decimal are read.
+- ImageJ: a z spacing of 0 or NaN is not calibration; the unit `inch` is converted.
+  RGB channel names stay on their data; unlabelled 5D/6D arrays follow the 4D rule;
+  `load_image` of a z-stack no longer parses or warns about z.
+- **Axis order comes from the file's axis labels** (TIFF series axes, nd2 sizes,
+  czifile axes), not from the array shape. Changes results for TIFF/ND2/CZI files
+  not already in (C, Z, Y, X) order: ImageJ ZCYX hyperstacks with more than one
+  channel, OME files with Z before C or a time axis, RGB TIFFs (colour samples are
+  channels), single-plane multichannel files, and RGB z-stacks with one unlabelled
+  axis (taken as z, with a warning). Time points, positions and scenes keep index 0
+  with a warning. Files without labels keep the shape rule, which now warns when it
+  guesses and refuses layouts with more than 10 channels or X < 5.
+- **Channel names stay positional.** An unnamed channel no longer shifts later names
+  onto the wrong channel (OME/CZI/ND2/Olympus: ["", "GFP"] was read as ["GFP",
+  "Ch2"], so the green-channel pick measured the empty channel). CZI names come from
+  the image's channels only (they collected every `Channel` element of the file).
+- **Voxel sizes are converted from their stated unit** (OME `PhysicalSize*Unit`,
+  ImageJ `unit`/`zunit`; 500 nm pixels were read as 500 µm); ImageJ x/y pixel size
+  is read from the resolution tags when the file names a unit; Leica `.lif` sizes
+  were 10^6 too large; ND2 axes nd2 cannot calibrate are recorded as defaulted. An
+  unknown or missing unit keeps the value, warns and records `file-unit-unknown`.
+- **CZI/ND2/LIF/Olympus metadata parsers keep what they read** and warn naming what
+  they could not (a CZI with a non-numeric z `Distance` lost its x/y sizes silently).
+- **Unnamed 4-channel inputs are measured on channel 1 (green), not channel 0**, for
+  RGBA images and unnamed 4-channel volumes in `quant3d` (announced as a guess).
+
+Segmentation and objects
+- **`clear_border_labels` re-merged touching objects**; `watershed_split` merged
+  objects touching only at a corner. Both keep objects apart now.
+- `object_centroids` gives one row per present label (gaps in label ids made phantom
+  objects); skeletonize output is treated as a mask on every scikit-image version;
+  spur pruning keeps two branches at every junction.
+- **`objects.watershed_split(min_size>0)` re-merged the objects it split** (the size
+  filter relabelled the foreground). It now filters the watershed labels, and seeds
+  at the h-maxima of the distance transform (h = `min_distance`/2) so irregular or
+  elongated objects are not over-split. Watershed counts change everywhere,
+  including `live_dead_by_count(method="watershed"/"all")` and the viability
+  driver's watershed, consensus and spread columns.
+- **One small-object rule** (`segment.remove_small`: objects smaller than `min_size`
+  are removed, objects of exactly `min_size` kept) on every scikit-image version,
+  used by `binarize`, `label_3d` and the benchmark producers.
+- **`skeleton.n_junction_nodes` merges junction voxels with full connectivity** as
+  documented (about 1% fewer nodes where branches touch diagonally).
+- **`texture.orientation_anisotropy` angles use the regionprops convention** of
+  `object_shape_metrics` (they were mirrored), and never read 180.
+- **`objects.nearest_neighbor_stats`** uses the 2D or 3D Clark-Evans formula for the
+  number of axes the points span (coplanar 3D points mixed an area with the 3D
+  constant); NaN with a warning below two varying axes.
+
+Measurements and statistics
+- **Cliff's delta ignores NaN** (NaN counted as a tie); **one minimum-n rule** for
+  every two-group test, `welch_t` included (a group with fewer than 2 values is
+  untested, p NaN with `reason` "n<2", not p = 1.0); `compute_pvalues` no longer
+  crashes on missing or mixed-type labels.
+- **The λ fit no longer depends on the intensity scale** (tiny intensities gave a
+  wrong λ with `fit_ok` true) and refuses a λ below the z-step.
+- Depth windows a stack covers only partly are flagged (`n_partial`, counted over
+  the two tested groups), and retention divides by the covered depth; power
+  estimates refuse empty inputs.
+- **A value that was never measured is NaN, not 0**: a skeleton that cannot be
+  measured; `largest_component_fraction` and cluster areas of an empty mask; the
+  mean branch length of no branches; the regime estimate with no segmented cell;
+  the count spread when one method ran; a depth AUC window entirely past a stack;
+  R² of a constant depth profile; the SD/SEM of a single value (depth curves and
+  λ, viability summaries, plot error bars, Bland-Altman limits); an empty
+  condition's bar; density for a zero imaged volume.
+- **Skeleton spur pruning compares branch length in µm** with per-axis voxel sizes.
+- **An all-tied Mann-Whitney comparison has p = NaN on every scipy** (scipy < 1.18
+  said 1.0).
+- **Tile CVs use the population form (ddof=0) everywhere**: `coverage_tile_cv` and
+  `spatial_heterogeneity` cv are about 2% lower on the default 5×5 grid.
+- **One tiling rule for images and one for points** (`lateral_homogeneity` used to
+  crop edge pixels; point binning used two edge rules).
+- **`power`**: one resampling helper and one seeding rule; `power_curve` now equals
+  `bootstrap_power` at each n, `fdr_power_curve` values change, and an empty group
+  has NaN power (was 0).
+- **`morphometry.depth_span`/`depth_centroid`** use the z voxel size whatever
+  `z_axis` is; `depth_centroid`'s `z_*` keys are slices and the µm values are the new
+  `z_*_um` keys.
+- **`fluorostats viability`**: the field of view uses the y pixel size for y; counts
+  use the manifest's `seg.method` (they always used Otsu); omitted live/dead channels
+  are resolved from dye names (with a warning when it falls back to 0/1).
+- **CLI summary-panel stars used raw p-values** while `pvalues.csv` starred BH
+  q-values; both use q now.
+
+CLI and drivers
+- **A run refuses an output folder holding files it did not write** (`--overwrite` to
+  replace them) and records which tool wrote the folder; files it wrote earlier are
+  replaced and named (relative to the output folder). A folder at an output name is
+  refused with a message, and a symlink there is removed, never written through.
+- **Depth groups get distinct default colours**: groups not named exactly GelMA,
+  Hybrid or Control all took one grey, and a name containing one of those (e.g.
+  "GelMA-CMCMA") took its colour. `pubfig.group_colors` now gives every other group
+  the next unused palette colour; `material_color` matches exact names only.
+- **One unreadable file no longer stops `quant2d`/`quant3d`**: failures go to
+  `failures.csv`, the rest are measured, and the command exits 1. Errors from bad
+  manifests or options print as messages, not tracebacks; a failed run leaves no
+  empty folder; `quant3d` skips Olympus `.oif.files` companion folders;
+  `--condition-from filename` strips `.ome.tif`; `--prune` with `--no-skeleton` is
+  refused.
+- **`quant2d`/`quant3d` refuse an `--output` inside `--input`**; reruns remove the
+  tool's own earlier plots, overlays and (depth) figures, naming each, and every
+  command marks its folder with an "incomplete" `run_config.json` before its first
+  output and writes the full record (`"status": "complete"`) last, so a folder an
+  interrupted or failed run left is still recognised on rerun; a quant run where
+  every file fails writes only `failures.csv` and the marker. An input
+  folder with nothing to measure exits 2.
+- **QC overlays of same-named files in different condition folders no longer
+  overwrite each other**; **fractional depth AUC windows** no longer overwrite each
+  other's figures.
+- **`quant3d` measures a Keyence BZ-X folder as one volume** (each slice was measured
+  as its own sample).
+- **Depth**: the group grid stops within the shallowest stack (it extrapolated); the
+  λ overlay uses the manifest's `n_surface` and fitted floor; `window_covered_um` is
+  0, not negative; the Welch t-test is printed only with `"parametric": true`.
+- **Manifests are validated before any image loads**: unknown fields at any level,
+  non-bool flags, `true`/`false` as channels, malformed windows, unknown colours,
+  duplicate group names or stack labels, empty groups, `"role": "aux"` or a group
+  `background` in a viability manifest, a bad `seg` block. Late failures (channel out
+  of range, too few slices) name the file. Unknown option values
+  (`attenuation_correct(reference=)`, `morans_i(connectivity=)`,
+  `render_isosurface(style=)`, report `mode`, bootstrap `agg`) raise.
+- **Figures**: bars use one style (some `*_bar.png` change); more than eight
+  conditions get distinct colours; `render3d.mip_overlay` uses the QC overlays'
+  min-max stretch.
+- Importing `fluorostats` no longer imports pyplot or switches the matplotlib
+  backend.
+
+### Added
+- `quant3d --opening` and the viability `seg.opening`; `viability.live_dead_channels`
+  (live/dead from dye names); `live_cov_frac`/`dead_cov_frac` (fractions; the `_pct`
+  columns are removed, see Removed); `run_config.json` records the tool, the code commit
+  and the absolute paths read; `io.read_voxel_size`; an optional regression suite on
+  real vendor files (`FLUOROSTATS_VENDOR_DATA`); a CI job at the minimum dependency
+  versions.
+- `voxel_size_source` (which axes came from the file, which were defaulted, copied
+  or assumed) in every per-file/per-stack table; quant2d also records
+  `voxel_size_um`, `auto_crop_box` and µm² cluster areas; `channel_used`.
+- `contrasts.csv` from `fluorostats depth` and `fluorostats viability` (the printed
+  two-group Mann-Whitney contrasts with n, U, p, BH q, Cliff's δ, test and
+  correction). `pvalues.csv` names its test and correction, reports Cliff's δ and
+  keeps untestable pairs with a `reason`.
+- Warnings instead of silent fallbacks (defaulted calibration, positional channel
+  guesses, dropped axes, layout guesses, mis-saved z-stacks, Keyence gaps and its
+  assumed z unit, failed threshold algorithms, partial windows, trimmed blanks,
+  unbalanced Scheirer-Ray-Hare designs, zero fold-change denominators).
+- Options: `quant3d --opening ball|disk|none` (the 3D noise opening erases
+  structures thinner than three slices; `disk` opens each slice), depth manifest
+  `parametric` and `fit_r2_threshold`; CLI defaults shown and result-changing
+  options marked.
+- API: `segment.segment_channel`, `segment.remove_small`, `segment.OPENINGS`,
+  `validate.dice`, `stats.describe(axis=)`, `stats.compute_pvalues`,
+  `stats.significance_stars`, `stats.REDUCERS`, `stats.gini`,
+  `stats.coefficient_of_variation`, `stats.welch_t`, `stats.bootstrap_mean_ci(rng=)`,
+  `viability.live_ratio`, `viability.live_dead_channels`, `qc.overlay_rgb`,
+  `io.read_voxel_size`, `io.FORMATS`, `io.DIRECTORY_FORMATS`, `pubfig` (one figure
+  style module with themes, `save_figure`, `TEXT_WIDTH_IN`), `depth_figures`,
+  `depth_contrasts`, `projections` (2D MIP panels, moved from `render3d`), `cli_paths` (CLI input discovery and output hygiene), `manifest`, `skeleton.UNMEASURED_METRICS`.
+- Type checking (mypy) and a CI workflow (ruff lint and format, mypy, the test
+  suite at 100% coverage on Python 3.10-3.13); `ruff` and `mypy` pinned in `dev`.
+
+### Changed
+- **Breaking for manifests that relied on working-directory-relative paths**:
+  relative paths in `depth` and `viability` manifests (stack `path`, `background`,
+  `output_dir`, and the default output folder) resolve against the folder that holds
+  the manifest file, not the working directory. A path that exists only relative to
+  the working directory is refused, naming both locations. `--output`, and manifests
+  passed to the library checks as dicts, stay relative to the working directory;
+  `run_config.json` records the resolved paths.
+- **Dependency floors raised to versions that work**: numpy >= 1.25, scikit-image
+  >= 0.23, matplotlib >= 3.8, skan >= 0.12 (at the old floors 3D skeleton metrics
+  were NaN and other functions failed).
+- `quant2d`/`quant3d` plots follow the one figure style (their colours and fonts
+  change).
+- The maxima count is described as what it is (local maxima above a fraction of the
+  image maximum); no claim of agreement with the Fiji Live/Dead macro.
+- Version 0.9.0.dev0 on the development branch.
+- **One name for the voxel-size argument, `voxel_size_um`** (per-axis µm in array
+  order; a scalar means isotropic): `ring_morphometry`/`mesh_size` (`spacing`),
+  `coverage_metrics` (`pixel_size_um`), `intensity_depth_profile`
+  (`voxel_size_z_um`), `prune_skeleton` (`min_branch_length_px` ->
+  `min_branch_length`); the old keywords are removed (see Removed).
+- **`live_dead_by_count` returns one flat set of keys in every mode** (n_live, n_dead,
+  viability, consensus, spread, method/reason per channel, and per-method counts).
+- `fluorostats.io` is split into `io`, `io_vendors` and `io_canonical`;
+  `compute_pvalues` moved from `plots` to `stats`.
+- `keyence.load_keyence_stack` returns `voxel_size_um` and `gci_axes` (the axes the
+  `.gci` calibrated).
+- Metric labels: `n_junctions` is "Junction-to-Junction Branches".
+- **An output folder written before 0.9 needs `--overwrite` once**: its
+  `run_config.json` names no tool, so a rerun refuses it as not this tool's (the
+  message says so); after one `--overwrite` run the folder is recorded as the tool's.
+
+### Removed
+Names deprecated earlier in this cycle are gone (a breaking change before 1.0); the
+old spelling now raises instead of resolving to its replacement.
+- Module `fluorostats.style`: use `fluorostats.pubfig` (`style.apply_style(font_scale=)`
+  -> `pubfig.apply_style("house", font_scale=)`; `PALETTE`, `MATERIAL_COLORS`,
+  `DARK_PALETTE`, `material_color`, `darken`, `lighten` -> the same names in `pubfig`).
+- `render3d.mip_overlay`, `live_dead_mip`, `mip_grid`, `depth_coded_mip`,
+  `layer_split_mip`: use `fluorostats.projections`.
+- `depth_batch.parse_window`, `window_label`, `window_title`, `window_bounds`: use
+  `fluorostats.depth`; `depth_batch.plot_depth_curves`, `plot_auc`,
+  `plot_retention_multiwindow`: use `fluorostats.depth_figures`.
+- `metrics_3d.skeleton_metrics`, `prune_skeleton`, `n_junction_nodes`: use
+  `fluorostats.skeleton`.
+- `plots.compute_pvalues`: use `stats.compute_pvalues`.
+- The renamed keywords (now a TypeError): `ring_morphometry(spacing=)`,
+  `mesh_size(spacing=)`, `coverage_metrics(pixel_size_um=)` and
+  `intensity_depth_profile(voxel_size_z_um=)` -> `voxel_size_um=`;
+  `prune_skeleton(min_branch_length_px=)` -> `min_branch_length=`.
+- `watershed_split`'s `footprint_size` (keyword, or the v0.8.2 fourth positional
+  argument), which had no effect: drop it.
+- `pubfig.panel(dx=, dy=)`, which were ignored: use `pad=(x, y)` (points).
+- The helper module `fluorostats.deprecation` (nothing left to keep working).
+- The depth manifest's singular `auc_window_um`: a manifest that gives it is refused
+  by validation with an error naming the replacement, `"auc_windows_um": [[z0, z1]]`
+  (it is never silently ignored).
+- `live_dead_by_count`'s nested `by_method` (method "all"): read the flat
+  `n_live_<m>`, `n_dead_<m>`, `viability_<m>` keys.
+- `keyence.load_keyence_stack`'s `px_um`, `z_step_um`, `vox_xy_um`, `vox_z_um`: use
+  `voxel_size_um` (z, y, x; downsampling applied) and `gci_axes` for which axes the
+  `.gci` gave. `parse_gci` still returns the raw `px_um` / `z_step_um`.
+- The viability per-stack columns `live_cov_pct` / `dead_cov_pct`: use
+  `live_cov_frac` / `dead_cov_frac` (the same values / 100).
+
+### Benchmarks and examples
+- Fig 2 (d) plots measured deep-learning lines on the BBBC024 crowding series
+  (Cellpose 3D mode; StarDist per plane, stitched in z with settings chosen on
+  held-out volumes) in place of a typed reference value, and (f) plots the measured
+  F1 gap to Cellpose in place of a hand-drawn scope map. Fig S4 (c) adds every
+  method on the 2D mid planes. New: `cluster/bbbc024_dl_infer.py`,
+  `producers/b_clustering_curve_dl.py`, `b_stardist3d_tuning.py`, `zstitch.py`.
+- Fig S2 (c) plots the measured run-to-run spread of fluorostats, StarDist and
+  Cellpose (20 runs, `b_dl_determinism`) in place of a typed 3.2%, and the 2D
+  segmentation timings in (a) come from one cluster CPU for all three methods
+  (`b_seg_timing`); the typed deep-learning timing constants are removed from the
+  timing tables.
+- `ve_crops.npz` (Fig 3b) has a producer, `producers/ve_crops.py`: its crops were
+  recovered as 3-slice maximum projections around the mid plane, centred 400 px,
+  of two VesselExpress VEA volumes, and the producer rebuilds every array exactly.
+- The published Kerkhoff Fiji macro is run on its own synthetic Live/Dead set
+  (`cluster/kerkhoff_macro_headless.py` makes it unattended; only its folder
+  prompts and parameter dialog change). `b_viability_external` gains its viability
+  (`kerkhoff_macro`), and Fig 4 (d) is a Bland-Altman of fluorostats against the
+  macro in place of fluorostats against the same algorithm in scikit-image.
+- The external-viability peak-count comparator is named `skimage_peakcount` (it is a
+  direct scikit-image peak count with the library's parameters, not the Fiji macro);
+  figure and docs wording follow.
+- Every locally reproducible results table is regenerated with this library
+  (watershed columns change materially; others in the 3rd-4th decimal). Not
+  regenerated, and marked so in `benchmarks/README.md`: cluster-only tables
+  (deep-learning evaluations, `b_ve_metrics`), the wall-clock timing tables, and
+  the collaborator `fig6_*` tables (raw data not deposited). Every
+  producer writes `<table>.run.json` (parameters, library versions, git commit).
+- Producers use the library's small-object rule; a failed threshold scores NaN; the
+  two fluorostats Otsu+CC pipelines are named in the tables; new count-agreement
+  and derived tables; column renames: `median_diam_vox` (BBBC024 is uncalibrated),
+  `fluorostats_maxima`, `bias_vs_3D`; `b4_reaver_ranking` gains `mean_bias`.
+- Figure scripts only read and plot (recorded exceptions: live determinism runs and
+  display overlays); caption numbers and claims come from the tables; Figure 2(d)
+  shows the default and watershed pipelines as separate lines; the Figure 4 scale
+  bar is drawn from the file's calibration (it was 438 µm labelled 1 mm); scripts
+  run from any directory; S1-S4 names; stale previews removed.
+- Examples: `keyence_tube_analysis` uses the library's ring, watershed, diameter,
+  density and junction-node measurements (its outputs change);
+  `multi_condition_pipeline` creates its output folder; the depth-penetration
+  example reads its caption from its run.
+
 ## [0.8.2]
 
 ### Fixed

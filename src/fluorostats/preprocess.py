@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import re
+import warnings
 
 import numpy as np
 from skimage.filters import gaussian
 from skimage.morphology import disk, white_tophat
 
+
+# `auto_crop`: a row or column whose intensity variance is below this fraction of
+# the median row/column variance is a blank border. Hand-set; no benchmark table
+# chose it.
+AUTO_CROP_VAR_FRACTION = 0.05
 
 # Real dye/fluorophore names that indicate the green / F-actin channel. Deliberately
 # NOT a positional token like "ch2": the loader pads missing channel names with
@@ -18,6 +24,37 @@ _GREEN_PATTERNS = re.compile(
     r"(alexa.*488|fitc|gfp|green|factin|f-actin|488)",
     re.IGNORECASE,
 )
+
+
+def green_channel_index(
+    channel_names: list[str],
+    n_channels: int,
+    override: int | str | None = None,
+) -> int:
+    """Index of the green / F-actin channel among ``n_channels``.
+
+    Resolution order: an explicit ``override`` (index or name substring); else the
+    first channel whose name matches a green dye; else a positional convention
+    (1 channel -> 0; 2, 3 or 4 channels -> 1, i.e. the green of RGB/RGBA or the
+    usual confocal second channel; otherwise 0). The positional fallback is a
+    guess and is announced with a RuntimeWarning.
+    """
+    if override is not None:
+        return _resolve_override(override, channel_names, n_channels)
+    for i, name in enumerate(channel_names):
+        if _GREEN_PATTERNS.search(name):
+            return i
+    if n_channels == 1:
+        return 0
+    idx = 1 if n_channels in (2, 3, 4) else 0
+    warnings.warn(
+        f"no channel name identifies the green channel among {n_channels} channels "
+        f"{channel_names}; using channel {idx} by position. Pass an explicit channel "
+        "(e.g. --channel) if that is not the signal to measure.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return idx
 
 
 def select_green_channel(
@@ -39,36 +76,13 @@ def select_green_channel(
     Returns
     -------
     ndarray
-        Single-channel array with channel axis removed.
+        Single-channel array with channel axis removed. See
+        `green_channel_index` for how the channel is chosen.
     """
-    n_ch = arr.shape[0]
-
-    if override is not None:
-        idx = _resolve_override(override, channel_names, n_ch)
-        return arr[idx]
-
-    # Try matching channel names against known green patterns
-    for i, name in enumerate(channel_names):
-        if _GREEN_PATTERNS.search(name):
-            return arr[i]
-
-    # Fallback heuristics
-    if n_ch == 1:
-        return arr[0]
-    if n_ch == 3:
-        # RGB — green is index 1
-        return arr[1]
-    if n_ch == 2:
-        # Common confocal layout: Ch1=red/transmitted, Ch2=green/fluorescence
-        return arr[1]
-
-    # Default to first channel
-    return arr[0]
+    return arr[green_channel_index(channel_names, arr.shape[0], override)]
 
 
-def _resolve_override(
-    override: int | str, channel_names: list[str], n_ch: int
-) -> int:
+def _resolve_override(override: int | str, channel_names: list[str], n_ch: int) -> int:
     if isinstance(override, int):
         if 0 <= override < n_ch:
             return override
@@ -87,6 +101,11 @@ def denoise(arr: np.ndarray, sigma: float = 1.0) -> np.ndarray:
     blur) — cheap on memory and matched to confocal sampling, where the
     in-plane PSF dominates. Pass a single channel, not a (C, Z, Y, X) volume.
     """
+    if arr.ndim not in (2, 3):
+        raise ValueError(
+            f"denoise expects a 2D (Y, X) image or a 3D (Z, Y, X) stack, got "
+            f"shape {arr.shape}; pass one channel of a (C, Z, Y, X) volume"
+        )
     if arr.ndim == 2:
         return gaussian(arr, sigma=sigma, preserve_range=True)
 
@@ -148,11 +167,11 @@ def auto_crop(arr: np.ndarray, margin: int = 5) -> tuple[np.ndarray, tuple[int, 
     row_var = np.var(work, axis=1)
     col_var = np.var(work, axis=0)
 
-    # Threshold: rows/columns with variance < 5% of median variance are borders
+    # rows/columns with variance < AUTO_CROP_VAR_FRACTION of the median are borders
     median_row_var = np.median(row_var[row_var > 0]) if np.any(row_var > 0) else 1.0
     median_col_var = np.median(col_var[col_var > 0]) if np.any(col_var > 0) else 1.0
-    row_thresh = median_row_var * 0.05
-    col_thresh = median_col_var * 0.05
+    row_thresh = median_row_var * AUTO_CROP_VAR_FRACTION
+    col_thresh = median_col_var * AUTO_CROP_VAR_FRACTION
 
     # Find first/last non-border row and column
     active_rows = np.where(row_var > row_thresh)[0]

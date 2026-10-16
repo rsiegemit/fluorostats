@@ -1,0 +1,20 @@
+{
+  "table": "b2_nuclei_methods_perimage.csv",
+  "producer": "benchmarks/producers/b2_nuclei_methods_perimage.py",
+  "params": {
+    "n_images": 100,
+    "min_size": 20,
+    "small_object_rule": "keep >= min_size",
+    "iou_threshold": 0.5,
+    "watershed_min_distance": 4,
+    "threshold_failures": {}
+  },
+  "git_commit": "227d69e",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0.dev0"
+  }
+}
