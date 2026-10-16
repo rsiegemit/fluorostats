@@ -1,7 +1,7 @@
 method,device,ms_per_image,images_per_sec
-Otsu_1979,CPU,5.7,174.1
-Isodata_1978,CPU,5.7,176.5
-Triangle_1977,CPU,5.9,170.5
-Li_1993,CPU,9.1,110.0
-fluorostats(denoised Otsu+CC),CPU,14.5,69.1
-Watershed_1991,CPU,35.6,28.1
+Otsu_1979,CPU,5.2,192.6
+Isodata_1978,CPU,5.2,192.4
+Triangle_1977,CPU,5.2,191.3
+Li_1993,CPU,8.5,117.4
+fluorostats(denoised Otsu+CC),CPU,13.4,74.4
+Watershed_1991,CPU,72.8,13.7

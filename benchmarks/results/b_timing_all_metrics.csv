@@ -1,65 +1,65 @@
 group,metric,ms
-fluorostats,segment.binarize(otsu) 3D,1812.574
-comparator,threshold_otsu 3D,376.264
-comparator,threshold_li 3D,1123.963
-comparator,threshold_isodata 3D,353.624
-comparator,threshold_triangle 3D,361.741
-comparator,threshold_yen 3D,362.419
-comparator,threshold_mean 3D,25.942
-fluorostats,preprocess.denoise(gauss) 3D,400.342
-comparator,median_filter 3D,17153.706
-comparator,gaussian_sigma2 3D,696.147
-fluorostats,preprocess.background_subtract 3D-slab,9333.137
-comparator,rolling_ball 3D-slab,7908.825
-comparator,morph_opening 3D-slab,162.107
-fluorostats,objects.label_3d,486.019
-fluorostats,objects.watershed_split,9175.474
-comparator,skimage watershed 3D,8135.213
-fluorostats,metrics_3d.volume_fraction,10.784
-fluorostats,metrics_3d.connectivity_metrics,1068.965
-comparator,euler_number(skimage) 3D,648.05
-fluorostats,metrics_3d.density_per_mm3,3.42
-fluorostats,objects.equivalent_diameters_um,215.453
-fluorostats,objects.count_local_maxima 3D,1400.056
-comparator,peak_local_max 3D,1332.098
-fluorostats,metrics_2d.area_fraction,2.897
-fluorostats,metrics_2d.coverage_metrics,5.095
-fluorostats,morphometry.lateral_homogeneity,32.031
-fluorostats,morphometry.depth_profile,7.899
-fluorostats,morphometry.depth_centroid,8.298
-fluorostats,morphometry.depth_span,7.917
-fluorostats,objects.centroid_homogeneity,0.032
-comparator,clark_evans NN,0.027
-comparator,morisita index,0.044
-comparator,quadrat_variance,0.04
-comparator,ripleys_K,0.009
-comparator,lacunarity,0.636
-fluorostats,skeleton.skeleton_metrics 2D,7.453
-fluorostats,skeleton.prune_skeleton 2D,12.662
-fluorostats,skeleton.n_junction_nodes 2D,4.265
-comparator,skeletonize Lee 2D,0.402
-comparator,medial_axis 2D,30.649
-comparator,thin 2D,14.773
-comparator,skeletonize zhang 2D,0.382
-fluorostats,viability.live_dead_fractions,10.463
-fluorostats,viability.live_dead_by_count cc,13.666
-fluorostats,viability.live_dead_by_count maxima,11.283
-fluorostats,viability.live_dead_by_count watershed,34.199
-fluorostats,viability.live_dead_by_count auto,39.985
-fluorostats,viability.live_dead_by_count all,85.906
-comparator,skimage peak count (live + dead),10.735
-fluorostats,viability.attenuation_correct,55.346
-fluorostats,stats.mann_whitney,0.371
-comparator,scipy.mannwhitneyu,0.239
-fluorostats,stats.cliffs_delta,0.064
-fluorostats,stats.bh_fdr,0.011
-fluorostats,stats.bootstrap_fold_change_ci,6.524
-fluorostats,stats.stouffer_combine,0.064
-comparator,scipy.combine_pvalues,0.088
-fluorostats,stats.stratified_mann_whitney,1.471
+fluorostats,segment.binarize(otsu) 3D,1718.451
+comparator,threshold_otsu 3D,348.592
+comparator,threshold_li 3D,1007.763
+comparator,threshold_isodata 3D,325.879
+comparator,threshold_triangle 3D,325.669
+comparator,threshold_yen 3D,323.638
+comparator,threshold_mean 3D,22.588
+fluorostats,preprocess.denoise(gauss) 3D,364.057
+comparator,median_filter 3D,15842.328
+comparator,gaussian_sigma2 3D,649.089
+fluorostats,preprocess.background_subtract 3D-slab,8617.556
+comparator,rolling_ball 3D-slab,7267.778
+comparator,morph_opening 3D-slab,149.679
+fluorostats,objects.label_3d,430.189
+fluorostats,objects.watershed_split,15898.346
+comparator,skimage watershed 3D,6536.589
+fluorostats,metrics_3d.volume_fraction,15.004
+fluorostats,metrics_3d.connectivity_metrics,966.356
+comparator,euler_number(skimage) 3D,584.707
+fluorostats,metrics_3d.density_per_mm3,2.977
+fluorostats,objects.equivalent_diameters_um,193.318
+fluorostats,objects.count_local_maxima 3D,1285.234
+comparator,peak_local_max 3D,1225.567
+fluorostats,metrics_2d.area_fraction,2.395
+fluorostats,metrics_2d.coverage_metrics,4.426
+fluorostats,morphometry.lateral_homogeneity,29.172
+fluorostats,morphometry.depth_profile,7.167
+fluorostats,morphometry.depth_centroid,7.149
+fluorostats,morphometry.depth_span,7.159
+fluorostats,objects.centroid_homogeneity,0.026
+comparator,clark_evans NN,0.023
+comparator,morisita index,0.033
+comparator,quadrat_variance,0.033
+comparator,ripleys_K,0.008
+comparator,lacunarity,2.149
+fluorostats,skeleton.skeleton_metrics 2D,9.663
+fluorostats,skeleton.prune_skeleton 2D,19.451
+fluorostats,skeleton.n_junction_nodes 2D,3.994
+comparator,skeletonize Lee 2D,0.347
+comparator,medial_axis 2D,26.273
+comparator,thin 2D,12.805
+comparator,skeletonize zhang 2D,0.34
+fluorostats,viability.live_dead_fractions,9.184
+fluorostats,viability.live_dead_by_count cc,11.245
+fluorostats,viability.live_dead_by_count maxima,9.956
+fluorostats,viability.live_dead_by_count watershed,70.239
+fluorostats,viability.live_dead_by_count auto,34.606
+fluorostats,viability.live_dead_by_count all,115.796
+comparator,skimage peak count (live + dead),9.786
+fluorostats,viability.attenuation_correct,38.197
+fluorostats,stats.mann_whitney,0.304
+comparator,scipy.mannwhitneyu,0.209
+fluorostats,stats.cliffs_delta,0.057
+fluorostats,stats.bh_fdr,0.01
+fluorostats,stats.bootstrap_fold_change_ci,5.507
+fluorostats,stats.stouffer_combine,0.058
+comparator,scipy.combine_pvalues,0.079
+fluorostats,stats.stratified_mann_whitney,1.404
 fluorostats,agreement.bland_altman,0.011
-fluorostats,agreement.lins_ccc,0.017
+fluorostats,agreement.lins_ccc,0.018
 fluorostats,agreement.icc,0.025
-comparator,scipy.pearsonr,0.103
-fluorostats,validate.instance_f1,2205.431
-fluorostats,validate.average_precision,19543.962
+comparator,scipy.pearsonr,0.102
+fluorostats,validate.instance_f1,1883.583
+fluorostats,validate.average_precision,16874.237
