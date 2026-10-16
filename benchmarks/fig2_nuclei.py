@@ -144,15 +144,14 @@ axa.legend(loc="lower right", bbox_to_anchor=(1.0, 1.005), ncol=3,
 panel(axa, "a", f"one tool, one default knob (n = {N_A})", xanchor=0.0315)   # row-leader
 
 # (b) forest vs DL — every BBBC039 image, NOT panel (a)'s first-100 envelope split.
-# fluorostats mean+CI from b_dl_ci.csv; the three DL tools from b2_nuclei_ci.csv
-# (subset all200).
+# All four methods' means, CIs and the paired differences from b_dl_ci.csv: one
+# bootstrap procedure for every row.
 axb = fig.add_subplot(gs[1, :])
 ci = pd.read_csv(R/"b_dl_ci.csv").set_index("method")
 FS = F.DENOISED_OTSU_CC   # the n=200 fluorostats row, plotted as "fluorostats"
-fb = {"fluorostats": (float(ci.loc[FS, "mean_F1"]),
-                      float(ci.loc[FS, "CI_low"]), float(ci.loc[FS, "CI_high"]))}
-for m in ("StarDist", "Cellpose", "Omnipose"):
-    fb[m] = ci_of("all200", m)
+DL_B = ("StarDist", "Cellpose", "Omnipose")
+fb = {("fluorostats" if m == FS else m): tuple(float(ci.loc[m, k]) for k in ("mean_F1", "CI_low", "CI_high"))
+      for m in (FS, *DL_B)}
 fo = sorted(fb, key=lambda m: fb[m][0])
 for i, m in enumerate(fo):
     mean, lo, hi = fb[m]
@@ -161,14 +160,13 @@ for i, m in enumerate(fo):
                  color=c, ecolor="black", capsize=2.5, ms=6, mec="black", mew=0.5, elinewidth=0.9)
 axb.set_yticks(range(len(fo)))
 axb.set_yticklabels(fo, fontsize=6.0)
-N_B = int(nci.loc[("all200", "StarDist"), "n_images"])
+N_B = run_params("b_dl_ci")["n_images"]
 axb.set_xlabel(f"mean F1  (95% CI, n = {N_B})")
-axb.set_xlim(0.78, 0.955)
+axb.set_xlim(0.77, 0.955)
 # whether both paired-difference CIs exclude 0, as the producer recorded it
-diffs_sig = all(str(ci.loc[f"{FS} - {t}", "diff_significant"]).startswith("YES") for t in ("StarDist", "Cellpose"))
+diffs_sig = all(str(ci.loc[f"{FS} - {t}", "diff_significant"]).startswith("YES") for t in DL_B)
 axb.text(0.97, 0.06, f"paired Δ {'excludes 0' if diffs_sig else 'CI spans 0'}:\n"
-         f"−StarDist {ci.loc[f'{FS} - StarDist', 'mean_F1']:+.3f}\n"
-         f"−Cellpose {ci.loc[f'{FS} - Cellpose', 'mean_F1']:+.3f}",
+         + "\n".join(f"−{t} {ci.loc[f'{FS} - {t}', 'mean_F1']:+.3f}" for t in DL_B),
          transform=axb.transAxes, fontsize=5.0, color="#333", va="bottom", ha="right")
 panel(axb, "b", f"vs trained deep learning (n = {N_B})", xanchor=0.0315)   # row-leader
 
@@ -332,8 +330,12 @@ cap = ("Figure 2 | Nucleus segmentation against deep learning, from separated to
  "headline; the remaining thresholds (open blue circles) trace the tuning envelope "
  f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
  f"learning on the same {N_A} images (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
- f"purple). (b) Forest plot on all n={N_B} images vs validated DL (StarDist, Cellpose, "
- f"Omnipose): fluorostats {ci.loc[FS, 'mean_F1']:.3f} [{ci.loc[FS, 'CI_low']:.3f}, {ci.loc[FS, 'CI_high']:.3f}]; paired differences {'exclude zero' if diffs_sig else 'do not all exclude zero'}. (c) Representative BBBC039 crops: raw, expert ground "
+ f"purple). (b) Bootstrap-CI forest on all n={N_B} images for the default with its denoising pre-filter "
+ f"(denoised Otsu+CC; {ci.loc[FS, 'mean_F1']:.3f} [{ci.loc[FS, 'CI_low']:.3f}, {ci.loc[FS, 'CI_high']:.3f}]) versus StarDist, "
+ f"Cellpose and Omnipose, every interval from one bootstrap (b_dl_ci): paired differences "
+ + "; ".join(f"{t} {ci.loc[f'{FS} - {t}', 'mean_F1']:+.3f} [{ci.loc[f'{FS} - {t}', 'CI_low']:+.3f}, "
+             f"{ci.loc[f'{FS} - {t}', 'CI_high']:+.3f}]" for t in DL_B)
+ + f" ({'all exclude zero' if diffs_sig else 'not all exclude zero'}). (c) Representative BBBC039 crops: raw, expert ground "
  f"truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~{F.BBBC039_UM_PER_PX} µm/px). "
  f"(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75, {CLUSTER['n_volumes']} volumes per level): from no overlap "
  f"to 75% overlap the fluorostats default (Otsu+CC, blue) {change(F.RAW_OTSU_CC)} and the fluorostats "

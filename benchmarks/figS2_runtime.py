@@ -64,6 +64,9 @@ df = pd.read_csv(RES / "b_timing_all_metrics.csv")
 # the Mac wall-clock table above.
 seg = pd.read_csv(RES / "b_seg_timing.csv").set_index("method")
 SEG_RUN = json.loads((RES / "b_seg_timing.run.json").read_text())["params"]
+MAC = json.loads((RES / "b_timing_all_metrics.run.json").read_text())["platform"]
+MAC_OS = f"macOS {MAC['os'].split('-')[1]}" if MAC["os"].startswith("macOS-") else MAC["os"]
+MAC_TXT = f"one {MAC['cpu_model']} ({MAC['cpu_count']} cores, {MAC_OS})"
 SEG_CAT = "2D seg. (one cluster CPU)"
 
 
@@ -208,8 +211,10 @@ seg_f = lookup("seg:" + F.DENOISED_OTSU_CC)
 seg_sd = lookup("seg:StarDist")
 seg_cp = lookup("seg:Cellpose")
 # wrapper / underlying-call time ratios on shared operations, for the caption
-ratio_conn = lookup("fluorostats,metrics_3d.connectivity_metrics") / lookup("comparator,euler_number(skimage) 3D")
-ratio_mwu = lookup("fluorostats,stats.mann_whitney") / lookup("comparator,scipy.mannwhitneyu")
+conn_ms = (lookup("fluorostats,metrics_3d.connectivity_metrics"), lookup("comparator,euler_number(skimage) 3D"))
+mwu_ms = (lookup("fluorostats,stats.mann_whitney"), lookup("comparator,scipy.mannwhitneyu"))
+ratio_conn = conn_ms[0] / conn_ms[1]
+ratio_mwu = mwu_ms[0] / mwu_ms[1]
 
 F.panel(axA, "a", xanchor=0.0315)   # row-leader
 
@@ -275,13 +280,14 @@ CAPTION = (
     "set of representative fluorostats operations (blue) and their matched "
     "SciPy / scikit-image reference implementations (grey), timed on identical "
     "inputs (one BBBC024 3D volume; 2D nuclei image; synthetic live/dead field) on "
-    "a single Apple Silicon Mac CPU (darwin), except the 2D segmentation group. On "
+    f"{MAC_TXT}, except the 2D segmentation group. On "
     "shared operations the fluorostats "
     f"wrapper takes {ratio_conn:.2f}× the time of its library equivalent for "
-    f"connectivity (metrics_3d.connectivity_metrics vs euler_number) and {ratio_mwu:.2f}× "
-    "for stats.mann_whitney vs scipy.mannwhitneyu (both return more than the bare call). "
+    f"connectivity (metrics_3d.connectivity_metrics vs euler_number; {conn_ms[0]:.0f} vs {conn_ms[1]:.0f} ms) "
+    f"and {ratio_mwu:.2f}× for stats.mann_whitney vs scipy.mannwhitneyu ({mwu_ms[0]:.3f} vs {mwu_ms[1]:.3f} ms; "
+    "both return more than the bare call). "
     "For headline 2D instance segmentation the three methods were timed on one "
-    f"cluster CPU ({SEG_RUN['cpu']}) in one job, on the first 10 BBBC039 images in "
+    f"cluster CPU ({SEG_RUN['cpu']}, {SEG_RUN['nproc']} cores) in one job, on the first 10 BBBC039 images in "
     f"{SEG_RUN['passes']} passes each (median per image, model loading excluded): "
     f"fluorostats (denoised Otsu + connected components) {seg_f:.1f} ms/image versus "
     f"{seg_sd:.0f} ms for StarDist (~{F.round_sig(seg_sd/seg_f):.0f}×) and {seg_cp:.0f} ms for "

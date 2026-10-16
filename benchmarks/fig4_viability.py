@@ -140,7 +140,7 @@ cap = ("Figure 4 | Depth-resolved viability. (a) On a Day-14 Live/Dead z-stack (
  "which coincides with the maxima mode by construction. fluorostats count/area modes shown faint "
  f"(grey). (d) Bland–Altman of fluorostats maxima minus the published Kerkhoff Fiji macro, run unchanged "
  f"apart from its parameter dialog (its defaults: prominence 20, Mean filter radius 0.5) on the same "
- f"{len(ext)} images: bias {_bd:+.3f}, 95% limits of agreement ±{_ld:.3f}. Against ground truth the macro "
+ f"{len(ext)} images: bias {_bd:+.3f}, 95% limits of agreement {_bd - _ld:+.3f} to {_bd + _ld:+.3f}. Against ground truth the macro "
  f"reaches CCC {ccc_m:.3f}, MAE {mae_m:.3f}. (e) Two-channel Live/Dead crop (green live, magenta dead): raw mid-plane, "
  "fluorostats live/dead classification, and the maximum-intensity projection that collapses depth "
  f"and inflates viability. Scale bar {SCALEBAR_UM} µm.")

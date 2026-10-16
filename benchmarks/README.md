@@ -18,7 +18,7 @@ doubles as a worked example of the library's analysis modules.
 | `fig5_homogeneity_stats.py` | spatial homogeneity + end-to-end statistics | `b_homogeneity_examples`, `b_homogeneity_consensus(_corr)`, `b_homogeneity_multi_corr`, `b_vascular_sproutangio_multi`, `b_vascular_sproutangio_stats` |
 | `figS1_correctness.py` | topology / skeleton / density-normalisation correctness | `b1_topology_phantoms`, `b_skeleton_tree`, `b_density_normalization(_cv)` |
 | `figS3_robustness.py` | segmentation robustness to noise + denoising | `b_noise_robustness`, `b_denoising`, `b_nuclei_size` |
-| `figS4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D) | `b_dsb2018`, `b2_ctc_multi` |
+| `figS4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D, BBBC024 2D crowding) | `b_dsb2018`, `b2_ctc_multi`, `b_clustering_curve_2d` |
 
 These scripts import from `fluorostats` only the figure kit (`pubfig`, through
 `figstyle.py`); the measurements behind the tables (`metrics_3d`, `skeleton`,
@@ -94,15 +94,15 @@ reproduces it byte for byte.
 | `b_clustering_curve_dl.csv`, `b_clustering_curve_2d.csv` | `b_clustering_curve_dl.py` | BBBC024 (+ c25/c50/c75) and the `BBBC024_dl/` predictions of `cluster/bbbc024_dl_infer.py` (`DATA_MANIFEST.md`) | EXACT given the predictions |
 | `b_denoising.csv` | `b_denoising.py` | BBBC024 | EXACT |
 | `b_density_normalization.csv`, `b_density_normalization_cv.csv` | `b_density_normalization.py` | BBBC024 | EXACT |
-| `b_dl_ci.csv` | `b_dl_ci.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`) | BBBC039 | EXACT |
+| `b_dl_ci.csv` | `b_dl_ci.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv`) | BBBC039 | EXACT |
 | `b_dsb2018.csv` | `b_dsb2018.py` | DSB2018 | EXACT |
 | `b_homogeneity_multi.csv`, `b_homogeneity_multi_corr.csv` | `b_homogeneity_multi.py` | none (synthetic) | EXACT |
 | `b_noise_robustness.csv` | `b_noise_robustness.py` | BBBC024 | EXACT |
 | `b_nuclei_count_agreement.csv` | `b_nuclei_count_agreement.py` (also reads `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv`) | BBBC039 | EXACT |
 | `b_nuclei_size.csv` | `b_nuclei_size.py` | BBBC024 | EXACT |
 | `b_skeleton_tree.csv` | `b_skeleton_tree.py` | none (synthetic) | EXACT |
-| `b_timing.csv` | `b_timing.py` | BBBC039 | not regenerated: the original wall-clock measurement (labels renamed by hand); no `.run.json`, so its machine is not recorded; a re-run gives this machine's times |
-| `b_timing_all_metrics.csv` | `b_timing_all_metrics.py` | BBBC024, BBBC039, Kerkhoff | not regenerated (as `b_timing.csv`) |
+| `b_timing.csv` | `b_timing.py` | BBBC039 | wall-clock: re-timed at 80a07cb on an idle Apple M3 Max; the `.run.json` records the CPU model, core count, OS and versions; a re-run gives the running machine's times |
+| `b_timing_all_metrics.csv` | `b_timing_all_metrics.py` | BBBC024, BBBC039, Kerkhoff | wall-clock (as `b_timing.csv`) |
 | `b_vascular_phantom_3d.csv` | `b_vascular_phantom_3d.py` | none (synthetic) | EXACT |
 | `b_vascular_sproutangio_multi.csv` | `b_vascular_sproutangio_multi.py` | SproutAngio | EXACT |
 | `b_ve_metrics.csv` | `b_ve_metrics.py` | VesselExpress Figure 2C–E volumes | not run (data not downloaded locally; produced on the cluster) |
