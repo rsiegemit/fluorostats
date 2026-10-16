@@ -2,7 +2,7 @@
   "table": "b_viability_external_agreement.csv",
   "producer": "benchmarks/producers/b_viability_external_agreement.py",
   "params": {},
-  "git_commit": "227d69e",
+  "git_commit": "6095503",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

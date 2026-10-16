@@ -4,9 +4,27 @@
   "params": {
     "min_size": 8,
     "small_object_rule": "keep >= min_size",
-    "n_images": 65
+    "n_images": 65,
+    "kerkhoff_macro": {
+      "macro": "LDA_macro.ijm (Kerkhoff 2024, Zenodo 10395753), headless copy from benchmarks/cluster/kerkhoff_macro_headless.py",
+      "parameters": {
+        "live_prominence": 20,
+        "dead_prominence": 20,
+        "live_channel": 2,
+        "dead_channel": 1,
+        "filter": "Mean",
+        "radius": 0.5,
+        "cut_prefix": 17
+      },
+      "imagej": "1.54p",
+      "bio_formats": "8.5.0",
+      "java": "OpenJDK 21.0.7 (Zulu, bundled with Fiji)",
+      "fiji_download": "https://downloads.imagej.net/fiji/latest/fiji-latest-linux64-jdk.zip (2026-10-16)",
+      "launch": "java -Xmx4g -cp 'Fiji/jars/*:Fiji/plugins/*' ij.ImageJ -port0 -macro LDA_headless.ijm 'IN,OUT,tif' under an Xvnc display",
+      "n_images": 65
+    }
   },
-  "git_commit": "227d69e",
+  "git_commit": "6095503",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",
