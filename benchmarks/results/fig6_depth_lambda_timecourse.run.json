@@ -1,0 +1,91 @@
+{
+  "table": "fig6_depth_lambda_timecourse.csv",
+  "producer": "benchmarks/producers/fig6_tables.py",
+  "params": {
+    "driver": {
+      "tool": "depth",
+      "status": "complete",
+      "settings": {
+        "title": "FITC-dextran 2000 kDa penetration time-course in GelMA (4/12/24/72 h)",
+        "channel": 0,
+        "reducer": "mean",
+        "n_surface": 3,
+        "auc_windows_um": [
+          [
+            0,
+            100
+          ],
+          [
+            0,
+            200
+          ],
+          [
+            0,
+            384
+          ],
+          "full"
+        ],
+        "signal_label": "Signal",
+        "fit_offset": false,
+        "fit_r2_threshold": 0.85,
+        "parametric": false,
+        "windows": [
+          [
+            0.0,
+            100.0
+          ],
+          [
+            0.0,
+            200.0
+          ],
+          [
+            0.0,
+            384.0
+          ],
+          [
+            "full"
+          ]
+        ]
+      },
+      "groups": {
+        "4h": 7,
+        "12h": 6,
+        "24h": 6,
+        "72h": 7
+      },
+      "environment": {
+        "python": "3.13.5",
+        "packages": {
+          "fluorostats": "0.9.0",
+          "numpy": "2.4.6",
+          "scipy": "1.17.1",
+          "scikit-image": "0.26.0",
+          "tifffile": "2026.3.3",
+          "pandas": "3.0.2",
+          "matplotlib": "3.10.8",
+          "skan": "0.13.1"
+        },
+        "fluorostats_commit": "f84193e",
+        "optional_readers": {
+          "oiffile": true,
+          "czifile": true,
+          "nd2": true,
+          "readlif": true
+        }
+      }
+    },
+    "derived_from": [
+      "auc_per_stack.csv",
+      "depth_profiles_long.csv"
+    ],
+    "rule": "guarded: mean/SEM of lambda over fit_ok primary stacks; else unguarded fit of stack #1"
+  },
+  "git_commit": "fd3b8cc",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}
