@@ -134,7 +134,7 @@ carry are gone.
 
 | table(s) | why | provenance |
 |---|---|---|
-| `fig6_*.csv` (6 tables) | collaborator data under a data-use arrangement; the producing scripts are excluded with the data | see the next section |
+| `fig6_*.csv` (6 tables) | collaborator data under a data-use arrangement: the raw stacks are not deposited, so the drivers cannot be re-run from the deposit; `fig6_tables.py` writes the tables from their outputs | see the next section |
 
 The deep-learning inference itself runs on a cluster node
 (`cluster/bbbc024_dl_infer.py`); its label outputs are scored here by the
@@ -158,11 +158,9 @@ per-stack tables are bundled here so the quantitative panels can be recomputed:
 | `results/fig6_viability_group_summary.csv` | day-1 vs day-5 group summaries |
 
 The representative micrograph panel cannot be regenerated from these tables — it
-renders the raw stacks directly. The analysis runs through the same `fluorostats`
-modules as everything above. These tables were produced on 2026-09-24 (commit
-784729c) with the depth and viability drivers of that version and are not
-regenerated here (the raw stacks are not deposited), so they lack columns added
-since (`voxel_size_source`, channel names, flat count keys) and carry no `.run.json`.
-They were not re-run under the 0.9 measurement fixes that could touch them (the
-small-object rule, watershed-split counting, the Olympus reader; `CHANGELOG.md`
-0.9.0), so they record the 0.8.0 analysis.
+renders the raw stacks directly. The tables are written by `producers/fig6_tables.py`
+from the outputs of `fluorostats depth` and `fluorostats viability` run on the
+laboratory stacks (folders given in `$FIG6_DEPTH_OUT` / `$FIG6_VIABILITY_OUT`); each
+`.run.json` carries the driver's run record (tool, fluorostats commit, package
+versions, analysis settings; data paths omitted). `fig6_depth_lambda_timecourse` is
+derived there from the per-stack λ fits (rule in the producer's docstring).
