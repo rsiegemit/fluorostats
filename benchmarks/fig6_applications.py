@@ -196,7 +196,7 @@ def draw_panel_d(ax, v):
     ax.set_xticks([0, 1])
     ax.set_xticklabels(DAYS)
     ax.set_ylabel("coverage (%)")
-    panel(ax, "d", "live rises, dead flat")
+    panel(ax, "d", "live rises, dead changes little")
 
 
 def draw_panel_e(ax, v):
@@ -260,7 +260,6 @@ def caption_text(v):
     spread = [float((v.loc[v.group == g, modes].max(axis=1) - v.loc[v.group == g, modes].min(axis=1)).mean())
               for g in DAYS]
     u, p = live_mwu(v)
-    pd_ = stats.mannwhitneyu(col(v, "Day 1", "dead_cov_pct"), col(v, "Day 5", "dead_cov_pct")).pvalue
     a = primary_auc()
     a = a[a.group.isin(GROUPS)]
     rho, prho = stats.spearmanr(a.group.map(TIME_H), a.auc_normalized_0_200um)
@@ -277,7 +276,7 @@ def caption_text(v):
         f"(c-e) Live/Dead of HUVECs on GelMA, day 1 (n = {n1}) vs day 5 (n = {n5}); live AF488, dead PI. "
         f"(c) Representative maximum-intensity projections, matched display range, field {FOV_UM:.0f} um. "
         f"(d) Live coverage {lc[0]:.2f} -> {lc[1]:.2f}% ({lc[1] / lc[0]:.2f}x; Mann-Whitney U = {u:.0f}, "
-        f"p = {p:.2g}); dead coverage {dc[0]:.2f} -> {dc[1]:.2f}% (p = {pd_:.2g}); points are stacks, bars "
+        f"p = {p:.2g}); dead coverage changes little ({dc[0]:.2f} -> {dc[1]:.2f}%); points are stacks, bars "
         f"mean +/- SEM. Live density {dn[0]:.1f} -> {dn[1]:.1f} cells/mm^2 ({dn[1] / dn[0]:.2f}x). "
         f"(e) Area-based viability ({ar[0]:.3f} -> {ar[1]:.3f}) and count-based consensus "
         f"({ct[0]:.3f} -> {ct[1]:.3f}) separate, gap {ar[0] - ct[0]:.3f} -> {ar[1] - ct[1]:.3f}; the spread "

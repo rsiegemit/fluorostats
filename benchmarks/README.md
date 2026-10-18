@@ -41,7 +41,7 @@ repository root, wherever the script is run from), then run:
 
 | script | figure | dataset |
 |---|---|---|
-| `fig2_nuclei.py` | Figure 2 — nucleus segmentation & the deep-learning boundary (a–f) | BBBC039 + BBBC024 + BBBC024_c75 |
+| `fig2_nuclei.py` | Figure 2 — nucleus segmentation against deep learning, from separated to crowded nuclei (a–f) | BBBC039 + BBBC024 + BBBC024_c75 |
 | `fig4_viability.py` | depth-resolved Live/Dead viability | S-BIAD2130 |
 | `figS2_runtime.py` | runtime + determinism | BBBC024 |
 | `fig6_applications.py` | Figure 6 — the two laboratory assays | panels a, b, d, e: the bundled `fig6_*` tables; panel c: two laboratory `.oib` stacks, not deposited (`$FIG6_LIVEDEAD_DIR`; see the `fig6_*` section) |

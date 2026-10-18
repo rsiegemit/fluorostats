@@ -12,7 +12,7 @@ URLs verified 2026-09-24.
 | Dataset | Figure | Licence | Size | Source |
 |---|---|---|---|---|
 | **BBBC039** (U2OS Hoechst nuclei, instance GT) | Fig 2 — 2D nuclei count / segmentation; Fig S2 — runtime | CC0 | 78 + 3 MB | https://data.broadinstitute.org/bbbc/BBBC039/images.zip · /masks.zip |
-| **BBBC024** (3D synthetic HL60, 20 nuclei/img; also the `BBBC024_c25/_c50/_c75` clustering sets) | Fig 2 — crowding crossover (c00–c75) and separated/crowded fields; Fig S2 — determinism / runtime; Fig S3 — noise robustness | CC BY 3.0 | — | https://bbbc.broadinstitute.org/BBBC024 |
+| **BBBC024** (3D synthetic HL60, 20 nuclei/img; also the `BBBC024_c25/_c50/_c75` clustering sets) | Fig 2 — crowding series (c00–c75) and separated/crowded fields; Fig S2 — determinism / runtime; Fig S3 — noise robustness | CC BY 3.0 | — | https://bbbc.broadinstitute.org/BBBC024 |
 | **DSB2018** (StarDist's curated fluorescence-nuclei subset of the 2018 Data Science Bowl, BBBC038) | Fig S4 — cross-dataset generalisation (2D) | CC0 | — | `dsb2018.zip` from https://github.com/stardist/stardist/releases/download/0.1.0/dsb2018.zip; unpack so that `$FLUOROSTATS_DATA/dsb2018/test/images` and `.../test/masks` exist (original data: https://bbbc.broadinstitute.org/BBBC038) |
 | **CTC Fluo-C3DH-A549**, **Fluo-N3DH-CHO** | Fig S4 — cross-dataset generalisation (3D) | CTC terms | 244 / 98 MB | http://celltrackingchallenge.net/3d-datasets/ |
 | **REAVER Vascular Networks** (36 imgs, manual GT) | Fig 3 — 2D vascular network vs REAVER | CC-BY-4.0 | 63 MB | https://zenodo.org/records/3340165 |
