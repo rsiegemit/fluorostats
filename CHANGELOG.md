@@ -25,6 +25,9 @@ revised manuscript.
   four tables) and Figure 6 (`fig6_applications.py`) scripts.
 
 ### Changed
+- Figures 2 and S4 name the raw Otsu+CC pipeline "fluorostats (raw Otsu+CC)" in
+  their labels and captions instead of calling it the default; the library default
+  denoises first (denoised Otsu+CC). Labels only; no number changes.
 - Documentation: figure titles follow the manuscript, the per-slice check in the
   depth example is described as a float64 comparison rather than a Fiji one, and the
   list of figures that regenerate from the bundled tables includes S5 and 6.

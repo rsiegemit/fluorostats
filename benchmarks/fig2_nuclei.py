@@ -71,7 +71,7 @@ BLUE = OKABE["blue"]
 # family: (display label, method in b2_nuclei_ci.csv, kind) — kind in
 # {"default","envelope","dl"}. Provenance kept in the label.
 fam = [
-    ("fluorostats (default, Otsu+CC)", F.RAW_OTSU_CC,      "default"),
+    ("fluorostats (raw Otsu+CC)", F.RAW_OTSU_CC,      "default"),
     ("fluorostats · Li (1993)",       "Li (1993)",        "envelope"),
     ("fluorostats · Isodata (1978)",  "Isodata (1978)",   "envelope"),
     ("fluorostats · Otsu+watershed",  "Watershed (1991)", "envelope"),
@@ -130,7 +130,7 @@ axa.set_xticks([0.2, 0.4, 0.6, 0.8, 1.0])
 N_A = int(nci.loc[("first100", F.RAW_OTSU_CC), "n_images"])
 axa.set_xlabel(f"instance F1 @ IoU {IOU}   (BBBC039, n = {N_A})")
 # legend explaining the family
-axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=6, label="fluorostats default")
+axa.plot([], [], "o", color=BLUE, mec="white", mew=0.6, ms=6, label="fluorostats (raw Otsu+CC)")
 axa.plot([], [], "o", mfc="white", mec=BLUE, mew=1.1, ms=5.5, label="envelope")
 # neutral key: the DL family is drawn in 3 colours (StarDist/Cellpose/Omnipose), so a
 # single coloured key would mis-map; caption + coloured row labels carry the mapping.
@@ -209,7 +209,7 @@ for row, (im, gt, stem) in enumerate(crops):
         if col == 0 and row == 0:
             F.scalebar(ax, round(20 / F.BBBC039_UM_PER_PX), "20 µm")
             panel(ax, "c", xanchor=0.0315)   # row-leader
-# (d) F1 vs crowding (3D volumes) — the fluorostats default (Otsu+CC) and the
+# (d) F1 vs crowding (3D volumes) — fluorostats raw Otsu+CC and the
 # fluorostats watershed split, the classical thresholds grey, and the measured deep
 # learning lines (b_clustering_curve_dl: Cellpose 3D mode, StarDist per plane with the
 # stitch tuned on held-out volumes).
@@ -217,7 +217,7 @@ axd = fig.add_subplot(gs[3, :2])
 cc = pd.read_csv(R/"b_clustering_curve.csv").set_index("method")
 LEVELS = ["c00", "c25", "c50", "c75"]
 x = [int(lv[1:]) for lv in LEVELS]
-FS_LINES = {F.RAW_OTSU_CC: ("fluorostats default", OKABE["blue"], "-", "o"),
+FS_LINES = {F.RAW_OTSU_CC: ("fluorostats\n(raw Otsu+CC)", OKABE["blue"], "-", "o"),   # 2 lines: fits the margin
             "fluorostats_watershed": ("fluorostats watershed", OKABE["sky"], "--", "s")}
 for m, r in cc.iterrows():
     if m in FS_LINES or r[LEVELS].sum() == 0:   # fluorostats drawn below; skip an all-zero row
@@ -326,8 +326,8 @@ cap = ("Figure 2 | Nucleus segmentation against deep learning, from separated to
  f"(a) Instance F1 (IoU {IOU}) on BBBC039 (n={N_A} images), dots with 95% bootstrap CIs "
  f"({N_BOOT:,} resamples of per-image scores){short_txt}. The eight classical thresholds (Otsu, Li, "
  "Isodata, Triangle, Yen, Mean, Minimum, watershed) are fluorostats CONFIGURATIONS, not "
- f"rival tools: the designated default (fluorostats Otsu+CC, solid blue, F1 {def_m:.3f}) is the "
- "headline; the remaining thresholds (open blue circles) trace the tuning envelope "
+ f"rival tools: fluorostats raw Otsu+CC (the default without its denoising pre-filter; solid blue, F1 {def_m:.3f}) "
+ "is the headline; the remaining thresholds (open blue circles) trace the tuning envelope "
  f"({env_lo:.2f}-{env_hi:.2f}, i.e. the range of one knob). The genuine external comparison is trained deep "
  f"learning on the same {N_A} images (StarDist {sd_m:.3f} orange, Cellpose {cp_m:.3f} vermillion, Omnipose {om_m:.3f} "
  f"purple). (b) Bootstrap-CI forest on all n={N_B} images for the default with its denoising pre-filter "
@@ -338,7 +338,7 @@ cap = ("Figure 2 | Nucleus segmentation against deep learning, from separated to
  + f" ({'all exclude zero' if diffs_sig else 'not all exclude zero'}). (c) Representative BBBC039 crops: raw, expert ground "
  f"truth (green outlines), fluorostats (blue outlines); scale bar 20 µm (BBBC039 ~{F.BBBC039_UM_PER_PX} µm/px). "
  f"(d) Instance F1 vs nuclear overlap (BBBC024 c00-c75, {CLUSTER['n_volumes']} volumes per level): from no overlap "
- f"to 75% overlap the fluorostats default (Otsu+CC, blue) {change(F.RAW_OTSU_CC)} and the fluorostats "
+ f"to 75% overlap fluorostats raw Otsu+CC (blue) {change(F.RAW_OTSU_CC)} and the fluorostats "
  f"watershed split (light blue, dashed) {change('fluorostats_watershed')}; the watershed seeding parameters "
  f"were chosen on BBBC024. Classical thresholds (grey) reach {classical['c75'].min():.2f}-"
  f"{classical['c75'].max():.2f} at 75% overlap. Deep learning, scored the same way on the same volumes: "
@@ -353,7 +353,7 @@ cap = ("Figure 2 | Nucleus segmentation against deep learning, from separated to
  "(e) fluorostats overlay on a "
  "well-separated (c00) and a crowded (c75) field, showing connected-component merging under overlap. "
  f"(f) Gap to Cellpose (\u0394F1 = fluorostats F1 minus Cellpose F1), filled: 3D volumes of (d); open: the mid z plane of all {N_2D} volumes per level, "
- f"where StarDist runs as published (Fig. S4c). The fluorostats default trails Cellpose by "
+ f"where StarDist runs as published (Fig. S4c). fluorostats raw Otsu+CC trails Cellpose by "
  f"{gap_txt(F.RAW_OTSU_CC)}; the fluorostats watershed by at most {worst_gap('fluorostats_watershed'):.3f}.")
 save(fig, "fig2_nuclei_boundary", tight=False)
 caption("fig2_nuclei_boundary", cap)

@@ -191,7 +191,7 @@ def panel_b(ax):
 
 LEVELS = ["c00", "c25", "c50", "c75"]
 PLANE_LINES = {   # method in b_clustering_curve_2d -> (label, colour, linestyle, marker)
-    "fluorostats(raw Otsu+CC)": ("fluorostats default", figstyle.OKABE["blue"], "-", "o"),
+    "fluorostats(raw Otsu+CC)": ("fluorostats (raw Otsu+CC)", figstyle.OKABE["blue"], "-", "o"),
     "fluorostats_watershed": ("fluorostats watershed", figstyle.OKABE["sky"], "--", "s"),
     "Cellpose": ("Cellpose", figstyle.TOOL["Cellpose"]["c"], figstyle.TOOL["Cellpose"]["ls"],
                  figstyle.TOOL["Cellpose"]["m"]),
@@ -288,8 +288,8 @@ def panel_c_caption() -> str:
         "where the 2D deep-learning models run as published (StarDist 2D_versatile_fluo, "
         "Cellpose 3 nuclei, pretrained, diameter estimated). From no overlap to 75% "
         f"overlap: Cellpose {span('Cellpose')}, StarDist {span('StarDist')}, the "
-        f"fluorostats watershed split {span('fluorostats_watershed')} and the fluorostats "
-        f"default (Otsu+CC) {span('fluorostats(raw Otsu+CC)')}; classical thresholds grey. "
+        f"fluorostats watershed split {span('fluorostats_watershed')} and fluorostats "
+        f"raw Otsu+CC {span('fluorostats(raw Otsu+CC)')}; classical thresholds grey. "
         "Fig. 2d shows the same series on whole 3D volumes.")
 
 
