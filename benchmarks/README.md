@@ -19,6 +19,7 @@ doubles as a worked example of the library's analysis modules.
 | `figS1_correctness.py` | topology / skeleton / density-normalisation correctness | `b1_topology_phantoms`, `b_skeleton_tree`, `b_density_normalization(_cv)` |
 | `figS3_robustness.py` | segmentation robustness to noise + denoising | `b_noise_robustness`, `b_denoising`, `b_nuclei_size` |
 | `figS4_generalization.py` | cross-dataset generalisation (DSB2018, CTC 3D, BBBC024 2D crowding) | `b_dsb2018`, `b2_ctc_multi`, `b_clustering_curve_2d` |
+| `figS5_depth_validation.py` | depth module on synthetic Beer–Lambert stacks (profile, λ recovery, two conditions) | `b_depth_penetration_profile`, `_correctness`, `_conditions`, `_parity` |
 
 These scripts import from `fluorostats` only the figure kit (`pubfig`, through
 `figstyle.py`); the measurements behind the tables (`metrics_3d`, `skeleton`,
@@ -43,6 +44,7 @@ repository root, wherever the script is run from), then run:
 | `fig2_nuclei.py` | Figure 2 — nucleus segmentation & the deep-learning boundary (a–f) | BBBC039 + BBBC024 + BBBC024_c75 |
 | `fig4_viability.py` | depth-resolved Live/Dead viability | S-BIAD2130 |
 | `figS2_runtime.py` | runtime + determinism | BBBC024 |
+| `fig6_applications.py` | Figure 6 — the two laboratory assays | panels a, b, d, e: the bundled `fig6_*` tables; panel c: two laboratory `.oib` stacks, not deposited (`$FIG6_LIVEDEAD_DIR`; see the `fig6_*` section) |
 
 For Figure 2, the summary panels (a, b, d) reproduce from the bundled `results/`
 tables; only the image panels (c, e) need the raw BBBC039/BBBC024 images. Panel a
@@ -87,6 +89,7 @@ reproduces it byte for byte.
 | `b_clustering_curve.csv` | `b_clustering_curve.py` | BBBC024 (+ c25/c50/c75) | EXACT |
 | `b_seg_timing.csv` | `b_seg_timing.py` | the timings in `BBBC039_timing/` (`DATA_MANIFEST.md`) | wall-clock (one cluster CPU) |
 | `stardist_eval.csv`, `cellpose_eval.csv`, `omnipose_eval.csv` | `b_dl_eval.py` | BBBC039 and the `BBBC039_dl/` predictions of `cluster/bbbc024_dl_infer.py` (`DATA_MANIFEST.md`) | EXACT given the predictions |
+| `b_depth_penetration_correctness.csv`, `_profile.csv`, `_conditions.csv`, `_parity.csv` | `b_depth_penetration.py` | none (synthetic) | EXACT |
 | `b_clustering_heldout.csv` | `b_clustering_heldout.py` | BBBC024 (+ c25/c50/c75), volumes 6-15 | EXACT |
 | `b_zprofile_fiji.csv` | `b_zprofile_fiji.py` | the Fiji profiles in `zprofile_fiji/` (`cluster/fiji_zprofile.ijm`) and two public stacks | EXACT given the Fiji profiles |
 | `b_dl_determinism.csv` | `b_dl_determinism.py` | BBBC039 (first 10 images) and the 20-run StarDist/Cellpose predictions in `BBBC039_dl_repeat/` (`DATA_MANIFEST.md`) | EXACT given the predictions |
@@ -158,8 +161,9 @@ per-stack tables are bundled here so the quantitative panels can be recomputed:
 | `results/fig6_viability_group_summary.csv` | day-1 vs day-5 group summaries |
 | `results/fig6_zprofile_fiji.csv` | Fiji Plot Z-axis Profile vs the depth driver's per-slice profile, one FD2000 stack (`b_zprofile_fiji.py`) |
 
-The representative micrograph panel cannot be regenerated from these tables — it
-renders the raw stacks directly. The tables are written by `producers/fig6_tables.py`
+`fig6_applications.py` draws Figure 6 from these tables, except the representative
+micrograph panel (c), which renders two of the raw Live/Dead stacks: it runs only with
+`$FIG6_LIVEDEAD_DIR` set to the folder holding them. The tables are written by `producers/fig6_tables.py`
 from the outputs of `fluorostats depth` and `fluorostats viability` run on the
 laboratory stacks (folders given in `$FIG6_DEPTH_OUT` / `$FIG6_VIABILITY_OUT`); each
 `.run.json` carries the driver's run record (tool, fluorostats commit, package

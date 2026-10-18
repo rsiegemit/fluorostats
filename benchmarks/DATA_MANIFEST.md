@@ -79,7 +79,8 @@ URLs verified 2026-09-24.
   laboratory and is available on request; it is not deposited. The closest public analogue
   listed above is S-BIAD2130. The derived per-stack tables *are* bundled as
   `results/fig6_*.csv`, so the quantitative panels can be recomputed without the raw stacks;
-  the representative micrograph panel cannot, since it renders the raw data directly.
+  the representative micrograph panel (Figure 6c) cannot, since `fig6_applications.py`
+  renders it from two of the raw stacks (`$FIG6_LIVEDEAD_DIR`).
 
 Datasets that were downloaded during exploration but back no figure or table here
 (VascuSynth, S-BIAD2215, S-BIAD2920, and the VesselExpress sample volume `test.tiff`)
