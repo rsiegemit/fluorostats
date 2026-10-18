@@ -1,0 +1,35 @@
+{
+  "table": "b_depth_penetration_profile.csv",
+  "producer": "benchmarks/producers/b_depth_penetration.py",
+  "params": {
+    "i0": 1000.0,
+    "bg": 50.0,
+    "dz_um": 2.0,
+    "yx": 128,
+    "sigma": 100.0,
+    "lambdas_um": [
+      20.0,
+      40.0,
+      80.0,
+      160.0
+    ],
+    "noisy_lambda_um": 40.0,
+    "n_replicates": 8,
+    "conditions_um": {
+      "short": 30.0,
+      "long": 70.0
+    },
+    "n_condition_replicates": 6,
+    "window_um": 100.0,
+    "seeds": "noisy stack r, blank 100 + r, conditions 200 + r",
+    "n_surface": 1
+  },
+  "git_commit": "8a8a8e1",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}

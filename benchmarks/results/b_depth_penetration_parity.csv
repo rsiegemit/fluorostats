@@ -1,0 +1,6 @@
+check,value,ok
+perslice_mean_vs_float64_mean,0.0,True
+scipy_trapezoid_parity,0.0,True
+trapezoid_err_pct_vs_analytic,0.01646052379175249,True
+rectangular_err_pct_vs_analytic,2.80654170507359,True
+determinism_bit_identical,0.0,True

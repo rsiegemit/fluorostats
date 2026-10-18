@@ -1,0 +1,15 @@
+{
+  "table": "b_depth_penetration_parity.csv",
+  "producer": "benchmarks/producers/b_depth_penetration.py",
+  "params": {
+    "reference": "float64 per-slice mean computed here, not Fiji (see b_zprofile_fiji)"
+  },
+  "git_commit": "8a8a8e1",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}
