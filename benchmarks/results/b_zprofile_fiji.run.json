@@ -9,7 +9,7 @@
       "vea_592-1-lepleft": "vesselexpress/Figure2C_E/VEA_0.25mm^3/Raw/210426_592-1-lepleft_500x_VEA.tif"
     }
   },
-  "git_commit": "9780b1b",
+  "git_commit": "b56652f",
   "versions": {
     "python": "3.13.5",
     "numpy": "2.4.6",

@@ -1,0 +1,17 @@
+{
+  "table": "fig6_zprofile_fiji.csv",
+  "producer": "benchmarks/producers/b_zprofile_fiji.py",
+  "params": {
+    "fiji": "ImageJ 1.54p (Fiji, macOS), Plot Z-axis Profile, no selection",
+    "stack": "FD2000 time course, 4 h stack 1, channel 0 (laboratory data)",
+    "export_decimals": 9
+  },
+  "git_commit": "b56652f",
+  "versions": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "scikit-image": "0.26.0",
+    "fluorostats": "0.9.0"
+  }
+}

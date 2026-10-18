@@ -1,0 +1,2 @@
+stack,n_slices,max_abs_diff,max_rel_diff,max_abs_diff_at_single_precision
+fd2000_4h_1,100,0.000118255615234375,5.9507594574337084e-08,5.002220859751105e-10
