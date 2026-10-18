@@ -17,9 +17,11 @@ ground truth and FAITHFUL reimplementations of the standard algorithms:
   A(lambda). Penetration-constant recovery: the single-exponential fit recovers
      the known lambda on noiseless stacks and on SNR~10 noisy replicates.
 
-  B. Faithful reimplementation parity. Fiji's "Plot Z-axis Profile" is the
-     per-slice spatial mean; we show fluorostats reproduces it BIT-FOR-BIT, that
-     its trapezoidal AUC matches scipy.integrate.trapezoid, and that it is more
+  B. Reimplementation parity. Fiji's "Plot Z-axis Profile" is the per-slice
+     spatial mean; we show fluorostats' profile equals a float64 per-slice mean
+     computed here (Fiji itself stores the profile in single precision, so it
+     agrees to ~1e-7 relative, not bit for bit), that its trapezoidal AUC matches
+     scipy.integrate.trapezoid, and that it is more
      accurate than the naive rectangular-sum (Sigma v*dz) an Excel/Prism manual
      workflow uses.
 
@@ -278,13 +280,12 @@ def benchmark_B():
 
     fs = depth.intensity_depth_profile(vol, dz)
 
-    # Fiji "Plot Z-axis Profile" == per-slice spatial mean over the (whole-image)
-    # ROI, accumulated as a double (ImageJ ImageStatistics uses double), which is
-    # exactly what fluorostats does (it casts to float64 before reducing).
-    fiji = vol.astype(np.float64).reshape(n_z, -1).mean(axis=1)
-    max_abs = float(np.max(np.abs(fs.mean - fiji)))
-    bitexact = np.array_equal(fs.mean, fiji)
-    print(f"  Fiji Plot-Z-axis-Profile parity: max|fs - per-slice-mean| = {max_abs:.2e}  "
+    # the per-slice spatial mean over the whole image (what Fiji's "Plot Z-axis
+    # Profile" computes), here in float64; Fiji stores it in single precision
+    ref = vol.astype(np.float64).reshape(n_z, -1).mean(axis=1)
+    max_abs = float(np.max(np.abs(fs.mean - ref)))
+    bitexact = np.array_equal(fs.mean, ref)
+    print(f"  per-slice-mean parity: max|fs - float64 per-slice mean| = {max_abs:.2e}  "
           f"-> {'BIT-EXACT' if bitexact else 'MISMATCH'}")
 
     # scipy.integrate.trapezoid on the same profile == fluorostats auc_depth (full range)
@@ -304,7 +305,7 @@ def benchmark_B():
     print(f"  AUC accuracy vs analytic ({gt:.2f}): fluorostats trapezoid err="
           f"{abs(trap-gt)/gt*100:.3f}%  vs manual rectangular-sum err={abs(rect-gt)/gt*100:.3f}%")
     return [
-        dict(check="fiji_perslice_mean_parity", value=max_abs, ok=bool(bitexact)),
+        dict(check="perslice_mean_vs_float64_mean", value=max_abs, ok=bool(bitexact)),
         dict(check="scipy_trapezoid_parity", value=abs(fs_auc - scipy_auc), ok=abs(fs_auc - scipy_auc) < 1e-6),
         dict(check="trapezoid_err_pct_vs_analytic", value=abs(trap - gt) / gt * 100, ok=True),
         dict(check="rectangular_err_pct_vs_analytic", value=abs(rect - gt) / gt * 100, ok=True),
@@ -443,8 +444,8 @@ def caption_text(ctx, lam_ctx, a_rows, alam_rows, b_rows):
         "per-stack dots) lands on the analytic truth (dashed) for both, and the built-in Welch t-test "
         f"separates them (p={ctx['welch_p']:.1e}). Absolute/normalised AUC are recovered to within "
         f"{exact_auc:.2g}% on noiseless stacks and within noise on noisy stacks; fluorostats reproduces "
-        "the standard per-slice-mean profile (Fiji Plot Z-axis Profile) "
-        f"{'bit-for-bit' if b_rows[0]['ok'] else 'NOT bit-for-bit'} and its trapezoidal AUC is "
+        "the float64 per-slice-mean profile (what Fiji's Plot Z-axis Profile computes, in single "
+        f"precision) {'exactly' if b_rows[0]['ok'] else 'NOT exactly'} and its trapezoidal AUC is "
         f"~{fold:.0f}x more accurate than a naive rectangular sum.")
 
 
@@ -464,7 +465,7 @@ def main():
           % max(r["err_norm_pct"] for r in a_rows if r["test"] == "A1_exact_noiseless"))
     print("  A(lambda) recovery (noiseless): max err = %.3f%%"
           % max(r["lambda_err_pct"] for r in alam_rows if r["test"] == "Alam_exact_noiseless"))
-    print("  B Fiji per-slice-mean parity: %s" % ("BIT-EXACT" if b_rows[0]["ok"] else "MISMATCH"))
+    print("  B per-slice-mean parity: %s" % ("BIT-EXACT" if b_rows[0]["ok"] else "MISMATCH"))
     print("  C determinism: %s" % ("bit-identical" if c_rows[0]["ok"] else "NON-DETERMINISTIC"))
     print("  wrote results/depth_penetration_correctness.csv, "
           "results/depth_penetration_parity_timing.csv, figure depth_penetration.{pdf,png}")
