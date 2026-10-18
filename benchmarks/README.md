@@ -156,6 +156,7 @@ per-stack tables are bundled here so the quantitative panels can be recomputed:
 | `results/fig6_depth_group_summary.csv` | group mean ± SEM depth profiles |
 | `results/fig6_viability_per_stack.csv` | per-stack Live/Dead coverage, counts, viability, regime flags |
 | `results/fig6_viability_group_summary.csv` | day-1 vs day-5 group summaries |
+| `results/fig6_zprofile_fiji.csv` | Fiji Plot Z-axis Profile vs the depth driver's per-slice profile, one FD2000 stack (`b_zprofile_fiji.py`) |
 
 The representative micrograph panel cannot be regenerated from these tables — it
 renders the raw stacks directly. The tables are written by `producers/fig6_tables.py`
