@@ -661,7 +661,8 @@ goes stale. Each release also gets its own version DOI — cite that instead to
 pin an exact version (v0.8.0 is
 [10.5281/zenodo.22942365](https://doi.org/10.5281/zenodo.22942365), v0.8.1 is
 [10.5281/zenodo.22945043](https://doi.org/10.5281/zenodo.22945043), v0.8.2 is
-[10.5281/zenodo.22947222](https://doi.org/10.5281/zenodo.22947222)).
+[10.5281/zenodo.22947222](https://doi.org/10.5281/zenodo.22947222), v0.9.0 is
+[10.5281/zenodo.23422528](https://doi.org/10.5281/zenodo.23422528)).
 
 Machine-readable metadata lives in [`CITATION.cff`](CITATION.cff) (GitHub's
 "Cite this repository" button reads it) and [`.zenodo.json`](.zenodo.json).

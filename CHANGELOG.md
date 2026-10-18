@@ -5,6 +5,30 @@ versions follow [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-18
+
+Measurement code unchanged from 0.9.0: the only change under `src/` is the version
+string. Adds the benchmark tables, run records and figure scripts used in the
+revised manuscript.
+
+### Added
+- Held-out check of the watershed seeding on BBBC024 volumes 6-15
+  (`b_clustering_heldout`).
+- Fiji Plot Z-axis Profile comparison (`b_zprofile_fiji`), on two public stacks and
+  one Figure 6 FD2000 stack (`fig6_zprofile_fiji`): agreement to Fiji's single
+  precision.
+- Deep-learning evaluation tables with recorded models, weights and SHA-256
+  (`b_dl_eval`, `cluster/bbbc024_dl_infer.py`), and the Omnipose row of `b_dl_ci`.
+- Mac timing tables re-timed with the machine recorded in their run records.
+- Figure 6 tables with run records (`fig6_tables.py`).
+- Figure S5 (`figS5_depth_validation.py`, producer `b_depth_penetration.py` and its
+  four tables) and Figure 6 (`fig6_applications.py`) scripts.
+
+### Changed
+- Documentation: figure titles follow the manuscript, the per-slice check in the
+  depth example is described as a float64 comparison rather than a Fiji one, and the
+  list of figures that regenerate from the bundled tables includes S5 and 6.
+
 ## [0.9.0] - 2026-10-16
 
 Four rounds of audits against the engineering rules (`docs/ENGINEERING.md`), a bug

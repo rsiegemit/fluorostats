@@ -57,7 +57,7 @@ Public API surface, grouped by module:
   - ``report`` — per-condition aggregation.
 """
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 import importlib
 
