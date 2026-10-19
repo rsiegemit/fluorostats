@@ -23,6 +23,9 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.23422528
     description: "Archived v0.9.0 release"
+  - type: doi
+    value: 10.5281/zenodo.23461861
+    description: "Archived v0.9.1 release"
 authors:
   - family-names: Siegelmann
     given-names: Roy
